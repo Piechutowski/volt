@@ -60,7 +60,7 @@ func (e *dynEmitter) header() {
 	if e.body.Len() == 0 {
 		return
 	}
-	imports := map[string]bool{"context": true, rtImport: true}
+	imports := map[string]bool{rtImport: true}
 	e.out.WriteString("\nimport (\n")
 	for _, p := range importKeysSort(imports) {
 		fmt.Fprintf(&e.out, "\t%s\n", importDecl(p))
@@ -111,43 +111,35 @@ func funcLine(b *strings.Builder, header, body string) {
 
 func (e *dynEmitter) queryEmit(t *naming.Table, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, opts ...rt.Opt[%s]) ([]%s, error) {\n", t.Names.Query, t.Model, t.Model)
-	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.SelectRender(%s, %s, opts)\n", t.Names.TableConst, t.Names.ColumnsConst)
-	b.WriteString("\tif voltErr != nil {\n\t\treturn nil, voltErr\n\t}\n")
-	fmt.Fprintf(b, "\tvoltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)\n")
-	rowsScanEmit(b, t.Model, t.Names.Scan)
+	fmt.Fprintf(b, "func %s(opts ...rt.Opt[%s]) rt.Query[%s] {\n", t.Names.Query, t.Model, t.Model)
+	fmt.Fprintf(b, "\tvoltSQL, voltArgs, voltErr := rt.SelectRender(%s, %s, opts)\n", t.Names.TableConst, t.Names.ColumnsConst)
+	queryReturn(b, t.Model, t.Names.Scan)
 }
 
 func (e *dynEmitter) countEmit(t *naming.Table, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, preds ...rt.Pred[%s]) (int64, error) {\n", t.Names.Count, t.Model)
-	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.CountRender(%s, preds)\n", t.Names.TableConst)
-	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n")
-	b.WriteString("\tvar voltN int64\n\tif voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n\treturn voltN, nil\n}\n\n")
+	fmt.Fprintf(b, "func %s(preds ...rt.Pred[%s]) rt.Lookup[int64] {\n", t.Names.Count, t.Model)
+	fmt.Fprintf(b, "\tvoltSQL, voltArgs, voltErr := rt.CountRender(%s, preds)\n", t.Names.TableConst)
+	b.WriteString("\treturn rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}\n}\n\n")
 }
 
 func (e *dynEmitter) existsEmit(t *naming.Table, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, preds ...rt.Pred[%s]) (bool, error) {\n", t.Names.Exists, t.Model)
-	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.ExistsRender(%s, preds)\n", t.Names.TableConst)
-	b.WriteString("\tif voltErr != nil {\n\t\treturn false, voltErr\n\t}\n")
-	b.WriteString("\tvar voltFound bool\n\tif voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {\n\t\treturn false, voltErr\n\t}\n\treturn voltFound, nil\n}\n\n")
+	fmt.Fprintf(b, "func %s(preds ...rt.Pred[%s]) rt.Lookup[bool] {\n", t.Names.Exists, t.Model)
+	fmt.Fprintf(b, "\tvoltSQL, voltArgs, voltErr := rt.ExistsRender(%s, preds)\n", t.Names.TableConst)
+	b.WriteString("\treturn rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}\n}\n\n")
 }
 
 func (e *dynEmitter) deleteWhereEmit(t *naming.Table, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, preds ...rt.Pred[%s]) (int64, error) {\n", t.Names.DeleteWhere, t.Model)
-	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.DeleteRender(%s, preds)\n", t.Names.TableConst)
-	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n")
-	b.WriteString("\tvoltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)\n")
-	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n\treturn voltRes.RowsAffected()\n}\n\n")
+	fmt.Fprintf(b, "func %s(preds ...rt.Pred[%s]) rt.Exec {\n", t.Names.DeleteWhere, t.Model)
+	fmt.Fprintf(b, "\tvoltSQL, voltArgs, voltErr := rt.DeleteRender(%s, preds)\n", t.Names.TableConst)
+	b.WriteString("\treturn rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}\n}\n\n")
 }
 
 func (e *dynEmitter) updateWhereEmit(t *naming.Table, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, set []rt.Assign[%s], preds ...rt.Pred[%s]) (int64, error) {\n", t.Names.UpdateWhere, t.Model, t.Model)
-	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.UpdateRender(%s, set, preds)\n", t.Names.TableConst)
-	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n")
-	b.WriteString("\tvoltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)\n")
-	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n\treturn voltRes.RowsAffected()\n}\n\n")
+	fmt.Fprintf(b, "func %s(set []rt.Assign[%s], preds ...rt.Pred[%s]) rt.Exec {\n", t.Names.UpdateWhere, t.Model, t.Model)
+	fmt.Fprintf(b, "\tvoltSQL, voltArgs, voltErr := rt.UpdateRender(%s, set, preds)\n", t.Names.TableConst)
+	b.WriteString("\treturn rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}\n}\n\n")
 }

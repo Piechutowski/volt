@@ -3,7 +3,6 @@
 package models
 
 import (
-	"context"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -24,73 +23,29 @@ func UserAfter(key ...any) rt.Opt[User] { return rt.After[User](key...) }
 
 func UserSet(assigns ...rt.Assign[User]) []rt.Assign[User] { return assigns }
 
-func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []User{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func UserQuery(opts ...rt.Opt[User]) rt.Query[User] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, opts)
+	return rt.Query[User]{SQL: voltSQL, Args: voltArgs, Scan: voltUserScan, Err: voltErr}
 }
 
-func (q *Queries) UserCount(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltUserTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func UserCount(preds ...rt.Pred[User]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltUserTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltUserTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func UserExists(preds ...rt.Pred[User]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltUserTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltUserTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func UserDeleteWhere(preds ...rt.Pred[User]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltUserTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltUserTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltUserTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -110,73 +65,29 @@ func RoleAfter(key ...any) rt.Opt[Role] { return rt.After[Role](key...) }
 
 func RoleSet(assigns ...rt.Assign[Role]) []rt.Assign[Role] { return assigns }
 
-func (q *Queries) RoleQuery(ctx context.Context, opts ...rt.Opt[Role]) ([]Role, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltRoleTableSQL, voltRoleColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Role{}
-	for voltRows.Next() {
-		voltV, voltErr := voltRoleScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func RoleQuery(opts ...rt.Opt[Role]) rt.Query[Role] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltRoleTableSQL, voltRoleColumnsSQL, opts)
+	return rt.Query[Role]{SQL: voltSQL, Args: voltArgs, Scan: voltRoleScan, Err: voltErr}
 }
 
-func (q *Queries) RoleCount(ctx context.Context, preds ...rt.Pred[Role]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltRoleTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func RoleCount(preds ...rt.Pred[Role]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltRoleTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) RoleExists(ctx context.Context, preds ...rt.Pred[Role]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltRoleTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func RoleExists(preds ...rt.Pred[Role]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltRoleTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) RoleDeleteWhere(ctx context.Context, preds ...rt.Pred[Role]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltRoleTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func RoleDeleteWhere(preds ...rt.Pred[Role]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltRoleTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) RoleUpdateWhere(ctx context.Context, set []rt.Assign[Role], preds ...rt.Pred[Role]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltRoleTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func RoleUpdateWhere(set []rt.Assign[Role], preds ...rt.Pred[Role]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltRoleTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -196,71 +107,27 @@ func UserRoleAfter(key ...any) rt.Opt[UserRole] { return rt.After[UserRole](key.
 
 func UserRoleSet(assigns ...rt.Assign[UserRole]) []rt.Assign[UserRole] { return assigns }
 
-func (q *Queries) UserRoleQuery(ctx context.Context, opts ...rt.Opt[UserRole]) ([]UserRole, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserRoleTableSQL, voltUserRoleColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []UserRole{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserRoleScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func UserRoleQuery(opts ...rt.Opt[UserRole]) rt.Query[UserRole] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltUserRoleTableSQL, voltUserRoleColumnsSQL, opts)
+	return rt.Query[UserRole]{SQL: voltSQL, Args: voltArgs, Scan: voltUserRoleScan, Err: voltErr}
 }
 
-func (q *Queries) UserRoleCount(ctx context.Context, preds ...rt.Pred[UserRole]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltUserRoleTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func UserRoleCount(preds ...rt.Pred[UserRole]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltUserRoleTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) UserRoleExists(ctx context.Context, preds ...rt.Pred[UserRole]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltUserRoleTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func UserRoleExists(preds ...rt.Pred[UserRole]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltUserRoleTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) UserRoleDeleteWhere(ctx context.Context, preds ...rt.Pred[UserRole]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltUserRoleTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func UserRoleDeleteWhere(preds ...rt.Pred[UserRole]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltUserRoleTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) UserRoleUpdateWhere(ctx context.Context, set []rt.Assign[UserRole], preds ...rt.Pred[UserRole]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltUserRoleTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func UserRoleUpdateWhere(set []rt.Assign[UserRole], preds ...rt.Pred[UserRole]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltUserRoleTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }

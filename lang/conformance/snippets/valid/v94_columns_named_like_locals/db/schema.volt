@@ -25,7 +25,6 @@ Table entries {
   rows       string [unique]
   q          string [unique]
   v          string [unique]
-  query      string [unique]
   args       string [unique]
   cols       string [unique]
   entry_scan string [unique]
@@ -47,5 +46,5 @@ Table tallies {
   label  string
 }
 
-Select by_locals for entries where err = :err and res = :rows and n in :out and v = :v and query = :query and args = :args
+Select by_locals for entries where err = :err and res = :rows and n in :out and v = :v and args = :args
 Select by_helpers for entries where err = :entryScan and n in :entryByHelpersSQL

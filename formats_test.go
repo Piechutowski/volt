@@ -3,7 +3,6 @@ package volt
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/gob"
 	"encoding/json"
 	"errors"
@@ -13,6 +12,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/Piechutowski/volt/nao/rt"
 	"time"
 )
 
@@ -183,10 +184,10 @@ func TestQueryBinding(t *testing.T) {
 
 func TestNoRowsIs404(t *testing.T) {
 	rec := serve(t, func(w http.ResponseWriter, r *Request) error {
-		return fmt.Errorf("get: %w", sql.ErrNoRows)
+		return fmt.Errorf("get: %w", rt.ErrNotFound)
 	}, httptest.NewRequest("GET", "/x", nil))
 	if rec.Code != 404 {
-		t.Fatalf("sql.ErrNoRows: %d, want 404", rec.Code)
+		t.Fatalf("rt.ErrNotFound: %d, want 404", rec.Code)
 	}
 }
 

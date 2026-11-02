@@ -35,8 +35,8 @@ func TestSelectHoverSharedRowType(t *testing.T) {
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
 	for _, want := range []string{
-		"PageViewSummary(ctx context.Context, from int) ([]Summary, error)",
-		"LinkClickSummary(ctx context.Context, from int) ([]Summary, error)",
+		"PageViewSummary(from int) rt.Query[Summary]",
+		"LinkClickSummary(from int) rt.Query[Summary]",
 		"type Summary struct",
 		"Site string",
 		"Day int",
@@ -51,7 +51,7 @@ func TestSelectHoverSharedRowType(t *testing.T) {
 	}
 	structAt := strings.Index(md, "type Summary struct")
 	whereAt := strings.Index(md, "WHERE ")
-	funcAt := strings.Index(md, "func (q *Queries)")
+	funcAt := strings.Index(md, "func ")
 	if !(structAt < whereAt && whereAt < funcAt) {
 		t.Errorf("hover order must be struct, SQL, signatures; got offsets %d %d %d:\n%s", structAt, whereAt, funcAt, md)
 	}
@@ -65,8 +65,8 @@ func TestSelectHoverStructDerivative(t *testing.T) {
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
 	for _, want := range []string{
-		"LinkClickPublic(ctx context.Context) ([]LinkClickPublic, error)",
-		"type LinkClickPublic struct",
+		"LinkClickPublic() rt.Query[LinkClickPublicRow]",
+		"type LinkClickPublicRow struct",
 		"Target string",
 	} {
 		if !strings.Contains(md, want) {
@@ -86,7 +86,7 @@ func TestSelectHoverListParam(t *testing.T) {
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
 	for _, want := range []string{
-		"PageViewChosen(ctx context.Context, sites []string, days []int) ([]PageView, error)",
+		"PageViewChosen(sites []string, days []int) rt.Query[PageView]",
 		"json_each(?)",
 		"binds: `rt.JSONList(sites)`, `rt.JSONList(days)`",
 	} {
@@ -108,7 +108,7 @@ func TestSelectHoverBindsInPlaceholderOrder(t *testing.T) {
 	if !strings.Contains(md, want) {
 		t.Errorf("hover missing %q:\n%s", want, md)
 	}
-	if !strings.Contains(md, "PageViewBusy(ctx context.Context, site string, days []int) ([]PageView, error)") {
+	if !strings.Contains(md, "PageViewBusy(site string, days []int) rt.Query[PageView]") {
 		t.Errorf("hover missing the signature:\n%s", md)
 	}
 }
@@ -144,7 +144,7 @@ func TestSelectHoverUnresolved(t *testing.T) {
 				t.Errorf("%s: hover missing %q:\n%s", tc.needle, want, md)
 			}
 		}
-		for _, leak := range []string{"func (q *Queries)", "WHERE", "ORDER BY", "binds:"} {
+		for _, leak := range []string{"rt.Query[", "WHERE", "ORDER BY", "binds:"} {
 			if strings.Contains(md, leak) {
 				t.Errorf("%s: an unresolved select's hover shows %q, which the dropped terms make wrong:\n%s", tc.needle, leak, md)
 			}

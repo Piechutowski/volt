@@ -74,7 +74,7 @@ app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§
 app/routes.volt:10:12: error: spec/resources: package "app" declares no tables; resources names a table of this package, or of an imported data package, qualified (§declaration)
 
 ## i115_controller_field_collision.volt
-app/i115_controller_field_collision.volt:12:2: error: spec/scopes-and-routes: controller "Queries" takes the name of the Controllers field holding this package's query routes (§handler-references); rename the controller
+app/i115_controller_field_collision.volt:12:2: error: spec/scopes-and-routes: controller "DB" takes the name of the Controllers field holding the database the query routes run on (§handler-references); rename the controller
 
 ## i115_resources_default_param
 app/routes.volt:10:31: error: spec/resources: param: does not apply with [default]; the key parameter is named by the primary-key column, as the generated CRUD spells it (§default-handlers)
@@ -390,7 +390,6 @@ app/schema.volt:8:6: error: spec/types: Type PathHome takes the Go name of the g
 
 ## i267_type_takes_migration_name
 db/schema.volt:5:6: error: spec/types: Type Migrations takes the Go name of the generated migration list; a declared type is named apart from the names generated code declares (§types)
-db/schema.volt:6:6: error: spec/types: Type Migrate takes the Go name of the generated migration runner; a declared type is named apart from the names generated code declares (§types)
 
 ## i268_declared_type_list_bytes.volt
 db/i268_declared_type_list_bytes.volt:13:31: error: spec/selects-over-groups: column "icon" has declared type blob.Blob stored as []byte; it cannot take a list parameter: JSON carries no blob, and its text never equals the stored bytes (§predicates)
@@ -601,9 +600,6 @@ app/i357_select_takes_other_table_list.volt:14:8: error: spec/selects-over-group
 
 ## i358_select_pair_across_tables.volt
 app/i358_select_pair_across_tables.volt:15:8: error: spec/selects-over-groups: select "rows" collides with select "tag_rows": both generate UserTagRows (§selects-over-groups)
-
-## i359_select_takes_queries_method.volt
-app/i359_select_takes_queries_method.volt:9:8: error: spec/selects-over-groups: select "cache" mints WithCache for table "withs", which is already the Queries method WithCache (§selects-over-groups)
 
 ## i35_reserved_param.volt
 app/i35_reserved_param.volt:5:9: error: spec/scopes-and-routes: path parameter "volt" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx

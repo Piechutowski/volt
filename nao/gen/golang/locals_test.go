@@ -51,14 +51,14 @@ func TestPredeclaredNamesCompile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handleTakesConstructor := map[string]bool{"new": true}
+	handleTakesFunction := map[string]bool{"new": true, "delete": true}
 	var b strings.Builder
 	b.WriteString("package db\n\nTable posts {\n  id    int [pk]\n  label string\n  n     int\n}\n\n")
 	var unique strings.Builder
 	names := types.Universe.Names()
 	params := 0
 	for _, name := range names {
-		if handleTakesConstructor[name] {
+		if handleTakesFunction[name] {
 			continue
 		}
 		fmt.Fprintf(&b, "Table k_%s {\n  %s int [pk]\n  label string\n}\n\n", name, name)

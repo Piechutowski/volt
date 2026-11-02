@@ -7,6 +7,7 @@ package itest
 import (
 	"context"
 	"errors"
+	"github.com/Piechutowski/volt/nao/run"
 	"strings"
 	"testing"
 
@@ -14,13 +15,13 @@ import (
 )
 
 func TestValidatorsRunTopDownAndOnlyInGo(t *testing.T) {
-	db, q := newDB(t)
+	db := newDB(t)
 	ctx := context.Background()
 
 	if good := PageViewNew().SiteSet("alpha").DaySet(1).HitsSet(3).Validate(); !good.Valid() || good.Err() != nil {
 		t.Fatalf("valid row rejected: %v", good.Errors())
 	}
-	if _, err := q.PageViewCreate(ctx, PageViewNew().SiteSet("alpha").DaySet(1)); err != nil {
+	if _, err := run.Run(ctx, db, PageViewCreate(PageViewNew().SiteSet("alpha").DaySet(1))); err != nil {
 		t.Fatalf("valid row rejected by the database: %v", err)
 	}
 
@@ -37,14 +38,14 @@ func TestValidatorsRunTopDownAndOnlyInGo(t *testing.T) {
 		t.Errorf("Err is the *rt.Invalid of the field errors: %v", err)
 	}
 
-	if _, err := db.ExecContext(ctx,
+	if _, err := db.Pool().ExecContext(ctx,
 		`INSERT INTO page_views (site, day, hits) VALUES ('', 0, -1)`); err != nil {
 		t.Errorf("the database carries no CHECK for a validator: %v", err)
 	}
 }
 
 func TestValidatorIsGoOnly(t *testing.T) {
-	db, _ := newDB(t)
+	db := newDB(t)
 	ctx := context.Background()
 
 	bad := UserNew().EmailSet("not-an-address").NameSet("Ann").Validate()
@@ -56,30 +57,30 @@ func TestValidatorIsGoOnly(t *testing.T) {
 		t.Error("Validate rejected a valid email")
 	}
 
-	if _, err := db.ExecContext(ctx,
+	if _, err := db.Pool().ExecContext(ctx,
 		`INSERT INTO users (email, name) VALUES ('not-an-address', 'Ann')`); err != nil {
 		t.Errorf("the database carries no CHECK for a validator: %v", err)
 	}
 }
 
 func TestWritesValidateBeforeTouchingTheDatabase(t *testing.T) {
-	_, q := newDB(t)
+	db := newDB(t)
 	ctx := context.Background()
 
-	_, err := q.UserCreate(ctx, UserNew().EmailSet("nope").NameSet("N"))
+	_, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("nope").NameSet("N")))
 	inv := invalidOf(t, err, "EmailValid", "email")
 	if inv.Cause != nil || inv.Details()[0].Columns[0] != "email" {
 		t.Errorf("a failed validator is a field error with no driver error beneath it: %+v", inv)
 	}
-	if n, _ := q.UserCount(ctx); n != 0 {
+	if n, _ := run.Run(ctx, db, UserCount()); n != 0 {
 		t.Errorf("an invalid changeset must write nothing, count = %d", n)
 	}
 
-	u := seedUser(t, q, "ann@example.com")
-	if _, err := q.UserUpdate(ctx, u.Changeset().EmailSet("nope")); !errors.As(err, &inv) || inv.Fields[0].Check != "EmailValid" {
+	u := seedUser(t, db, "ann@example.com")
+	if _, err := run.Run(ctx, db, UserUpdate(u.Changeset().EmailSet("nope"))); !errors.As(err, &inv) || inv.Fields[0].Check != "EmailValid" {
 		t.Errorf("Update validates too: %v", err)
 	}
-	if again, _ := q.UserGet(ctx, u.ID); again.Email != u.Email {
+	if again, _ := run.Run(ctx, db, UserGet(u.ID)); again.Email != u.Email {
 		t.Errorf("a refused update must leave the row as it was: %+v", again)
 	}
 
@@ -94,12 +95,12 @@ func TestWritesValidateBeforeTouchingTheDatabase(t *testing.T) {
 }
 
 func TestInvalidOfARefusedWrite(t *testing.T) {
-	db, q := newDB(t)
+	db := newDB(t)
 	ctx := context.Background()
-	if _, err := q.UserCreate(ctx, UserNew().EmailSet("one@example.com").NameSet("One")); err != nil {
+	if _, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("one@example.com").NameSet("One"))); err != nil {
 		t.Fatal(err)
 	}
-	_, err := q.UserCreate(ctx, UserNew().EmailSet("one@example.com").NameSet("Two"))
+	_, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("one@example.com").NameSet("Two")))
 	inv := invalidOf(t, err, "unique", "email")
 	if inv.Model != "User" || !errors.Is(err, inv.Cause) || inv.Cause == nil {
 		t.Fatalf("duplicate = %v (%+v)", err, inv)
@@ -111,16 +112,16 @@ func TestInvalidOfARefusedWrite(t *testing.T) {
 		t.Errorf("details = %+v", d)
 	}
 
-	_, raw := db.ExecContext(ctx, `INSERT INTO users (email) VALUES ('two@example.com')`)
+	_, raw := db.Pool().ExecContext(ctx, `INSERT INTO users (email) VALUES ('two@example.com')`)
 	if inv := invalidOf(t, rt.Refused("User", raw), "not_null", "name"); !errors.Is(inv, raw) {
 		t.Fatalf("not-null violation = %v (%+v)", raw, inv)
 	}
 }
 
 func TestRequiredIsAFieldErrorOnly(t *testing.T) {
-	db, q := newDB(t)
+	db := newDB(t)
 	ctx := context.Background()
-	u := seedUser(t, q, "r@example.com")
+	u := seedUser(t, db, "r@example.com")
 
 	unmarked := OrderNew().UserIDSet(u.ID).FeeSet(0).Validate()
 	if errs := unmarked.Errors(); len(errs) != 1 || errs[0].Check != "required" || errs[0].Columns[0] != "total" || errs[0].Message != "total is required" {
@@ -130,15 +131,15 @@ func TestRequiredIsAFieldErrorOnly(t *testing.T) {
 	if errs := zero.Errors(); len(errs) != 1 || errs[0].Check != "required" {
 		t.Fatalf("the explicit empty value is refused too: %+v", errs)
 	}
-	_, err := q.OrderCreate(ctx, OrderNew().UserIDSet(u.ID).FeeSet(0))
+	_, err := run.Run(ctx, db, OrderCreate(OrderNew().UserIDSet(u.ID).FeeSet(0)))
 	if inv := invalidOf(t, err, "required", "total"); inv.Cause != nil {
 		t.Errorf("Create refuses it before any statement runs: %+v", inv)
 	}
 
-	if _, err := db.ExecContext(ctx, `INSERT INTO orders (user_id, status, total, fee) VALUES (?, 'pending', 0, 0)`, u.ID); err != nil {
+	if _, err := db.Pool().ExecContext(ctx, `INSERT INTO orders (user_id, status, total, fee) VALUES (?, 'pending', 0, 0)`, u.ID); err != nil {
 		t.Fatalf("the database carries no CHECK for required: %v", err)
 	}
-	if _, err := q.OrderCreate(ctx, OrderNew().UserIDSet(u.ID).TotalSet(1.00).FeeSet(0)); err != nil {
+	if _, err := run.Run(ctx, db, OrderCreate(OrderNew().UserIDSet(u.ID).TotalSet(1.00).FeeSet(0))); err != nil {
 		t.Fatalf("non-empty total rejected: %v", err)
 	}
 }

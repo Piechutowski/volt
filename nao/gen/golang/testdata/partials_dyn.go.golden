@@ -3,7 +3,6 @@
 package models
 
 import (
-	"context"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -24,71 +23,27 @@ func InvoiceAfter(key ...any) rt.Opt[Invoice] { return rt.After[Invoice](key...)
 
 func InvoiceSet(assigns ...rt.Assign[Invoice]) []rt.Assign[Invoice] { return assigns }
 
-func (q *Queries) InvoiceQuery(ctx context.Context, opts ...rt.Opt[Invoice]) ([]Invoice, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltInvoiceTableSQL, voltInvoiceColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Invoice{}
-	for voltRows.Next() {
-		voltV, voltErr := voltInvoiceScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func InvoiceQuery(opts ...rt.Opt[Invoice]) rt.Query[Invoice] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltInvoiceTableSQL, voltInvoiceColumnsSQL, opts)
+	return rt.Query[Invoice]{SQL: voltSQL, Args: voltArgs, Scan: voltInvoiceScan, Err: voltErr}
 }
 
-func (q *Queries) InvoiceCount(ctx context.Context, preds ...rt.Pred[Invoice]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltInvoiceTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func InvoiceCount(preds ...rt.Pred[Invoice]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltInvoiceTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) InvoiceExists(ctx context.Context, preds ...rt.Pred[Invoice]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltInvoiceTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func InvoiceExists(preds ...rt.Pred[Invoice]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltInvoiceTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) InvoiceDeleteWhere(ctx context.Context, preds ...rt.Pred[Invoice]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltInvoiceTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func InvoiceDeleteWhere(preds ...rt.Pred[Invoice]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltInvoiceTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) InvoiceUpdateWhere(ctx context.Context, set []rt.Assign[Invoice], preds ...rt.Pred[Invoice]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltInvoiceTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func InvoiceUpdateWhere(set []rt.Assign[Invoice], preds ...rt.Pred[Invoice]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltInvoiceTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }

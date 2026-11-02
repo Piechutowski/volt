@@ -20,7 +20,10 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-const rtPath = module + "/nao/rt"
+const (
+	rtPath  = module + "/nao/rt"
+	runPath = module + "/nao/run"
+)
 
 var networkPackages = []string{module + "/gen/router", module + "/gen/model", module + "/lsp", module + "/cmd"}
 
@@ -270,11 +273,11 @@ func TestLayersDataOnlyProgram(t *testing.T) {
 		"db/pipe.volt": "package db\n\nPipeline api {\n  use volt.RequestID\n}\n",
 		"db/0001__init.volt": "package db\n\nMigration 0001__init {\n  create table authors {\n    id    int    [pk, increment]\n    email string [unique]\n    name  string\n  }\n" +
 			"  create table posts {\n    id        int    [pk, increment]\n    author_id int    [ref: authors.id]\n    title     string\n    views     int    [default: 0]\n  }\n}\n",
-		"cmd/app/main.go": "package main\n\nimport (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\n\t\"dataonly/db\"\n)\n\n" +
-			"func main() {\n\tctx := context.Background()\n\tconn, err := sql.Open(\"sqlite3\", \":memory:\")\n\tif err != nil {\n\t\tpanic(err)\n\t}\n" +
-			"\tif err := db.Migrate(ctx, conn); err != nil {\n\t\tfmt.Println(err)\n\t}\n\tq := db.New(conn)\n" +
-			"\ta, err := q.AuthorCreate(ctx, db.AuthorNew().EmailSet(\"ann@example.com\").NameSet(\"Ann\"))\n\tfmt.Println(a, err)\n" +
-			"\tposts, err := q.PostPopular(ctx, 10)\n\tfmt.Println(len(posts), err)\n}\n",
+		"cmd/app/main.go": "package main\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n\t\"dataonly/db\"\n\t\"github.com/Piechutowski/volt/nao/run\"\n)\n\n" +
+			"func main() {\n\tctx := context.Background()\n\tconn, err := run.Open(\"sqlite3\", \":memory:\")\n\tif err != nil {\n\t\tpanic(err)\n\t}\n" +
+			"\tif _, err := run.MigrateUp(ctx, conn, db.Migrations); err != nil {\n\t\tfmt.Println(err)\n\t}\n" +
+			"\ta, err := run.Run(ctx, conn, db.AuthorCreate(db.AuthorNew().EmailSet(\"ann@example.com\").NameSet(\"Ann\")))\n\tfmt.Println(a, err)\n" +
+			"\tposts, err := run.Run(ctx, conn, db.PostPopular(10))\n\tfmt.Println(len(posts), err)\n}\n",
 	}
 	for name, src := range files {
 		path := filepath.Join(dir, name)
@@ -333,7 +336,7 @@ func dataOnly(t *testing.T, pkg *packages.Package, data string) {
 		t.Fatalf("%s does not reach nao/rt; the walk sees too little", pkg.PkgPath)
 	}
 	for path, chain := range via {
-		if path == module || (strings.HasPrefix(path, module+"/") && path != rtPath && !strings.HasPrefix(path, data)) || path == "net/http" {
+		if path == module || (strings.HasPrefix(path, module+"/") && path != rtPath && path != runPath && !strings.HasPrefix(path, data)) || path == "net/http" {
 			t.Errorf("%s links %s: %s", pkg.PkgPath, path, strings.Join(chain, " -> "))
 		}
 	}

@@ -188,76 +188,6 @@ file without the generated marker.
 
 ---
 
-## Step 4. Queries, lookups and writes as values; the runner
-
-Depends on: 2, 3. The one breaking rename of the query surface; finish it
-before anyone writes an application on Volt. The split of `nao/rt` from
-`database/sql` lands here with the runner, not in step 3: the generated
-`Queries` still runs its statements through `rt` until this step
-removes it, and an intermediate shape would be built only to be torn
-down.
-
-**Today.** A generated query is a method on `*Queries`, which holds the
-database handle and builds, runs and scans in one call. Handlers hold a
-`*Queries`, so they cannot be pure, and a query is not a value.
-
-**Proposed.** Building is a value returned by a generated function with no
-receiver and no context; running is one function in `nao/run`.
-
-```go
-// nao/rt: values. No database/sql import.
-type Query[T any] struct { SQL string; Args []any; Scan func(Row) (T, error) }   // zero or more rows
-type Lookup[T any] struct { ... }   // exactly one row, or ErrNotFound
-type Write[T any] struct { ... }    // insert, update, delete; rendered from marks
-type Effect[T any] interface{ effect() }  // sealed; Query, Lookup, Write, Tx, All implement it
-
-func Insert[M any](c Changeset[M]) Write[M]
-func Update[M any](c Changeset[M]) Write[M]
-func Delete[M any](d Desc[M], key ...any) Write[Unit]
-func Tx(ws ...AnyWrite) Write[[]any]            // all or nothing, results in order
-
-// nao/run: the one stateful object and the one executor.
-type DB struct { ... }                          // pool plus statement cache
-func Open(driver, dsn string) (DB, error)
-func Run[T any](ctx context.Context, db DB, e rt.Effect[T]) (T, error)
-func MigrateUp(ctx, db, []rt.Migration) ...     // moved from rt; rt.Migration stays a value
-```
-
-```go
-// generated, in place of the methods
-func MetricGet(id int) rt.Lookup[Metric] {
-	return rt.Lookup[Metric]{SQL: metricGetSQL, Args: []any{id}, Scan: metricScan}
-}
-func MetricOrdered() rt.Query[Metric]
-func PointWindow(metricID, since int) rt.Query[Point]
-func MetricQuery(opts ...rt.Opt[Metric]) rt.Query[Metric]     // dynamic layer, rendered at construction
-func MetricCount(preds ...rt.Pred[Metric]) rt.Lookup[int64]
-```
-
-`Queries`, `New`, `WithTx`, `WithCache` and `Tx` disappear from generated
-code. The runner owns the statement cache, transactions, context
-cancellation, `rt.ErrNotFound` mapping (from `sql.ErrNoRows`), the
-`*rt.Invalid` mapping of database refusals, and one structured log line
-per statement with its duration. A `Write` built from an invalid
-changeset carries its `*rt.Invalid` and the runner returns it without
-running a statement; the spec says so in that sentence.
-
-Query routes: the generated shim becomes `Run(query)` then `Render`.
-The generated Go client is unchanged. `rt.ParallelMap` and `rt.All`
-(parallel effects, first error cancels) land here too, over
-`sync.WaitGroup.Go` and a cancelable context: the root module stays
-stdlib-only, so no `errgroup`.
-
-Spec: §generated-query-surface, the `Create` and `Update` rule of §changesets, §data-and-network-layers
-(route files import `nao/run`), the mutable-state inventory. `AGENT.md`'s
-generated-imports sentence names `nao/run` for route files in this step.
-
-Done when: goldens and `nao/itest` green on the new surface; the blog
-fixture's hand-written side rebuilt; layers test holds `nao/rt` free of
-`database/sql`; per-statement logging visible in the itest.
-
----
-
 ## Step 5. Generated Elm client
 
 Deferred: the language first, then non-core features and tooling.
@@ -620,7 +550,6 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 
 | Step | Depends on | Lands |
 |---|---|---|
-| 4 values and the runner | 2, 3 | the breaking rename |
 | 6 responses, pure handlers | 4 | |
 | 7 route loads | 6 | |
 | 8 bodies | 7 | |

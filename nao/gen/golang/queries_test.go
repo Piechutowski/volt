@@ -186,11 +186,6 @@ func TestQueriesGenerationErrors(t *testing.T) {
 			src:     "Table users { id int [pk] }\nTable user { id int [pk] }",
 			wantErr: "both map to Go type",
 		},
-		{
-			name:    "reserved model name",
-			src:     "Table jobs [model: \"Queries\"] { id int [pk] }",
-			wantErr: "Queries",
-		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

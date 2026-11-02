@@ -3,128 +3,41 @@
 package models
 
 import (
-	"context"
-	"database/sql"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-type Queries struct {
-	db    rt.DBTX
-	cache *rt.StmtCache
-}
-
-func New(db rt.DBTX) *Queries { return &Queries{db: db} }
-
-func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
-	return &Queries{db: q.db, cache: cache}
-}
-
-func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
-
-func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
-}
-
 const voltAuthorGetSQL = `SELECT "id", "email", "handle", "deleted_at" FROM "authors" WHERE "id" = ?`
 
-func (q *Queries) AuthorGet(ctx context.Context, id int) (Author, error) {
-	return voltAuthorScan(q.db.QueryRowContext(ctx, voltAuthorGetSQL, id))
+func AuthorGet(id int) rt.Lookup[Author] {
+	return rt.Lookup[Author]{SQL: voltAuthorGetSQL, Args: []any{id}, Scan: voltAuthorScan}
 }
 
-func (q *Queries) AuthorGetMany(ctx context.Context, ids []int) ([]Author, error) {
+func AuthorGetMany(ids []int) rt.Query[Author] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[Author]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltAuthorTableSQL, voltAuthorColumnsSQL, []rt.Opt[Author]{AuthorID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Author{}
-	for voltRows.Next() {
-		voltV, voltErr := voltAuthorScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltAuthorTableSQL, voltAuthorColumnsSQL, []rt.Opt[Author]{AuthorID.In(ids...)})
+	return rt.Query[Author]{SQL: voltSQL, Args: voltArgs, Scan: voltAuthorScan, Err: voltErr}
 }
 
 const voltAuthorGetByHandleSQL = `SELECT "id", "email", "handle", "deleted_at" FROM "authors" WHERE "handle" = ?`
 
-func (q *Queries) AuthorGetByHandle(ctx context.Context, handle string) (Author, error) {
-	return voltAuthorScan(q.db.QueryRowContext(ctx, voltAuthorGetByHandleSQL, handle))
+func AuthorGetByHandle(handle string) rt.Lookup[Author] {
+	return rt.Lookup[Author]{SQL: voltAuthorGetByHandleSQL, Args: []any{handle}, Scan: voltAuthorScan}
 }
 
 const voltAuthorListSQL = `SELECT "id", "email", "handle", "deleted_at" FROM "authors"`
 
-func (q *Queries) AuthorList(ctx context.Context) ([]Author, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltAuthorListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Author{}
-	for voltRows.Next() {
-		voltV, voltErr := voltAuthorScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func AuthorList() rt.Query[Author] {
+	return rt.Query[Author]{SQL: voltAuthorListSQL, Scan: voltAuthorScan}
 }
 
-func (q *Queries) AuthorCreate(ctx context.Context, c AuthorChangeset) (Author, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Author{}, voltErr
-	}
-	voltSQL, voltArgs := c.InsertRender()
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return Author{}, voltErr
-	}
-	return voltAuthorScan(voltRow)
-}
+func AuthorCreate(c AuthorChangeset) rt.Write[Author] { return rt.Insert(c.Validate().Changeset) }
 
-func (q *Queries) AuthorUpdate(ctx context.Context, c AuthorChangeset) (Author, error) {
-	if !c.FromRow() {
-		return Author{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Author{}, voltErr
-	}
-	voltSQL, voltArgs := c.UpdateRender()
-	if voltSQL == "" {
-		return c.Row(), nil
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return Author{}, voltErr
-	}
-	return voltAuthorScan(voltRow)
-}
+func AuthorUpdate(c AuthorChangeset) rt.Write[Author] { return rt.Update(c.Validate().Changeset) }
 
 const voltAuthorDeleteSQL = `DELETE FROM "authors" WHERE "id" = ?`
 
-func (q *Queries) AuthorDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltAuthorDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("Author", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
+func AuthorDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltAuthorDeleteSQL, Args: []any{id}, Model: "Author", One: true}
 }

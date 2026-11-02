@@ -3,7 +3,6 @@
 package models
 
 import (
-	"context"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -24,71 +23,27 @@ func AuthorAfter(key ...any) rt.Opt[Author] { return rt.After[Author](key...) }
 
 func AuthorSet(assigns ...rt.Assign[Author]) []rt.Assign[Author] { return assigns }
 
-func (q *Queries) AuthorQuery(ctx context.Context, opts ...rt.Opt[Author]) ([]Author, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltAuthorTableSQL, voltAuthorColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Author{}
-	for voltRows.Next() {
-		voltV, voltErr := voltAuthorScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func AuthorQuery(opts ...rt.Opt[Author]) rt.Query[Author] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltAuthorTableSQL, voltAuthorColumnsSQL, opts)
+	return rt.Query[Author]{SQL: voltSQL, Args: voltArgs, Scan: voltAuthorScan, Err: voltErr}
 }
 
-func (q *Queries) AuthorCount(ctx context.Context, preds ...rt.Pred[Author]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltAuthorTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func AuthorCount(preds ...rt.Pred[Author]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltAuthorTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) AuthorExists(ctx context.Context, preds ...rt.Pred[Author]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltAuthorTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func AuthorExists(preds ...rt.Pred[Author]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltAuthorTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) AuthorDeleteWhere(ctx context.Context, preds ...rt.Pred[Author]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltAuthorTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func AuthorDeleteWhere(preds ...rt.Pred[Author]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltAuthorTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) AuthorUpdateWhere(ctx context.Context, set []rt.Assign[Author], preds ...rt.Pred[Author]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltAuthorTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func AuthorUpdateWhere(set []rt.Assign[Author], preds ...rt.Pred[Author]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltAuthorTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }

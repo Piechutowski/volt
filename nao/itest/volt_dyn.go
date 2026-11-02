@@ -3,7 +3,6 @@
 package itest
 
 import (
-	"context"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -24,73 +23,29 @@ func UserAfter(key ...any) rt.Opt[User] { return rt.After[User](key...) }
 
 func UserSet(assigns ...rt.Assign[User]) []rt.Assign[User] { return assigns }
 
-func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []User{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func UserQuery(opts ...rt.Opt[User]) rt.Query[User] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, opts)
+	return rt.Query[User]{SQL: voltSQL, Args: voltArgs, Scan: voltUserScan, Err: voltErr}
 }
 
-func (q *Queries) UserCount(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltUserTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func UserCount(preds ...rt.Pred[User]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltUserTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltUserTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func UserExists(preds ...rt.Pred[User]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltUserTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltUserTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func UserDeleteWhere(preds ...rt.Pred[User]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltUserTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltUserTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltUserTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -110,73 +65,29 @@ func OrderAfter(key ...any) rt.Opt[Order] { return rt.After[Order](key...) }
 
 func OrderSet(assigns ...rt.Assign[Order]) []rt.Assign[Order] { return assigns }
 
-func (q *Queries) OrderQuery(ctx context.Context, opts ...rt.Opt[Order]) ([]Order, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltOrderTableSQL, voltOrderColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Order{}
-	for voltRows.Next() {
-		voltV, voltErr := voltOrderScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func OrderQuery(opts ...rt.Opt[Order]) rt.Query[Order] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltOrderTableSQL, voltOrderColumnsSQL, opts)
+	return rt.Query[Order]{SQL: voltSQL, Args: voltArgs, Scan: voltOrderScan, Err: voltErr}
 }
 
-func (q *Queries) OrderCount(ctx context.Context, preds ...rt.Pred[Order]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltOrderTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func OrderCount(preds ...rt.Pred[Order]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltOrderTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) OrderExists(ctx context.Context, preds ...rt.Pred[Order]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltOrderTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func OrderExists(preds ...rt.Pred[Order]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltOrderTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) OrderDeleteWhere(ctx context.Context, preds ...rt.Pred[Order]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltOrderTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func OrderDeleteWhere(preds ...rt.Pred[Order]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltOrderTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) OrderUpdateWhere(ctx context.Context, set []rt.Assign[Order], preds ...rt.Pred[Order]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltOrderTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func OrderUpdateWhere(set []rt.Assign[Order], preds ...rt.Pred[Order]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltOrderTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -196,73 +107,29 @@ func UserTagAfter(key ...any) rt.Opt[UserTag] { return rt.After[UserTag](key...)
 
 func UserTagSet(assigns ...rt.Assign[UserTag]) []rt.Assign[UserTag] { return assigns }
 
-func (q *Queries) UserTagQuery(ctx context.Context, opts ...rt.Opt[UserTag]) ([]UserTag, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserTagTableSQL, voltUserTagColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []UserTag{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserTagScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func UserTagQuery(opts ...rt.Opt[UserTag]) rt.Query[UserTag] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltUserTagTableSQL, voltUserTagColumnsSQL, opts)
+	return rt.Query[UserTag]{SQL: voltSQL, Args: voltArgs, Scan: voltUserTagScan, Err: voltErr}
 }
 
-func (q *Queries) UserTagCount(ctx context.Context, preds ...rt.Pred[UserTag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltUserTagTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func UserTagCount(preds ...rt.Pred[UserTag]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltUserTagTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) UserTagExists(ctx context.Context, preds ...rt.Pred[UserTag]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltUserTagTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func UserTagExists(preds ...rt.Pred[UserTag]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltUserTagTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) UserTagDeleteWhere(ctx context.Context, preds ...rt.Pred[UserTag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltUserTagTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func UserTagDeleteWhere(preds ...rt.Pred[UserTag]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltUserTagTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) UserTagUpdateWhere(ctx context.Context, set []rt.Assign[UserTag], preds ...rt.Pred[UserTag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltUserTagTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func UserTagUpdateWhere(set []rt.Assign[UserTag], preds ...rt.Pred[UserTag]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltUserTagTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -282,73 +149,29 @@ func PageViewAfter(key ...any) rt.Opt[PageView] { return rt.After[PageView](key.
 
 func PageViewSet(assigns ...rt.Assign[PageView]) []rt.Assign[PageView] { return assigns }
 
-func (q *Queries) PageViewQuery(ctx context.Context, opts ...rt.Opt[PageView]) ([]PageView, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPageViewTableSQL, voltPageViewColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PageView{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPageViewScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PageViewQuery(opts ...rt.Opt[PageView]) rt.Query[PageView] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltPageViewTableSQL, voltPageViewColumnsSQL, opts)
+	return rt.Query[PageView]{SQL: voltSQL, Args: voltArgs, Scan: voltPageViewScan, Err: voltErr}
 }
 
-func (q *Queries) PageViewCount(ctx context.Context, preds ...rt.Pred[PageView]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltPageViewTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func PageViewCount(preds ...rt.Pred[PageView]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltPageViewTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) PageViewExists(ctx context.Context, preds ...rt.Pred[PageView]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltPageViewTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func PageViewExists(preds ...rt.Pred[PageView]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltPageViewTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) PageViewDeleteWhere(ctx context.Context, preds ...rt.Pred[PageView]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltPageViewTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PageViewDeleteWhere(preds ...rt.Pred[PageView]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltPageViewTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) PageViewUpdateWhere(ctx context.Context, set []rt.Assign[PageView], preds ...rt.Pred[PageView]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltPageViewTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PageViewUpdateWhere(set []rt.Assign[PageView], preds ...rt.Pred[PageView]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltPageViewTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -368,73 +191,29 @@ func LinkClickAfter(key ...any) rt.Opt[LinkClick] { return rt.After[LinkClick](k
 
 func LinkClickSet(assigns ...rt.Assign[LinkClick]) []rt.Assign[LinkClick] { return assigns }
 
-func (q *Queries) LinkClickQuery(ctx context.Context, opts ...rt.Opt[LinkClick]) ([]LinkClick, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltLinkClickTableSQL, voltLinkClickColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []LinkClick{}
-	for voltRows.Next() {
-		voltV, voltErr := voltLinkClickScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func LinkClickQuery(opts ...rt.Opt[LinkClick]) rt.Query[LinkClick] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltLinkClickTableSQL, voltLinkClickColumnsSQL, opts)
+	return rt.Query[LinkClick]{SQL: voltSQL, Args: voltArgs, Scan: voltLinkClickScan, Err: voltErr}
 }
 
-func (q *Queries) LinkClickCount(ctx context.Context, preds ...rt.Pred[LinkClick]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltLinkClickTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func LinkClickCount(preds ...rt.Pred[LinkClick]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltLinkClickTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) LinkClickExists(ctx context.Context, preds ...rt.Pred[LinkClick]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltLinkClickTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func LinkClickExists(preds ...rt.Pred[LinkClick]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltLinkClickTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) LinkClickDeleteWhere(ctx context.Context, preds ...rt.Pred[LinkClick]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltLinkClickTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func LinkClickDeleteWhere(preds ...rt.Pred[LinkClick]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltLinkClickTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) LinkClickUpdateWhere(ctx context.Context, set []rt.Assign[LinkClick], preds ...rt.Pred[LinkClick]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltLinkClickTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func LinkClickUpdateWhere(set []rt.Assign[LinkClick], preds ...rt.Pred[LinkClick]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltLinkClickTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -454,73 +233,29 @@ func SiteFlagAfter(key ...any) rt.Opt[SiteFlag] { return rt.After[SiteFlag](key.
 
 func SiteFlagSet(assigns ...rt.Assign[SiteFlag]) []rt.Assign[SiteFlag] { return assigns }
 
-func (q *Queries) SiteFlagQuery(ctx context.Context, opts ...rt.Opt[SiteFlag]) ([]SiteFlag, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltSiteFlagTableSQL, voltSiteFlagColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []SiteFlag{}
-	for voltRows.Next() {
-		voltV, voltErr := voltSiteFlagScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func SiteFlagQuery(opts ...rt.Opt[SiteFlag]) rt.Query[SiteFlag] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltSiteFlagTableSQL, voltSiteFlagColumnsSQL, opts)
+	return rt.Query[SiteFlag]{SQL: voltSQL, Args: voltArgs, Scan: voltSiteFlagScan, Err: voltErr}
 }
 
-func (q *Queries) SiteFlagCount(ctx context.Context, preds ...rt.Pred[SiteFlag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltSiteFlagTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func SiteFlagCount(preds ...rt.Pred[SiteFlag]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltSiteFlagTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) SiteFlagExists(ctx context.Context, preds ...rt.Pred[SiteFlag]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltSiteFlagTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func SiteFlagExists(preds ...rt.Pred[SiteFlag]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltSiteFlagTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) SiteFlagDeleteWhere(ctx context.Context, preds ...rt.Pred[SiteFlag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltSiteFlagTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func SiteFlagDeleteWhere(preds ...rt.Pred[SiteFlag]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltSiteFlagTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) SiteFlagUpdateWhere(ctx context.Context, set []rt.Assign[SiteFlag], preds ...rt.Pred[SiteFlag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltSiteFlagTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func SiteFlagUpdateWhere(set []rt.Assign[SiteFlag], preds ...rt.Pred[SiteFlag]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltSiteFlagTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -540,73 +275,29 @@ func AttachmentAfter(key ...any) rt.Opt[Attachment] { return rt.After[Attachment
 
 func AttachmentSet(assigns ...rt.Assign[Attachment]) []rt.Assign[Attachment] { return assigns }
 
-func (q *Queries) AttachmentQuery(ctx context.Context, opts ...rt.Opt[Attachment]) ([]Attachment, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltAttachmentTableSQL, voltAttachmentColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Attachment{}
-	for voltRows.Next() {
-		voltV, voltErr := voltAttachmentScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func AttachmentQuery(opts ...rt.Opt[Attachment]) rt.Query[Attachment] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltAttachmentTableSQL, voltAttachmentColumnsSQL, opts)
+	return rt.Query[Attachment]{SQL: voltSQL, Args: voltArgs, Scan: voltAttachmentScan, Err: voltErr}
 }
 
-func (q *Queries) AttachmentCount(ctx context.Context, preds ...rt.Pred[Attachment]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltAttachmentTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func AttachmentCount(preds ...rt.Pred[Attachment]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltAttachmentTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) AttachmentExists(ctx context.Context, preds ...rt.Pred[Attachment]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltAttachmentTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func AttachmentExists(preds ...rt.Pred[Attachment]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltAttachmentTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) AttachmentDeleteWhere(ctx context.Context, preds ...rt.Pred[Attachment]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltAttachmentTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func AttachmentDeleteWhere(preds ...rt.Pred[Attachment]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltAttachmentTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) AttachmentUpdateWhere(ctx context.Context, set []rt.Assign[Attachment], preds ...rt.Pred[Attachment]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltAttachmentTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func AttachmentUpdateWhere(set []rt.Assign[Attachment], preds ...rt.Pred[Attachment]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltAttachmentTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -626,73 +317,29 @@ func BlobAfter(key ...any) rt.Opt[Blob] { return rt.After[Blob](key...) }
 
 func BlobSet(assigns ...rt.Assign[Blob]) []rt.Assign[Blob] { return assigns }
 
-func (q *Queries) BlobQuery(ctx context.Context, opts ...rt.Opt[Blob]) ([]Blob, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltBlobTableSQL, voltBlobColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Blob{}
-	for voltRows.Next() {
-		voltV, voltErr := voltBlobScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func BlobQuery(opts ...rt.Opt[Blob]) rt.Query[Blob] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltBlobTableSQL, voltBlobColumnsSQL, opts)
+	return rt.Query[Blob]{SQL: voltSQL, Args: voltArgs, Scan: voltBlobScan, Err: voltErr}
 }
 
-func (q *Queries) BlobCount(ctx context.Context, preds ...rt.Pred[Blob]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltBlobTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func BlobCount(preds ...rt.Pred[Blob]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltBlobTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) BlobExists(ctx context.Context, preds ...rt.Pred[Blob]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltBlobTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func BlobExists(preds ...rt.Pred[Blob]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltBlobTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) BlobDeleteWhere(ctx context.Context, preds ...rt.Pred[Blob]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltBlobTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func BlobDeleteWhere(preds ...rt.Pred[Blob]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltBlobTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) BlobUpdateWhere(ctx context.Context, set []rt.Assign[Blob], preds ...rt.Pred[Blob]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltBlobTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func BlobUpdateWhere(set []rt.Assign[Blob], preds ...rt.Pred[Blob]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltBlobTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -712,73 +359,29 @@ func DailyHitAfter(key ...any) rt.Opt[DailyHit] { return rt.After[DailyHit](key.
 
 func DailyHitSet(assigns ...rt.Assign[DailyHit]) []rt.Assign[DailyHit] { return assigns }
 
-func (q *Queries) DailyHitQuery(ctx context.Context, opts ...rt.Opt[DailyHit]) ([]DailyHit, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltDailyHitTableSQL, voltDailyHitColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []DailyHit{}
-	for voltRows.Next() {
-		voltV, voltErr := voltDailyHitScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func DailyHitQuery(opts ...rt.Opt[DailyHit]) rt.Query[DailyHit] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltDailyHitTableSQL, voltDailyHitColumnsSQL, opts)
+	return rt.Query[DailyHit]{SQL: voltSQL, Args: voltArgs, Scan: voltDailyHitScan, Err: voltErr}
 }
 
-func (q *Queries) DailyHitCount(ctx context.Context, preds ...rt.Pred[DailyHit]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltDailyHitTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func DailyHitCount(preds ...rt.Pred[DailyHit]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltDailyHitTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) DailyHitExists(ctx context.Context, preds ...rt.Pred[DailyHit]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltDailyHitTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func DailyHitExists(preds ...rt.Pred[DailyHit]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltDailyHitTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) DailyHitDeleteWhere(ctx context.Context, preds ...rt.Pred[DailyHit]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltDailyHitTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func DailyHitDeleteWhere(preds ...rt.Pred[DailyHit]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltDailyHitTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) DailyHitUpdateWhere(ctx context.Context, set []rt.Assign[DailyHit], preds ...rt.Pred[DailyHit]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltDailyHitTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func DailyHitUpdateWhere(set []rt.Assign[DailyHit], preds ...rt.Pred[DailyHit]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltDailyHitTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -798,73 +401,29 @@ func InviteAfter(key ...any) rt.Opt[Invite] { return rt.After[Invite](key...) }
 
 func InviteSet(assigns ...rt.Assign[Invite]) []rt.Assign[Invite] { return assigns }
 
-func (q *Queries) InviteQuery(ctx context.Context, opts ...rt.Opt[Invite]) ([]Invite, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltInviteTableSQL, voltInviteColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Invite{}
-	for voltRows.Next() {
-		voltV, voltErr := voltInviteScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func InviteQuery(opts ...rt.Opt[Invite]) rt.Query[Invite] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltInviteTableSQL, voltInviteColumnsSQL, opts)
+	return rt.Query[Invite]{SQL: voltSQL, Args: voltArgs, Scan: voltInviteScan, Err: voltErr}
 }
 
-func (q *Queries) InviteCount(ctx context.Context, preds ...rt.Pred[Invite]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltInviteTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func InviteCount(preds ...rt.Pred[Invite]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltInviteTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) InviteExists(ctx context.Context, preds ...rt.Pred[Invite]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltInviteTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func InviteExists(preds ...rt.Pred[Invite]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltInviteTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) InviteDeleteWhere(ctx context.Context, preds ...rt.Pred[Invite]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltInviteTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func InviteDeleteWhere(preds ...rt.Pred[Invite]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltInviteTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) InviteUpdateWhere(ctx context.Context, set []rt.Assign[Invite], preds ...rt.Pred[Invite]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltInviteTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func InviteUpdateWhere(set []rt.Assign[Invite], preds ...rt.Pred[Invite]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltInviteTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -884,71 +443,27 @@ func PostFlagAfter(key ...any) rt.Opt[PostFlag] { return rt.After[PostFlag](key.
 
 func PostFlagSet(assigns ...rt.Assign[PostFlag]) []rt.Assign[PostFlag] { return assigns }
 
-func (q *Queries) PostFlagQuery(ctx context.Context, opts ...rt.Opt[PostFlag]) ([]PostFlag, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPostFlagTableSQL, voltPostFlagColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PostFlag{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPostFlagScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PostFlagQuery(opts ...rt.Opt[PostFlag]) rt.Query[PostFlag] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltPostFlagTableSQL, voltPostFlagColumnsSQL, opts)
+	return rt.Query[PostFlag]{SQL: voltSQL, Args: voltArgs, Scan: voltPostFlagScan, Err: voltErr}
 }
 
-func (q *Queries) PostFlagCount(ctx context.Context, preds ...rt.Pred[PostFlag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltPostFlagTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func PostFlagCount(preds ...rt.Pred[PostFlag]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltPostFlagTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) PostFlagExists(ctx context.Context, preds ...rt.Pred[PostFlag]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltPostFlagTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func PostFlagExists(preds ...rt.Pred[PostFlag]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltPostFlagTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) PostFlagDeleteWhere(ctx context.Context, preds ...rt.Pred[PostFlag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltPostFlagTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PostFlagDeleteWhere(preds ...rt.Pred[PostFlag]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltPostFlagTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) PostFlagUpdateWhere(ctx context.Context, set []rt.Assign[PostFlag], preds ...rt.Pred[PostFlag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltPostFlagTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PostFlagUpdateWhere(set []rt.Assign[PostFlag], preds ...rt.Pred[PostFlag]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltPostFlagTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }

@@ -7,13 +7,14 @@ package itest
 import (
 	"context"
 	"encoding/json"
+	"github.com/Piechutowski/volt/nao/run"
 	"strings"
 	"testing"
 )
 
 func TestTagPassthroughRenamesJSON(t *testing.T) {
-	_, q := newDB(t)
-	u, err := q.UserCreate(context.Background(), UserNew().EmailSet("ann@example.com").NameSet("Ann"))
+	db := newDB(t)
+	u, err := run.Run(context.Background(), db, UserCreate(UserNew().EmailSet("ann@example.com").NameSet("Ann")))
 	if err != nil {
 		t.Fatal(err)
 	}

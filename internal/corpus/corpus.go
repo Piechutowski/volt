@@ -227,7 +227,7 @@ func controllersGo(pkg string, stats []string, main bool) string {
 		fmt.Fprintf(&b, "\nfunc (stub) %s(w http.ResponseWriter, r *volt.Request) error { return nil }\n", a)
 	}
 	if main {
-		b.WriteString("\nfunc main() {\n\thttp.ListenAndServe(\":0\", NewRouter(Controllers{Home: stub{}, Files: stub{}, Stats: stub{}, Queries: New(nil)}))\n}\n")
+		b.WriteString("\nfunc main() {\n\thttp.ListenAndServe(\":0\", NewRouter(Controllers{Home: stub{}, Files: stub{}, Stats: stub{}}))\n}\n")
 	} else {
 		b.WriteString("\nvar _ http.Handler = NewRouter(Controllers{Home: stub{}, Files: stub{}, Stats: stub{}})\n")
 	}

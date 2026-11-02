@@ -3,9 +3,6 @@
 package models
 
 import (
-	"context"
-	"database/sql"
-
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -135,9 +132,4 @@ FROM posts`,
 			`ALTER TABLE comments DROP COLUMN nickname`,
 		},
 	},
-}
-
-func Migrate(ctx context.Context, db *sql.DB) error {
-	_, voltErr := rt.MigrateUp(ctx, db, Migrations)
-	return voltErr
 }

@@ -44,7 +44,8 @@ green.
 ## Repository
 
 Three Go modules under `go.work`: the library at the root (runtime,
-`lang/`, `gen/`, `nao/`, `itest/`; stdlib only, sqlite3 test-only) and
+`lang/`, `gen/`, `nao/` with the value runtime `nao/rt` and the runner
+`nao/run`, `itest/`; stdlib only, sqlite3 test-only) and
 the tools `lsp/` and `cmd/volt/`, which carry the third-party
 dependencies; `cmd/volt` carries the `mattn/go-sqlite3` driver for the
 fold and `volt migration up`, so the tool is built with cgo (a C
@@ -87,8 +88,8 @@ server gets a scripted stdio session; one is a golden
 - Generated files start with the `Code generated … DO NOT EDIT.`
   marker; the CLI refuses to overwrite a file without it. Generated
   data files import the standard library, `nao/rt` and the packages of
-  declared types only; route files add the root `volt` package and the
-  data packages they route.
+  declared types only; route files add the root `volt` package, the
+  runner `nao/run` and the data packages they route.
 - SQLite is the only database. Values and effects at the edge (spec
   §values-and-effects, `docs/plan.md` part 0).
 - A memoized computation is a pure function of explicit inputs, keyed

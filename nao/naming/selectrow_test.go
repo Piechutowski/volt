@@ -16,7 +16,7 @@ func TestSelectRowNameMatchesRowType(t *testing.T) {
 		{SelectFn{TableKey: "users", MethodSuffix: "Active"}, "User"},
 		{SelectFn{TableKey: "users", MethodSuffix: "Active", Cols: []string{"id", "email"}}, "User"},
 		{SelectFn{TableKey: "users", MethodSuffix: "Active", Cols: []string{"id", "email"}, SharedType: "UserContact"}, "UserContact"},
-		{SelectFn{TableKey: "users", MethodSuffix: "Public", Excluded: []string{"email"}}, "UserPublic"},
+		{SelectFn{TableKey: "users", MethodSuffix: "Public", Excluded: []string{"email"}}, "UserPublicRow"},
 		{SelectFn{TableKey: "users", MethodSuffix: "Public", Excluded: []string{"email"}, SharedType: "UserPublic"}, "UserPublic"},
 		{SelectFn{TableKey: "nope", MethodSuffix: "Active"}, ""},
 	} {

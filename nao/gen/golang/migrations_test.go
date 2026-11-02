@@ -18,13 +18,13 @@ func TestMigrationsGolden(t *testing.T) {
 		t.Fatalf("GenerateMigrations: %v", err)
 	}
 	compareGolden(t, out, filepath.Join("testdata", "blog_migrations.go.golden"))
-	for _, want := range []string{`"context"`, `"database/sql"`, `"github.com/Piechutowski/volt/nao/rt"`} {
+	for _, want := range []string{`"github.com/Piechutowski/volt/nao/rt"`} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("missing import %s", want)
 		}
 	}
-	if strings.Count(string(out), "\n\t\"") != 3 {
-		t.Errorf("volt_migrations.go imports context, database/sql and rt only:\n%s", out)
+	if strings.Count(string(out), "\n\t\"") != 1 {
+		t.Errorf("volt_migrations.go imports rt only:\n%s", out)
 	}
 }
 

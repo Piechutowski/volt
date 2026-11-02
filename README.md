@@ -41,7 +41,7 @@ effect is performed by generated code you can read.
 | `cmd/volt` | the one binary: `check`, `vet`, `gen`, `routes`, `stress`, `migration`, `lsp`, `version` |
 | `lang/` | the language: scanner, parser, checker, vet, conformance corpus |
 | `gen/` | the generators |
-| `nao/` | the data layer: naming, generation, the value runtime `rt` |
+| `nao/` | the data layer: naming, generation, the value runtime `rt`, the runner `run` |
 | `lsp/` | the language server |
 | `grammar/`, `zed-extension/` | the editor stack |
 | `itest/` | the fixture application served over `httptest`, drift-checked against the generator |

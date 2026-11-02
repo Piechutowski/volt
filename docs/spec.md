@@ -71,8 +71,7 @@ the generator and `volt vet` where Go itself holds nothing.
 
 Where the implementation as it stands falls short of a rule,
 [`plan.md`](plan.md) names the step that closes the gap: today a
-generated query runs on its `Queries` handle (§generated-query-surface)
-and a handler writes its own response (§handler-references).
+handler writes its own response (§handler-references).
 
 ---
 
@@ -831,7 +830,7 @@ column setting  = "pk"
    as a column its row type keeps, is kept unresolved: it generates no
    method, and the query routes and datasets that name it are checked
    as for any select (§query-routes, §dataset-declaration). A query
-   route to a default CRUD method keyed by such a column, and a
+   route to a default CRUD function keyed by such a column, and a
    resources declaration over a table whose primary key is one, are
    kept and checked the same way (§query-routes, §table-resolution).
    One check is narrowed: a path parameter that a dropped predicate
@@ -1217,9 +1216,8 @@ storage type = column type ;
    shares the package scope with the exported names generated code
    declares (§names), so it MUST NOT be one of them: a model, a
    changeset with its aliases and constructor, a column handle, an
-   option wrapper, the `Queries` handle or its constructor `New`, in a
-   package that declares migrations `Migrations` and `Migrate`
-   (§migration-tooling), and in a package that routes the router's
+   option wrapper, a query function (§generated-query-surface), in a
+   package that declares migrations `Migrations` (§migration-tooling), and in a package that routes the router's
    `Controllers`, `NewRouter`, `Table`, each `<Name>Controller`
    interface and each `Path<Helper>` function
    (§route-names-and-reverse-urls), and `Client` and `NewClient`, which
@@ -1763,18 +1761,22 @@ both.
    (§changesets). `volt gen` writes it into a package's data files,
    `volt_models.go`, `volt_queries.go`, `volt_dyn.go`,
    `volt_validate.go`, `volt_selects.go` and `volt_migrations.go` (with
-   `volt_schema.sql` on request), over the data runtime `nao/rt`. A data
-   file imports only the standard library other than `net/http`, `nao/rt`
-   and the packages of the package's declared types (§types).
+   `volt_schema.sql` on request), over the data runtime `nao/rt`, whose
+   values a program performs through the runner `nao/run`. A data
+   file imports only the standard library other than `net/http` and
+   `database/sql`, `nao/rt` and the packages of the package's declared
+   types (§types).
 2. **The network layer** is packages (§projects-and-packages), imports
    (§imports), pipelines (§pipelines), scopes and routes
    (§scopes-and-routes), resources (§resources) and datasets
    (§datasets). `volt gen` writes it into the route files,
    `volt_handlers.go`, `volt_router.go`, `volt_paths.go`,
    `volt_routes.go` and the client's `volt_client.go`, over the root
-   `volt` package, the network runtime. A route file and the client
-   import the standard library, the root `volt` package and the data
-   packages whose models and queries they name.
+   `volt` package, the network runtime. A route file imports the
+   standard library, the root `volt` package, the runner `nao/run` when
+   it has a query route, and the data packages whose models and queries
+   it names; the client imports the standard library, the root `volt`
+   package and those data packages.
 3. **The rule.** The network layer may use the data layer, never the
    reverse. The route files call a data package's queries and
    changesets, and the root `volt` package reads the data runtime's
@@ -1792,7 +1794,8 @@ both.
    has no routes, since resources and datasets live only in scopes
    (§scopes): it generates its data files alone, `volt gen` removes
    the route files it wrote for the package while it had a scope, and
-   a program built on it links nothing from Volt but `nao/rt`. Beside
+   a program built on it links nothing from Volt but `nao/rt` and the
+   runner `nao/run`. Beside
    the package clause (§projects-and-packages), the one declaration of
    the network layer such a package can carry is a pipeline, which no
    scope pipes through and which generates nothing.
@@ -2076,12 +2079,12 @@ handler ref = name, [ ".", name ] ;
    parameter signatures (names, types and wildcard-ness, in order).
 4. The generated `Controllers` manifest is one namespace: a controller
    MUST NOT take the name of a field the manifest holds for a data
-   package (`DB`, `Queries`; §query-routes) or for the event broker
+   the query routes run on (`DB`; §query-routes) or for the event broker
    (`Events`; §event-routes). The error names the field.
 
 ### Query routes
 
-A **query route** binds a route to a generated query method of a data
+A **query route** binds a route to a generated query function of a data
 package — an imported one, or the package itself when it declares the
 tables — instead of to a controller. Volt generated the
 method, so it knows the parameters and the row type, and it writes the
@@ -2104,24 +2107,24 @@ Scope /api [pipe: api] {
 }
 ```
 
-1. **Which methods qualify.** A select method, `<Model><SelectName>`
-   per member (§selects-over-groups), or a default CRUD method of a table:
+1. **Which functions qualify.** A select function, `<Model><SelectName>`
+   per member (§selects-over-groups), or a default CRUD function of a table:
    `<Model>Get`, `<Model>List`, `<Model>Create`, `<Model>Update`,
    `<Model>Delete`, each only where the query generator emits it
    (`Get`/`Update`/`Delete` need a primary key, `Update` a non-key
    column). Any other name is an error listing what qualifies; a name
-   differing only in case names the right spelling. The method fixes
-   the route's verb: a read, `Get`, `List` or a select method, takes
+   differing only in case names the right spelling. The function fixes
+   the route's verb: a read, `Get`, `List` or a select function, takes
    `get`, which ServeMux also serves for HEAD (§routes); `Create` takes
    `post`; `Update` takes `patch`, the partial update; `Delete` takes
    `delete`. Any other verb on a query route, `head`, `options` and
    `any` included, is an error naming the right one, so a GET never
    writes and the route matches what resources and datasets generate
    for the same method; a controller route keeps every verb (§routes).
-2. **Binding.** Each parameter of the method, in signature order,
+2. **Binding.** Each parameter of the function, in signature order,
    binds from exactly one source, decided at generation time:
    - a **path parameter** of the route with the same name binds it.
-     Its declared type MUST spell the method's Go type
+     Its declared type MUST spell the function's Go type
      (`:id(int)` for `id int`, a bare `:slug` for `slug string`); a
      type a segment cannot carry (§route-paths) goes in the query string.
      A wildcard cannot bind a query parameter;
@@ -2148,30 +2151,29 @@ Scope /api [pipe: api] {
    `string`, `bool`, `int`, `float64` or `time.Time`, or a slice of one
    of those (a list parameter); a select with a parameter of any other
    type, a declared type (§types) included, is not a query route, and
-   the route is an error. A path parameter the method does not take is
+   the route is an error. A path parameter the function does not take is
    an error: the route would capture a value nothing consumes; the key
    of an `Update` is consumed by the load.
 3. **Response.** The result renders in the negotiated format
    (Formats): rows or a row with status 200, a created row with 201,
-   a delete with 204 and no body. A query's row miss (`rt.ErrNotFound`,
-   which is `sql.ErrNoRows`) is a 404 through the error spine. A
+   a delete with 204 and no body. A query's row miss (`rt.ErrNotFound`) is a 404 through the error
+   spine. A
    refused write is a `*rt.Invalid`, which carries no HTTP status
    (§changesets, `rt.Invalid`); the error spine gives it one (§formats):
    409 when a unique violation is among its field errors, 422 otherwise,
    itemized per field, an unknown key of the body among the fields. Any
    other error is the spine's 500.
 4. **Names.** The helper name (§route-names-and-reverse-urls) defaults to the scope name
-   prefixes followed by the method name, and only the `get` routes of
+   prefixes followed by the function name, and only the `get` routes of
    reads carry one: writes have no reverse URL, as with resources
    (§the-action-table). `volt routes` and the route table show the reference as
    written (`db.UserGet`; a query of the package itself unqualified,
    `UserGet`) in place of `Controller.Action`.
 5. **Wiring.** The generated `Controllers` manifest (§handler-references) gains one
-   field per data package that query routes go through, named by the
-   qualifier as a Go name (`db` → `DB`), typed `*<pkg>.Queries` — for
-   the package itself, `Queries *Queries`; the application
-   constructs it with the package's `New`. No interface is generated
-   for a query route.
+   field, `DB run.DB`, when the package has a query route: the one
+   database every query route runs on, which the application opens
+   with `run.Open` (§generated-query-surface). The shim performs the
+   query with `run.Run`. No interface is generated for a query route.
 6. **Own tables.** A package that declares tables MAY route them
    itself, so one directory holds schema, routes and handlers.
    `Query` names its own generated query;
@@ -2252,7 +2254,7 @@ the routes through typed methods instead of hand-built requests.
    else the status and the body text, so
    `errors.Is(err, volt.ErrNotFound)` holds for a 404.
 3. **Every query route** (§query-routes) is one typed method, named as its
-   helper would be (scope name prefixes and the method name, or
+   helper would be (scope name prefixes and the function name, or
    `name:`), with the query's parameters in signature order and the
    query's result: `func (c *Client) APIUserGet(ctx, id int)
    (db.User, error)`, `APIUserDelete(ctx, id int) error`. Path
@@ -2451,7 +2453,7 @@ ident list = "(", name, { ",", name }, ")" ;   (* the value of only: and except:
 
 Every action is one route. `update` is PATCH alone, the partial
 update (§routes); the methods are those §query-routes fixes for the
-CRUD method each API action maps to (§default-handlers). The key
+CRUD function each API action maps to (§default-handlers). The key
 segment is spelled as its type is (§route-paths): `:<param>(int)` for
 an `int` key, a bare `:<param>` for a `string` one.
 
@@ -2530,7 +2532,7 @@ Scope /api {
 ```
 
 1. `[default]` turns every surviving action into a **query route**
-   (§query-routes) over the table's default CRUD method — `index` → `List`,
+   (§query-routes) over the table's default CRUD function — `index` → `List`,
    `show` → `Get`, `create` → `Create`, `update` → `Update`, `delete`
    → `Delete` — so the handlers are generated and there is no
    controller to write. The routes, their paths and their helpers are
@@ -2549,7 +2551,7 @@ Scope /api {
    primary-key column (`id` for `id`), because binding is by name
    (§query-routes); `param:` is an error with `default`. Type and
    routability follow §table-resolution unchanged.
-5. An action whose CRUD method does not exist is an error naming the
+5. An action whose CRUD function does not exist is an error naming the
    `except:` that drops it — `update` on a table whose every column is
    part of the key (there is nothing to set).
 6. Naming: `index` and `show` keep their reverse-URL helpers and
@@ -2595,15 +2597,15 @@ Scope /ms [pipe: api] {
    case-insensitive hint.
 2. For every member of the select's target (§selects-over-groups), in member order,
    the dataset yields one `get` **query route** (§query-routes), the
-   verb a select method fixes, whose path is
+   verb a select function fixes, whose path is
    the scope prefixes followed by one segment — the member's table
    name, with the `strip:` prefix removed — and whose handler is the
-   member's select method (`<Model><SelectName>`). Every parameter of
+   member's select function (`<Model><SelectName>`). Every parameter of
    the select binds as §query-routes binds it: from a scope prefix
    parameter of the same name, else from the query string, a list
    parameter as a repeated key; a prefix parameter the select does not
    take is an error. The helper and client method names are the
-   scope name prefixes followed by the method name (§query-routes).
+   scope name prefixes followed by the function name (§query-routes).
 3. Expanded routes obey every rule of routes: conflicts (§route-conflicts), one
    helper namespace (§route-names-and-reverse-urls, §generated-client). To hand-write one member's route,
    take it out with `except:` and declare it beside the dataset, with
@@ -2647,8 +2649,8 @@ an action list on resources, a table list on a dataset.
 The normative output contract is the golden corpus under
 `gen/router/testdata/` and the proof suite under `itest/`. In prose:
 one `<Controller>Controller` interface per controller and a
-`Controllers` struct (§handler-references), with one `*<pkg>.Queries` field per data
-package query routes use (§query-routes); `NewRouter(Controllers) http.Handler`
+`Controllers` struct (§handler-references), with the `DB run.DB` field when
+query routes exist (§query-routes); `NewRouter(Controllers) http.Handler`
 registering every route onto a `http.ServeMux` with its pipeline chain
 composed statically and its typed shim parsing parameters per §route-paths
 — for a query route the shim is the whole handler: it binds every
@@ -2825,7 +2827,7 @@ Pred chosen  { org in :orgs }
    stored value.
 6. **Rendering.** There is one SQL renderer for the generated query
    surface, the runtime's (`rt.SelectRender` and its siblings): the
-   select methods, the CRUD methods, the changeset writes and the
+   select functions, the CRUD functions, the changeset writes and the
    dynamic layer are its output. The dynamic layer calls it at run
    time, the generator calls it at generation time over the same tree
    and writes the result into the statement constants, so the same
@@ -2920,15 +2922,15 @@ The clauses read in SQL order — name, columns, source, filter — and
 the optional projection narrows the emitted columns.
 
 1. The select name is an identifier; per target-member it mints
-   the method `<Model><SelectName>` (§names). A select name that is a
+   the function `<Model><SelectName>` (§names). A select name that is a
    generated suffix (`Get`, `GetMany`, `List`, `Create`, `Update`,
    `Delete`, `Count`, `Exists`, `Query`, `DeleteWhere`, `UpdateWhere`,
    `Limit`, `Offset`, `OrderBy`, `Changeset`, `Column`, `Params`,
-   `New`) is an error, and so is a minted method that takes the name of
-   any other method of `Queries`: a CRUD, `GetBy<Field>` or dynamic
-   method of any table of the package, `WithCache`, `WithTx`, `Tx`, or
-   another select's minted method. Its statement constant is named
-   from the method, so a minted `<Model>Table` or `<Model>Columns`,
+   `New`) is an error, and so is a minted function that takes the name
+   of any other generated name of the package: a CRUD, `GetBy<Field>`
+   or dynamic function of any table, a column handle, another select's
+   minted function, or any name of §changesets. Its statement constant
+   is named from the function, so a minted `<Model>Table` or `<Model>Columns`,
    which would take a table's statement constants, is an error too.
 2. `for` names a table or a group of the package, resolved as a group
    term is (§groups): case-sensitively, tables first, with the same
@@ -2950,15 +2952,16 @@ the optional projection narrows the emitted columns.
    ORDER BY text is SQL's own collation, allowed here — and MUST appear
    at most once. A column of a declared type (§types) is neither: it
    compares for equality only, so ordering it is an error.
-6. Generation contract (with §mapping-to-go): per member, a method on
-   `Queries` —
-   `func (q *Queries) <Model><SelectName>(ctx context.Context, <params>) ([]<Row>, error)`
+6. Generation contract (with §mapping-to-go): per member, a function
+   of `volt_selects.go` returning the query as a value
+   (§generated-query-surface) —
+   `func <Model><SelectName>(<params>) rt.Query[<Row>]`
    — parameters in first-appearance order over the expanded
    expression, each typed by §predicates; `<Row>` is the member's row
    type (the model itself when there is no projection); the
    emitted SQL is the runtime renderer's output (§predicates,
    rendering), `SELECT <projected columns> FROM <table> [WHERE …] [ORDER BY
-   …]` with positional `?` placeholders, the method binding its
+   …]` with positional `?` placeholders, the function binding its
    parameters and the expression's literals in the order the text
    names them. A list parameter renders as `<column> IN (SELECT value
    FROM json_each(?))` and binds one JSON array (`rt.JSONList`), so
@@ -2993,8 +2996,9 @@ the optional projection narrows the emitted columns.
      (§groups: the algebra must say something true), and no member may
      end up with zero columns. Each member projects its own columns,
      in declaration order, minus the exclusions, minting a per-member
-     **struct derivative** named `<Model><SelectName>`
-     (`User` + `public` → `UserPublic`): every kept field is copied
+     **struct derivative** named `<Model><SelectName>Row`
+     (`User` + `public` → `UserPublicRow`, the query function being
+     `UserPublic`): every kept field is copied
      verbatim from the model — Go name, Go type, assembled struct tag
      (§struct-tags, `tag:` passthroughs included), doc comment, so the
      derivative behaves exactly like the model minus the removed
@@ -3008,8 +3012,7 @@ the optional projection narrows the emitted columns.
      `<Model>New`, the column handles and the dynamic-layer wrappers
      `<Model>Limit`, `<Model>Offset`, `<Model>Distinct`,
      `<Model>OrderBy`, `<Model>After`, `<Model>Set`), the package's bare
-     declared types (§types), the `Queries` handle and `New`, and
-     another select's minted row type; the select names `Changeset`,
+     declared types (§types), and another select's minted row type; the select names `Changeset`,
      `Column`, `Params` and `New` are rejected outright (rule 1). The Go
      compiler backstops the rest.
 
@@ -3149,8 +3152,8 @@ func (c UserChangeset) Errors() []rt.FieldError
 func (c UserChangeset) Valid() bool
 func (c UserChangeset) Err() error                               // *rt.Invalid, nil when valid
 
-func (q *Queries) UserCreate(ctx context.Context, c UserChangeset) (User, error)
-func (q *Queries) UserUpdate(ctx context.Context, c UserChangeset) (User, error)
+func UserCreate(c UserChangeset) rt.Write[User]   // the insert, as a value the runner performs
+func UserUpdate(c UserChangeset) rt.Write[User]   // the update, likewise
 ```
 
 ```go
@@ -3158,7 +3161,7 @@ cs := user.Changeset().Cast(params, db.UserEmail, db.UserBio).Validate()
 if !cs.Valid() {
 	return cs.Err()
 }
-user, err := q.UserUpdate(ctx, cs)
+user, err := run.Run(ctx, db, db.UserUpdate(cs))
 ```
 
 1. **Value semantics.** A changeset is a struct passed and returned
@@ -3242,23 +3245,25 @@ user, err := q.UserUpdate(ctx, cs)
    `unknown_field`, `custom`, a validator's name, or the database's
    `unique`, `foreign_key`, `not_null` (rule 10); the columns are the
    ones the check reads, and for `unknown_field` the key as sent.
-8. **`Create` and `Update`.** `<Model>Create(ctx, c)` validates and,
-   if valid, inserts the marked columns and returns the stored row;
+8. **`Create` and `Update`.** `<Model>Create(c)` is the `rt.Write`
+   that validates and, if valid, inserts the marked columns and yields
+   the stored row when the runner performs it (§generated-query-surface);
    a column never marked takes its database default or, lacking one,
    NULL, which a `NOT NULL` column refuses as a `not_null` field error
    (rule 10), a single-column `int` primary key excepted, which the
    database assigns (rule 2); nothing marked inserts `DEFAULT VALUES`.
-   `<Model>Update(ctx, c)` validates and, if valid,
+   `<Model>Update(c)` is the `rt.Write` that validates and, if valid,
    issues `UPDATE <table> SET <the marked columns> WHERE <the key of
    the row the changeset was made from> RETURNING` and returns the
-   stored row; nothing marked touches nothing and returns `Row()`;
+   stored row; nothing marked touches nothing and yields `Row()`;
    a changeset not made from a row (`UserNew()`) is `rt.ErrNoRow`,
    there being no key; a vanished row is `rt.ErrNotFound`. Both
-   statements are rendered at run time from the marks and run through
-   `rt.StmtCache` when `WithCache` was set, like the dynamic layer.
-   An invalid changeset is `*rt.Invalid` from either, before any
-   statement runs; `Update` reports `rt.ErrNoRow` for a changeset not
-   made from a row before it validates.
+   statements are rendered from the marks when the function is called
+   and prepared through the runner's statement cache, like the dynamic
+   layer. A Write built from an invalid changeset carries its
+   `*rt.Invalid` and the runner returns it without running a
+   statement; `Update` carries `rt.ErrNoRow` for a changeset not made
+   from a row before validity.
 9. **`required`** (§columns) is the one built-in rule of `Validate`
    (rule 6), which the schema switches on per column: it refuses the
    type's empty value, `""` for `string`, `0` for `int` and
@@ -3316,8 +3321,8 @@ user, err := q.UserUpdate(ctx, cs)
     `volt_validate.go` declares `Validate`, which is where the
     package's validator functions are called and which replaces the
     findings through `FindingsSet`. `volt_queries.go` declares `Create`
-    and `Update`, which render through the changeset's `InsertRender`
-    and `UpdateRender`. The names
+    and `Update`, over `rt.Insert` and `rt.Update`, which render
+    through the changeset's `InsertRender` and `UpdateRender`. The names
     `<Model>Changeset`, `<Model>Column`, `<Model>Params` and
     `<Model>New` join the package-scope names the `dynname` lint and
     §selects-over-groups guard.
@@ -3710,19 +3715,19 @@ true. What is checked instead is their composition.
    writes `volt_migrations.go` beside the other generated files:
    `var Migrations = []rt.Migration{…}` in name order, each with its
    name, up statements, down statements (nil when irreversible) and
-   its transaction and foreign-key bracket flags; and `func
-   Migrate(ctx context.Context, db *sql.DB) error`, which applies
-   every pending migration through `rt.MigrateUp` and is called by
-   nothing unless the application calls it. The file belongs to the
+   its transaction and foreign-key bracket flags, and nothing else:
+   the application applies them with `run.MigrateUp(ctx, db,
+   Migrations)` (rule 3). The file belongs to the
    queries part (`-parts queries`) and is absent with `-parts
    models`. With it, a binary migrates its own database and a test
    builds a fresh one with one call, without the `volt` tool or the
    `.volt` files.
 3. **Runtime.** `rt.Migration` is the statement form of one
-   migration; `rt.MigrateUp(ctx, db, migrations)` applies the pending
-   ones and returns their names; `rt.MigrateDown(ctx, db, migrations)`
-   reverts the last applied one and returns its name; `rt.
-   MigrateStatus(ctx, db, migrations)` lists each migration with
+   migration, a value; the runner applies it over a `run.DB`
+   (§generated-query-surface): `run.MigrateUp(ctx, db, migrations)`
+   applies the pending ones and returns their names;
+   `run.MigrateDown(ctx, db, migrations)` reverts the last applied one
+   and returns its name; `run.MigrateStatus(ctx, db, migrations)` lists each migration with
    whether and when it was applied and whether it is out of order,
    and every ledger row that no migration of the package names,
    marked as such. The CLI's `up`, `down` and `status` are these
@@ -3954,8 +3959,9 @@ that shares the models, a generated client (§generated-client) among
 them, needs nothing else but the declared types the models name: a
 package-qualified one from its own package, a bare one from the data
 package's Go files (§types).
-`volt_queries.go` carries the `Queries` handle and its methods, and
-imports only what their signatures name.
+`volt_queries.go`, `volt_dyn.go` and `volt_selects.go` carry the query
+functions (§generated-query-surface), and import only what their
+signatures name.
 
 ### Go types
 
@@ -4064,36 +4070,76 @@ default `db`/`json` pair only.
 
 ### Generated query surface
 
-Per table, on the `Queries` handle of `volt_queries.go` (`New(db
-rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
+A generated query is a value (§values-and-effects): a function of
+`volt_queries.go`, `volt_dyn.go` or `volt_selects.go` with no receiver
+and no context returns an **effect** of `nao/rt`, and the runner
+`nao/run` performs it. Nothing runs when the function is called.
+
+```go
+// nao/rt: the effects. Effect[T] is sealed; these are all of them.
+type Query[T any]  struct { SQL string; Args []any; Scan func(Row) (T, error); Err error }  // zero or more rows, []T
+type Lookup[T any] struct { SQL string; Args []any; Scan func(Row) (T, error); Err error }  // one row, or ErrNotFound
+type Write[M any]  struct { SQL string; Args []any; Scan func(Row) (M, error); Row M; Err error }  // insert or update of a changeset
+type Exec          struct { SQL string; Args []any; Model string; One bool; Err error }    // rows affected
+func Tx(steps ...AnyEffect) Transaction   // all or nothing, results in order
+func All(steps ...AnyEffect) Parallel     // at once, first error cancels, results in order
+func Insert[M any](c Changeset[M]) Write[M]
+func Update[M any](c Changeset[M]) Write[M]
+
+// nao/run: the one stateful object and the one performer.
+type DB struct { /* the pool, the statement cache, the logger */ }
+func Open(driver, dsn string) (DB, error)
+func Run[T any](ctx context.Context, db DB, e rt.Effect[T]) (T, error)
+func MigrateUp(ctx context.Context, db DB, ms []rt.Migration) ([]string, error)
+```
+
+```go
+// generated, per table
+func UserGet(id int) rt.Lookup[User]
+func UserGetMany(ids []int) rt.Query[User]
+func UserGetByEmail(email string) rt.Lookup[User]
+func UserList() rt.Query[User]
+func UserCreate(c UserChangeset) rt.Write[User]
+func UserUpdate(c UserChangeset) rt.Write[User]
+func UserDelete(id int) rt.Exec
+func UserQuery(opts ...rt.Opt[User]) rt.Query[User]
+func UserCount(preds ...rt.Pred[User]) rt.Lookup[int64]
+func UserExists(preds ...rt.Pred[User]) rt.Lookup[bool]
+func UserDeleteWhere(preds ...rt.Pred[User]) rt.Exec
+func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
+```
 
 1. `<Model>Get`, `<Model>Update` and `<Model>Delete` exist iff the
    table has a primary key (one or more `pk` columns, §columns), one
    positional argument per key column in the key's order, which is
    the columns' declaration order, and `Update` writes by the key in
    that order; `Update` also needs a non-key column; `Create` and
-   `Update` take a changeset and return the stored row (§changesets).
-   `<Model>GetMany(ctx, keys)` exists for a single-column key; missing
-   keys are absent, not errors; an empty input returns nil.
+   `Update` take a changeset and the Write yields the stored row
+   (§changesets). `<Model>GetMany(keys)` exists for a single-column
+   key; missing keys are absent, not errors; an empty input is a
+   Query with no statement, which yields nil.
    `<Model>GetBy<Column>` exists per column that carries `unique` and
    is not the whole key, a member of a composite key among them; a
    partial or an expression unique index makes no column unique, so it
    gives none (§indexes). `<Model>List` and `<Model>Create` always
    exist; a table without a key gets List, Create, GetBy and the
    dynamic layer.
-2. `Get`, `GetBy*` and `Update` return `rt.ErrNotFound`
-   (`sql.ErrNoRows`) on a miss; `Delete` checks the affected count.
-   Multi-row results are empty slices, never nil, GetMany on an empty
-   input excepted.
+2. A `Lookup` yields `rt.ErrNotFound` on a miss, which the runner
+   returns for the driver's no-rows error, and so does an `Update`
+   whose row vanished and a keyed `Delete`, an `Exec` with `One` set,
+   when nothing was affected. A `Query` yields an empty slice, never
+   nil, unless it has no statement.
 3. Every statement is rendered by the runtime (§predicates, rendering):
-   `Get`, `GetBy*`, `List`, `Delete` and the select methods are
+   `Get`, `GetBy*`, `List`, `Delete` and the select functions carry
    constants rendered at generation time, bound positionally in the
-   order the text names their parameters; `GetMany` renders at run
-   time, its `IN` list varying with the input, and does not use the
-   statement cache. `Create` and `Update` are rendered at run time
-   from the changeset's marks and end in `RETURNING` (§changesets).
-   Every CRUD write's database refusal becomes `*rt.Invalid`;
-   `DeleteWhere` and `UpdateWhere` return the driver's error.
+   order the text names their parameters; `GetMany` and the dynamic
+   layer render when the function is called, so a rendering that
+   fails (an `After` without an `OrderBy`) is a value carrying its
+   error in `Err`, which the runner returns without running a
+   statement. `Create` and `Update` render from the changeset's marks
+   and end in `RETURNING` (§changesets). The runner maps a database
+   refusal of a `Write` or a keyed `Delete` onto `*rt.Invalid`;
+   `DeleteWhere` and `UpdateWhere` yield the driver's error.
 4. The column handles `<Model><Field>` (`rt.Column[M, T]`,
    `rt.NullColumn` when nullable) are declared in `volt_models.go`
    (§changesets); the dynamic layer in `volt_dyn.go` mints per model the
@@ -4103,13 +4149,24 @@ rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
    one renderer (§predicates, rendering): an empty `In` is constant false,
    a zero predicate vanishes, a `DeleteWhere` or `UpdateWhere` with no
    predicate is an error, `After` is keyset pagination over the
-   `OrderBy` terms. Dynamic statements run through `rt.StmtCache` when
-   `WithCache` was set, the changeset writes among them; the static
-   CRUD and select methods do not use the cache;
-   `WithTx` drops it.
-5. `rt.Open(driver, dsn)` pins one connection and sets WAL,
-   `busy_timeout = 5000` and `foreign_keys = ON`. `rt.Null[T]`
-   marshals as the value or `null`.
+   `OrderBy` terms. Every function of the three files shares the
+   package scope with the column handles and the names of
+   §changesets, so a column whose handle would take a function's name
+   (`count` on `users` gives `UserCount`) is a check error naming
+   both, as it is for the wrappers (`lint.md`, `dynname`).
+5. **The runner.** `run.Open(driver, dsn)` pins one connection and sets
+   WAL, `busy_timeout = 5000` and `foreign_keys = ON`; `run.Wrap` takes
+   a pool the application opened. `run.Run(ctx, db, e)` performs one
+   effect: every statement is prepared through the statement cache,
+   keyed by its text, so identical shapes prepare once; a
+   `Transaction` runs its steps on one transaction that commits when
+   every step succeeded and rolls back on the first error, a
+   `Transaction` inside one joins it; a `Parallel` runs its steps on
+   their own goroutines and joins them, the first error cancelling the
+   rest; the context cancels any of them. The runner writes one
+   structured log line per statement at debug level, with the text,
+   the duration and the error, through the logger of `WithLogger`.
+   `rt.Null[T]` marshals as the value or `null`.
 6. **Locals and helpers.** Every local a function of a data file
    declares, the parameters of a function literal included, is `volt`
    followed by an upper-case letter, with no underscore (`voltErr`,
@@ -4124,7 +4181,7 @@ rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
    key column takes in `Get`, `GetMany`, `GetBy*` and `Delete` is its
    Go field name (§names) with the leading initialism or letter lowered
    (`UserID` is `userID`), with `_` appended when that is a Go keyword,
-   `ctx`, `arg`, `q` or `rt`, `nil` or `append` (the predeclared names a
+   `ctx`, `arg`, `q` or `rt`, `nil`, `append`, `any` or `true` (the predeclared names a
    generated method uses), a name the route files' signatures take
    (`w`, `r`, `opts`, `volt`, `cs`, `c`), which a query route's path
    parameter, named after the key parameter, may not take

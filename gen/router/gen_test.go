@@ -331,7 +331,7 @@ type stub struct{}
 
 func (stub) Purge(w http.ResponseWriter, r *volt.Request, id int) error { return nil }
 
-var _ http.Handler = NewRouter(Controllers{Tags: stub{}, Queries: &Queries{}})
+var _ http.Handler = NewRouter(Controllers{Tags: stub{}})
 `))
 	cmd := exec.Command("go", "build", "./...")
 	cmd.Dir = dir
@@ -367,7 +367,7 @@ Scope /api {
 
 import "net/http"
 
-func main() { http.ListenAndServe(":0", NewRouter(Controllers{Queries: New(nil)})) }
+func main() { http.ListenAndServe(":0", NewRouter(Controllers{})) }
 `,
 	}
 	for name, src := range files {

@@ -1,4 +1,8 @@
-package rt
+// Package run performs the effects of nao/rt over database/sql (spec
+// §values-and-effects): it holds the connection pool, the statement
+// cache and the logger, the mutable state of the data layer, and is
+// imported by main and the generated route files alone.
+package run
 
 import (
 	"container/list"
@@ -40,11 +44,11 @@ func NewStmtCache(max int) *StmtCache {
 // Prepare returns the cached statement for query, preparing and caching
 // it on first use. The returned statement is shared: callers must not
 // Close it (Close the cache instead).
-func (c *StmtCache) Prepare(ctx context.Context, db DBTX, query string) (*sql.Stmt, error) {
+func (c *StmtCache) Prepare(ctx context.Context, db *sql.DB, query string) (*sql.Stmt, error) {
 	c.mu.Lock()
 	if c.closed {
 		c.mu.Unlock()
-		return nil, errors.New("rt.StmtCache: cache is closed")
+		return nil, errors.New("run.StmtCache: cache is closed")
 	}
 	if el, ok := c.entries[query]; ok {
 		c.order.MoveToFront(el)
@@ -63,7 +67,7 @@ func (c *StmtCache) Prepare(ctx context.Context, db DBTX, query string) (*sql.St
 	defer c.mu.Unlock()
 	if c.closed {
 		_ = stmt.Close()
-		return nil, errors.New("rt.StmtCache: cache is closed")
+		return nil, errors.New("run.StmtCache: cache is closed")
 	}
 	if el, ok := c.entries[query]; ok {
 		_ = stmt.Close()

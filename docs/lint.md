@@ -272,12 +272,15 @@ names* collide in Go package scope. Generation mints flat
 package-scope names by concatenation from the model name: the model
 struct itself, the changeset `<Model>Changeset`, the aliases
 `<Model>Column` and `<Model>Params`, the constructor `<Model>New`
-(§changesets), the column handles `<Model><Field>`, and the option
+(§changesets), the column handles `<Model><Field>`, the option
 wrappers `<Model>Limit`, `<Model>Offset`, `<Model>Distinct`,
-`<Model>OrderBy`, `<Model>After`, `<Model>Set` of the dynamic layer,
-so two distinct declarations can flatten to one Go identifier: `Table
-user_limits` mints model `UserLimit`, exactly the option wrapper of
-`Table users`; `users.foo_bar` and `user_foos.bar` both mint the
+`<Model>OrderBy`, `<Model>After`, `<Model>Set` of the dynamic layer and
+the query functions `<Model>Get`, `<Model>List`, `<Model>Count` and the
+rest (§generated-query-surface), so two distinct declarations can
+flatten to one Go identifier: `Table user_limits` mints model
+`UserLimit`, exactly the option wrapper of `Table users`; a column
+`count` of `users` mints the handle `UserCount`, exactly its count
+function; `users.foo_bar` and `user_foos.bar` both mint the
 handle `UserFooBar`. A bare declared type shares that scope, since the
 package's own Go files declare it (§types); a declared type that takes
 a generated name is the checker's error, not this rule's warning.

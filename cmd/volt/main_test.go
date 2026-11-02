@@ -51,7 +51,7 @@ Scope /api [name: api] {
 
 import "net/http"
 
-func main() { http.ListenAndServe(":0", NewRouter(Controllers{Queries: New(nil)})) }
+func main() { http.ListenAndServe(":0", NewRouter(Controllers{})) }
 `,
 		"gui/go.mod": "module shop/gui\n\ngo 1.27\n",
 		"gui/main.go": `package main

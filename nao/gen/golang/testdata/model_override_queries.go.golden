@@ -3,226 +3,73 @@
 package models
 
 import (
-	"context"
-	"database/sql"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-type Queries struct {
-	db    rt.DBTX
-	cache *rt.StmtCache
-}
-
-func New(db rt.DBTX) *Queries { return &Queries{db: db} }
-
-func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
-	return &Queries{db: q.db, cache: cache}
-}
-
-func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
-
-func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
-}
-
 const voltMenuGetSQL = `SELECT "id", "title", "price" FROM "menus" WHERE "id" = ?`
 
-func (q *Queries) MenuGet(ctx context.Context, id int) (Menu, error) {
-	return voltMenuScan(q.db.QueryRowContext(ctx, voltMenuGetSQL, id))
+func MenuGet(id int) rt.Lookup[Menu] {
+	return rt.Lookup[Menu]{SQL: voltMenuGetSQL, Args: []any{id}, Scan: voltMenuScan}
 }
 
-func (q *Queries) MenuGetMany(ctx context.Context, ids []int) ([]Menu, error) {
+func MenuGetMany(ids []int) rt.Query[Menu] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[Menu]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltMenuTableSQL, voltMenuColumnsSQL, []rt.Opt[Menu]{MenuID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Menu{}
-	for voltRows.Next() {
-		voltV, voltErr := voltMenuScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltMenuTableSQL, voltMenuColumnsSQL, []rt.Opt[Menu]{MenuID.In(ids...)})
+	return rt.Query[Menu]{SQL: voltSQL, Args: voltArgs, Scan: voltMenuScan, Err: voltErr}
 }
 
 const voltMenuListSQL = `SELECT "id", "title", "price" FROM "menus"`
 
-func (q *Queries) MenuList(ctx context.Context) ([]Menu, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltMenuListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Menu{}
-	for voltRows.Next() {
-		voltV, voltErr := voltMenuScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
-}
+func MenuList() rt.Query[Menu] { return rt.Query[Menu]{SQL: voltMenuListSQL, Scan: voltMenuScan} }
 
-func (q *Queries) MenuCreate(ctx context.Context, c MenuChangeset) (Menu, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Menu{}, voltErr
-	}
-	voltSQL, voltArgs := c.InsertRender()
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return Menu{}, voltErr
-	}
-	return voltMenuScan(voltRow)
-}
+func MenuCreate(c MenuChangeset) rt.Write[Menu] { return rt.Insert(c.Validate().Changeset) }
 
-func (q *Queries) MenuUpdate(ctx context.Context, c MenuChangeset) (Menu, error) {
-	if !c.FromRow() {
-		return Menu{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Menu{}, voltErr
-	}
-	voltSQL, voltArgs := c.UpdateRender()
-	if voltSQL == "" {
-		return c.Row(), nil
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return Menu{}, voltErr
-	}
-	return voltMenuScan(voltRow)
-}
+func MenuUpdate(c MenuChangeset) rt.Write[Menu] { return rt.Update(c.Validate().Changeset) }
 
 const voltMenuDeleteSQL = `DELETE FROM "menus" WHERE "id" = ?`
 
-func (q *Queries) MenuDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltMenuDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("Menu", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
+func MenuDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltMenuDeleteSQL, Args: []any{id}, Model: "Menu", One: true}
 }
 
 const voltOrderStatusGetSQL = `SELECT "code", "label" FROM "order_status" WHERE "code" = ?`
 
-func (q *Queries) OrderStatusGet(ctx context.Context, code string) (OrderStatus, error) {
-	return voltOrderStatusScan(q.db.QueryRowContext(ctx, voltOrderStatusGetSQL, code))
+func OrderStatusGet(code string) rt.Lookup[OrderStatus] {
+	return rt.Lookup[OrderStatus]{SQL: voltOrderStatusGetSQL, Args: []any{code}, Scan: voltOrderStatusScan}
 }
 
-func (q *Queries) OrderStatusGetMany(ctx context.Context, codes []string) ([]OrderStatus, error) {
+func OrderStatusGetMany(codes []string) rt.Query[OrderStatus] {
 	if len(codes) == 0 {
-		return nil, nil
+		return rt.Query[OrderStatus]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltOrderStatusTableSQL, voltOrderStatusColumnsSQL, []rt.Opt[OrderStatus]{OrderStatusCode.In(codes...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []OrderStatus{}
-	for voltRows.Next() {
-		voltV, voltErr := voltOrderStatusScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltOrderStatusTableSQL, voltOrderStatusColumnsSQL, []rt.Opt[OrderStatus]{OrderStatusCode.In(codes...)})
+	return rt.Query[OrderStatus]{SQL: voltSQL, Args: voltArgs, Scan: voltOrderStatusScan, Err: voltErr}
 }
 
 const voltOrderStatusGetByLabelSQL = `SELECT "code", "label" FROM "order_status" WHERE "label" = ?`
 
-func (q *Queries) OrderStatusGetByLabel(ctx context.Context, label string) (OrderStatus, error) {
-	return voltOrderStatusScan(q.db.QueryRowContext(ctx, voltOrderStatusGetByLabelSQL, label))
+func OrderStatusGetByLabel(label string) rt.Lookup[OrderStatus] {
+	return rt.Lookup[OrderStatus]{SQL: voltOrderStatusGetByLabelSQL, Args: []any{label}, Scan: voltOrderStatusScan}
 }
 
 const voltOrderStatusListSQL = `SELECT "code", "label" FROM "order_status"`
 
-func (q *Queries) OrderStatusList(ctx context.Context) ([]OrderStatus, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltOrderStatusListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []OrderStatus{}
-	for voltRows.Next() {
-		voltV, voltErr := voltOrderStatusScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func OrderStatusList() rt.Query[OrderStatus] {
+	return rt.Query[OrderStatus]{SQL: voltOrderStatusListSQL, Scan: voltOrderStatusScan}
 }
 
-func (q *Queries) OrderStatusCreate(ctx context.Context, c OrderStatusChangeset) (OrderStatus, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return OrderStatus{}, voltErr
-	}
-	voltSQL, voltArgs := c.InsertRender()
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return OrderStatus{}, voltErr
-	}
-	return voltOrderStatusScan(voltRow)
+func OrderStatusCreate(c OrderStatusChangeset) rt.Write[OrderStatus] {
+	return rt.Insert(c.Validate().Changeset)
 }
 
-func (q *Queries) OrderStatusUpdate(ctx context.Context, c OrderStatusChangeset) (OrderStatus, error) {
-	if !c.FromRow() {
-		return OrderStatus{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return OrderStatus{}, voltErr
-	}
-	voltSQL, voltArgs := c.UpdateRender()
-	if voltSQL == "" {
-		return c.Row(), nil
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return OrderStatus{}, voltErr
-	}
-	return voltOrderStatusScan(voltRow)
+func OrderStatusUpdate(c OrderStatusChangeset) rt.Write[OrderStatus] {
+	return rt.Update(c.Validate().Changeset)
 }
 
 const voltOrderStatusDeleteSQL = `DELETE FROM "order_status" WHERE "code" = ?`
 
-func (q *Queries) OrderStatusDelete(ctx context.Context, code string) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltOrderStatusDeleteSQL, code)
-	if voltErr != nil {
-		return rt.Refused("OrderStatus", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
+func OrderStatusDelete(code string) rt.Exec {
+	return rt.Exec{SQL: voltOrderStatusDeleteSQL, Args: []any{code}, Model: "OrderStatus", One: true}
 }

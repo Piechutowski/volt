@@ -8,7 +8,6 @@
 package volt
 
 import (
-	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -75,8 +74,7 @@ func DefaultErrorHandler(w http.ResponseWriter, r *Request, err error) {
 // ProblemOf is the Problem the error spine writes for err (spec §formats):
 // an HTTPError's own status and message; a refused write, a *rt.Invalid,
 // as 409 when a unique field error is among its fields and 422 otherwise
-// (spec §changesets); a query's row miss (sql.ErrNoRows, which
-// rt.ErrNotFound is) as 404; each with the details of an error that
+// (spec §changesets); a query's row miss (rt.ErrNotFound) as 404; each with the details of an error that
 // itemizes them. ok is false for any other error.
 func ProblemOf(err error) (p Problem, ok bool) {
 	var he HTTPError
@@ -91,7 +89,7 @@ func ProblemOf(err error) (p Problem, ok bool) {
 				p.Status = http.StatusConflict
 			}
 		}
-	case errors.Is(err, sql.ErrNoRows):
+	case errors.Is(err, rt.ErrNotFound):
 		return Problem{Status: http.StatusNotFound, Message: "not found"}, true
 	default:
 		return Problem{}, false

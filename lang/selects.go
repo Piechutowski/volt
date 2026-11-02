@@ -113,7 +113,11 @@ func (c *checker) dataQueries(pkg *Package) {
 		if si := c.selectCheckMemo(sel, info, minted, memo); si != nil {
 			for _, m := range si.Members {
 				method := naming.SelectMethodName(pkg.modelOf(m), si.MethodSuffix)
-				if what, dup := pkg.plan.QueryName(method); dup {
+				what, dup := pkg.plan.QueryName(method)
+				if !dup {
+					what, dup = minted.Generated(method)
+				}
+				if dup {
 					c.errorf(sel.Name.Pos(), "selects-over-groups",
 						"select %q mints %s for table %q, which is already %s (§selects-over-groups)",
 						sel.Name.Name(), method, m.Decl.Name.Name(), what)

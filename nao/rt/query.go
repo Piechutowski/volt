@@ -9,8 +9,6 @@
 package rt
 
 import (
-	"context"
-	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
@@ -561,43 +559,4 @@ func afterPred[M any](orders []Order[M], key []any) (Pred[M], error) {
 // §predicates): always double-quoted, a quote inside doubled.
 func Ident(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
-}
-
-// StmtQuery runs a row-returning statement on db, through cache when one
-// is given (nil runs directly).
-func StmtQuery(ctx context.Context, db DBTX, cache *StmtCache, query string, args ...any) (*sql.Rows, error) {
-	if cache != nil {
-		stmt, err := cache.Prepare(ctx, db, query)
-		if err != nil {
-			return nil, err
-		}
-		return stmt.QueryContext(ctx, args...)
-	}
-	return db.QueryContext(ctx, query, args...)
-}
-
-// StmtExec runs a non-row statement on db, through cache when one is
-// given (nil runs directly).
-func StmtExec(ctx context.Context, db DBTX, cache *StmtCache, query string, args ...any) (sql.Result, error) {
-	if cache != nil {
-		stmt, err := cache.Prepare(ctx, db, query)
-		if err != nil {
-			return nil, err
-		}
-		return stmt.ExecContext(ctx, args...)
-	}
-	return db.ExecContext(ctx, query, args...)
-}
-
-// RowScan runs a single-row statement and scans its columns into dest,
-// through cache when one is given (nil runs directly).
-func RowScan(ctx context.Context, db DBTX, cache *StmtCache, query string, args []any, dest ...any) error {
-	if cache != nil {
-		stmt, err := cache.Prepare(ctx, db, query)
-		if err != nil {
-			return err
-		}
-		return stmt.QueryRowContext(ctx, args...).Scan(dest...)
-	}
-	return db.QueryRowContext(ctx, query, args...).Scan(dest...)
 }

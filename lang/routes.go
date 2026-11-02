@@ -107,11 +107,10 @@ type ChangesetBind struct {
 // declares the tables (Local).
 type QueryRef struct {
 	Qualifier string // the import qualifier as written, e.g. "db"; the package's own name when Local
-	Field     string // the Controllers field holding *pkg.Queries: the qualifier as a Go name, e.g. "DB"; "Queries" when Local
 	Package   string // root-relative package path
 	Import    string // Go import path of the package
 	PkgName   string // the package's Go name (its directory name)
-	Local     bool   // the query is this package's own (§query-routes): no import, the field is Queries *Queries
+	Local     bool   // the query is this package's own (§query-routes): no import, the call is unqualified
 	Method    string // generated method name, e.g. "UserGet"
 	Params    []QueryParam
 	Changeset *ChangesetBind // how a write's body becomes its changeset (§changesets); nil for a read

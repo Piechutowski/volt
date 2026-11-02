@@ -5,8 +5,8 @@ package app
 import (
 	"net/http"
 
-	"blog/db"
 	"github.com/Piechutowski/volt"
+	"github.com/Piechutowski/volt/nao/run"
 )
 
 type AdminController interface {
@@ -35,7 +35,7 @@ type Controllers struct {
 	Files  FilesController
 	Home   HomeController
 	Users  UsersController
-	DB     *db.Queries
+	DB     run.DB
 	Events *volt.Broker
 }
 

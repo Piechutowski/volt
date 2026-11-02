@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"errors"
+	"github.com/Piechutowski/volt/nao/run"
 	"reflect"
 	"testing"
 	"time"
@@ -27,14 +28,14 @@ func paramsOf(t *testing.T, doc string) UserParams {
 
 func TestCastPartialUpdateSetsOnlyTheCastColumn(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	u := seedUser(t, q, "ann@example.com")
+	db := newDB(t)
+	u := seedUser(t, db, "ann@example.com")
 
 	cs := u.Changeset().Cast(paramsOf(t, `{"bio": "hey"}`), UserEmail, UserName, UserBio, UserCreatedAt)
 	if !cs.Valid() || !cs.Changed(UserBio) || cs.Changed(UserEmail) || cs.Changed(UserName) || cs.Changed(UserCreatedAt) {
 		t.Fatalf("Cast marks the carried column only: %+v %+v", cs.Errors(), cs.Params().Keys())
 	}
-	upd, err := q.UserUpdate(ctx, cs)
+	upd, err := run.Run(ctx, db, UserUpdate(cs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,8 +87,8 @@ func TestCastTypeMismatchIsAFieldError(t *testing.T) {
 
 func TestCastNullOnANullableColumn(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	u, err := q.UserCreate(ctx, UserNew().EmailSet("ann@example.com").NameSet("Ann").BioSet(rt.Some("hi")))
+	db := newDB(t)
+	u, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("ann@example.com").NameSet("Ann").BioSet(rt.Some("hi"))))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +96,7 @@ func TestCastNullOnANullableColumn(t *testing.T) {
 	if !cs.Valid() || !cs.Changed(UserBio) || cs.Row().Bio.Valid {
 		t.Fatalf("null on a nullable column sets NULL: %+v %+v", cs.Errors(), cs.Row())
 	}
-	upd, err := q.UserUpdate(ctx, cs)
+	upd, err := run.Run(ctx, db, UserUpdate(cs))
 	if err != nil || upd.Bio.Valid {
 		t.Errorf("stored bio = %+v, %v; want NULL", upd.Bio, err)
 	}
@@ -103,7 +104,7 @@ func TestCastNullOnANullableColumn(t *testing.T) {
 
 func TestGobParamsRoundTripThroughCast(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
+	db := newDB(t)
 	when := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
 
 	var buf bytes.Buffer
@@ -121,7 +122,7 @@ func TestGobParamsRoundTripThroughCast(t *testing.T) {
 	if !cs.Valid() || cs.Changed(UserBio) || !cs.Changed(UserName) || cs.Row().Email != "gob@example.com" || !cs.Row().CreatedAt.Equal(when) {
 		t.Fatalf("GOB carries the row and the marks: %+v %+v", cs.Errors(), cs.Row())
 	}
-	u, err := q.UserCreate(ctx, cs)
+	u, err := run.Run(ctx, db, UserCreate(cs))
 	if err != nil || u.Name != "Gob" || !u.CreatedAt.Equal(when) {
 		t.Errorf("UserCreate = %+v, %v", u, err)
 	}
@@ -166,16 +167,16 @@ func TestChangesetValueSemantics(t *testing.T) {
 
 func TestUpdateWithNothingMarkedIsANoOp(t *testing.T) {
 	ctx := context.Background()
-	db, q := newDB(t)
-	u := seedUser(t, q, "ann@example.com")
-	if _, err := db.ExecContext(ctx, `UPDATE users SET name = 'Renamed' WHERE id = ?`, u.ID); err != nil {
+	db := newDB(t)
+	u := seedUser(t, db, "ann@example.com")
+	if _, err := db.Pool().ExecContext(ctx, `UPDATE users SET name = 'Renamed' WHERE id = ?`, u.ID); err != nil {
 		t.Fatal(err)
 	}
-	got, err := q.UserUpdate(ctx, u.Changeset())
+	got, err := run.Run(ctx, db, UserUpdate(u.Changeset()))
 	if err != nil || got.Name != u.Name {
 		t.Errorf("nothing marked returns Row() without touching the database: %+v, %v", got, err)
 	}
-	if _, err := q.UserUpdate(ctx, UserNew().EmailSet("x@example.com")); !errors.Is(err, rt.ErrNoRow) {
+	if _, err := run.Run(ctx, db, UserUpdate(UserNew().EmailSet("x@example.com"))); !errors.Is(err, rt.ErrNoRow) {
 		t.Errorf("Update on UserNew() = %v; want rt.ErrNoRow", err)
 	}
 }
@@ -204,23 +205,23 @@ func TestMembershipIsAFieldError(t *testing.T) {
 
 func TestCreateDefaults(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
+	db := newDB(t)
 
-	_, err := q.LinkClickCreate(ctx, LinkClickNew())
+	_, err := run.Run(ctx, db, LinkClickCreate(LinkClickNew()))
 	if inv := invalidOf(t, err, "not_null", "site"); inv.Cause == nil {
 		t.Errorf("nothing marked inserts DEFAULT VALUES, which the database refuses on its first NOT NULL column: %+v", inv)
 	}
-	lc, err := q.LinkClickCreate(ctx, LinkClickNew().SiteSet("alpha").DaySet(1))
+	lc, err := run.Run(ctx, db, LinkClickCreate(LinkClickNew().SiteSet("alpha").DaySet(1)))
 	if err != nil || lc.Target != "" || lc.ID == 0 {
 		t.Errorf("an unmarked column takes its default: %+v, %v", lc, err)
 	}
 
 	when := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
-	pinned, err := q.UserCreate(ctx, UserNew().EmailSet("a@example.com").NameSet("A").CreatedAtSet(when))
+	pinned, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("a@example.com").NameSet("A").CreatedAtSet(when)))
 	if err != nil || !pinned.CreatedAt.Equal(when) {
 		t.Errorf("a marked created_at is stored as given: %+v, %v", pinned, err)
 	}
-	stamped, err := q.UserCreate(ctx, UserNew().EmailSet("b@example.com").NameSet("B"))
+	stamped, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("b@example.com").NameSet("B")))
 	if err != nil || stamped.CreatedAt.IsZero() || stamped.CreatedAt.Equal(when) {
 		t.Errorf("an unmarked created_at takes CURRENT_TIMESTAMP: %+v, %v", stamped, err)
 	}
@@ -228,31 +229,29 @@ func TestCreateDefaults(t *testing.T) {
 
 func TestChangesetWritesUseTheStatementCache(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	cache := rt.NewStmtCache(8)
-	defer cache.Close()
-	cq := q.WithCache(cache)
+	db := newDB(t)
+	before := db.Statements()
 
-	if _, err := cq.UserCreate(ctx, UserNew().EmailSet("a@example.com").NameSet("A")); err != nil {
+	if _, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("a@example.com").NameSet("A"))); err != nil {
 		t.Fatal(err)
 	}
-	u, err := cq.UserCreate(ctx, UserNew().EmailSet("b@example.com").NameSet("B"))
+	u, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("b@example.com").NameSet("B")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := cache.Len(); n != 1 {
+	if n := db.Statements() - before; n != 1 {
 		t.Errorf("two creates of one shape prepare one statement, got %d", n)
 	}
-	if _, err := cq.UserCreate(ctx, UserNew().EmailSet("c@example.com").NameSet("C").BioSet(rt.Some("x"))); err != nil {
+	if _, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("c@example.com").NameSet("C").BioSet(rt.Some("x")))); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cq.UserUpdate(ctx, u.Changeset().NameSet("B2")); err != nil {
+	if _, err := run.Run(ctx, db, UserUpdate(u.Changeset().NameSet("B2"))); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cq.UserUpdate(ctx, u.Changeset().NameSet("B3")); err != nil {
+	if _, err := run.Run(ctx, db, UserUpdate(u.Changeset().NameSet("B3"))); err != nil {
 		t.Fatal(err)
 	}
-	if n := cache.Len(); n != 3 {
+	if n := db.Statements() - before; n != 3 {
 		t.Errorf("a new mark shape prepares a new statement, got %d", n)
 	}
 }

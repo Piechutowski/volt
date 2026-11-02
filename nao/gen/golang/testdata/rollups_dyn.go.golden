@@ -3,7 +3,6 @@
 package models
 
 import (
-	"context"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -24,73 +23,29 @@ func PageViewAfter(key ...any) rt.Opt[PageView] { return rt.After[PageView](key.
 
 func PageViewSet(assigns ...rt.Assign[PageView]) []rt.Assign[PageView] { return assigns }
 
-func (q *Queries) PageViewQuery(ctx context.Context, opts ...rt.Opt[PageView]) ([]PageView, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPageViewTableSQL, voltPageViewColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PageView{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPageViewScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PageViewQuery(opts ...rt.Opt[PageView]) rt.Query[PageView] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltPageViewTableSQL, voltPageViewColumnsSQL, opts)
+	return rt.Query[PageView]{SQL: voltSQL, Args: voltArgs, Scan: voltPageViewScan, Err: voltErr}
 }
 
-func (q *Queries) PageViewCount(ctx context.Context, preds ...rt.Pred[PageView]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltPageViewTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func PageViewCount(preds ...rt.Pred[PageView]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltPageViewTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) PageViewExists(ctx context.Context, preds ...rt.Pred[PageView]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltPageViewTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func PageViewExists(preds ...rt.Pred[PageView]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltPageViewTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) PageViewDeleteWhere(ctx context.Context, preds ...rt.Pred[PageView]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltPageViewTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PageViewDeleteWhere(preds ...rt.Pred[PageView]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltPageViewTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) PageViewUpdateWhere(ctx context.Context, set []rt.Assign[PageView], preds ...rt.Pred[PageView]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltPageViewTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PageViewUpdateWhere(set []rt.Assign[PageView], preds ...rt.Pred[PageView]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltPageViewTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -110,71 +65,27 @@ func LinkClickAfter(key ...any) rt.Opt[LinkClick] { return rt.After[LinkClick](k
 
 func LinkClickSet(assigns ...rt.Assign[LinkClick]) []rt.Assign[LinkClick] { return assigns }
 
-func (q *Queries) LinkClickQuery(ctx context.Context, opts ...rt.Opt[LinkClick]) ([]LinkClick, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltLinkClickTableSQL, voltLinkClickColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []LinkClick{}
-	for voltRows.Next() {
-		voltV, voltErr := voltLinkClickScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func LinkClickQuery(opts ...rt.Opt[LinkClick]) rt.Query[LinkClick] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltLinkClickTableSQL, voltLinkClickColumnsSQL, opts)
+	return rt.Query[LinkClick]{SQL: voltSQL, Args: voltArgs, Scan: voltLinkClickScan, Err: voltErr}
 }
 
-func (q *Queries) LinkClickCount(ctx context.Context, preds ...rt.Pred[LinkClick]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltLinkClickTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func LinkClickCount(preds ...rt.Pred[LinkClick]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltLinkClickTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) LinkClickExists(ctx context.Context, preds ...rt.Pred[LinkClick]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltLinkClickTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func LinkClickExists(preds ...rt.Pred[LinkClick]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltLinkClickTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) LinkClickDeleteWhere(ctx context.Context, preds ...rt.Pred[LinkClick]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltLinkClickTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func LinkClickDeleteWhere(preds ...rt.Pred[LinkClick]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltLinkClickTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) LinkClickUpdateWhere(ctx context.Context, set []rt.Assign[LinkClick], preds ...rt.Pred[LinkClick]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltLinkClickTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func LinkClickUpdateWhere(set []rt.Assign[LinkClick], preds ...rt.Pred[LinkClick]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltLinkClickTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }

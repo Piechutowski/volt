@@ -3,220 +3,69 @@
 package models
 
 import (
-	"context"
-	"database/sql"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-type Queries struct {
-	db    rt.DBTX
-	cache *rt.StmtCache
-}
-
-func New(db rt.DBTX) *Queries { return &Queries{db: db} }
-
-func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
-	return &Queries{db: q.db, cache: cache}
-}
-
-func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
-
-func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
-}
-
 const voltPageViewGetSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" WHERE "id" = ?`
 
-func (q *Queries) PageViewGet(ctx context.Context, id int) (PageView, error) {
-	return voltPageViewScan(q.db.QueryRowContext(ctx, voltPageViewGetSQL, id))
+func PageViewGet(id int) rt.Lookup[PageView] {
+	return rt.Lookup[PageView]{SQL: voltPageViewGetSQL, Args: []any{id}, Scan: voltPageViewScan}
 }
 
-func (q *Queries) PageViewGetMany(ctx context.Context, ids []int) ([]PageView, error) {
+func PageViewGetMany(ids []int) rt.Query[PageView] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[PageView]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPageViewTableSQL, voltPageViewColumnsSQL, []rt.Opt[PageView]{PageViewID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PageView{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPageViewScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltPageViewTableSQL, voltPageViewColumnsSQL, []rt.Opt[PageView]{PageViewID.In(ids...)})
+	return rt.Query[PageView]{SQL: voltSQL, Args: voltArgs, Scan: voltPageViewScan, Err: voltErr}
 }
 
 const voltPageViewListSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views"`
 
-func (q *Queries) PageViewList(ctx context.Context) ([]PageView, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PageView{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPageViewScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PageViewList() rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewListSQL, Scan: voltPageViewScan}
 }
 
-func (q *Queries) PageViewCreate(ctx context.Context, c PageViewChangeset) (PageView, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return PageView{}, voltErr
-	}
-	voltSQL, voltArgs := c.InsertRender()
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return PageView{}, voltErr
-	}
-	return voltPageViewScan(voltRow)
-}
+func PageViewCreate(c PageViewChangeset) rt.Write[PageView] { return rt.Insert(c.Validate().Changeset) }
 
-func (q *Queries) PageViewUpdate(ctx context.Context, c PageViewChangeset) (PageView, error) {
-	if !c.FromRow() {
-		return PageView{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return PageView{}, voltErr
-	}
-	voltSQL, voltArgs := c.UpdateRender()
-	if voltSQL == "" {
-		return c.Row(), nil
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return PageView{}, voltErr
-	}
-	return voltPageViewScan(voltRow)
-}
+func PageViewUpdate(c PageViewChangeset) rt.Write[PageView] { return rt.Update(c.Validate().Changeset) }
 
 const voltPageViewDeleteSQL = `DELETE FROM "page_views" WHERE "id" = ?`
 
-func (q *Queries) PageViewDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltPageViewDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("PageView", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
+func PageViewDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltPageViewDeleteSQL, Args: []any{id}, Model: "PageView", One: true}
 }
 
 const voltLinkClickGetSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "id" = ?`
 
-func (q *Queries) LinkClickGet(ctx context.Context, id int) (LinkClick, error) {
-	return voltLinkClickScan(q.db.QueryRowContext(ctx, voltLinkClickGetSQL, id))
+func LinkClickGet(id int) rt.Lookup[LinkClick] {
+	return rt.Lookup[LinkClick]{SQL: voltLinkClickGetSQL, Args: []any{id}, Scan: voltLinkClickScan}
 }
 
-func (q *Queries) LinkClickGetMany(ctx context.Context, ids []int) ([]LinkClick, error) {
+func LinkClickGetMany(ids []int) rt.Query[LinkClick] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[LinkClick]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltLinkClickTableSQL, voltLinkClickColumnsSQL, []rt.Opt[LinkClick]{LinkClickID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []LinkClick{}
-	for voltRows.Next() {
-		voltV, voltErr := voltLinkClickScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltLinkClickTableSQL, voltLinkClickColumnsSQL, []rt.Opt[LinkClick]{LinkClickID.In(ids...)})
+	return rt.Query[LinkClick]{SQL: voltSQL, Args: voltArgs, Scan: voltLinkClickScan, Err: voltErr}
 }
 
 const voltLinkClickListSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks"`
 
-func (q *Queries) LinkClickList(ctx context.Context) ([]LinkClick, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []LinkClick{}
-	for voltRows.Next() {
-		voltV, voltErr := voltLinkClickScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func LinkClickList() rt.Query[LinkClick] {
+	return rt.Query[LinkClick]{SQL: voltLinkClickListSQL, Scan: voltLinkClickScan}
 }
 
-func (q *Queries) LinkClickCreate(ctx context.Context, c LinkClickChangeset) (LinkClick, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return LinkClick{}, voltErr
-	}
-	voltSQL, voltArgs := c.InsertRender()
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return LinkClick{}, voltErr
-	}
-	return voltLinkClickScan(voltRow)
+func LinkClickCreate(c LinkClickChangeset) rt.Write[LinkClick] {
+	return rt.Insert(c.Validate().Changeset)
 }
 
-func (q *Queries) LinkClickUpdate(ctx context.Context, c LinkClickChangeset) (LinkClick, error) {
-	if !c.FromRow() {
-		return LinkClick{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return LinkClick{}, voltErr
-	}
-	voltSQL, voltArgs := c.UpdateRender()
-	if voltSQL == "" {
-		return c.Row(), nil
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return LinkClick{}, voltErr
-	}
-	return voltLinkClickScan(voltRow)
+func LinkClickUpdate(c LinkClickChangeset) rt.Write[LinkClick] {
+	return rt.Update(c.Validate().Changeset)
 }
 
 const voltLinkClickDeleteSQL = `DELETE FROM "link_clicks" WHERE "id" = ?`
 
-func (q *Queries) LinkClickDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltLinkClickDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("LinkClick", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
+func LinkClickDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltLinkClickDeleteSQL, Args: []any{id}, Model: "LinkClick", One: true}
 }

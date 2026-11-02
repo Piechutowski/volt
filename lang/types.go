@@ -42,7 +42,6 @@ func (c *checker) typesGoCheck(pkg *Package, info *check.Info, sc *goScan) {
 
 var migrationNames = map[string]string{
 	"Migrations": "the generated migration list",
-	"Migrate":    "the generated migration runner",
 }
 
 func (c *checker) typesRouterCheck(pkg *Package) {

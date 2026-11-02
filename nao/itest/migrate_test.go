@@ -2,11 +2,11 @@ package itest
 
 import (
 	"context"
+	"github.com/Piechutowski/volt/nao/run"
 	"os"
 	"testing"
 
 	"github.com/Piechutowski/volt/nao/migrate"
-	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // TestMigrateBuildsTheSchema builds a fresh database through the
@@ -14,18 +14,18 @@ import (
 // has the structure of volt_schema.sql, and runs a query on it.
 func TestMigrateBuildsTheSchema(t *testing.T) {
 	ctx := context.Background()
-	db, err := rt.Open("sqlite3", ":memory:")
+	db, err := run.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	if err := Migrate(ctx, db); err != nil {
+	if _, err := run.MigrateUp(ctx, db, Migrations); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if err := Migrate(ctx, db); err != nil {
-		t.Fatalf("second Migrate: %v", err)
+	if applied, err := run.MigrateUp(ctx, db, Migrations); err != nil || len(applied) != 0 {
+		t.Fatalf("second MigrateUp = %v, %v; want nothing applied", applied, err)
 	}
-	status, err := rt.MigrateStatus(ctx, db, Migrations)
+	status, err := run.MigrateStatus(ctx, db, Migrations)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestMigrateBuildsTheSchema(t *testing.T) {
 		}
 	}
 
-	target, err := rt.Open("sqlite3", ":memory:")
+	target, err := run.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,14 +47,14 @@ func TestMigrateBuildsTheSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := target.ExecContext(ctx, string(ddl)); err != nil {
+	if _, err := target.Pool().ExecContext(ctx, string(ddl)); err != nil {
 		t.Fatal(err)
 	}
-	fold, err := migrate.Read(ctx, db)
+	fold, err := migrate.Read(ctx, db.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := migrate.Read(ctx, target)
+	want, err := migrate.Read(ctx, target.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,12 +64,11 @@ func TestMigrateBuildsTheSchema(t *testing.T) {
 		}
 	}
 
-	q := New(db)
-	u, err := q.UserCreate(ctx, UserNew().EmailSet("ann@example.com").NameSet("Ann"))
+	u, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("ann@example.com").NameSet("Ann")))
 	if err != nil {
 		t.Fatalf("UserCreate on the migrated database: %v", err)
 	}
-	got, err := q.UserGet(ctx, u.ID)
+	got, err := run.Run(ctx, db, UserGet(u.ID))
 	if err != nil || got.Email != "ann@example.com" {
 		t.Fatalf("UserGet: %+v %v", got, err)
 	}

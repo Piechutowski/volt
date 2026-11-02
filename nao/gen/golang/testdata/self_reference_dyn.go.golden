@@ -3,7 +3,6 @@
 package models
 
 import (
-	"context"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -24,71 +23,27 @@ func EmployeeAfter(key ...any) rt.Opt[Employee] { return rt.After[Employee](key.
 
 func EmployeeSet(assigns ...rt.Assign[Employee]) []rt.Assign[Employee] { return assigns }
 
-func (q *Queries) EmployeeQuery(ctx context.Context, opts ...rt.Opt[Employee]) ([]Employee, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltEmployeeTableSQL, voltEmployeeColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Employee{}
-	for voltRows.Next() {
-		voltV, voltErr := voltEmployeeScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func EmployeeQuery(opts ...rt.Opt[Employee]) rt.Query[Employee] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltEmployeeTableSQL, voltEmployeeColumnsSQL, opts)
+	return rt.Query[Employee]{SQL: voltSQL, Args: voltArgs, Scan: voltEmployeeScan, Err: voltErr}
 }
 
-func (q *Queries) EmployeeCount(ctx context.Context, preds ...rt.Pred[Employee]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltEmployeeTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func EmployeeCount(preds ...rt.Pred[Employee]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltEmployeeTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-func (q *Queries) EmployeeExists(ctx context.Context, preds ...rt.Pred[Employee]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltEmployeeTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func EmployeeExists(preds ...rt.Pred[Employee]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltEmployeeTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-func (q *Queries) EmployeeDeleteWhere(ctx context.Context, preds ...rt.Pred[Employee]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltEmployeeTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func EmployeeDeleteWhere(preds ...rt.Pred[Employee]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltEmployeeTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-func (q *Queries) EmployeeUpdateWhere(ctx context.Context, set []rt.Assign[Employee], preds ...rt.Pred[Employee]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltEmployeeTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func EmployeeUpdateWhere(set []rt.Assign[Employee], preds ...rt.Pred[Employee]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltEmployeeTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }

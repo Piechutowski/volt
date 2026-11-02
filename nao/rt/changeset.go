@@ -5,8 +5,6 @@ package rt
 
 import (
 	"bytes"
-	"context"
-	"database/sql"
 	"database/sql/driver"
 	"encoding/gob"
 	"encoding/json"
@@ -412,24 +410,3 @@ func UpdateRowRender(table string, set, key []string, returning string) string {
 	b.WriteString(" RETURNING " + returning)
 	return b.String()
 }
-
-// Row is what a generated scan function reads: *sql.Row and *sql.Rows
-// both satisfy it.
-type Row interface {
-	Scan(dest ...any) error
-}
-
-// StmtQueryRow runs a single-row statement on db, through cache when one
-// is given (nil runs directly).
-func StmtQueryRow(ctx context.Context, db DBTX, cache *StmtCache, query string, args ...any) (Row, error) {
-	if cache != nil {
-		stmt, err := cache.Prepare(ctx, db, query)
-		if err != nil {
-			return nil, err
-		}
-		return stmt.QueryRowContext(ctx, args...), nil
-	}
-	return db.QueryRowContext(ctx, query, args...), nil
-}
-
-var _ Row = (*sql.Row)(nil)

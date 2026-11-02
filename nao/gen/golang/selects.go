@@ -31,7 +31,7 @@ func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, erro
 	}
 
 	var body strings.Builder
-	imports := map[string]bool{"context": true}
+	imports := map[string]bool{rtImport: true}
 	sharedDone := map[string]bool{}
 	for _, fn := range fns {
 		t, err := pl.Table(fn.TableKey)
@@ -147,17 +147,12 @@ func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t 
 	for _, prm := range fn.Params {
 		fmt.Fprintf(&sig, ", %s %s", prm.GoName, prm.GoType)
 	}
-	binds := ""
-	if len(args) > 0 {
-		binds = ", " + strings.Join(args, ", ")
-	}
 	for _, a := range args {
 		if strings.HasPrefix(a, "rt.") {
 			imports[rtImport] = true
 		}
 	}
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context%s) ([]%s, error) {\n", name, sig.String(), row)
-	fmt.Fprintf(b, "\tvoltRows, voltErr := q.db.QueryContext(ctx, %s%s)\n", constName, binds)
-	rowsScanEmit(b, row, naming.RowScan(row))
+	fmt.Fprintf(b, "func %s(%s) rt.Query[%s] {\n", name, strings.TrimPrefix(sig.String(), ", "), row)
+	fmt.Fprintf(b, "\treturn rt.Query[%s]{SQL: %s, Args: %s, Scan: %s}\n}\n\n", row, constName, argsList(args), naming.RowScan(row))
 	return nil
 }

@@ -21,7 +21,7 @@ import (
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/itest/blog/app"
 	"github.com/Piechutowski/volt/itest/blog/db"
-	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/nao/run"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -106,7 +106,7 @@ func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 	if t == nil {
 		t = &testing.T{}
 	}
-	sqlDB, err := rt.Open("sqlite3", ":memory:")
+	dbh, err := run.Open("sqlite3", ":memory:")
 	if err != nil {
 		panic(err)
 	}
@@ -114,21 +114,20 @@ func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 	if err != nil {
 		panic(err)
 	}
-	if _, err := sqlDB.Exec(string(ddl)); err != nil {
+	if _, err := dbh.Pool().Exec(string(ddl)); err != nil {
 		panic(err)
 	}
-	q := db.New(sqlDB)
-	if _, err := q.UserCreate(context.Background(), db.UserNew().EmailSet("one@example.com")); err != nil {
+	if _, err := run.Run(context.Background(), dbh, db.UserCreate(db.UserNew().EmailSet("one@example.com"))); err != nil {
 		panic(err)
 	}
-	if _, err := q.TagCreate(context.Background(), db.TagNew().SlugSet("go").NameSet("Go")); err != nil {
+	if _, err := run.Run(context.Background(), dbh, db.TagCreate(db.TagNew().SlugSet("go").NameSet("Go"))); err != nil {
 		panic(err)
 	}
 	broker := &volt.Broker{Heartbeat: 20 * time.Millisecond}
 	return app.NewRouter(app.Controllers{
 		Home: home{}, Users: users{}, Files: files{}, Admin: admin{},
 		Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{},
-		DB:     q,
+		DB:     dbh,
 		Events: broker,
 	}), broker
 }

@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Piechutowski/volt"
-	"github.com/Piechutowski/volt/itest/blog/db"
+	"github.com/Piechutowski/volt/nao/run"
 )
 
 type AdminController interface {
@@ -59,7 +59,7 @@ type Controllers struct {
 	Pages   PagesController
 	Tags    TagsController
 	Users   UsersController
-	DB      *db.Queries
+	DB      run.DB
 	Events  *volt.Broker
 }
 

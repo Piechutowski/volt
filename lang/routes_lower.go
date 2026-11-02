@@ -508,19 +508,11 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		}
 		return nil
 	}
-	field := "Queries"
-	if !local {
-		var err error
-		if field, err = naming.GoName(qual); err != nil {
-			l.errorf(qualPos, "scopes-and-routes", "import qualifier %q: %v (§query-routes)", qual, err)
-			return nil
-		}
-	}
 	importPath := l.facts.module
 	if target != "." {
 		importPath += "/" + target
 	}
-	qr := &QueryRef{Qualifier: qual, Field: field, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200}
+	qr := &QueryRef{Qualifier: qual, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200}
 
 	type sigParam struct {
 		name, goType string

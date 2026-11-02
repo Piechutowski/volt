@@ -29,7 +29,7 @@ that lands it.
 | Migrations with a ledger and a schema check | yes | built | |
 | Migration generation from drift | yes | missing | |
 | Seeds | yes | built (`Records`) | |
-| Transactions | yes | built; as values | 4 |
+| Transactions | yes | built (as values) | |
 | Sessions | yes | missing | |
 | Password hashing | yes | missing | |
 | CSRF | yes | missing | |
@@ -41,7 +41,7 @@ that lands it.
 | File uploads and storage | ActiveStorage | not planned | |
 | Caching | yes | partial (statement cache) | |
 | Internationalization | yes | not planned | |
-| Structured logging per request and per statement | yes | partial | 4 |
+| Structured logging per request and per statement | yes | built | |
 | Metrics and tracing hooks | Telemetry / instrumentation | missing | |
 | Secure headers, CORS, rate limiting | yes | missing | |
 | Graceful shutdown, health endpoint | releases / Puma | missing | |

@@ -7,11 +7,12 @@ package itest
 import (
 	"context"
 	"encoding/json"
+	"github.com/Piechutowski/volt/nao/run"
 	"strings"
 	"testing"
 )
 
-func seedMetrics(t *testing.T, q *Queries) {
+func seedMetrics(t *testing.T, db run.DB) {
 	t.Helper()
 	ctx := context.Background()
 	for _, r := range []PageViewChangeset{
@@ -20,7 +21,7 @@ func seedMetrics(t *testing.T, q *Queries) {
 		PageViewNew().SiteSet("alpha").DaySet(2),
 		PageViewNew().SiteSet("beta").DaySet(1),
 	} {
-		if _, err := q.PageViewCreate(ctx, r); err != nil {
+		if _, err := run.Run(ctx, db, PageViewCreate(r)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -28,18 +29,18 @@ func seedMetrics(t *testing.T, q *Queries) {
 		LinkClickNew().SiteSet("alpha").DaySet(1),
 		LinkClickNew().SiteSet("beta").DaySet(2),
 	} {
-		if _, err := q.LinkClickCreate(ctx, r); err != nil {
+		if _, err := run.Run(ctx, db, LinkClickCreate(r)); err != nil {
 			t.Fatal(err)
 		}
 	}
 }
 
 func TestSelectRowsFiltersPerMember(t *testing.T) {
-	_, q := newDB(t)
-	seedMetrics(t, q)
+	db := newDB(t)
+	seedMetrics(t, db)
 	ctx := context.Background()
 
-	pv, err := q.PageViewRows(ctx, "alpha", 1)
+	pv, err := run.Run(ctx, db, PageViewRows("alpha", 1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +53,7 @@ func TestSelectRowsFiltersPerMember(t *testing.T) {
 		}
 	}
 
-	lc, err := q.LinkClickRows(ctx, "beta", 2)
+	lc, err := run.Run(ctx, db, LinkClickRows("beta", 2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,17 +61,17 @@ func TestSelectRowsFiltersPerMember(t *testing.T) {
 		t.Fatalf("LinkClickRows(beta, 2) = %+v, want the beta row", lc)
 	}
 
-	none, err := q.LinkClickRows(ctx, "alpha", 99)
+	none, err := run.Run(ctx, db, LinkClickRows("alpha", 99))
 	if err != nil || len(none) != 0 {
 		t.Fatalf("no-match select = %v rows, err %v", len(none), err)
 	}
 }
 
 func TestSelectOrderDescApplies(t *testing.T) {
-	_, q := newDB(t)
-	seedMetrics(t, q)
+	db := newDB(t)
+	seedMetrics(t, db)
 
-	rows, err := q.PageViewRecent(context.Background(), "nosuch", 0, 1)
+	rows, err := run.Run(context.Background(), db, PageViewRecent("nosuch", 0, 1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +79,7 @@ func TestSelectOrderDescApplies(t *testing.T) {
 		t.Fatalf("Recent(since day 1) = %d rows, want all 4", len(rows))
 	}
 
-	ordered, err := q.PageViewRows(context.Background(), "alpha", 1)
+	ordered, err := run.Run(context.Background(), db, PageViewRows("alpha", 1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,15 +89,15 @@ func TestSelectOrderDescApplies(t *testing.T) {
 }
 
 func TestSelectProjectionSharedType(t *testing.T) {
-	_, q := newDB(t)
-	seedMetrics(t, q)
+	db := newDB(t)
+	seedMetrics(t, db)
 	ctx := context.Background()
 
-	pv, err := q.PageViewSummary(ctx, "alpha", 1)
+	pv, err := run.Run(ctx, db, PageViewSummary("alpha", 1))
 	if err != nil {
 		t.Fatal(err)
 	}
-	lc, err := q.LinkClickSummary(ctx, "alpha", 1)
+	lc, err := run.Run(ctx, db, LinkClickSummary("alpha", 1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,10 +113,10 @@ func TestSelectProjectionSharedType(t *testing.T) {
 }
 
 func TestSelectProjectionStructDerivative(t *testing.T) {
-	_, q := newDB(t)
-	seedMetrics(t, q)
+	db := newDB(t)
+	seedMetrics(t, db)
 
-	rows, err := q.LinkClickPublic(context.Background())
+	rows, err := run.Run(context.Background(), db, LinkClickPublic())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,11 +140,11 @@ func TestSelectProjectionStructDerivative(t *testing.T) {
 // multi-value list, a single value, and the empty list that matches
 // nothing, with one signature across both members.
 func TestSelectListParam(t *testing.T) {
-	_, q := newDB(t)
-	seedMetrics(t, q)
+	db := newDB(t)
+	seedMetrics(t, db)
 	ctx := context.Background()
 
-	both, err := q.PageViewOnSites(ctx, []string{"alpha", "beta"})
+	both, err := run.Run(ctx, db, PageViewOnSites([]string{"alpha", "beta"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,21 +156,21 @@ func TestSelectListParam(t *testing.T) {
 			t.Fatalf("rows not in id order: %+v", both)
 		}
 	}
-	beta, err := q.LinkClickOnSites(ctx, []string{"beta"})
+	beta, err := run.Run(ctx, db, LinkClickOnSites([]string{"beta"}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(beta) != 1 || beta[0].Site != "beta" {
 		t.Fatalf("LinkClickOnSites(beta) = %+v, want the beta row", beta)
 	}
-	none, err := q.PageViewOnSites(ctx, nil)
+	none, err := run.Run(ctx, db, PageViewOnSites(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(none) != 0 {
 		t.Fatalf("PageViewOnSites(empty) = %d rows, want 0", len(none))
 	}
-	odd, err := q.PageViewOnSites(ctx, []string{`al"pha`, "alpha"})
+	odd, err := run.Run(ctx, db, PageViewOnSites([]string{`al"pha`, "alpha"}))
 	if err != nil {
 		t.Fatal(err)
 	}

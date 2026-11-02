@@ -3,9 +3,6 @@
 package itest
 
 import (
-	"context"
-	"database/sql"
-
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -153,9 +150,4 @@ var Migrations = []rt.Migration{
 			`DROP TABLE post_flags`,
 		},
 	},
-}
-
-func Migrate(ctx context.Context, db *sql.DB) error {
-	_, voltErr := rt.MigrateUp(ctx, db, Migrations)
-	return voltErr
 }

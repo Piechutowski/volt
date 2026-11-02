@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/Piechutowski/volt/nao/run"
 	"os"
 	"regexp"
 	"strings"
@@ -20,10 +21,10 @@ import (
 // Delete take them in that order.
 func TestCompositeKeyInDeclarationOrder(t *testing.T) {
 	ctx := context.Background()
-	db, q := newDB(t)
+	db := newDB(t)
 
 	positions := map[string]int{}
-	rows, err := db.QueryContext(ctx, "PRAGMA table_info(daily_hits)")
+	rows, err := db.Pool().QueryContext(ctx, "PRAGMA table_info(daily_hits)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,39 +42,39 @@ func TestCompositeKeyInDeclarationOrder(t *testing.T) {
 		t.Fatalf("primary key positions %v, want day 1 and site 2 in declaration order", positions)
 	}
 
-	hit, err := q.DailyHitCreate(ctx, DailyHitNew().DaySet(20261022).SiteSet("blog.example").HitsSet(7))
+	hit, err := run.Run(ctx, db, DailyHitCreate(DailyHitNew().DaySet(20261022).SiteSet("blog.example").HitsSet(7)))
 	if err != nil {
 		t.Fatalf("DailyHitCreate: %v", err)
 	}
-	got, err := q.DailyHitGet(ctx, 20261022, "blog.example")
+	got, err := run.Run(ctx, db, DailyHitGet(20261022, "blog.example"))
 	if err != nil || got != hit {
 		t.Fatalf("DailyHitGet(day, site) = %+v, %v; want %+v", got, err, hit)
 	}
-	if _, err := q.DailyHitGet(ctx, 20261023, "blog.example"); !errors.Is(err, rt.ErrNotFound) {
+	if _, err := run.Run(ctx, db, DailyHitGet(20261023, "blog.example")); !errors.Is(err, rt.ErrNotFound) {
 		t.Errorf("DailyHitGet on another day = %v; want rt.ErrNotFound", err)
 	}
-	_, err = q.DailyHitCreate(ctx, DailyHitNew().DaySet(20261022).SiteSet("blog.example"))
+	_, err = run.Run(ctx, db, DailyHitCreate(DailyHitNew().DaySet(20261022).SiteSet("blog.example")))
 	if inv := invalidOf(t, err, "unique", "day", "site"); inv.Cause == nil {
 		t.Errorf("a duplicate composite key is a unique field error naming both columns: %+v", inv)
 	}
-	if _, err := q.DailyHitCreate(ctx, DailyHitNew().DaySet(20261023).SiteSet("blog.example")); err != nil {
+	if _, err := run.Run(ctx, db, DailyHitCreate(DailyHitNew().DaySet(20261023).SiteSet("blog.example"))); err != nil {
 		t.Errorf("the same site on another day is another key: %v", err)
 	}
 
-	updated, err := q.DailyHitUpdate(ctx, hit.Changeset().HitsSet(8))
+	updated, err := run.Run(ctx, db, DailyHitUpdate(hit.Changeset().HitsSet(8)))
 	if err != nil || updated.Hits != 8 || updated.Day != hit.Day || updated.Site != hit.Site {
 		t.Fatalf("DailyHitUpdate = %+v, %v; want hits 8 on the same key", updated, err)
 	}
-	if again, err := q.DailyHitGet(ctx, hit.Day, hit.Site); err != nil || again.Hits != 8 {
+	if again, err := run.Run(ctx, db, DailyHitGet(hit.Day, hit.Site)); err != nil || again.Hits != 8 {
 		t.Errorf("DailyHitGet after the update = %+v, %v", again, err)
 	}
-	if err := q.DailyHitDelete(ctx, hit.Day, hit.Site); err != nil {
+	if _, err := run.Run(ctx, db, DailyHitDelete(hit.Day, hit.Site)); err != nil {
 		t.Fatalf("DailyHitDelete(day, site): %v", err)
 	}
-	if _, err := q.DailyHitGet(ctx, hit.Day, hit.Site); !errors.Is(err, rt.ErrNotFound) {
+	if _, err := run.Run(ctx, db, DailyHitGet(hit.Day, hit.Site)); !errors.Is(err, rt.ErrNotFound) {
 		t.Errorf("DailyHitGet after the delete = %v; want rt.ErrNotFound", err)
 	}
-	if n, err := q.DailyHitCount(ctx); err != nil || n != 1 {
+	if n, err := run.Run(ctx, db, DailyHitCount()); err != nil || n != 1 {
 		t.Errorf("the delete removes its key alone: %d rows, %v", n, err)
 	}
 }
@@ -85,10 +86,10 @@ const uniqueConstraintsSQL = `SELECT count(*) FROM sqlite_master AS m, pragma_in
 
 // indexSQL is the CREATE statement SQLite keeps for an index, and
 // whether the index exists.
-func indexSQL(t *testing.T, db *sql.DB, name string) (string, bool) {
+func indexSQL(t *testing.T, db run.DB, name string) (string, bool) {
 	t.Helper()
 	var text sql.NullString
-	err := db.QueryRow("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?", name).Scan(&text)
+	err := db.Pool().QueryRow("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?", name).Scan(&text)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false
 	}
@@ -105,34 +106,34 @@ func indexSQL(t *testing.T, db *sql.DB, name string) (string, bool) {
 // 409-style refusal naming the column.
 func TestUniqueColumnIsAUniqueIndex(t *testing.T) {
 	ctx := context.Background()
-	db, q := newDB(t)
+	db := newDB(t)
 	text, ok := indexSQL(t, db, "idx_users_email")
 	if !ok || !strings.HasPrefix(text, "CREATE UNIQUE INDEX idx_users_email ON users (email)") {
 		t.Fatalf("idx_users_email = %q, %v; want the unique column's CREATE UNIQUE INDEX", text, ok)
 	}
 	var autoindexes int
-	if err := db.QueryRow(uniqueConstraintsSQL).Scan(&autoindexes); err != nil {
+	if err := db.Pool().QueryRow(uniqueConstraintsSQL).Scan(&autoindexes); err != nil {
 		t.Fatal(err)
 	}
 	if autoindexes != 0 {
 		t.Errorf("%d indexes of a UNIQUE constraint (sqlite_autoindex): the DDL carries an inline UNIQUE", autoindexes)
 	}
 
-	seedUser(t, q, "ann@example.com")
-	_, err := q.UserCreate(ctx, UserNew().EmailSet("ann@example.com").NameSet("Ann again"))
+	seedUser(t, db, "ann@example.com")
+	_, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("ann@example.com").NameSet("Ann again")))
 	if inv := invalidOf(t, err, "unique", "email"); inv.Cause == nil {
 		t.Errorf("a duplicate of a unique column is a unique field error naming the column, with the database's error as its cause: %+v", inv)
 	}
 
-	if _, err := q.DailyHitCreate(ctx, DailyHitNew().DaySet(1).SiteSet("a").TokenSet(rt.Some("t-1"))); err != nil {
+	if _, err := run.Run(ctx, db, DailyHitCreate(DailyHitNew().DaySet(1).SiteSet("a").TokenSet(rt.Some("t-1")))); err != nil {
 		t.Fatal(err)
 	}
 	for _, site := range []string{"b", "c"} {
-		if _, err := q.DailyHitCreate(ctx, DailyHitNew().DaySet(1).SiteSet(site)); err != nil {
+		if _, err := run.Run(ctx, db, DailyHitCreate(DailyHitNew().DaySet(1).SiteSet(site))); err != nil {
 			t.Errorf("NULL tokens do not collide under a unique index: %v", err)
 		}
 	}
-	_, err = q.DailyHitCreate(ctx, DailyHitNew().DaySet(2).SiteSet("a").TokenSet(rt.Some("t-1")))
+	_, err = run.Run(ctx, db, DailyHitCreate(DailyHitNew().DaySet(2).SiteSet("a").TokenSet(rt.Some("t-1"))))
 	if inv := invalidOf(t, err, "unique", "token"); inv.Cause == nil {
 		t.Errorf("a duplicate token is a unique field error naming the column: %+v", inv)
 	}
@@ -143,18 +144,18 @@ func TestUniqueColumnIsAUniqueIndex(t *testing.T) {
 // duplicates, and SQLite plans a lookup by the column through it.
 func TestIndexColumn(t *testing.T) {
 	ctx := context.Background()
-	db, q := newDB(t)
+	db := newDB(t)
 	text, ok := indexSQL(t, db, "idx_daily_hits_label")
 	if !ok || !strings.HasPrefix(text, "CREATE INDEX idx_daily_hits_label ON daily_hits (label)") {
 		t.Fatalf("idx_daily_hits_label = %q, %v; want the index column's CREATE INDEX", text, ok)
 	}
 	for _, site := range []string{"a", "b"} {
-		if _, err := q.DailyHitCreate(ctx, DailyHitNew().DaySet(1).SiteSet(site).LabelSet("launch")); err != nil {
+		if _, err := run.Run(ctx, db, DailyHitCreate(DailyHitNew().DaySet(1).SiteSet(site).LabelSet("launch"))); err != nil {
 			t.Fatalf("an index column admits duplicates: %v", err)
 		}
 	}
 	var plan strings.Builder
-	rows, err := db.QueryContext(ctx, "EXPLAIN QUERY PLAN SELECT * FROM daily_hits WHERE label = ?", "launch")
+	rows, err := db.Pool().QueryContext(ctx, "EXPLAIN QUERY PLAN SELECT * FROM daily_hits WHERE label = ?", "launch")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +171,7 @@ func TestIndexColumn(t *testing.T) {
 	if !strings.Contains(plan.String(), "idx_daily_hits_label") {
 		t.Errorf("a lookup by label does not use its index:\n%s", plan.String())
 	}
-	got, err := q.DailyHitQuery(ctx, DailyHitLabel.Eq("launch"))
+	got, err := run.Run(ctx, db, DailyHitQuery(DailyHitLabel.Eq("launch")))
 	if err != nil || len(got) != 2 {
 		t.Errorf("DailyHitQuery by label = %+v, %v; want both rows", got, err)
 	}
@@ -181,23 +182,23 @@ func TestIndexColumn(t *testing.T) {
 // the row, or rt.ErrNotFound.
 func TestGetByUniqueColumn(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	seedUser(t, q, "ann@example.com")
-	inv, err := q.InviteCreate(ctx, InviteNew().UserEmailSet("ann@example.com").CodeSet("WELCOME"))
+	db := newDB(t)
+	seedUser(t, db, "ann@example.com")
+	inv, err := run.Run(ctx, db, InviteCreate(InviteNew().UserEmailSet("ann@example.com").CodeSet("WELCOME")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := q.InviteGetByCode(ctx, "WELCOME"); err != nil || got != inv {
+	if got, err := run.Run(ctx, db, InviteGetByCode("WELCOME")); err != nil || got != inv {
 		t.Errorf("InviteGetByCode = %+v, %v; want %+v", got, err, inv)
 	}
-	if _, err := q.InviteGetByCode(ctx, "NOPE"); !errors.Is(err, rt.ErrNotFound) {
+	if _, err := run.Run(ctx, db, InviteGetByCode("NOPE")); !errors.Is(err, rt.ErrNotFound) {
 		t.Errorf("InviteGetByCode on a miss = %v; want rt.ErrNotFound", err)
 	}
-	hit, err := q.DailyHitCreate(ctx, DailyHitNew().DaySet(1).SiteSet("a").TokenSet(rt.Some("t-1")))
+	hit, err := run.Run(ctx, db, DailyHitCreate(DailyHitNew().DaySet(1).SiteSet("a").TokenSet(rt.Some("t-1"))))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := q.DailyHitGetByToken(ctx, rt.Some("t-1")); err != nil || got != hit {
+	if got, err := run.Run(ctx, db, DailyHitGetByToken(rt.Some("t-1"))); err != nil || got != hit {
 		t.Errorf("DailyHitGetByToken = %+v, %v; want %+v", got, err, hit)
 	}
 }
@@ -208,17 +209,17 @@ func TestGetByUniqueColumn(t *testing.T) {
 // enforces it on insert, and refuses to delete the referenced row.
 func TestForeignKeyToAUniqueIndexedColumn(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	u := seedUser(t, q, "ann@example.com")
-	if _, err := q.InviteCreate(ctx, InviteNew().UserEmailSet("ann@example.com").CodeSet("A")); err != nil {
+	db := newDB(t)
+	u := seedUser(t, db, "ann@example.com")
+	if _, err := run.Run(ctx, db, InviteCreate(InviteNew().UserEmailSet("ann@example.com").CodeSet("A"))); err != nil {
 		t.Fatalf("an invite referencing a user's email: %v", err)
 	}
-	_, err := q.InviteCreate(ctx, InviteNew().UserEmailSet("nobody@example.com").CodeSet("B"))
+	_, err := run.Run(ctx, db, InviteCreate(InviteNew().UserEmailSet("nobody@example.com").CodeSet("B")))
 	var refused *rt.Invalid
 	if !errors.As(err, &refused) || len(refused.Fields) != 1 || refused.Fields[0].Check != "foreign_key" {
 		t.Fatalf("an invite referencing no user = %v; want the foreign key refusal", err)
 	}
-	if err := q.UserDelete(ctx, u.ID); !errors.As(err, &refused) || refused.Fields[0].Check != "foreign_key" {
+	if _, err := run.Run(ctx, db, UserDelete(u.ID)); !errors.As(err, &refused) || refused.Fields[0].Check != "foreign_key" {
 		t.Errorf("deleting a referenced user = %v; want the foreign key refusal", err)
 	}
 }
@@ -232,7 +233,7 @@ func TestForeignKeyToAUniqueIndexedColumn(t *testing.T) {
 // folds to the schema.
 func TestMigrationAddsAUniqueColumnWithoutARebuild(t *testing.T) {
 	ctx := context.Background()
-	db, err := rt.Open("sqlite3", ":memory:")
+	db, err := run.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,36 +258,35 @@ func TestMigrationAddsAUniqueColumnWithoutARebuild(t *testing.T) {
 		t.Fatalf("0006 lowers to %q (bracket %v); want the adds and their indexes, no rebuild:\n%q", last.Up, last.ForeignKeysOff, want)
 	}
 
-	if _, err := rt.MigrateUp(ctx, db, Migrations[:at]); err != nil {
+	if _, err := run.MigrateUp(ctx, db, Migrations[:at]); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, "INSERT INTO daily_hits (day, site, hits) VALUES (1, 'a', 3), (1, 'b', 4)"); err != nil {
+	if _, err := db.Pool().ExecContext(ctx, "INSERT INTO daily_hits (day, site, hits) VALUES (1, 'a', 3), (1, 'b', 4)"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, "ALTER TABLE daily_hits ADD COLUMN other TEXT UNIQUE"); err == nil || !strings.Contains(err.Error(), "UNIQUE") {
+	if _, err := db.Pool().ExecContext(ctx, "ALTER TABLE daily_hits ADD COLUMN other TEXT UNIQUE"); err == nil || !strings.Contains(err.Error(), "UNIQUE") {
 		t.Fatalf("SQLite's ADD COLUMN ... UNIQUE = %v; want it refused, which is why add lowers to an index", err)
 	}
-	if applied, err := rt.MigrateUp(ctx, db, Migrations[:at+1]); err != nil || len(applied) != 1 || applied[0] != last.Name {
+	if applied, err := run.MigrateUp(ctx, db, Migrations[:at+1]); err != nil || len(applied) != 1 || applied[0] != last.Name {
 		t.Fatalf("MigrateUp of 0006 over rows = %v, %v", applied, err)
 	}
 
-	q := New(db)
-	hits, err := q.DailyHitList(ctx)
+	hits, err := run.Run(ctx, db, DailyHitList())
 	if err != nil || len(hits) != 2 || hits[0].Label != "" || hits[0].Token.Valid || hits[1].Hits != 4 {
 		t.Fatalf("the rows after 0006 = %+v, %v; want both kept, label empty, token NULL", hits, err)
 	}
-	if _, err := q.DailyHitUpdate(ctx, hits[0].Changeset().TokenSet(rt.Some("t-1"))); err != nil {
+	if _, err := run.Run(ctx, db, DailyHitUpdate(hits[0].Changeset().TokenSet(rt.Some("t-1")))); err != nil {
 		t.Fatal(err)
 	}
-	_, err = q.DailyHitUpdate(ctx, hits[1].Changeset().TokenSet(rt.Some("t-1")))
+	_, err = run.Run(ctx, db, DailyHitUpdate(hits[1].Changeset().TokenSet(rt.Some("t-1"))))
 	if inv := invalidOf(t, err, "unique", "token"); inv.Cause == nil {
 		t.Errorf("the added unique column refuses a duplicate: %+v", inv)
 	}
 
-	if _, err := rt.MigrateUp(ctx, db, Migrations); err != nil {
+	if _, err := run.MigrateUp(ctx, db, Migrations); err != nil {
 		t.Fatalf("MigrateUp of the migrations after 0006: %v", err)
 	}
-	fold, err := migrate.Read(ctx, db)
+	fold, err := migrate.Read(ctx, db.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,13 +329,13 @@ func TestOldLoweringFoldsEqual(t *testing.T) {
 
 	oldDB := ddlOpen(t, old)
 	var autoindexes int
-	if err := oldDB.QueryRow(uniqueConstraintsSQL).Scan(&autoindexes); err != nil {
+	if err := oldDB.Pool().QueryRow(uniqueConstraintsSQL).Scan(&autoindexes); err != nil {
 		t.Fatal(err)
 	}
 	if autoindexes != moved {
 		t.Fatalf("the old lowering has %d indexes of a UNIQUE constraint (sqlite_autoindex), want %d", autoindexes, moved)
 	}
-	oldSchema, err := migrate.Read(context.Background(), oldDB)
+	oldSchema, err := migrate.Read(context.Background(), oldDB.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -357,14 +357,14 @@ func schemaDDL(t *testing.T) string {
 	return string(ddl)
 }
 
-func ddlOpen(t *testing.T, ddl string) *sql.DB {
+func ddlOpen(t *testing.T, ddl string) run.DB {
 	t.Helper()
-	db, err := rt.Open("sqlite3", ":memory:")
+	db, err := run.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if _, err := db.Exec(ddl); err != nil {
+	if _, err := db.Pool().Exec(ddl); err != nil {
 		t.Fatalf("DDL rejected: %v\n%s", err, ddl)
 	}
 	return db
@@ -372,7 +372,7 @@ func ddlOpen(t *testing.T, ddl string) *sql.DB {
 
 func schemaRead(t *testing.T, ddl string) migrate.Schema {
 	t.Helper()
-	s, err := migrate.Read(context.Background(), ddlOpen(t, ddl))
+	s, err := migrate.Read(context.Background(), ddlOpen(t, ddl).Pool())
 	if err != nil {
 		t.Fatal(err)
 	}

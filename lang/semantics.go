@@ -372,10 +372,8 @@ func (c *checker) routing(pkg *Package) {
 	held := map[string]string{}
 	for _, r := range pkg.Routes {
 		switch {
-		case r.Query != nil && r.Query.Local:
-			held[r.Query.Field] = "this package's query routes"
 		case r.Query != nil:
-			held[r.Query.Field] = "the query routes through package " + r.Query.Qualifier
+			held["DB"] = "the database the query routes run on"
 		case r.Events:
 			held["Events"] = "the event routes (§event-routes)"
 		}

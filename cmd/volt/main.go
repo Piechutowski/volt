@@ -61,7 +61,7 @@ func command() *cli.Command {
 				ArgsUsage: "[packages]",
 				Flags:     []cli.Flag{jsonFlag},
 				Action: func(_ context.Context, c *cli.Command) error {
-					return run(c, "check")
+					return modeRun(c, "check")
 				},
 			},
 			{
@@ -73,7 +73,7 @@ func command() *cli.Command {
 					&cli.BoolFlag{Name: "werror", Usage: "treat warnings as errors in the exit status"},
 				},
 				Action: func(_ context.Context, c *cli.Command) error {
-					return run(c, "vet")
+					return modeRun(c, "vet")
 				},
 			},
 			{
@@ -181,7 +181,7 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 	return pr, named, lang.Check(pr), nil
 }
 
-func run(c *cli.Command, mode string) error {
+func modeRun(c *cli.Command, mode string) error {
 	pr, _, diags, err := load(c)
 	if err != nil {
 		return err

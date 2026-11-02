@@ -1,4 +1,4 @@
-package rt
+package run
 
 import (
 	"context"
@@ -11,14 +11,16 @@ import (
 	"testing"
 
 	sqlite3 "github.com/mattn/go-sqlite3"
+
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
-func migrateDB(t *testing.T) *sql.DB {
+func migrateDB(t *testing.T) DB {
 	t.Helper()
 	return migrateDBAt(t, "sqlite3", filepath.Join(t.TempDir(), "m.db"))
 }
 
-func migrateDBAt(t *testing.T, driver, path string) *sql.DB {
+func migrateDBAt(t *testing.T, driver, path string) DB {
 	t.Helper()
 	db, err := Open(driver, path)
 	if err != nil {
@@ -48,7 +50,7 @@ func init() {
 	})
 }
 
-var blogMigrations = []Migration{
+var blogMigrations = []rt.Migration{
 	{
 		Name: "0001__posts",
 		Up:   []string{"CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"},
@@ -64,10 +66,10 @@ var blogMigrations = []Migration{
 	},
 }
 
-func tableExists(t *testing.T, db *sql.DB, name string) bool {
+func tableExists(t *testing.T, db DB, name string) bool {
 	t.Helper()
 	var n int
-	if err := db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", name).Scan(&n); err != nil {
+	if err := db.Pool().QueryRow("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", name).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n == 1
@@ -127,7 +129,7 @@ func TestMigrateDownRevertsTheLast(t *testing.T) {
 	if status[1].Applied || status[1].OutOfOrder {
 		t.Errorf("after down: %+v, want pending in order", status[1])
 	}
-	irreversible := []Migration{blogMigrations[0], {Name: "0002__comments", Up: blogMigrations[1].Up}}
+	irreversible := []rt.Migration{blogMigrations[0], {Name: "0002__comments", Up: blogMigrations[1].Up}}
 	if _, err := MigrateUp(ctx, db, irreversible); err != nil {
 		t.Fatal(err)
 	}
@@ -135,9 +137,9 @@ func TestMigrateDownRevertsTheLast(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "0002__comments") || !strings.Contains(err.Error(), "irreversible") {
 		t.Fatalf("down over an irreversible migration: %v, want a refusal naming it", err)
 	}
-	var me *MigrationError
-	if !errors.As(err, &me) || !errors.Is(err, ErrIrreversible) || me.Name != "0002__comments" || me.Direction != "down" || me.Index != 0 {
-		t.Errorf("the refusal is %#v, want a MigrationError for 0002__comments down caused by ErrIrreversible", err)
+	var me *rt.MigrationError
+	if !errors.As(err, &me) || !errors.Is(err, rt.ErrIrreversible) || me.Name != "0002__comments" || me.Direction != "down" || me.Index != 0 {
+		t.Errorf("the refusal is %#v, want a rt.MigrationError for 0002__comments down caused by rt.ErrIrreversible", err)
 	}
 	if !tableExists(t, db, "comments") {
 		t.Error("the refusal dropped the table")
@@ -147,11 +149,11 @@ func TestMigrateDownRevertsTheLast(t *testing.T) {
 func TestMigrateStatusMarksOutOfOrder(t *testing.T) {
 	ctx := context.Background()
 	db := migrateDB(t)
-	later := Migration{Name: "0003__tags", Up: []string{"CREATE TABLE tags (id INTEGER PRIMARY KEY)"}, Down: []string{"DROP TABLE tags"}}
-	if _, err := MigrateUp(ctx, db, []Migration{blogMigrations[0], later}); err != nil {
+	later := rt.Migration{Name: "0003__tags", Up: []string{"CREATE TABLE tags (id INTEGER PRIMARY KEY)"}, Down: []string{"DROP TABLE tags"}}
+	if _, err := MigrateUp(ctx, db, []rt.Migration{blogMigrations[0], later}); err != nil {
 		t.Fatal(err)
 	}
-	all := []Migration{blogMigrations[0], blogMigrations[1], later}
+	all := []rt.Migration{blogMigrations[0], blogMigrations[1], later}
 	status, err := MigrateStatus(ctx, db, all)
 	if err != nil {
 		t.Fatal(err)
@@ -181,10 +183,10 @@ func TestMigrateBracketRollsBackDanglingForeignKeys(t *testing.T) {
 	if _, err := MigrateUp(ctx, db, blogMigrations); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("INSERT INTO posts (id, title) VALUES (1, 'a'); INSERT INTO comments (id, post_id) VALUES (1, 1)"); err != nil {
+	if _, err := db.Pool().Exec("INSERT INTO posts (id, title) VALUES (1, 'a'); INSERT INTO comments (id, post_id) VALUES (1, 1)"); err != nil {
 		t.Fatal(err)
 	}
-	drop := Migration{
+	drop := rt.Migration{
 		Name:           "0003__drop_posts",
 		Up:             []string{"DROP TABLE posts", "CREATE TABLE posts_log (id INTEGER PRIMARY KEY)"},
 		ForeignKeysOff: true,
@@ -193,15 +195,15 @@ func TestMigrateBracketRollsBackDanglingForeignKeys(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "0003__drop_posts") || !strings.Contains(err.Error(), "comments") {
 		t.Fatalf("bracket: %v, want the check failure naming the migration and the table", err)
 	}
-	var me *MigrationError
+	var me *rt.MigrationError
 	if !errors.As(err, &me) || me.Name != "0003__drop_posts" || me.Direction != "up" || me.Index != 0 {
-		t.Errorf("the check failure is %#v, want a MigrationError for 0003__drop_posts up with no statement", err)
+		t.Errorf("the check failure is %#v, want a rt.MigrationError for 0003__drop_posts up with no statement", err)
 	}
 	if !tableExists(t, db, "posts") || tableExists(t, db, "posts_log") {
 		t.Error("the failed migration was not rolled back")
 	}
 	var fk int
-	if err := db.QueryRow("PRAGMA foreign_keys").Scan(&fk); err != nil || fk != 1 {
+	if err := db.Pool().QueryRow("PRAGMA foreign_keys").Scan(&fk); err != nil || fk != 1 {
 		t.Errorf("PRAGMA foreign_keys = %d after the bracket, want 1", fk)
 	}
 	status, err := MigrateStatus(ctx, db, append(blogMigrations, drop))
@@ -211,7 +213,7 @@ func TestMigrateBracketRollsBackDanglingForeignKeys(t *testing.T) {
 	if status[2].Applied {
 		t.Error("the ledger recorded a rolled-back migration")
 	}
-	rebuild := Migration{
+	rebuild := rt.Migration{
 		Name: "0003__rebuild_posts",
 		Up: []string{
 			"CREATE TABLE posts__new (id INTEGER PRIMARY KEY, title TEXT NOT NULL DEFAULT '')",
@@ -225,7 +227,7 @@ func TestMigrateBracketRollsBackDanglingForeignKeys(t *testing.T) {
 		t.Fatalf("a rebuild under the bracket: %v", err)
 	}
 	var n int
-	if err := db.QueryRow("SELECT count(*) FROM comments c JOIN posts p ON p.id = c.post_id").Scan(&n); err != nil || n != 1 {
+	if err := db.Pool().QueryRow("SELECT count(*) FROM comments c JOIN posts p ON p.id = c.post_id").Scan(&n); err != nil || n != 1 {
 		t.Errorf("rows after the rebuild: %d %v", n, err)
 	}
 }
@@ -233,22 +235,22 @@ func TestMigrateBracketRollsBackDanglingForeignKeys(t *testing.T) {
 func TestMigrateNoTransactionRunsWhatATransactionCannot(t *testing.T) {
 	ctx := context.Background()
 	db := migrateDB(t)
-	vacuum := Migration{Name: "0001__vacuum", Up: []string{"VACUUM"}}
-	_, err := MigrateUp(ctx, db, []Migration{vacuum})
+	vacuum := rt.Migration{Name: "0001__vacuum", Up: []string{"VACUUM"}}
+	_, err := MigrateUp(ctx, db, []rt.Migration{vacuum})
 	if err == nil || !strings.Contains(err.Error(), "statement 1") || !strings.Contains(err.Error(), "VACUUM") {
 		t.Fatalf("VACUUM in a transaction: %v, want the statement error", err)
 	}
 	vacuum.NoTransaction = true
 	vacuum.Up = append(vacuum.Up, "PRAGMA journal_mode = DELETE")
-	applied, err := MigrateUp(ctx, db, []Migration{vacuum})
+	applied, err := MigrateUp(ctx, db, []rt.Migration{vacuum})
 	if err != nil || len(applied) != 1 {
 		t.Fatalf("no_transaction: %v %v", applied, err)
 	}
 	var mode string
-	if err := db.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil || mode != "delete" {
+	if err := db.Pool().QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil || mode != "delete" {
 		t.Errorf("journal_mode %q %v, want delete", mode, err)
 	}
-	status, err := MigrateStatus(ctx, db, []Migration{vacuum})
+	status, err := MigrateStatus(ctx, db, []rt.Migration{vacuum})
 	if err != nil || !status[0].Applied {
 		t.Errorf("status after a no-transaction migration: %+v %v", status, err)
 	}
@@ -257,16 +259,16 @@ func TestMigrateNoTransactionRunsWhatATransactionCannot(t *testing.T) {
 func TestMigrateUpConcurrentRunnersApplyOnce(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "shared.db")
-	var all []Migration
+	var all []rt.Migration
 	for _, table := range []string{"posts", "comments", "tags"} {
-		all = append(all, Migration{
+		all = append(all, rt.Migration{
 			Name: fmt.Sprintf("%04d__%s", len(all)+1, table),
 			Up:   []string{fmt.Sprintf("CREATE TABLE %s AS WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 200000) SELECT count(*) AS n FROM c", table)},
 			Down: []string{"DROP TABLE " + table},
 		})
 	}
 	const runners = 2
-	dbs := make([]*sql.DB, runners)
+	dbs := make([]DB, runners)
 	applied := make([][]string, runners)
 	errs := make([]error, runners)
 	for i := range dbs {
@@ -295,7 +297,7 @@ func TestMigrateUpConcurrentRunnersApplyOnce(t *testing.T) {
 		t.Fatalf("%d applications of %d migrations: %v", total, len(all), applied)
 	}
 	var rows int
-	if err := dbs[0].QueryRow("SELECT count(*) FROM volt_migrations").Scan(&rows); err != nil || rows != len(all) {
+	if err := dbs[0].Pool().QueryRow("SELECT count(*) FROM volt_migrations").Scan(&rows); err != nil || rows != len(all) {
 		t.Errorf("%d ledger rows %v, want %d", rows, err, len(all))
 	}
 	for _, table := range []string{"posts", "comments", "tags"} {
@@ -308,17 +310,17 @@ func TestMigrateUpConcurrentRunnersApplyOnce(t *testing.T) {
 func TestMigrateNoTransactionDisablesTheBracket(t *testing.T) {
 	ctx := context.Background()
 	db := migrateDB(t)
-	seen := Migration{
+	seen := rt.Migration{
 		Name:           "0001__fk_seen",
 		Up:             []string{"CREATE TABLE fk_seen AS SELECT foreign_keys AS fk FROM pragma_foreign_keys"},
 		NoTransaction:  true,
 		ForeignKeysOff: true,
 	}
-	if _, err := MigrateUp(ctx, db, []Migration{seen}); err != nil {
+	if _, err := MigrateUp(ctx, db, []rt.Migration{seen}); err != nil {
 		t.Fatal(err)
 	}
 	var fk int
-	if err := db.QueryRow("SELECT fk FROM fk_seen").Scan(&fk); err != nil || fk != 1 {
+	if err := db.Pool().QueryRow("SELECT fk FROM fk_seen").Scan(&fk); err != nil || fk != 1 {
 		t.Errorf("foreign_keys during a no-transaction migration = %d %v, want 1: the bracket is off", fk, err)
 	}
 }
@@ -335,22 +337,22 @@ func TestMigrateBracketRestoresForeignKeysOnCancel(t *testing.T) {
 		cancelHook.fn = nil
 		cancelHook.Unlock()
 	}()
-	cancelled := Migration{
+	cancelled := rt.Migration{
 		Name:           "0001__cancelled",
 		Up:             []string{"SELECT cancel_ctx()", "CREATE TABLE after_cancel (id INTEGER PRIMARY KEY)"},
 		ForeignKeysOff: true,
 	}
-	if _, err := MigrateUp(ctx, db, []Migration{cancelled}); err == nil {
+	if _, err := MigrateUp(ctx, db, []rt.Migration{cancelled}); err == nil {
 		t.Fatal("a context cancelled inside the migration applied it")
 	}
 	var fk int
-	if err := db.QueryRow("PRAGMA foreign_keys").Scan(&fk); err != nil || fk != 1 {
+	if err := db.Pool().QueryRow("PRAGMA foreign_keys").Scan(&fk); err != nil || fk != 1 {
 		t.Errorf("PRAGMA foreign_keys = %d %v after the cancelled bracket, want 1", fk, err)
 	}
 	if tableExists(t, db, "after_cancel") {
 		t.Error("the cancelled migration was not rolled back")
 	}
-	status, err := MigrateStatus(context.Background(), db, []Migration{cancelled})
+	status, err := MigrateStatus(context.Background(), db, []rt.Migration{cancelled})
 	if err != nil || status[0].Applied {
 		t.Errorf("status after the cancelled migration: %+v %v, want pending", status, err)
 	}
@@ -378,7 +380,7 @@ func TestMigrateStatusOnlyReads(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ro.Close()
-	status, err = MigrateStatus(ctx, ro, blogMigrations)
+	status, err = MigrateStatus(ctx, Wrap(ro), blogMigrations)
 	if err != nil || len(status) != 2 || !status[0].Applied || !status[1].Applied {
 		t.Fatalf("status over a read-only connection: %+v %v, want two applied rows", status, err)
 	}
@@ -387,8 +389,8 @@ func TestMigrateStatusOnlyReads(t *testing.T) {
 func TestMigrateUpReportsTheFailingStatement(t *testing.T) {
 	ctx := context.Background()
 	db := migrateDB(t)
-	bad := Migration{Name: "0001__bad", Up: []string{"CREATE TABLE a (id INTEGER)", "CREATE TABLE a (id INTEGER)"}}
-	applied, err := MigrateUp(ctx, db, []Migration{bad})
+	bad := rt.Migration{Name: "0001__bad", Up: []string{"CREATE TABLE a (id INTEGER)", "CREATE TABLE a (id INTEGER)"}}
+	applied, err := MigrateUp(ctx, db, []rt.Migration{bad})
 	if err == nil || len(applied) != 0 {
 		t.Fatalf("%v %v", applied, err)
 	}
@@ -397,15 +399,15 @@ func TestMigrateUpReportsTheFailingStatement(t *testing.T) {
 			t.Errorf("error %q lacks %q", err, want)
 		}
 	}
-	var me *MigrationError
+	var me *rt.MigrationError
 	if !errors.As(err, &me) {
-		t.Fatalf("%T is not a MigrationError", err)
+		t.Fatalf("%T is not a rt.MigrationError", err)
 	}
 	if me.Name != "0001__bad" || me.Direction != "up" || me.Index != 2 || me.SQL != "CREATE TABLE a (id INTEGER)" || me.Cause == nil || !strings.Contains(me.Cause.Error(), "already exists") {
-		t.Errorf("MigrationError %+v, want 0001__bad up, statement 2, its SQL and SQLite's cause", me)
+		t.Errorf("rt.MigrationError %+v, want 0001__bad up, statement 2, its SQL and SQLite's cause", me)
 	}
 	if errors.Unwrap(err) != me.Cause {
-		t.Error("the MigrationError does not unwrap to its cause")
+		t.Error("the rt.MigrationError does not unwrap to its cause")
 	}
 	if tableExists(t, db, "a") {
 		t.Error("the failed migration left its first statement applied")

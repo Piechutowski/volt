@@ -5,9 +5,9 @@ package itest
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/Piechutowski/volt/nao/run"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,9 +18,9 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func newDB(t *testing.T) (*sql.DB, *Queries) {
+func newDB(t *testing.T) run.DB {
 	t.Helper()
-	db, err := rt.Open("sqlite3", ":memory:")
+	db, err := run.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,15 +29,15 @@ func newDB(t *testing.T) (*sql.DB, *Queries) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(string(ddl)); err != nil {
+	if _, err := db.Pool().Exec(string(ddl)); err != nil {
 		t.Fatalf("generated DDL rejected by SQLite: %v", err)
 	}
-	return db, New(db)
+	return db
 }
 
-func seedUser(t *testing.T, q *Queries, email string) User {
+func seedUser(t *testing.T, db run.DB, email string) User {
 	t.Helper()
-	u, err := q.UserCreate(context.Background(), UserNew().EmailSet(email).NameSet("Ann"))
+	u, err := run.Run(context.Background(), db, UserCreate(UserNew().EmailSet(email).NameSet("Ann")))
 	if err != nil {
 		t.Fatalf("UserCreate: %v", err)
 	}
@@ -60,9 +60,9 @@ func invalidOf(t *testing.T, err error, check string, cols ...string) *rt.Invali
 
 func TestUserCRUD(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
+	db := newDB(t)
 
-	u, err := q.UserCreate(ctx, UserNew().EmailSet("ann@example.com").NameSet("Ann"))
+	u, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("ann@example.com").NameSet("Ann")))
 	if err != nil {
 		t.Fatalf("UserCreate: %v", err)
 	}
@@ -73,33 +73,33 @@ func TestUserCRUD(t *testing.T) {
 		t.Errorf("bio should be NULL, got %+v", u.Bio)
 	}
 
-	got, err := q.UserGet(ctx, u.ID)
+	got, err := run.Run(ctx, db, UserGet(u.ID))
 	if err != nil || got.Email != "ann@example.com" {
 		t.Errorf("UserGet = %+v, %v", got, err)
 	}
-	byEmail, err := q.UserGetByEmail(ctx, "ann@example.com")
+	byEmail, err := run.Run(ctx, db, UserGetByEmail("ann@example.com"))
 	if err != nil || byEmail.ID != u.ID {
 		t.Errorf("UserGetByEmail = %+v, %v", byEmail, err)
 	}
 
-	u2 := seedUser(t, q, "bob@example.com")
-	many, err := q.UserGetMany(ctx, []int{u.ID, u2.ID, 999})
+	u2 := seedUser(t, db, "bob@example.com")
+	many, err := run.Run(ctx, db, UserGetMany([]int{u.ID, u2.ID, 999}))
 	if err != nil || len(many) != 2 {
 		t.Errorf("UserGetMany = %d rows, %v; want 2 (missing keys are not errors)", len(many), err)
 	}
-	if none, err := q.UserGetMany(ctx, nil); err != nil || none != nil {
+	if none, err := run.Run(ctx, db, UserGetMany(nil)); err != nil || none != nil {
 		t.Errorf("UserGetMany(nil) = %v, %v; want nil, nil", none, err)
 	}
 
-	all, err := q.UserList(ctx)
+	all, err := run.Run(ctx, db, UserList())
 	if err != nil || len(all) != 2 {
 		t.Errorf("UserList = %d rows, %v", len(all), err)
 	}
-	if n, err := q.UserCount(ctx); err != nil || n != 2 {
+	if n, err := run.Run(ctx, db, UserCount()); err != nil || n != 2 {
 		t.Errorf("UserCount = %d, %v", n, err)
 	}
 
-	upd, err := q.UserUpdate(ctx, u.Changeset().NameSet("Ann B.").BioSet(rt.Some("hi there")))
+	upd, err := run.Run(ctx, db, UserUpdate(u.Changeset().NameSet("Ann B.").BioSet(rt.Some("hi there"))))
 	if err != nil {
 		t.Fatalf("UserUpdate: %v", err)
 	}
@@ -110,21 +110,21 @@ func TestUserCRUD(t *testing.T) {
 		t.Errorf("an update writes the marked columns only; email and created_at changed: %+v", upd)
 	}
 
-	if _, err := q.UserUpdate(ctx, User{ID: 999, Email: "x@x", Name: "x"}.Changeset().NameSet("y")); !errors.Is(err, rt.ErrNotFound) {
+	if _, err := run.Run(ctx, db, UserUpdate(User{ID: 999, Email: "x@x", Name: "x"}.Changeset().NameSet("y"))); !errors.Is(err, rt.ErrNotFound) {
 		t.Errorf("UserUpdate of a vanished row = %v; want rt.ErrNotFound", err)
 	}
-	if _, err := q.UserGet(ctx, 999); !errors.Is(err, sql.ErrNoRows) {
-		t.Errorf("UserGet(999) = %v; want sql.ErrNoRows compatibility", err)
+	if _, err := run.Run(ctx, db, UserGet(999)); !errors.Is(err, rt.ErrNotFound) {
+		t.Errorf("UserGet(999) = %v; want rt.ErrNotFound", err)
 	}
 
-	if err := q.UserDelete(ctx, u2.ID); err != nil {
+	if _, err := run.Run(ctx, db, UserDelete(u2.ID)); err != nil {
 		t.Errorf("UserDelete: %v", err)
 	}
-	if err := q.UserDelete(ctx, u2.ID); !errors.Is(err, rt.ErrNotFound) {
+	if _, err := run.Run(ctx, db, UserDelete(u2.ID)); !errors.Is(err, rt.ErrNotFound) {
 		t.Errorf("second UserDelete = %v; want rt.ErrNotFound", err)
 	}
 
-	_, err = q.UserCreate(ctx, UserNew().EmailSet("ann@example.com").NameSet("Imposter"))
+	_, err = run.Run(ctx, db, UserCreate(UserNew().EmailSet("ann@example.com").NameSet("Imposter")))
 	if inv := invalidOf(t, err, "unique", "email"); inv.Cause == nil {
 		t.Errorf("a duplicate email is a unique field error wrapping the driver's error: %+v", inv)
 	}
@@ -132,10 +132,10 @@ func TestUserCRUD(t *testing.T) {
 
 func TestOrderDefaultsMembershipAndFKs(t *testing.T) {
 	ctx := context.Background()
-	db, q := newDB(t)
-	u := seedUser(t, q, "ann@example.com")
+	db := newDB(t)
+	u := seedUser(t, db, "ann@example.com")
 
-	o, err := q.OrderCreate(ctx, OrderNew().UserIDSet(u.ID).TotalSet(19.99).FeeSet(0))
+	o, err := run.Run(ctx, db, OrderCreate(OrderNew().UserIDSet(u.ID).TotalSet(19.99).FeeSet(0)))
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestOrderDefaultsMembershipAndFKs(t *testing.T) {
 	}
 
 	placed := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
-	upd, err := q.OrderUpdate(ctx, o.Changeset().StatusSet(OrderStateShipped).PlacedAtSet(rt.Some(placed)))
+	upd, err := run.Run(ctx, db, OrderUpdate(o.Changeset().StatusSet(OrderStateShipped).PlacedAtSet(rt.Some(placed))))
 	if err != nil {
 		t.Fatalf("OrderUpdate: %v", err)
 	}
@@ -158,84 +158,47 @@ func TestOrderDefaultsMembershipAndFKs(t *testing.T) {
 		t.Errorf("OrderUpdate returned %+v", upd)
 	}
 
-	_, err = q.OrderCreate(ctx, OrderNew().UserIDSet(999).TotalSet(1.00).FeeSet(0))
+	_, err = run.Run(ctx, db, OrderCreate(OrderNew().UserIDSet(999).TotalSet(1.00).FeeSet(0)))
 	if inv := invalidOf(t, err, "foreign_key"); inv.Cause == nil {
 		t.Errorf("a dangling user_id is a foreign_key field error without a column, wrapping the driver's error: %+v", inv)
 	}
 
-	_, err = q.OrderCreate(ctx, OrderNew().UserIDSet(u.ID).TotalSet(1.00))
+	_, err = run.Run(ctx, db, OrderCreate(OrderNew().UserIDSet(u.ID).TotalSet(1.00)))
 	if inv := invalidOf(t, err, "not_null", "fee"); inv.Cause == nil {
 		t.Errorf("an unmarked NOT NULL column without a default is a not_null field error wrapping the driver's error: %+v", inv)
 	}
 
-	_, err = q.OrderUpdate(ctx, o.Changeset().StatusSet("teleported"))
+	_, err = run.Run(ctx, db, OrderUpdate(o.Changeset().StatusSet("teleported")))
 	if inv := invalidOf(t, err, "OrderStateKnown", "status"); inv.Cause != nil {
 		t.Errorf("a value outside the constants is a field error of the membership validator before any statement runs: %+v", inv)
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE orders SET status = 'teleported' WHERE id = ?`, o.ID); err != nil {
+	if _, err := db.Pool().ExecContext(ctx, `UPDATE orders SET status = 'teleported' WHERE id = ?`, o.ID); err != nil {
 		t.Errorf("the database carries no CHECK for a validated column: %v", err)
 	}
 }
 
 func TestUserTagCompositePK(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	u := seedUser(t, q, "ann@example.com")
+	db := newDB(t)
+	u := seedUser(t, db, "ann@example.com")
 
-	tag, err := q.UserTagCreate(ctx, UserTagNew().UserIDSet(u.ID).TagSet("vip"))
+	tag, err := run.Run(ctx, db, UserTagCreate(UserTagNew().UserIDSet(u.ID).TagSet("vip")))
 	if err != nil {
 		t.Fatalf("UserTagCreate: %v", err)
 	}
-	got, err := q.UserTagGet(ctx, tag.UserID, tag.Tag)
+	got, err := run.Run(ctx, db, UserTagGet(tag.UserID, tag.Tag))
 	if err != nil || got != tag {
 		t.Errorf("UserTagGet = %+v, %v", got, err)
 	}
-	_, err = q.UserTagCreate(ctx, UserTagNew().From(tag))
+	_, err = run.Run(ctx, db, UserTagCreate(UserTagNew().From(tag)))
 	if inv := invalidOf(t, err, "unique", "user_id", "tag"); inv.Cause == nil {
 		t.Errorf("a duplicate composite key names both columns and wraps the driver's error: %+v", inv)
 	}
-	if err := q.UserTagDelete(ctx, tag.UserID, tag.Tag); err != nil {
+	if _, err := run.Run(ctx, db, UserTagDelete(tag.UserID, tag.Tag)); err != nil {
 		t.Errorf("UserTagDelete: %v", err)
 	}
-	if _, err := q.UserTagGet(ctx, tag.UserID, tag.Tag); !errors.Is(err, rt.ErrNotFound) {
+	if _, err := run.Run(ctx, db, UserTagGet(tag.UserID, tag.Tag)); !errors.Is(err, rt.ErrNotFound) {
 		t.Errorf("UserTagGet after delete = %v; want rt.ErrNotFound", err)
-	}
-}
-
-func TestTx(t *testing.T) {
-	ctx := context.Background()
-	_, q := newDB(t)
-
-	err := q.Tx(ctx, func(q *Queries) error {
-		_, err := q.UserCreate(ctx, UserNew().EmailSet("tx@example.com").NameSet("Tx"))
-		return err
-	})
-	if err != nil {
-		t.Fatalf("Tx: %v", err)
-	}
-	if n, _ := q.UserCount(ctx); n != 1 {
-		t.Errorf("after committed Tx, count = %d; want 1", n)
-	}
-
-	sentinel := errors.New("boom")
-	err = q.Tx(ctx, func(q *Queries) error {
-		if _, err := q.UserCreate(ctx, UserNew().EmailSet("gone@example.com").NameSet("Gone")); err != nil {
-			return err
-		}
-		return sentinel
-	})
-	if !errors.Is(err, sentinel) {
-		t.Fatalf("Tx = %v; want the fn error back", err)
-	}
-	if n, _ := q.UserCount(ctx); n != 1 {
-		t.Errorf("after rolled-back Tx, count = %d; want 1", n)
-	}
-
-	err = q.Tx(ctx, func(inner *Queries) error {
-		return inner.Tx(ctx, func(*Queries) error { return nil })
-	})
-	if err == nil {
-		t.Error("nested Tx unexpectedly succeeded")
 	}
 }
 
@@ -243,8 +206,8 @@ func TestTx(t *testing.T) {
 // value or null, the JSON never shows a wrapper and never omits the key.
 func TestJSONNull(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	u := seedUser(t, q, "ann@example.com")
+	db := newDB(t)
+	u := seedUser(t, db, "ann@example.com")
 
 	doc, err := json.Marshal(u)
 	if err != nil {
@@ -254,7 +217,7 @@ func TestJSONNull(t *testing.T) {
 		t.Errorf("NULL bio marshals as %s; want \"bio\":null", doc)
 	}
 
-	upd, err := q.UserUpdate(ctx, u.Changeset().BioSet(rt.Some("hi")))
+	upd, err := run.Run(ctx, db, UserUpdate(u.Changeset().BioSet(rt.Some("hi"))))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,62 +238,70 @@ func TestJSONNull(t *testing.T) {
 	}
 }
 
-func TestStmtCache(t *testing.T) {
-	ctx := context.Background()
-	db, q := newDB(t)
-	seedUser(t, q, "ann@example.com")
-
-	cache := rt.NewStmtCache(2)
-	defer cache.Close()
-
-	s1, err := cache.Prepare(ctx, db, voltUserGetSQL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var u User
-	if err := s1.QueryRowContext(ctx, 1).Scan(&u.ID, &u.Email, &u.Name, &u.Bio, &u.CreatedAt); err != nil {
-		t.Fatalf("cached statement: %v", err)
-	}
-	again, err := cache.Prepare(ctx, db, voltUserGetSQL)
-	if err != nil || again != s1 {
-		t.Errorf("second Prepare returned a different statement (%p vs %p, %v); the SQL text is the cache key", again, s1, err)
-	}
-
-	if _, err := cache.Prepare(ctx, db, voltUserListSQL); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := cache.Prepare(ctx, db, voltUserDeleteSQL); err != nil {
-		t.Fatal(err)
-	}
-	if n := cache.Len(); n != 2 {
-		t.Errorf("cache holds %d statements; want 2 after eviction", n)
-	}
-
-	if err := cache.Close(); err != nil {
-		t.Errorf("Close: %v", err)
-	}
-	if _, err := cache.Prepare(ctx, db, voltUserGetSQL); err == nil {
-		t.Error("Prepare on a closed cache unexpectedly succeeded")
-	}
-}
-
 func TestOpenPragmas(t *testing.T) {
-	db, err := rt.Open("sqlite3", filepath.Join(t.TempDir(), "t.db"))
+	db, err := run.Open("sqlite3", filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
 
 	var fk int
-	if err := db.QueryRow("PRAGMA foreign_keys").Scan(&fk); err != nil || fk != 1 {
+	if err := db.Pool().QueryRow("PRAGMA foreign_keys").Scan(&fk); err != nil || fk != 1 {
 		t.Errorf("foreign_keys = %d, %v; want 1", fk, err)
 	}
 	var mode string
-	if err := db.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil || !strings.EqualFold(mode, "wal") {
+	if err := db.Pool().QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil || !strings.EqualFold(mode, "wal") {
 		t.Errorf("journal_mode = %q, %v; want wal", mode, err)
 	}
 	var timeout int
-	if err := db.QueryRow("PRAGMA busy_timeout").Scan(&timeout); err != nil || timeout != 5000 {
+	if err := db.Pool().QueryRow("PRAGMA busy_timeout").Scan(&timeout); err != nil || timeout != 5000 {
 		t.Errorf("busy_timeout = %d, %v; want 5000", timeout, err)
+	}
+}
+
+func TestTx(t *testing.T) {
+	ctx := context.Background()
+	db := newDB(t)
+
+	if _, err := run.Run(ctx, db, rt.Tx(UserCreate(UserNew().EmailSet("tx@example.com").NameSet("Tx")))); err != nil {
+		t.Fatalf("Tx: %v", err)
+	}
+	if n, _ := run.Run(ctx, db, UserCount()); n != 1 {
+		t.Errorf("after committed Tx, count = %d; want 1", n)
+	}
+
+	_, err := run.Run(ctx, db, rt.Tx(
+		UserCreate(UserNew().EmailSet("gone@example.com").NameSet("Gone")),
+		UserCreate(UserNew().EmailSet("tx@example.com").NameSet("Dup")),
+	))
+	var inv *rt.Invalid
+	if !errors.As(err, &inv) || inv.Fields[0].Check != "unique" {
+		t.Fatalf("Tx = %v; want the refused second step back", err)
+	}
+	if n, _ := run.Run(ctx, db, UserCount()); n != 1 {
+		t.Errorf("after rolled-back Tx, count = %d; want 1", n)
+	}
+
+	out, err := run.Run(ctx, db, rt.Tx(rt.Tx(UserCount())))
+	if err != nil || len(out) != 1 {
+		t.Fatalf("nested Tx = %v, %v; want the inner results joined into the outer transaction", out, err)
+	}
+	if inner, ok := out[0].([]any); !ok || len(inner) != 1 || inner[0] != int64(1) {
+		t.Errorf("nested Tx results = %#v; want the inner count", out[0])
+	}
+}
+
+func TestStatementsPrepareOnce(t *testing.T) {
+	ctx := context.Background()
+	db := newDB(t)
+	u := seedUser(t, db, "ann@example.com")
+	before := db.Statements()
+	for range 3 {
+		if _, err := run.Run(ctx, db, UserGet(u.ID)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := db.Statements(); n != before+1 {
+		t.Errorf("three runs of one statement prepared %d; the SQL text is the cache key", n-before)
 	}
 }

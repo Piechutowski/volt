@@ -3,199 +3,68 @@
 package itest
 
 import (
-	"context"
 	pay "github.com/Piechutowski/volt/nao/itest/pay"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
 const voltOrderByFeeSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "fee" = ?`
 
-func (q *Queries) OrderByFee(ctx context.Context, fee pay.Cents) ([]Order, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltOrderByFeeSQL, fee)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Order{}
-	for voltRows.Next() {
-		voltV, voltErr := voltOrderScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func OrderByFee(fee pay.Cents) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderByFeeSQL, Args: []any{fee}, Scan: voltOrderScan}
 }
 
 const voltOrderFeesSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "fee" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
-func (q *Queries) OrderFees(ctx context.Context, fees []pay.Cents) ([]Order, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltOrderFeesSQL, rt.JSONList(fees))
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Order{}
-	for voltRows.Next() {
-		voltV, voltErr := voltOrderScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func OrderFees(fees []pay.Cents) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderFeesSQL, Args: []any{rt.JSONList(fees)}, Scan: voltOrderScan}
 }
 
 const voltOrderFreeSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "fee" = ?`
 
-func (q *Queries) OrderFree(ctx context.Context) ([]Order, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltOrderFreeSQL, 0)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Order{}
-	for voltRows.Next() {
-		voltV, voltErr := voltOrderScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func OrderFree() rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderFreeSQL, Args: []any{0}, Scan: voltOrderScan}
 }
 
 const voltOrderByStateSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "status" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
-func (q *Queries) OrderByState(ctx context.Context, states []OrderState) ([]Order, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltOrderByStateSQL, rt.JSONList(states))
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Order{}
-	for voltRows.Next() {
-		voltV, voltErr := voltOrderScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func OrderByState(states []OrderState) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderByStateSQL, Args: []any{rt.JSONList(states)}, Scan: voltOrderScan}
 }
 
 const voltPageViewRowsSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE ("site" = ? AND "day" = ?) ORDER BY "day" DESC, "id" ASC`
 
-func (q *Queries) PageViewRows(ctx context.Context, site string, day int) ([]PageView, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewRowsSQL, site, day)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PageView{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPageViewScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PageViewRows(site string, day int) rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewRowsSQL, Args: []any{site, day}, Scan: voltPageViewScan}
 }
 
 const voltLinkClickRowsSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE ("site" = ? AND "day" = ?) ORDER BY "day" DESC, "id" ASC`
 
-func (q *Queries) LinkClickRows(ctx context.Context, site string, day int) ([]LinkClick, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickRowsSQL, site, day)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []LinkClick{}
-	for voltRows.Next() {
-		voltV, voltErr := voltLinkClickScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func LinkClickRows(site string, day int) rt.Query[LinkClick] {
+	return rt.Query[LinkClick]{SQL: voltLinkClickRowsSQL, Args: []any{site, day}, Scan: voltLinkClickScan}
 }
 
 const voltPageViewRecentSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (("site" = ? AND "day" = ?) OR "day" >= ?)`
 
-func (q *Queries) PageViewRecent(ctx context.Context, site string, day int, from int) ([]PageView, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewRecentSQL, site, day, from)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PageView{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPageViewScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PageViewRecent(site string, day int, from int) rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewRecentSQL, Args: []any{site, day, from}, Scan: voltPageViewScan}
 }
 
 const voltLinkClickRecentSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE (("site" = ? AND "day" = ?) OR "day" >= ?)`
 
-func (q *Queries) LinkClickRecent(ctx context.Context, site string, day int, from int) ([]LinkClick, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickRecentSQL, site, day, from)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []LinkClick{}
-	for voltRows.Next() {
-		voltV, voltErr := voltLinkClickScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func LinkClickRecent(site string, day int, from int) rt.Query[LinkClick] {
+	return rt.Query[LinkClick]{SQL: voltLinkClickRecentSQL, Args: []any{site, day, from}, Scan: voltLinkClickScan}
 }
 
 const voltPageViewOnSitesSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE "site" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
-func (q *Queries) PageViewOnSites(ctx context.Context, sites []string) ([]PageView, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewOnSitesSQL, rt.JSONList(sites))
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PageView{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPageViewScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PageViewOnSites(sites []string) rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewOnSitesSQL, Args: []any{rt.JSONList(sites)}, Scan: voltPageViewScan}
 }
 
 const voltLinkClickOnSitesSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "site" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
-func (q *Queries) LinkClickOnSites(ctx context.Context, sites []string) ([]LinkClick, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickOnSitesSQL, rt.JSONList(sites))
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []LinkClick{}
-	for voltRows.Next() {
-		voltV, voltErr := voltLinkClickScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func LinkClickOnSites(sites []string) rt.Query[LinkClick] {
+	return rt.Query[LinkClick]{SQL: voltLinkClickOnSitesSQL, Args: []any{rt.JSONList(sites)}, Scan: voltLinkClickScan}
 }
 
 type Summary struct {
@@ -211,90 +80,38 @@ func voltSummaryScan(r rt.Row) (Summary, error) {
 
 const voltPageViewSummarySQL = `SELECT "site", "day" FROM "page_views" WHERE ("site" = ? AND "day" = ?)`
 
-func (q *Queries) PageViewSummary(ctx context.Context, site string, day int) ([]Summary, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewSummarySQL, site, day)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Summary{}
-	for voltRows.Next() {
-		voltV, voltErr := voltSummaryScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PageViewSummary(site string, day int) rt.Query[Summary] {
+	return rt.Query[Summary]{SQL: voltPageViewSummarySQL, Args: []any{site, day}, Scan: voltSummaryScan}
 }
 
 const voltLinkClickSummarySQL = `SELECT "site", "day" FROM "link_clicks" WHERE ("site" = ? AND "day" = ?)`
 
-func (q *Queries) LinkClickSummary(ctx context.Context, site string, day int) ([]Summary, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickSummarySQL, site, day)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Summary{}
-	for voltRows.Next() {
-		voltV, voltErr := voltSummaryScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func LinkClickSummary(site string, day int) rt.Query[Summary] {
+	return rt.Query[Summary]{SQL: voltLinkClickSummarySQL, Args: []any{site, day}, Scan: voltSummaryScan}
 }
 
-type LinkClickPublic struct {
+type LinkClickPublicRow struct {
 	ID   int    `db:"id" json:"id"`
 	Site string `db:"site" json:"site"`
 	Day  int    `db:"day" json:"day"`
 }
 
-func voltLinkClickPublicScan(r rt.Row) (LinkClickPublic, error) {
-	var voltV LinkClickPublic
+func voltLinkClickPublicRowScan(r rt.Row) (LinkClickPublicRow, error) {
+	var voltV LinkClickPublicRow
 	voltErr := r.Scan(&voltV.ID, &voltV.Site, &voltV.Day)
 	return voltV, voltErr
 }
 
 const voltLinkClickPublicSQL = `SELECT "id", "site", "day" FROM "link_clicks" ORDER BY "id" ASC`
 
-func (q *Queries) LinkClickPublic(ctx context.Context) ([]LinkClickPublic, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickPublicSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []LinkClickPublic{}
-	for voltRows.Next() {
-		voltV, voltErr := voltLinkClickPublicScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func LinkClickPublic() rt.Query[LinkClickPublicRow] {
+	return rt.Query[LinkClickPublicRow]{SQL: voltLinkClickPublicSQL, Args: nil, Scan: voltLinkClickPublicRowScan}
 }
 
 const voltAttachmentNamedSQL = `SELECT "id", "name", "body", "thumb", "digest" FROM "attachments" WHERE "name" = ?`
 
-func (q *Queries) AttachmentNamed(ctx context.Context, name string) ([]Attachment, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltAttachmentNamedSQL, name)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Attachment{}
-	for voltRows.Next() {
-		voltV, voltErr := voltAttachmentScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func AttachmentNamed(name string) rt.Query[Attachment] {
+	return rt.Query[Attachment]{SQL: voltAttachmentNamedSQL, Args: []any{name}, Scan: voltAttachmentScan}
 }
 
 type Slim struct {
@@ -311,51 +128,25 @@ func voltSlimScan(r rt.Row) (Slim, error) {
 
 const voltAttachmentSlimSQL = `SELECT "id", "body", "thumb" FROM "attachments" WHERE "name" = ?`
 
-func (q *Queries) AttachmentSlim(ctx context.Context, name string) ([]Slim, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltAttachmentSlimSQL, name)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Slim{}
-	for voltRows.Next() {
-		voltV, voltErr := voltSlimScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func AttachmentSlim(name string) rt.Query[Slim] {
+	return rt.Query[Slim]{SQL: voltAttachmentSlimSQL, Args: []any{name}, Scan: voltSlimScan}
 }
 
-type AttachmentHeavy struct {
+type AttachmentHeavyRow struct {
 	ID     int             `db:"id" json:"id"`
 	Body   []byte          `db:"body" json:"body"`
 	Thumb  rt.Null[[]byte] `db:"thumb" json:"thumb"`
 	Digest []byte          `db:"digest" json:"digest"`
 }
 
-func voltAttachmentHeavyScan(r rt.Row) (AttachmentHeavy, error) {
-	var voltV AttachmentHeavy
+func voltAttachmentHeavyRowScan(r rt.Row) (AttachmentHeavyRow, error) {
+	var voltV AttachmentHeavyRow
 	voltErr := r.Scan(&voltV.ID, (*rt.Bytes)(&voltV.Body), &voltV.Thumb, (*rt.Bytes)(&voltV.Digest))
 	return voltV, voltErr
 }
 
 const voltAttachmentHeavySQL = `SELECT "id", "body", "thumb", "digest" FROM "attachments" WHERE "name" = ?`
 
-func (q *Queries) AttachmentHeavy(ctx context.Context, name string) ([]AttachmentHeavy, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltAttachmentHeavySQL, name)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []AttachmentHeavy{}
-	for voltRows.Next() {
-		voltV, voltErr := voltAttachmentHeavyScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func AttachmentHeavy(name string) rt.Query[AttachmentHeavyRow] {
+	return rt.Query[AttachmentHeavyRow]{SQL: voltAttachmentHeavySQL, Args: []any{name}, Scan: voltAttachmentHeavyRowScan}
 }

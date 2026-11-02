@@ -3,122 +3,35 @@
 package models
 
 import (
-	"context"
-	"database/sql"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-type Queries struct {
-	db    rt.DBTX
-	cache *rt.StmtCache
-}
-
-func New(db rt.DBTX) *Queries { return &Queries{db: db} }
-
-func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
-	return &Queries{db: q.db, cache: cache}
-}
-
-func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
-
-func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
-}
-
 const voltCommentGetSQL = `SELECT "id", "commentable_type", "commentable_id", "body" FROM "comments" WHERE "id" = ?`
 
-func (q *Queries) CommentGet(ctx context.Context, id int) (Comment, error) {
-	return voltCommentScan(q.db.QueryRowContext(ctx, voltCommentGetSQL, id))
+func CommentGet(id int) rt.Lookup[Comment] {
+	return rt.Lookup[Comment]{SQL: voltCommentGetSQL, Args: []any{id}, Scan: voltCommentScan}
 }
 
-func (q *Queries) CommentGetMany(ctx context.Context, ids []int) ([]Comment, error) {
+func CommentGetMany(ids []int) rt.Query[Comment] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[Comment]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltCommentTableSQL, voltCommentColumnsSQL, []rt.Opt[Comment]{CommentID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Comment{}
-	for voltRows.Next() {
-		voltV, voltErr := voltCommentScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltCommentTableSQL, voltCommentColumnsSQL, []rt.Opt[Comment]{CommentID.In(ids...)})
+	return rt.Query[Comment]{SQL: voltSQL, Args: voltArgs, Scan: voltCommentScan, Err: voltErr}
 }
 
 const voltCommentListSQL = `SELECT "id", "commentable_type", "commentable_id", "body" FROM "comments"`
 
-func (q *Queries) CommentList(ctx context.Context) ([]Comment, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltCommentListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Comment{}
-	for voltRows.Next() {
-		voltV, voltErr := voltCommentScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func CommentList() rt.Query[Comment] {
+	return rt.Query[Comment]{SQL: voltCommentListSQL, Scan: voltCommentScan}
 }
 
-func (q *Queries) CommentCreate(ctx context.Context, c CommentChangeset) (Comment, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Comment{}, voltErr
-	}
-	voltSQL, voltArgs := c.InsertRender()
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return Comment{}, voltErr
-	}
-	return voltCommentScan(voltRow)
-}
+func CommentCreate(c CommentChangeset) rt.Write[Comment] { return rt.Insert(c.Validate().Changeset) }
 
-func (q *Queries) CommentUpdate(ctx context.Context, c CommentChangeset) (Comment, error) {
-	if !c.FromRow() {
-		return Comment{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Comment{}, voltErr
-	}
-	voltSQL, voltArgs := c.UpdateRender()
-	if voltSQL == "" {
-		return c.Row(), nil
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return Comment{}, voltErr
-	}
-	return voltCommentScan(voltRow)
-}
+func CommentUpdate(c CommentChangeset) rt.Write[Comment] { return rt.Update(c.Validate().Changeset) }
 
 const voltCommentDeleteSQL = `DELETE FROM "comments" WHERE "id" = ?`
 
-func (q *Queries) CommentDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltCommentDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("Comment", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
+func CommentDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltCommentDeleteSQL, Args: []any{id}, Model: "Comment", One: true}
 }

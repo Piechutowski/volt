@@ -18,7 +18,10 @@ import (
 	"github.com/Piechutowski/volt/lang"
 )
 
-const voltImport = "github.com/Piechutowski/volt"
+const (
+	voltImport = "github.com/Piechutowski/volt"
+	runImport  = "github.com/Piechutowski/volt/nao/run"
+)
 
 // Options configures generation.
 type Options struct {
@@ -228,10 +231,8 @@ func (g *generator) handlersEmit() error {
 		imports = append(imports, voltImport)
 	}
 	data := g.dataPackages()
-	for _, q := range data {
-		if !q.Local {
-			imports = append(imports, dataImport(q))
-		}
+	if len(data) > 0 {
+		imports = append(imports, runImport)
 	}
 	g.header(imports...)
 
@@ -249,12 +250,8 @@ func (g *generator) handlersEmit() error {
 	for _, name := range g.controllerNames() {
 		fields.Row(name, name+"Controller")
 	}
-	for _, q := range data {
-		if q.Local {
-			fields.Row(q.Field, "*Queries")
-			continue
-		}
-		fields.Row(q.Field, "*"+q.Qualifier+".Queries")
+	if len(data) > 0 {
+		fields.Row("DB", "run.DB")
 	}
 	if g.hasEvents() {
 		fields.Row("Events", "*volt.Broker")
@@ -292,14 +289,11 @@ func (g *generator) routerEmit() error {
 		imports = append(imports, "time")
 	}
 	imports = append(imports, "", voltImport)
-	for _, q := range g.dataPackages() {
-		if q.Local {
-			continue
-		}
-		for _, r := range g.pkg.Routes {
-			if r.Query != nil && r.Query.Qualifier == q.Qualifier && hasBody(r.Query) {
+	if data := g.dataPackages(); len(data) > 0 {
+		imports = append(imports, runImport)
+		for _, q := range data {
+			if !q.Local {
 				imports = append(imports, dataImport(q))
-				break
 			}
 		}
 	}
@@ -373,15 +367,6 @@ func (g *generator) hasEvents() bool {
 	return false
 }
 
-func hasBody(q *lang.QueryRef) bool {
-	for _, p := range q.Params {
-		if p.Source == lang.FromBody {
-			return true
-		}
-	}
-	return false
-}
-
 func pathParse(body *strings.Builder, p lang.Param) string {
 	if p.Type == lang.TString {
 		return fmt.Sprintf("r.PathValue(%q)", p.Name)
@@ -398,6 +383,12 @@ func (g *generator) queryShimBody(r *lang.RouteInfo) {
 		byName[p.Name] = p
 	}
 	g.pf("\t\tif _, err := volt.Negotiate(r); err != nil {\n\t\t\treturn err\n\t\t}\n")
+	name := func(n string) string {
+		if q.Local {
+			return n
+		}
+		return q.Qualifier + "." + n
+	}
 	args := make([]string, 0, len(q.Params))
 	for _, p := range q.Params {
 		switch p.Source {
@@ -411,16 +402,10 @@ func (g *generator) queryShimBody(r *lang.RouteInfo) {
 			args = append(args, "volt"+p.Name)
 		case lang.FromBody:
 			cb := q.Changeset
-			name := func(n string) string {
-				if q.Local {
-					return n
-				}
-				return q.Qualifier + "." + n
-			}
 			g.pf("\t\tvar volt_params %s\n\t\tif err := volt.Decode(r, &volt_params); err != nil {\n\t\t\treturn err\n\t\t}\n", name(cb.Params))
 			start := name(cb.New) + "()"
 			if cb.Get != "" {
-				g.pf("\t\tvolt_row, err := c.%s.%s(r.Context()%s)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", q.Field, cb.Get, prefixEach(args, ", "))
+				g.pf("\t\tvolt_row, err := run.Run(r.Context(), c.DB, %s(%s))\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", name(cb.Get), strings.Join(args, ", "))
 				args, start = nil, "volt_row.Changeset()"
 			}
 			allow := make([]string, len(cb.Allow))
@@ -431,9 +416,9 @@ func (g *generator) queryShimBody(r *lang.RouteInfo) {
 			args = append(args, "volt_cs")
 		}
 	}
-	call := fmt.Sprintf("c.%s.%s(r.Context()%s)", q.Field, q.Method, prefixEach(args, ", "))
+	call := fmt.Sprintf("run.Run(r.Context(), c.DB, %s(%s))", name(q.Method), strings.Join(args, ", "))
 	if q.Result == "" {
-		g.pf("\t\tif err := %s; err != nil {\n\t\t\treturn err\n\t\t}\n", call)
+		g.pf("\t\tif _, err := %s; err != nil {\n\t\t\treturn err\n\t\t}\n", call)
 		g.pf("\t\treturn volt.RenderStatus(w, r, %d, nil)\n", q.Status)
 		return
 	}

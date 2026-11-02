@@ -9,7 +9,7 @@ type SelectParam struct {
 	GoType string // e.g. "string", "int64", "time.Time"
 }
 
-// SelectFn is one select instantiation: a method on Queries for one
+// SelectFn is one select instantiation: a query function for one
 // member table, over the predicate tree and order terms the checker
 // lowered (spec §predicates) and the §selects-over-groups
 // projection already validated.

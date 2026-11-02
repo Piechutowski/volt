@@ -3,281 +3,87 @@
 package models
 
 import (
-	"context"
-	"database/sql"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-type Queries struct {
-	db    rt.DBTX
-	cache *rt.StmtCache
-}
-
-func New(db rt.DBTX) *Queries { return &Queries{db: db} }
-
-func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
-	return &Queries{db: q.db, cache: cache}
-}
-
-func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
-
-func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
-}
-
 const voltUserGetSQL = `SELECT "id" FROM "users" WHERE "id" = ?`
 
-func (q *Queries) UserGet(ctx context.Context, id int) (User, error) {
-	return voltUserScan(q.db.QueryRowContext(ctx, voltUserGetSQL, id))
+func UserGet(id int) rt.Lookup[User] {
+	return rt.Lookup[User]{SQL: voltUserGetSQL, Args: []any{id}, Scan: voltUserScan}
 }
 
-func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
+func UserGetMany(ids []int) rt.Query[User] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[User]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, []rt.Opt[User]{UserID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []User{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, []rt.Opt[User]{UserID.In(ids...)})
+	return rt.Query[User]{SQL: voltSQL, Args: voltArgs, Scan: voltUserScan, Err: voltErr}
 }
 
 const voltUserListSQL = `SELECT "id" FROM "users"`
 
-func (q *Queries) UserList(ctx context.Context) ([]User, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltUserListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []User{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
-}
+func UserList() rt.Query[User] { return rt.Query[User]{SQL: voltUserListSQL, Scan: voltUserScan} }
 
-func (q *Queries) UserCreate(ctx context.Context, c UserChangeset) (User, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return User{}, voltErr
-	}
-	voltSQL, voltArgs := c.InsertRender()
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return User{}, voltErr
-	}
-	return voltUserScan(voltRow)
-}
+func UserCreate(c UserChangeset) rt.Write[User] { return rt.Insert(c.Validate().Changeset) }
 
 const voltUserDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
 
-func (q *Queries) UserDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltUserDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("User", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
+func UserDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltUserDeleteSQL, Args: []any{id}, Model: "User", One: true}
 }
 
 const voltRoleGetSQL = `SELECT "id", "name" FROM "roles" WHERE "id" = ?`
 
-func (q *Queries) RoleGet(ctx context.Context, id int) (Role, error) {
-	return voltRoleScan(q.db.QueryRowContext(ctx, voltRoleGetSQL, id))
+func RoleGet(id int) rt.Lookup[Role] {
+	return rt.Lookup[Role]{SQL: voltRoleGetSQL, Args: []any{id}, Scan: voltRoleScan}
 }
 
-func (q *Queries) RoleGetMany(ctx context.Context, ids []int) ([]Role, error) {
+func RoleGetMany(ids []int) rt.Query[Role] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[Role]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltRoleTableSQL, voltRoleColumnsSQL, []rt.Opt[Role]{RoleID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Role{}
-	for voltRows.Next() {
-		voltV, voltErr := voltRoleScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltRoleTableSQL, voltRoleColumnsSQL, []rt.Opt[Role]{RoleID.In(ids...)})
+	return rt.Query[Role]{SQL: voltSQL, Args: voltArgs, Scan: voltRoleScan, Err: voltErr}
 }
 
 const voltRoleGetByNameSQL = `SELECT "id", "name" FROM "roles" WHERE "name" = ?`
 
-func (q *Queries) RoleGetByName(ctx context.Context, name string) (Role, error) {
-	return voltRoleScan(q.db.QueryRowContext(ctx, voltRoleGetByNameSQL, name))
+func RoleGetByName(name string) rt.Lookup[Role] {
+	return rt.Lookup[Role]{SQL: voltRoleGetByNameSQL, Args: []any{name}, Scan: voltRoleScan}
 }
 
 const voltRoleListSQL = `SELECT "id", "name" FROM "roles"`
 
-func (q *Queries) RoleList(ctx context.Context) ([]Role, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltRoleListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Role{}
-	for voltRows.Next() {
-		voltV, voltErr := voltRoleScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
-}
+func RoleList() rt.Query[Role] { return rt.Query[Role]{SQL: voltRoleListSQL, Scan: voltRoleScan} }
 
-func (q *Queries) RoleCreate(ctx context.Context, c RoleChangeset) (Role, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Role{}, voltErr
-	}
-	voltSQL, voltArgs := c.InsertRender()
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return Role{}, voltErr
-	}
-	return voltRoleScan(voltRow)
-}
+func RoleCreate(c RoleChangeset) rt.Write[Role] { return rt.Insert(c.Validate().Changeset) }
 
-func (q *Queries) RoleUpdate(ctx context.Context, c RoleChangeset) (Role, error) {
-	if !c.FromRow() {
-		return Role{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Role{}, voltErr
-	}
-	voltSQL, voltArgs := c.UpdateRender()
-	if voltSQL == "" {
-		return c.Row(), nil
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return Role{}, voltErr
-	}
-	return voltRoleScan(voltRow)
-}
+func RoleUpdate(c RoleChangeset) rt.Write[Role] { return rt.Update(c.Validate().Changeset) }
 
 const voltRoleDeleteSQL = `DELETE FROM "roles" WHERE "id" = ?`
 
-func (q *Queries) RoleDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltRoleDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("Role", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
+func RoleDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltRoleDeleteSQL, Args: []any{id}, Model: "Role", One: true}
 }
 
 const voltUserRoleGetSQL = `SELECT "user_id", "role_id", "granted_at" FROM "user_roles" WHERE "user_id" = ? AND "role_id" = ?`
 
-func (q *Queries) UserRoleGet(ctx context.Context, userID int, roleID int) (UserRole, error) {
-	return voltUserRoleScan(q.db.QueryRowContext(ctx, voltUserRoleGetSQL, userID, roleID))
+func UserRoleGet(userID int, roleID int) rt.Lookup[UserRole] {
+	return rt.Lookup[UserRole]{SQL: voltUserRoleGetSQL, Args: []any{userID, roleID}, Scan: voltUserRoleScan}
 }
 
 const voltUserRoleListSQL = `SELECT "user_id", "role_id", "granted_at" FROM "user_roles"`
 
-func (q *Queries) UserRoleList(ctx context.Context) ([]UserRole, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltUserRoleListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []UserRole{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserRoleScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func UserRoleList() rt.Query[UserRole] {
+	return rt.Query[UserRole]{SQL: voltUserRoleListSQL, Scan: voltUserRoleScan}
 }
 
-func (q *Queries) UserRoleCreate(ctx context.Context, c UserRoleChangeset) (UserRole, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return UserRole{}, voltErr
-	}
-	voltSQL, voltArgs := c.InsertRender()
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return UserRole{}, voltErr
-	}
-	return voltUserRoleScan(voltRow)
-}
+func UserRoleCreate(c UserRoleChangeset) rt.Write[UserRole] { return rt.Insert(c.Validate().Changeset) }
 
-func (q *Queries) UserRoleUpdate(ctx context.Context, c UserRoleChangeset) (UserRole, error) {
-	if !c.FromRow() {
-		return UserRole{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return UserRole{}, voltErr
-	}
-	voltSQL, voltArgs := c.UpdateRender()
-	if voltSQL == "" {
-		return c.Row(), nil
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return UserRole{}, voltErr
-	}
-	return voltUserRoleScan(voltRow)
-}
+func UserRoleUpdate(c UserRoleChangeset) rt.Write[UserRole] { return rt.Update(c.Validate().Changeset) }
 
 const voltUserRoleDeleteSQL = `DELETE FROM "user_roles" WHERE "user_id" = ? AND "role_id" = ?`
 
-func (q *Queries) UserRoleDelete(ctx context.Context, userID int, roleID int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltUserRoleDeleteSQL, userID, roleID)
-	if voltErr != nil {
-		return rt.Refused("UserRole", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
+func UserRoleDelete(userID int, roleID int) rt.Exec {
+	return rt.Exec{SQL: voltUserRoleDeleteSQL, Args: []any{userID, roleID}, Model: "UserRole", One: true}
 }

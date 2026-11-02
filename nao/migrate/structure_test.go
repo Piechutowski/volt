@@ -9,12 +9,12 @@ import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
-	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/nao/run"
 )
 
 func ddlDB(t *testing.T, ddl string) *sql.DB {
 	t.Helper()
-	db := memoryDB(t)
+	db := memoryDB(t).Pool()
 	if _, err := db.Exec(ddl); err != nil {
 		t.Fatalf("DDL rejected: %v\n%s", err, ddl)
 	}
@@ -427,20 +427,20 @@ func TestDriftCloses(t *testing.T) {
 				t.Fatalf("%v\n%s", err, src)
 			}
 			db := memoryDB(t)
-			if _, err := rt.MigrateUp(ctx, db, ms[:1]); err != nil {
+			if _, err := run.MigrateUp(ctx, db, ms[:1]); err != nil {
 				t.Fatalf("%v\n%s", err, src)
 			}
-			remade, err := Read(ctx, db)
+			remade, err := Read(ctx, db.Pool())
 			if err != nil {
 				t.Fatal(err)
 			}
 			for _, d := range Diff(fold, remade) {
 				t.Errorf("the fold rendered and remade differs: %s\n%s", d.Reason, d.Volt)
 			}
-			if _, err := rt.MigrateUp(ctx, db, ms); err != nil {
+			if _, err := run.MigrateUp(ctx, db, ms); err != nil {
 				t.Fatalf("%v\n%s", err, src)
 			}
-			after, err := Read(ctx, db)
+			after, err := Read(ctx, db.Pool())
 			if err != nil {
 				t.Fatal(err)
 			}

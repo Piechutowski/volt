@@ -35,7 +35,7 @@ type Table struct {
 // TableNames are the Go names one table's data files declare beside its
 // model and column handles (spec §changesets, §generated-query-surface):
 // the changeset surface and the option wrappers, which the package's name
-// scope holds (Names), the Queries methods, and the unexported scan
+// scope holds (Names), the query functions, and the unexported scan
 // function and statement constants, which take the form of the generated
 // locals (LocalName), so no parameter shadows one.
 type TableNames struct {
@@ -59,8 +59,26 @@ func tableNamesBuild(m string) TableNames {
 	}
 }
 
-func (n *TableNames) wrappers() []string {
-	return []string{n.Limit, n.Offset, n.Distinct, n.OrderBy, n.After, n.Set}
+// functions lists the package-scope functions the dynamic and the static
+// query layers mint for the table (spec §generated-query-surface): the
+// option wrappers and every query function, which share the package
+// scope with the column handles.
+func (t *Table) functions() []string {
+	n := &t.Names
+	out := []string{n.Limit, n.Offset, n.Distinct, n.OrderBy, n.After, n.Set, n.List, n.Create, n.Query, n.Count, n.Exists, n.DeleteWhere, n.UpdateWhere}
+	if len(t.PK) > 0 {
+		out = append(out, n.Get, n.Delete)
+		if len(t.PK) == 1 {
+			out = append(out, n.GetMany)
+		}
+		if len(t.NonPK()) > 0 {
+			out = append(out, n.Update)
+		}
+	}
+	for _, f := range t.UniqueFields() {
+		out = append(out, t.GetBy(f))
+	}
+	return out
 }
 
 // RowScan is the name of the unexported function that scans one row into
@@ -79,7 +97,7 @@ func (t *Table) GetBy(f *Field) string { return t.Model + "GetBy" + f.GoField }
 // generated locals' form (spec §generated-query-surface).
 func (t *Table) GetByConst(f *Field) string { return "volt" + t.Model + "GetBy" + f.GoField + "SQL" }
 
-// SelectMethod is the name of the Queries method a select instantiation
+// SelectMethod is the name of the query function a select instantiation
 // over the table mints (spec §selects-over-groups).
 func (t *Table) SelectMethod(fn SelectFn) string { return SelectMethodName(t.Model, fn.MethodSuffix) }
 
@@ -215,7 +233,7 @@ func (t *Table) UniqueFields() []*Field {
 func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 	imports := map[string]bool{}
 	p := &plan{imports: imports}
-	typeNames := map[string]string{"Queries": "the generated Queries type"}
+	typeNames := map[string]string{}
 	sqlNames := map[string]string{}
 
 	type built struct {

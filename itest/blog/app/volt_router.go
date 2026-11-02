@@ -8,6 +8,7 @@ import (
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/itest/blog/db"
+	"github.com/Piechutowski/volt/nao/run"
 )
 
 func register(mux *http.ServeMux, c Controllers) {
@@ -118,7 +119,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if _, err := volt.Negotiate(r); err != nil {
 			return err
 		}
-		out, err := c.DB.UserList(r.Context())
+		out, err := run.Run(r.Context(), c.DB, db.UserList())
 		if err != nil {
 			return err
 		}
@@ -133,7 +134,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if !ok {
 			return volt.ErrNotFound
 		}
-		out, err := c.DB.UserGet(r.Context(), voltid)
+		out, err := run.Run(r.Context(), c.DB, db.UserGet(voltid))
 		if err != nil {
 			return err
 		}
@@ -149,7 +150,7 @@ func register(mux *http.ServeMux, c Controllers) {
 			return err
 		}
 		volt_cs := db.UserNew().Cast(volt_params, db.UserEmail, db.UserCreatedAt)
-		out, err := c.DB.UserCreate(r.Context(), volt_cs)
+		out, err := run.Run(r.Context(), c.DB, db.UserCreate(volt_cs))
 		if err != nil {
 			return err
 		}
@@ -168,12 +169,12 @@ func register(mux *http.ServeMux, c Controllers) {
 		if err := volt.Decode(r, &volt_params); err != nil {
 			return err
 		}
-		volt_row, err := c.DB.UserGet(r.Context(), voltid)
+		volt_row, err := run.Run(r.Context(), c.DB, db.UserGet(voltid))
 		if err != nil {
 			return err
 		}
 		volt_cs := volt_row.Changeset().Cast(volt_params, db.UserEmail, db.UserCreatedAt)
-		out, err := c.DB.UserUpdate(r.Context(), volt_cs)
+		out, err := run.Run(r.Context(), c.DB, db.UserUpdate(volt_cs))
 		if err != nil {
 			return err
 		}
@@ -188,7 +189,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if !ok {
 			return volt.ErrNotFound
 		}
-		if err := c.DB.UserDelete(r.Context(), voltid); err != nil {
+		if _, err := run.Run(r.Context(), c.DB, db.UserDelete(voltid)); err != nil {
 			return err
 		}
 		return volt.RenderStatus(w, r, 204, nil)
@@ -202,7 +203,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if err != nil {
 			return err
 		}
-		out, err := c.DB.UserPicked(r.Context(), voltids)
+		out, err := run.Run(r.Context(), c.DB, db.UserPicked(voltids))
 		if err != nil {
 			return err
 		}
@@ -217,7 +218,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if err != nil {
 			return err
 		}
-		out, err := c.DB.UserSince(r.Context(), voltsince)
+		out, err := run.Run(r.Context(), c.DB, db.UserSince(voltsince))
 		if err != nil {
 			return err
 		}
@@ -232,7 +233,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if err != nil {
 			return err
 		}
-		out, err := c.DB.MsRevenueBrowse(r.Context(), voltyear)
+		out, err := run.Run(r.Context(), c.DB, db.MsRevenueBrowse(voltyear))
 		if err != nil {
 			return err
 		}
@@ -247,7 +248,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if err != nil {
 			return err
 		}
-		out, err := c.DB.MsUsageBrowse(r.Context(), voltyear)
+		out, err := run.Run(r.Context(), c.DB, db.MsUsageBrowse(voltyear))
 		if err != nil {
 			return err
 		}
@@ -258,7 +259,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if _, err := volt.Negotiate(r); err != nil {
 			return err
 		}
-		out, err := c.DB.UserList(r.Context())
+		out, err := run.Run(r.Context(), c.DB, db.UserList())
 		if err != nil {
 			return err
 		}
@@ -274,7 +275,7 @@ func register(mux *http.ServeMux, c Controllers) {
 			return err
 		}
 		volt_cs := db.UserNew().Cast(volt_params, db.UserEmail, db.UserCreatedAt)
-		out, err := c.DB.UserCreate(r.Context(), volt_cs)
+		out, err := run.Run(r.Context(), c.DB, db.UserCreate(volt_cs))
 		if err != nil {
 			return err
 		}
@@ -289,7 +290,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if !ok {
 			return volt.ErrNotFound
 		}
-		out, err := c.DB.UserGet(r.Context(), voltid)
+		out, err := run.Run(r.Context(), c.DB, db.UserGet(voltid))
 		if err != nil {
 			return err
 		}
@@ -308,12 +309,12 @@ func register(mux *http.ServeMux, c Controllers) {
 		if err := volt.Decode(r, &volt_params); err != nil {
 			return err
 		}
-		volt_row, err := c.DB.UserGet(r.Context(), voltid)
+		volt_row, err := run.Run(r.Context(), c.DB, db.UserGet(voltid))
 		if err != nil {
 			return err
 		}
 		volt_cs := volt_row.Changeset().Cast(volt_params, db.UserEmail, db.UserCreatedAt)
-		out, err := c.DB.UserUpdate(r.Context(), volt_cs)
+		out, err := run.Run(r.Context(), c.DB, db.UserUpdate(volt_cs))
 		if err != nil {
 			return err
 		}
@@ -328,7 +329,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if !ok {
 			return volt.ErrNotFound
 		}
-		if err := c.DB.UserDelete(r.Context(), voltid); err != nil {
+		if _, err := run.Run(r.Context(), c.DB, db.UserDelete(voltid)); err != nil {
 			return err
 		}
 		return volt.RenderStatus(w, r, 204, nil)
@@ -338,7 +339,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if _, err := volt.Negotiate(r); err != nil {
 			return err
 		}
-		out, err := c.DB.TagList(r.Context())
+		out, err := run.Run(r.Context(), c.DB, db.TagList())
 		if err != nil {
 			return err
 		}
@@ -354,7 +355,7 @@ func register(mux *http.ServeMux, c Controllers) {
 			return err
 		}
 		volt_cs := db.TagNew().Cast(volt_params, db.TagSlug, db.TagName)
-		out, err := c.DB.TagCreate(r.Context(), volt_cs)
+		out, err := run.Run(r.Context(), c.DB, db.TagCreate(volt_cs))
 		if err != nil {
 			return err
 		}
@@ -365,7 +366,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if _, err := volt.Negotiate(r); err != nil {
 			return err
 		}
-		out, err := c.DB.TagGet(r.Context(), r.PathValue("slug"))
+		out, err := run.Run(r.Context(), c.DB, db.TagGet(r.PathValue("slug")))
 		if err != nil {
 			return err
 		}
@@ -380,12 +381,12 @@ func register(mux *http.ServeMux, c Controllers) {
 		if err := volt.Decode(r, &volt_params); err != nil {
 			return err
 		}
-		volt_row, err := c.DB.TagGet(r.Context(), r.PathValue("slug"))
+		volt_row, err := run.Run(r.Context(), c.DB, db.TagGet(r.PathValue("slug")))
 		if err != nil {
 			return err
 		}
 		volt_cs := volt_row.Changeset().Cast(volt_params, db.TagName)
-		out, err := c.DB.TagUpdate(r.Context(), volt_cs)
+		out, err := run.Run(r.Context(), c.DB, db.TagUpdate(volt_cs))
 		if err != nil {
 			return err
 		}
@@ -396,7 +397,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if _, err := volt.Negotiate(r); err != nil {
 			return err
 		}
-		if err := c.DB.TagDelete(r.Context(), r.PathValue("slug")); err != nil {
+		if _, err := run.Run(r.Context(), c.DB, db.TagDelete(r.PathValue("slug"))); err != nil {
 			return err
 		}
 		return volt.RenderStatus(w, r, 204, nil)

@@ -611,7 +611,7 @@ func TestQueryRoutes(t *testing.T) {
 		t.Fatalf("routes = %d, controllers = %d; want 4 and none", len(app.Routes), len(app.Controllers))
 	}
 	get := app.Routes[0].Query
-	if get == nil || get.Field != "DB" || get.Import != "blog/db" || get.Result != "User" || get.Many || get.Status != 200 {
+	if get == nil || get.Import != "blog/db" || get.Result != "User" || get.Many || get.Status != 200 {
 		t.Errorf("UserGet ref = %+v", get)
 	}
 	if len(get.Params) != 1 || get.Params[0].Source != FromPath || get.Params[0].GoType != "int" {

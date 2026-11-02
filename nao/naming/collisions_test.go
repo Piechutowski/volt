@@ -18,7 +18,6 @@ func dynNamesWalk(p *plan, info *check.Info) []NameCollision {
 		size += 5 + len(dynWrapperSuffixes) + len(tm.Fields)
 	}
 	seen := make(map[string]dynOrigin, size)
-	seen["Queries"] = dynOrigin{kind: dynQueries}
 	var out []NameCollision
 	add := func(name string, o dynOrigin) {
 		prev, dup := seen[name]

@@ -3,122 +3,35 @@
 package models
 
 import (
-	"context"
-	"database/sql"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-type Queries struct {
-	db    rt.DBTX
-	cache *rt.StmtCache
-}
-
-func New(db rt.DBTX) *Queries { return &Queries{db: db} }
-
-func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
-	return &Queries{db: q.db, cache: cache}
-}
-
-func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
-
-func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
-}
-
 const voltInvoiceGetSQL = `SELECT "id", "total", "created_at", "updated_at", "deleted_at" FROM "invoices" WHERE "id" = ?`
 
-func (q *Queries) InvoiceGet(ctx context.Context, id int) (Invoice, error) {
-	return voltInvoiceScan(q.db.QueryRowContext(ctx, voltInvoiceGetSQL, id))
+func InvoiceGet(id int) rt.Lookup[Invoice] {
+	return rt.Lookup[Invoice]{SQL: voltInvoiceGetSQL, Args: []any{id}, Scan: voltInvoiceScan}
 }
 
-func (q *Queries) InvoiceGetMany(ctx context.Context, ids []int) ([]Invoice, error) {
+func InvoiceGetMany(ids []int) rt.Query[Invoice] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[Invoice]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltInvoiceTableSQL, voltInvoiceColumnsSQL, []rt.Opt[Invoice]{InvoiceID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Invoice{}
-	for voltRows.Next() {
-		voltV, voltErr := voltInvoiceScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltInvoiceTableSQL, voltInvoiceColumnsSQL, []rt.Opt[Invoice]{InvoiceID.In(ids...)})
+	return rt.Query[Invoice]{SQL: voltSQL, Args: voltArgs, Scan: voltInvoiceScan, Err: voltErr}
 }
 
 const voltInvoiceListSQL = `SELECT "id", "total", "created_at", "updated_at", "deleted_at" FROM "invoices"`
 
-func (q *Queries) InvoiceList(ctx context.Context) ([]Invoice, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltInvoiceListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Invoice{}
-	for voltRows.Next() {
-		voltV, voltErr := voltInvoiceScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func InvoiceList() rt.Query[Invoice] {
+	return rt.Query[Invoice]{SQL: voltInvoiceListSQL, Scan: voltInvoiceScan}
 }
 
-func (q *Queries) InvoiceCreate(ctx context.Context, c InvoiceChangeset) (Invoice, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Invoice{}, voltErr
-	}
-	voltSQL, voltArgs := c.InsertRender()
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return Invoice{}, voltErr
-	}
-	return voltInvoiceScan(voltRow)
-}
+func InvoiceCreate(c InvoiceChangeset) rt.Write[Invoice] { return rt.Insert(c.Validate().Changeset) }
 
-func (q *Queries) InvoiceUpdate(ctx context.Context, c InvoiceChangeset) (Invoice, error) {
-	if !c.FromRow() {
-		return Invoice{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Invoice{}, voltErr
-	}
-	voltSQL, voltArgs := c.UpdateRender()
-	if voltSQL == "" {
-		return c.Row(), nil
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
-	if voltErr != nil {
-		return Invoice{}, voltErr
-	}
-	return voltInvoiceScan(voltRow)
-}
+func InvoiceUpdate(c InvoiceChangeset) rt.Write[Invoice] { return rt.Update(c.Validate().Changeset) }
 
 const voltInvoiceDeleteSQL = `DELETE FROM "invoices" WHERE "id" = ?`
 
-func (q *Queries) InvoiceDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltInvoiceDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("Invoice", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
+func InvoiceDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltInvoiceDeleteSQL, Args: []any{id}, Model: "Invoice", One: true}
 }

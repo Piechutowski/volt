@@ -559,8 +559,8 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 		if r, err := plan.SelectRowName(memberFn(m.Key)); err == nil {
 			row = r
 		}
-		fmt.Fprintf(&b, "func (q *Queries) %s%s(ctx context.Context%s) ([]%s, error)\n",
-			model, si.MethodSuffix, params.String(), row)
+		fmt.Fprintf(&b, "func %s%s(%s) rt.Query[%s]\n",
+			model, si.MethodSuffix, strings.TrimPrefix(params.String(), ", "), row)
 	}
 	b.WriteString("```\n")
 	return b.String()

@@ -131,7 +131,8 @@ func (pl *Plan) NameCollisionErr() error {
 
 // SelectRowName is the row type SelectRowType names, without its
 // fields: the model, the shared type, or the model with the method
-// suffix when columns are excluded.
+// suffix and Row when columns are excluded, since the query function
+// takes the model with the suffix.
 func (pl *Plan) SelectRowName(fn SelectFn) (string, error) {
 	t, err := pl.table(fn.TableKey)
 	if err != nil {
@@ -141,7 +142,7 @@ func (pl *Plan) SelectRowName(fn SelectFn) (string, error) {
 	case fn.SharedType != "":
 		return fn.SharedType, nil
 	case len(fn.Excluded) > 0:
-		return t.SelectMethod(fn), nil
+		return t.SelectMethod(fn) + "Row", nil
 	}
 	return t.Model, nil
 }
@@ -192,16 +193,12 @@ func (pl *Plan) CRUDMethod(name string) (tableKey string, m CRUDMethod, ok bool)
 // order, in a slice the caller owns.
 func (pl *Plan) CRUDMethodNames() []string { return append([]string(nil), pl.names...) }
 
-// QueryName reports whether name is a method of the generated Queries
-// handle, or the exported stem of a statement constant the query files
-// declare, and what mints it (spec §selects-over-groups,
+// QueryName reports whether name is a generated query function, or the
+// exported stem of a statement constant the query files declare, and
+// what mints it (spec §selects-over-groups,
 // §generated-query-surface): a select's method and constant must take
 // none of them.
 func (pl *Plan) QueryName(name string) (string, bool) {
-	switch name {
-	case "WithCache", "WithTx", "Tx":
-		return "the Queries method " + name, true
-	}
 	if pl.err != nil {
 		return "", false
 	}
@@ -324,7 +321,7 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 	if pl.err != nil {
 		return nil
 	}
-	seen := map[string]dynOrigin{"Queries": {kind: dynQueries}}
+	seen := map[string]dynOrigin{}
 	var out []NameCollision
 	for _, td := range pl.info.Types {
 		if td.Path == "" {
@@ -425,7 +422,7 @@ func dynOriginOf(o *nameOrigin) dynOrigin {
 // Names is the scope of package-level Go identifiers a package's
 // generated files mint (§selects-over-groups): models, changesets with
 // their column and params aliases and constructors (§changesets), column
-// handles and option wrappers, the Queries handle and its constructor,
+// handles and option wrappers,
 // beside the package's bare declared types, which its own Go files
 // declare (§types). It is read in layers, last writer first.
 type Names struct {
@@ -457,7 +454,7 @@ type nameOrigin struct {
 }
 
 func modelNamesBuild(t *Table) []nameOrigin {
-	wrappers := t.Names.wrappers()
+	wrappers := t.functions()
 	names := make([]nameOrigin, 0, 5+len(wrappers)+len(t.Fields))
 	add := func(name string, kind nameKind, field *Field, dyn bool, rank int) {
 		names = append(names, nameOrigin{name: name, kind: kind, idx: len(names), table: t, field: field, dyn: dyn, rank: rank})
@@ -492,7 +489,7 @@ func (o *nameOrigin) describe() string {
 	case nameHandle:
 		return fmt.Sprintf("the column handle for %s.%s", o.table.Info.Decl.Name.Name(), o.field.ColName)
 	}
-	return "the dynamic-layer function " + o.name
+	return "the generated function " + o.name
 }
 
 type nameBase struct {
@@ -641,12 +638,6 @@ func (n *Names) Generated(name string) (desc string, ok bool) {
 		if o := n.base.lookup(name); o != nil {
 			return o.describe(), true
 		}
-	}
-	switch name {
-	case "Queries":
-		return "the generated Queries handle", true
-	case "New":
-		return "the generated constructor", true
 	}
 	return "", false
 }
