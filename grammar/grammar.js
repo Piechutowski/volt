@@ -393,6 +393,16 @@ module.exports = grammar({
         ')',
       ),
 
+    // A query call as a setting value, the value of a route's body:
+    // (§request-bodies): `db.SettingUpdate(id)`.
+    query_call: ($) =>
+      seq(
+        field('query', $.go_ref),
+        '(',
+        optional(seq($._load_arg, repeat(seq(',', $._load_arg)))),
+        ')',
+      ),
+
     _load_arg: ($) => choice($.identifier, $.string, $.number, $.signed_number, $.boolean),
 
     verb: () =>
@@ -778,6 +788,7 @@ module.exports = grammar({
         $.null,
         $.expression,
         $.ident_group,
+        $.query_call,
         $._name,
       ),
 

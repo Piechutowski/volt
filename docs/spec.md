@@ -156,6 +156,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Routes](#routes)
     - [Handler references](#handler-references)
     - [Requests and responses](#requests-and-responses)
+    - [Request bodies](#request-bodies)
     - [Route loads](#route-loads)
     - [Query routes](#query-routes)
     - [Formats](#formats)
@@ -1992,8 +1993,8 @@ param type = "int" ;
 2. A `:name` segment captures one path segment as a parameter. The
    parameter name MUST be a valid, non-keyword Go identifier, MUST NOT
    be one of the reserved names `w`, `r`, `opts`, `volt`, `cs`, `c`,
-   `ctx` (they appear in generated signatures, the router's and the
-   client's, and would be shadowed), and MUST be unique within the
+   `ctx`, `body` (they appear in generated signatures, the router's,
+   the handlers' and the client's, and would be shadowed), and MUST be unique within the
    route's full path (scope prefixes included). The rules of this
    section hold for a Scope prefix where it is written: its errors are
    reported once, an empty Scope's included, and nothing beneath a
@@ -2076,13 +2077,14 @@ handler ref = name, [ ".", name ] ;
    runtime's own handlers are `volt.<Name>` (§event-routes).
 2. Every distinct controller becomes one generated interface; every
    distinct action one method with the route's typed parameters
-   appended after `(r volt.Request)` and the route's loads after them
-   (§route-loads), returning `volt.Response` (§requests-and-responses);
-   the type that implements it is an empty struct (`lint.md`,
-   `handlerreceiver`).
+   appended after `(r volt.Request)`, its body after them
+   (§request-bodies) and its loads last (§route-loads), returning
+   `volt.Response` (§requests-and-responses); the type that implements
+   it is an empty struct (`lint.md`, `handlerreceiver`).
 3. Two routes MAY share `Controller.Action` only with identical
-   parameter signatures (names, types and wildcard-ness, in order) and
-   identical loads (names and types, in order; §route-loads).
+   parameter signatures (names, types and wildcard-ness, in order),
+   the same body type or none (§request-bodies) and identical loads
+   (names and types, in order; §route-loads).
 4. The generated `Controllers` manifest is one namespace: a controller
    MUST NOT take the name of a field the manifest holds for a data
    the query routes run on (`DB`; §query-routes) or for the event broker
@@ -2175,14 +2177,83 @@ func (r Response) Rescue(on func(error) Response) Response
    caught: reflection, `unsafe`, cgo, and a package imported under
    another name.
 
+### Request bodies
+
+```ebnf
+query call = query ref, "(", [ arg, { ",", arg } ], ")" ;   (* with query ref, the value of body:, a setting value (§settings-lists) *)
+query ref  = name, [ ".", name ] ;
+arg        = name | literal ;
+```
+
+```volt fragment
+Scope / {
+	patch /settings/:id(int) Settings.Save  [body: db.SettingUpdate(id), only: (unit, note)]
+	post  /metrics           Metrics.Create [body: db.MetricCreate]
+	post  /login             Session.Login  [body: LoginForm]
+}
+```
+
+A controller route may bind its request body with the `body:`
+setting: the shim decodes the body before the handler runs, and the
+handler receives a value, never bytes. The setting takes two forms,
+because they bind two different things.
+
+1. **A changeset.** `body:` names a write of a data package, `Create`
+   or `Update` (§generated-query-surface), written `pkg.Query` for an
+   imported data package or `Query` for the package's own tables, as a
+   query route names one (§query-routes). An update takes its key in
+   parentheses, one argument per key column: a path parameter of the
+   route whose type spells the key's Go type, or a literal that does
+   (§route-loads). A create takes no argument, its parentheses empty
+   or absent. The shim does what a query route's shim does up to the
+   write (§query-routes): it decodes the body by `Content-Type` into
+   the model's Params (§formats), loads the row of an update, casts
+   with the write's allow list (§changesets) and validates
+   (§validators). The changeset, valid or not, is what the handler
+   receives; the handler reads `Valid()` and `Errors()`, adds findings
+   of its own, and describes the write with the function the body
+   named, `db.SettingUpdate(body)`, or does not. A body that does not
+   decode is a 400 or a 415 before any row loads (§formats); a missing
+   row of an update is a 404 through the error spine, as a load's
+   would be (§route-loads).
+2. **`only:`** narrows the cast to the listed columns, a column list
+   `(a, b)` naming each once, every one a column the write casts
+   (§changesets). `only:` without `body:`, or with a struct body, is
+   an error.
+3. **A struct.** `body:` names an exported struct type declared in
+   the routes package's Go files; the body decodes into it with the
+   rules of `volt.Decode` (§formats): a field the struct does not
+   declare is a 400 naming it.
+4. **Signature.** The handler receives the value as the parameter after
+   the route's parameters and before its loads (§route-loads), named
+   `body` and typed as the changeset type, qualified by the package
+   unless the write is the package's own, or as the struct:
+   `Save(r volt.Request, id int, body db.SettingChangeset)
+   volt.Response`. Two routes sharing an action share its body type
+   (§handler-references); `body` is a reserved name a path parameter
+   cannot take (§route-paths) and a load cannot be named (§route-loads).
+5. **Order.** The body is bound before the loads run: a body that does
+   not decode loads nothing, and the row of an update loads first.
+6. A body on a query route or an event route is an error: their
+   handlers are generated, and a query route's write decodes its own
+   body (§query-routes).
+
+```go
+func (Settings) Save(r volt.Request, id int, body db.SettingChangeset) volt.Response {
+	if !body.Valid() {
+		return volt.Reject(422, "check the fields").WithDetails(body.Errors())
+	}
+	return volt.Then(db.SettingUpdate(body), func(db.Setting) volt.Response {
+		return volt.NoContent()
+	})
+}
+```
+
 ### Route loads
 
 ```ebnf
 load block = "{", { load }, "}" ;
 load       = name, query call, newline ;
-query call = query ref, "(", [ arg, { ",", arg } ], ")" ;
-query ref  = name, [ ".", name ] ;
-arg        = name | literal ;
 ```
 
 ```volt fragment
@@ -2205,8 +2276,8 @@ parameters, so the handler reads them and never asks for them.
    write, `Create`, `Update` or `Delete`, is an error, and so is a
    name that is no generated query. The load's name is the parameter
    the handler receives the value under: a lower-case Go identifier
-   that is not `r`, not a path parameter of the route and not another
-   load of it.
+   that is not a reserved name (§route-paths), not a path parameter of
+   the route and not another load of it.
 2. **Arguments** are given in the function's order and number, each a
    name or a literal. A name that is a path parameter of the route
    binds it, and the parameter's type MUST spell the function's Go
@@ -2222,8 +2293,9 @@ parameters, so the handler reads them and never asks for them.
 3. **Order and the shim.** Loads run in declaration order before the
    handler, each a continuation of the shim (§requests-and-responses),
    and every argument is bound before the first runs. The handler's
-   signature is generated from them: after the route's parameters, one
-   parameter per load named as the load is, typed as the query yields,
+   signature is generated from them: after the route's parameters and
+   its body (§request-bodies), one parameter per load named as the load
+   is, typed as the query yields,
    the row type for `Get`, a slice of it for `List` and a select,
    qualified by the package unless the query is the package's own:
    `Charts(r volt.Request, metrics []db.Metric, settings db.Setting)
@@ -2432,8 +2504,11 @@ the routes through typed methods instead of hand-built requests.
    `APIUserUpdate(ctx, id, db.UserNew().EmailSet(e))` sets one column
    of row `id`.
 4. **Every named controller route** is one raw method with the
-   route's path parameters, returning `*http.Response` for the caller
-   to read and close: Volt does not know what a hand-written action
+   route's path parameters and, when the route binds a body
+   (§request-bodies), the body last: a changeset `cs db.UserChangeset`
+   sent as `cs.Params()`, or `body any` for a struct body, encoded in
+   the client's format. It returns `*http.Response` for the caller to
+   read and close: Volt does not know what a hand-written action
    writes.
 5. Client method names and reverse-URL helper names share one
    namespace per package (§route-names-and-reverse-urls); a collision is an error naming
@@ -2799,7 +2874,7 @@ an element is an error on that element):
 | Element | Settings |
 |---|---|
 | Scope | `pipe`, `name`, `error_handler` |
-| route | `name`, `timeout` |
+| route | `name`, `timeout`, `body`, `only` |
 | resources | `api`, `only`, `except`, `param`, `singular`, `default` |
 | dataset | `strip`, `only`, `except` |
 | Select | `order` |
@@ -2807,7 +2882,9 @@ an element is an error on that element):
 
 The identifier-list value form `(a, b, c)` (production in Collected
 grammar (Part II)) is valid only as the value of `only:` and `except:`:
-an action list on resources, a table list on a dataset.
+an action list on resources, a table list on a dataset, a column list
+on a route (§request-bodies). The query-call value form `pkg.Query(a)`
+is valid only as the value of a route's `body:`.
 
 ## Generation contract (informative)
 
@@ -4044,7 +4121,8 @@ migration column setting  = column setting
                           | "update", ":", ref action ;
 
 (* setting value, extended (Part I §settings-lists): *)
-setting value  = (* schema-layer alternatives *) | ident list | order list ;
+setting value  = (* schema-layer alternatives *) | ident list | order list
+               | query ref | query call ;
 ident list     = "(", name, { ",", name }, ")" ;
 ```
 

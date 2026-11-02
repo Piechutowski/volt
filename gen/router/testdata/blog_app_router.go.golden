@@ -79,6 +79,38 @@ func register(mux *http.ServeMux, c Controllers) {
 		})
 	}, errHandlerErrors, voltPerform, volt.Params("id"), volt.Timeout(5*time.Second))))
 
+	mux.Handle("PATCH /users/{id}/email", pipe0(volt.Handler("PATCH /users/{id}/email", func(r volt.Request) volt.Response {
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		var voltParams db.UserParams
+		if err := volt.Decode(r, &voltParams); err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.UserGet(voltid), func(voltRow db.User) volt.Response {
+			voltBody := voltRow.Changeset().Cast(voltParams, db.UserEmail).Validate()
+			return c.Users.ChangeEmail(r, voltid, voltBody)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
+
+	mux.Handle("POST /signup", pipe0(volt.Handler("POST /signup", func(r volt.Request) volt.Response {
+		var voltParams db.UserParams
+		if err := volt.Decode(r, &voltParams); err != nil {
+			return volt.Fail(err)
+		}
+		voltBody := db.UserNew().Cast(voltParams, db.UserEmail, db.UserCreatedAt).Validate()
+		return c.Users.Signup(r, voltBody)
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("POST /login", pipe0(volt.Handler("POST /login", func(r volt.Request) volt.Response {
+		var voltBody LoginForm
+		if err := volt.Decode(r, &voltBody); err != nil {
+			return volt.Fail(err)
+		}
+		return c.Session.Login(r, voltBody)
+	}, errHandlerErrors, voltPerform)))
+
 	mux.Handle("/ping", pipe0(volt.Handler("/ping", func(r volt.Request) volt.Response {
 		return c.Home.Ping(r)
 	}, errHandlerErrors, voltPerform)))

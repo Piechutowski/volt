@@ -15,7 +15,7 @@ that lands it.
 | Route-level data loading | plugs / before_action | built | |
 | Handlers as pure functions | no | built | |
 | Strong parameters | yes | built (`Cast` allow lists) | |
-| Request bodies bound to changesets on controller routes | yes | missing | 8 |
+| Request bodies bound to changesets on controller routes | yes | built (`body:`, `only:`; a struct body too) | |
 | HTML templates | HEEx / ERB | not planned (Elm and guigui are the UIs) | |
 | JSON API with negotiated formats | yes | built (JSON, GOB) | |
 | Generated Go client | no | built | |

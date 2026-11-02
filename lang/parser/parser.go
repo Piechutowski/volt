@@ -729,7 +729,14 @@ func (p *parser) settingValue() ast.Node {
 		id := p.ident("setting value (§settings-lists)")
 		if p.at(token.DOT) {
 			p.next()
-			return &ast.QualIdent{Qual: id, Name: p.ident("qualified setting value (§scopes)")}
+			name := p.ident("qualified setting value (§scopes)")
+			if p.at(token.LPAREN) {
+				return p.queryCall(&ast.GoRef{Parts: []*ast.Ident{id, name}}, "a body: setting (§request-bodies)")
+			}
+			return &ast.QualIdent{Qual: id, Name: name}
+		}
+		if p.at(token.LPAREN) {
+			return p.queryCall(&ast.GoRef{Parts: []*ast.Ident{id}}, "a body: setting (§request-bodies)")
 		}
 		return id
 	default:

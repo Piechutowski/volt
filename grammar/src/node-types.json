@@ -1142,6 +1142,48 @@
     }
   },
   {
+    "type": "query_call",
+    "named": true,
+    "fields": {
+      "query": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "go_ref",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "signed_number",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "query_param",
     "named": true,
     "fields": {
@@ -1703,6 +1745,10 @@
           },
           {
             "type": "number",
+            "named": true
+          },
+          {
+            "type": "query_call",
             "named": true
           },
           {

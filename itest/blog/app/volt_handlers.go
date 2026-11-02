@@ -36,6 +36,10 @@ type PagesController interface {
 	Show(r volt.Request, num int) volt.Response
 }
 
+type SessionController interface {
+	Login(r volt.Request, body LoginForm) volt.Response
+}
+
 type TagsController interface {
 	Show(r volt.Request, name string) volt.Response
 }
@@ -51,6 +55,7 @@ type UsersController interface {
 	Avatar(r volt.Request, id int) volt.Response
 	Profile(r volt.Request, id int, user db.User) volt.Response
 	Card(r volt.Request, id int) volt.Response
+	ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response
 }
 
 type Controllers struct {
@@ -60,6 +65,7 @@ type Controllers struct {
 	Home    HomeController
 	Ops     OpsController
 	Pages   PagesController
+	Session SessionController
 	Tags    TagsController
 	Users   UsersController
 	DB      run.DB
@@ -98,6 +104,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Pages.Show(r, 0), c.Pages.Show(r, 0)) {
 		voltOut = append(voltOut, "Pages.Show")
 	}
+	if !volt.Same(c.Session.Login(r, LoginForm{}), c.Session.Login(r, LoginForm{})) {
+		voltOut = append(voltOut, "Session.Login")
+	}
 	if !volt.Same(c.Tags.Show(r, ""), c.Tags.Show(r, "")) {
 		voltOut = append(voltOut, "Tags.Show")
 	}
@@ -130,6 +139,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	}
 	if !volt.Same(c.Users.Card(r, 0), c.Users.Card(r, 0)) {
 		voltOut = append(voltOut, "Users.Card")
+	}
+	if !volt.Same(c.Users.ChangeEmail(r, 0, db.UserChangeset{}), c.Users.ChangeEmail(r, 0, db.UserChangeset{})) {
+		voltOut = append(voltOut, "Users.ChangeEmail")
 	}
 	return voltOut
 }

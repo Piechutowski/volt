@@ -6,6 +6,7 @@ import (
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 // loads lowers the load block of a controller route (spec §route-loads):
@@ -23,7 +24,7 @@ func (l *routeLowering) loads(r *ast.Route, params []Param) (loads []LoadInfo, o
 		name := ld.Name.Name()
 		switch {
 		case !loadNameOK(name):
-			l.errorf(ld.Name.Pos(), "route-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not r (§route-loads)", name)
+			l.errorf(ld.Name.Pos(), "route-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not reserved (§route-loads, §route-paths)", name)
 			ok = false
 			continue
 		case byName[name].Name != "":
@@ -48,14 +49,18 @@ func (l *routeLowering) loads(r *ast.Route, params []Param) (loads []LoadInfo, o
 }
 
 func loadNameOK(name string) bool {
-	if name == "r" || name == "_" || !exportedIdentOK(strings.ToUpper(name[:1])+name[1:]) {
+	if naming.RouteSignatureName(name) || name == "_" || !exportedIdentOK(strings.ToUpper(name[:1])+name[1:]) {
 		return false
 	}
 	return name[0] >= 'a' && name[0] <= 'z'
 }
 
 func (l *routeLowering) loadQuery(ld *ast.Load, byName map[string]Param) *QueryRef {
-	parts := ld.Query.Parts
+	return l.callQuery(ld.Name.Name(), ld.Call, byName)
+}
+
+func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[string]Param) *QueryRef {
+	parts := call.Ref.Parts
 	last := parts[len(parts)-1]
 	name := last.Name()
 	qual, target, local := l.facts.pkgName, l.facts.pkgPath, true
@@ -66,10 +71,10 @@ func (l *routeLowering) loadQuery(ld *ast.Load, byName map[string]Param) *QueryR
 		case qualImport:
 			target, local = t, false
 		case qualSelf:
-			l.diags = append(l.diags, selfQualified(ld.Query.Pos(), qual, name))
+			l.diags = append(l.diags, selfQualified(call.Ref.Pos(), qual, name))
 			return nil
 		default:
-			l.errorf(ld.Query.Pos(), "route-loads", "load %s names %q, which is not an import of this package (§route-loads, §imports)", ld.Name.Name(), qual)
+			l.errorf(call.Ref.Pos(), "route-loads", "load %s names %q, which is not an import of this package (§route-loads, §imports)", what, qual)
 			return nil
 		}
 	}
@@ -79,7 +84,7 @@ func (l *routeLowering) loadQuery(ld *ast.Load, byName map[string]Param) *QueryR
 		ref = name
 	}
 	if !hasSchema {
-		l.errorf(ld.Query.Pos(), "route-loads", "package %q declares no tables, so it has no query %s to load (§route-loads)", target, name)
+		l.errorf(call.Ref.Pos(), "route-loads", "package %q declares no tables, so it has no query %s to load (§route-loads)", target, name)
 		return nil
 	}
 	importPath := l.facts.module
@@ -113,7 +118,7 @@ func (l *routeLowering) loadQuery(ld *ast.Load, byName map[string]Param) *QueryR
 		switch cm.Op {
 		case "get", "list":
 		default:
-			l.errorf(ld.Query.Pos(), "route-loads", "%s writes; a load reads: a select function, Get or List (§route-loads)", ref)
+			l.errorf(call.Ref.Pos(), "route-loads", "%s writes; a load reads: a select function, Get or List (§route-loads)", ref)
 			return nil
 		}
 		for _, k := range cm.Key {
@@ -122,15 +127,15 @@ func (l *routeLowering) loadQuery(ld *ast.Load, byName map[string]Param) *QueryR
 		qr.Result, qr.Many = cm.Result, cm.Many
 	}
 	if !found {
-		l.errorf(ld.Query.Pos(), "route-loads", "no generated query %s in package %q%s; a load names a select function, Get or List (§route-loads)", ref, target, l.queryHint(target, name))
+		l.errorf(call.Ref.Pos(), "route-loads", "no generated query %s in package %q%s; a load names a select function, Get or List (§route-loads)", ref, target, l.queryHint(target, name))
 		return nil
 	}
-	if len(ld.Args) != len(sig) {
-		l.errorf(ld.Query.Pos(), "route-loads", "%s takes %d argument(s), the load gives %d (§route-loads)", ref, len(sig), len(ld.Args))
+	if len(call.Args) != len(sig) {
+		l.errorf(call.Ref.Pos(), "route-loads", "%s takes %d argument(s), the load gives %d (§route-loads)", ref, len(sig), len(call.Args))
 		return nil
 	}
 	ok := true
-	for i, arg := range ld.Args {
+	for i, arg := range call.Args {
 		sp := sig[i]
 		qp := QueryParam{Name: sp.name, GoType: sp.goType}
 		if sp.goType == "" {
@@ -259,4 +264,257 @@ func loadsString(ls []LoadInfo) string {
 		parts[i] = ld.Name + " " + ld.GoType()
 	}
 	return "{" + strings.Join(parts, ", ") + "}"
+}
+
+// BodyKind says what a controller route's body: setting binds (spec
+// §request-bodies): a changeset of a write query, or a struct of the
+// routes package.
+type BodyKind int
+
+const (
+	BodyChangeset BodyKind = iota
+	BodyStruct
+)
+
+// BodyInfo is how a controller route binds its request body (spec
+// §request-bodies): for BodyChangeset the write query whose changeset
+// the handler receives, decoded, loaded, cast and validated by the shim,
+// with Query.Changeset carrying the allow list; for BodyStruct the name
+// of the struct type the body decodes into.
+type BodyInfo struct {
+	Kind   BodyKind
+	Query  *QueryRef
+	Struct string
+}
+
+// GoType is the Go type of the value the handler receives: the
+// changeset type, qualified unless the query is the package's own, or
+// the struct.
+func (b BodyInfo) GoType() string {
+	if b.Kind == BodyStruct {
+		return b.Struct
+	}
+	t := b.Query.Changeset.Type
+	if !b.Query.Local {
+		t = b.Query.Qualifier + "." + t
+	}
+	return t
+}
+
+// body lowers a controller route's body: and only: settings (spec
+// §request-bodies); nil with ok when the route has no body.
+func (l *routeLowering) body(r *ast.Route, params []Param, bodyS, onlyS *ast.Setting) (*BodyInfo, bool) {
+	if bodyS == nil {
+		if onlyS != nil {
+			l.errorf(onlyS.Pos(), "request-bodies", "only: narrows the columns a body: changeset casts; the route has no body (§request-bodies)")
+			return nil, false
+		}
+		return nil, true
+	}
+	byName := map[string]Param{}
+	for _, p := range params {
+		byName[p.Name] = p
+	}
+	switch v := bodyS.Value.(type) {
+	case *ast.QueryCall:
+		q := l.bodyQuery(v, byName)
+		if q == nil {
+			return nil, false
+		}
+		if !l.narrow(q, onlyS) {
+			return nil, false
+		}
+		return &BodyInfo{Kind: BodyChangeset, Query: q}, true
+	case *ast.QualIdent:
+		q := l.bodyQuery(&ast.QueryCall{Ref: &ast.GoRef{Parts: []*ast.Ident{v.Qual, v.Name}}, Rparen: v.End()}, byName)
+		if q == nil {
+			return nil, false
+		}
+		if !l.narrow(q, onlyS) {
+			return nil, false
+		}
+		return &BodyInfo{Kind: BodyChangeset, Query: q}, true
+	case *ast.Ident:
+		name := v.Name()
+		if _, hasSchema, _ := l.dataPackage(l.facts.pkgPath); hasSchema {
+			if _, _, cm, ok := l.crudByName(l.facts.pkgPath, name); ok && cm.Body != "" {
+				q := l.bodyQuery(&ast.QueryCall{Ref: &ast.GoRef{Parts: []*ast.Ident{v}}, Rparen: v.End()}, byName)
+				if q == nil || !l.narrow(q, onlyS) {
+					return nil, false
+				}
+				return &BodyInfo{Kind: BodyChangeset, Query: q}, true
+			}
+		}
+		if onlyS != nil {
+			l.errorf(onlyS.Pos(), "request-bodies", "only: narrows the columns a body: changeset casts; %s is a struct of this package (§request-bodies)", name)
+			return nil, false
+		}
+		if !exportedIdentOK(name) {
+			l.errorf(v.Pos(), "request-bodies", "body: takes a write query of a data package or an exported struct type of this package, found %q (§request-bodies)", name)
+			return nil, false
+		}
+		underlying, ok := l.goType(name)
+		switch {
+		case !ok:
+			l.errorf(v.Pos(), "request-bodies", "no type %s in package %s's Go files; body: names a write query of a data package or a struct type declared beside the routes (§request-bodies)", name, l.facts.pkgName)
+			return nil, false
+		case !strings.HasPrefix(underlying, "struct"):
+			l.errorf(v.Pos(), "request-bodies", "%s is %s, not a struct type; a body decodes into a struct (§request-bodies)", name, underlying)
+			return nil, false
+		}
+		return &BodyInfo{Kind: BodyStruct, Struct: name}, true
+	}
+	l.errorf(bodyS.Pos(), "request-bodies", "body: takes a write query of a data package, with the key of an update, or a struct type of this package (§request-bodies)")
+	return nil, false
+}
+
+func (l *routeLowering) bodyQuery(call *ast.QueryCall, byName map[string]Param) *QueryRef {
+	parts := call.Ref.Parts
+	name := parts[len(parts)-1].Name()
+	qual, target, local := l.facts.pkgName, l.facts.pkgPath, true
+	if len(parts) == 2 {
+		qual = parts[0].Name()
+		t, kind := l.qualify(qual)
+		switch kind {
+		case qualImport:
+			target, local = t, false
+		case qualSelf:
+			l.diags = append(l.diags, selfQualified(call.Ref.Pos(), qual, name))
+			return nil
+		default:
+			l.errorf(call.Ref.Pos(), "request-bodies", "body: names %q, which is not an import of this package (§request-bodies, §imports)", qual)
+			return nil
+		}
+	}
+	pkgName, hasSchema, _ := l.dataPackage(target)
+	ref := qual + "." + name
+	if local {
+		ref = name
+	}
+	if !hasSchema {
+		l.errorf(call.Ref.Pos(), "request-bodies", "package %q declares no tables, so it has no write %s (§request-bodies)", target, name)
+		return nil
+	}
+	key, _, cm, ok := l.crudByName(target, name)
+	if !ok || cm.Body == "" {
+		l.errorf(call.Ref.Pos(), "request-bodies", "%s is not a write a body binds to: body: names a Create or an Update of a data package (§request-bodies)", ref)
+		return nil
+	}
+	importPath := l.facts.module
+	if target != "." {
+		importPath += "/" + target
+	}
+	qr := &QueryRef{Qualifier: qual, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200,
+		Result: cm.Result, Changeset: &ChangesetBind{Type: cm.Body, Params: cm.Params, New: cm.New, Get: cm.Get, Allow: cm.Allow, Table: key}}
+	if len(call.Args) != len(cm.Key) {
+		l.errorf(call.Ref.Pos(), "request-bodies", "%s loads the row to update by %d key column(s), the body: gives %d argument(s) (§request-bodies)", ref, len(cm.Key), len(call.Args))
+		return nil
+	}
+	ok = true
+	for i, arg := range call.Args {
+		k := cm.Key[i]
+		qp := QueryParam{Name: k.GoName, GoType: k.GoType}
+		switch a := arg.(type) {
+		case *ast.Ident:
+			pp, inPath := byName[a.Name()]
+			switch {
+			case !inPath:
+				l.errorf(a.Pos(), "request-bodies", "the key %q of %s must be a path parameter of the route (§request-bodies)", a.Name(), ref)
+				ok = false
+			case pp.Wild:
+				l.errorf(a.Pos(), "request-bodies", "the key %q of %s cannot be the wildcard (§request-bodies)", a.Name(), ref)
+				ok = false
+			case pp.Type != tUnresolved && pp.Type.GoType() != k.GoType:
+				l.errorf(a.Pos(), "request-bodies", "path parameter %q is %s but %s takes %s (§request-bodies)", pp.Name, pp.Type.GoType(), ref, k.GoType)
+				ok = false
+			}
+			qp.Source, qp.Name = FromPath, a.Name()
+		case *ast.BasicLit:
+			qp.Source = FromLiteral
+			if a.Tok.Kind == token.STRING {
+				if k.GoType != "string" {
+					l.errorf(a.Pos(), "request-bodies", "key %d of %s is %s, not a string (§request-bodies)", i+1, ref, k.GoType)
+					ok = false
+				}
+				qp.Literal = strconv.Quote(a.Tok.Val)
+			} else if qp.Literal = numberLiteral(a.Tok.Val, k.GoType); qp.Literal == "" {
+				l.errorf(a.Pos(), "request-bodies", "key %d of %s is %s, which the number %s does not spell (§request-bodies)", i+1, ref, k.GoType, a.Tok.Val)
+				ok = false
+			}
+		case *ast.NegNumber:
+			qp.Source = FromLiteral
+			if qp.Literal = numberLiteral("-"+a.Num.Tok.Val, k.GoType); qp.Literal == "" {
+				l.errorf(a.Pos(), "request-bodies", "key %d of %s is %s, which the number -%s does not spell (§request-bodies)", i+1, ref, k.GoType, a.Num.Tok.Val)
+				ok = false
+			}
+		}
+		qr.Params = append(qr.Params, qp)
+	}
+	if !ok {
+		return nil
+	}
+	return qr
+}
+
+// narrow applies an only: setting to the body's allow list (spec
+// §request-bodies): every named column must be one the write casts.
+func (l *routeLowering) narrow(q *QueryRef, onlyS *ast.Setting) bool {
+	if onlyS == nil {
+		return true
+	}
+	list, ok := onlyS.Value.(*ast.IdentList)
+	if !ok {
+		l.errorf(onlyS.Pos(), "request-bodies", "only: takes a column list like (title, body) (§request-bodies)")
+		return false
+	}
+	ok = true
+	var allow []string
+	for i, id := range list.Names {
+		if list.Mods[i] != nil {
+			l.errorf(list.Mods[i].Pos(), "request-bodies", "only: entries are column names; %q does not belong after %q (§request-bodies)", list.Mods[i].Name(), id.Name())
+			ok = false
+			continue
+		}
+		h, found := l.columnHandle(q.Package, q.Changeset.Table, id.Name())
+		if !found || !contains(q.Changeset.Allow, h) {
+			l.errorf(id.Pos(), "request-bodies", "only: names %q, which %s does not cast; the columns it casts: %s (§request-bodies)", id.Name(), q.Ref(), strings.Join(q.Changeset.Allow, ", "))
+			ok = false
+			continue
+		}
+		if contains(allow, h) {
+			l.errorf(id.Pos(), "request-bodies", "only: names %q twice (§request-bodies)", id.Name())
+			ok = false
+			continue
+		}
+		allow = append(allow, h)
+	}
+	if !ok {
+		return false
+	}
+	q.Changeset = &ChangesetBind{Type: q.Changeset.Type, Params: q.Changeset.Params, New: q.Changeset.New, Get: q.Changeset.Get, Allow: allow, Table: q.Changeset.Table}
+	return true
+}
+
+func bodiesEqual(a, b *BodyInfo) bool {
+	if (a == nil) != (b == nil) {
+		return false
+	}
+	return a == nil || a.GoType() == b.GoType()
+}
+
+func signatureString(ps []Param, b *BodyInfo, ls []LoadInfo) string {
+	s := paramsString(ps)
+	if b != nil {
+		s += " [body: " + b.GoType() + "]"
+	}
+	return s + " " + loadsString(ls)
+}
+
+func contains(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }

@@ -24,21 +24,28 @@ type HomeController interface {
 	Ping(r volt.Request) volt.Response
 }
 
+type SessionController interface {
+	Login(r volt.Request, body LoginForm) volt.Response
+}
+
 type UsersController interface {
 	Index(r volt.Request) volt.Response
 	Create(r volt.Request) volt.Response
 	Show(r volt.Request, id int) volt.Response
 	Avatar(r volt.Request, id int) volt.Response
 	Profile(r volt.Request, id int, user db.User, picked []db.User, since []db.User) volt.Response
+	ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response
+	Signup(r volt.Request, body db.UserChangeset) volt.Response
 }
 
 type Controllers struct {
-	Admin  AdminController
-	Files  FilesController
-	Home   HomeController
-	Users  UsersController
-	DB     run.DB
-	Events *volt.Broker
+	Admin   AdminController
+	Files   FilesController
+	Home    HomeController
+	Session SessionController
+	Users   UsersController
+	DB      run.DB
+	Events  *volt.Broker
 }
 
 func NewRouter(c Controllers) http.Handler {
@@ -64,6 +71,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Home.Ping(r), c.Home.Ping(r)) {
 		voltOut = append(voltOut, "Home.Ping")
 	}
+	if !volt.Same(c.Session.Login(r, LoginForm{}), c.Session.Login(r, LoginForm{})) {
+		voltOut = append(voltOut, "Session.Login")
+	}
 	if !volt.Same(c.Users.Index(r), c.Users.Index(r)) {
 		voltOut = append(voltOut, "Users.Index")
 	}
@@ -78,6 +88,12 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	}
 	if !volt.Same(c.Users.Profile(r, 0, db.User{}, nil, nil), c.Users.Profile(r, 0, db.User{}, nil, nil)) {
 		voltOut = append(voltOut, "Users.Profile")
+	}
+	if !volt.Same(c.Users.ChangeEmail(r, 0, db.UserChangeset{}), c.Users.ChangeEmail(r, 0, db.UserChangeset{})) {
+		voltOut = append(voltOut, "Users.ChangeEmail")
+	}
+	if !volt.Same(c.Users.Signup(r, db.UserChangeset{}), c.Users.Signup(r, db.UserChangeset{})) {
+		voltOut = append(voltOut, "Users.Signup")
 	}
 	return voltOut
 }

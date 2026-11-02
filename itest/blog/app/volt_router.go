@@ -110,6 +110,29 @@ func register(mux *http.ServeMux, c Controllers) {
 		return c.Users.Card(r, voltid)
 	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
+	mux.Handle("PATCH /users/{id}/email", pipe0(volt.Handler("PATCH /users/{id}/email", func(r volt.Request) volt.Response {
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		var voltParams db.UserParams
+		if err := volt.Decode(r, &voltParams); err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.UserGet(voltid), func(voltRow db.User) volt.Response {
+			voltBody := voltRow.Changeset().Cast(voltParams, db.UserEmail).Validate()
+			return c.Users.ChangeEmail(r, voltid, voltBody)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
+
+	mux.Handle("POST /login", pipe0(volt.Handler("POST /login", func(r volt.Request) volt.Response {
+		var voltBody LoginForm
+		if err := volt.Decode(r, &voltBody); err != nil {
+			return volt.Fail(err)
+		}
+		return c.Session.Login(r, voltBody)
+	}, errHandlerErrors, voltPerform)))
+
 	mux.Handle("GET /files/{path...}", pipe0(volt.Handler("GET /files/{path...}", func(r volt.Request) volt.Response {
 		return c.Files.Serve(r, r.PathValue("path"))
 	}, errHandlerErrors, voltPerform, volt.Params("path"))))

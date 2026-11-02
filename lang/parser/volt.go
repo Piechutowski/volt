@@ -206,35 +206,42 @@ func (p *parser) load() (ld *ast.Load) {
 		}
 	}()
 	ld = &ast.Load{Name: p.ident("load name (§route-loads)")}
-	ld.Query = p.goRef("load query (§route-loads)")
-	p.expect(token.LPAREN, "load query call (§route-loads)")
+	ld.Call = p.queryCall(p.goRef("load query (§route-loads)"), "load (§route-loads)")
+	p.endOfLine("load (§route-loads)")
+	return ld
+}
+
+// queryCall parses the argument list of a query call after its reference
+// (spec §route-loads): a load's query, or a body: setting's.
+func (p *parser) queryCall(ref *ast.GoRef, ctx string) *ast.QueryCall {
+	call := &ast.QueryCall{Ref: ref}
+	p.expect(token.LPAREN, "query call in "+ctx)
 	for !p.at(token.RPAREN) {
-		ld.Args = append(ld.Args, p.loadArg())
+		call.Args = append(call.Args, p.loadArg(ctx))
 		if !p.at(token.COMMA) {
 			break
 		}
 		p.next()
 		if p.at(token.RPAREN) {
-			p.fail(p.cur(), "expected a load argument after the comma (§route-loads), found %s", p.cur())
+			p.fail(p.cur(), "expected an argument after the comma in %s, found %s", ctx, p.cur())
 		}
 	}
-	ld.Rparen = p.expect(token.RPAREN, "load query call (§route-loads)").End()
-	p.endOfLine("load (§route-loads)")
-	return ld
+	call.Rparen = p.expect(token.RPAREN, "query call in "+ctx).End()
+	return call
 }
 
-func (p *parser) loadArg() ast.Node {
+func (p *parser) loadArg(ctx string) ast.Node {
 	t := p.cur()
 	switch t.Kind {
 	case token.STRING, token.NUMBER:
 		return p.litOf(p.next())
 	case token.MINUS:
 		p.next()
-		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "load argument (§route-loads)"))}
+		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "argument in "+ctx))}
 	case token.IDENT:
-		return p.ident("load argument (§route-loads)")
+		return p.ident("argument in " + ctx)
 	}
-	p.fail(t, "expected a name or a literal as a load argument (§route-loads), found %s", t)
+	p.fail(t, "expected a name or a literal as an argument in %s, found %s", ctx, t)
 	return nil
 }
 

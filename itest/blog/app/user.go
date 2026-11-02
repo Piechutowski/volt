@@ -45,3 +45,10 @@ func TagExtra(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// LoginForm is the struct body of the login route (§request-bodies):
+// the shim decodes the request into it before the handler runs.
+type LoginForm struct {
+	Email    string
+	Password string
+}

@@ -26,6 +26,9 @@ Scope / [pipe: api, error_handler: Errors] {
 		picked db.UserPicked(ids)
 		since  db.UserSince(since)
 	}
+	patch /users/:id(int)/email Users.ChangeEmail [body: db.UserUpdate(id), only: (email)]
+	post  /signup                Users.Signup      [body: db.UserCreate]
+	post  /login                 Session.Login     [body: LoginForm]
 	any /ping                    Home.Ping
 
 	Scope /api [name: api] {

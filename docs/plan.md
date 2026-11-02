@@ -194,43 +194,6 @@ Deferred: the language first, then non-core features and tooling.
 
 ---
 
-## Step 8. Request bodies on controller routes
-
-Depends on: 7.
-
-```ebnf
-body setting = "body", ":", ( query ref, "(", [ arg, { ",", arg } ], ")" | name ) ;
-```
-
-Two forms under one setting, because they bind two different things:
-
-- `[body: db.SettingUpdate(1)]` names a write query. The shim does what
-  the query route does up to the write: decode the body by `Content-Type`,
-  load the row by the given key, cast with the standard allow list,
-  validate; then it hands the changeset to the handler instead of
-  writing. `[only: (a, b)]` narrows the allow list. `[body: db.MetricCreate]`
-  likewise for a create.
-- `[body: LoginForm]` names a struct type of the routes package, held by
-  the checker to exist; the body decodes into it with `volt.Decode`'s
-  rules (unknown field 400).
-
-The handler receives the changeset or the struct as its next parameter
-after the route parameters and before the loads. A `Save` handler then
-reads:
-
-```go
-func (Settings) Save(r volt.Request, cs db.SettingChangeset) volt.Response {
-	if !cs.Valid() {
-		return volt.Problem(422, "check the fields").WithDetails(cs.Errors())
-	}
-	return volt.Then(rt.Update(cs), func(db.Setting) volt.Response { return volt.NoContent() })
-}
-```
-
-Done when: conformance, goldens, itest for both forms, 400 and 422 paths.
-
----
-
 ## Step 9. Relation names and `join`
 
 Depends on: 4.
@@ -457,7 +420,6 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 
 | Step | Depends on | Lands |
 |---|---|---|
-| 8 bodies | 7 | |
 | 9 relations, join | 4 | |
 | 10 aggregates, group | 9 | |
 | 11 with | 10 | |

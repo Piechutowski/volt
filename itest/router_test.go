@@ -52,6 +52,21 @@ func (users) Profile(r volt.Request, id int, user db.User) volt.Response { retur
 func (users) Card(r volt.Request, id int) volt.Response {
 	return volt.Then(db.UserGet(id), func(u db.User) volt.Response { return volt.Render(u) })
 }
+func (users) ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response {
+	if !body.Valid() {
+		return volt.Reject(http.StatusUnprocessableEntity, "check the fields").WithDetails(body.Errors())
+	}
+	return volt.Then(db.UserUpdate(body), func(u db.User) volt.Response { return volt.Render(u) })
+}
+
+type session struct{}
+
+func (session) Login(r volt.Request, body app.LoginForm) volt.Response {
+	if body.Password != "open sesame" {
+		return volt.Reject(http.StatusUnauthorized, "wrong password")
+	}
+	return volt.Render(map[string]any{"email": body.Email})
+}
 
 type files struct{}
 
@@ -112,7 +127,7 @@ func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 	broker := &volt.Broker{Heartbeat: 20 * time.Millisecond}
 	return app.NewRouter(app.Controllers{
 		Home: home{}, Users: users{}, Files: files{}, Admin: admin{},
-		Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{},
+		Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{}, Session: session{},
 		DB:     dbh,
 		Events: broker,
 	}), broker
@@ -156,6 +171,8 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathAvatar":          {"GET", app.PathAvatar(7)},
 		"PathProfile":         {"GET", app.PathProfile(1)},
 		"PathCard":            {"GET", app.PathCard(1)},
+		"PathChangeEmail":     {"PATCH", app.PathChangeEmail(1)},
+		"PathLogin":           {"POST", app.PathLogin()},
 		"PathServe":           {"GET", app.PathServe("a/b c.txt")},
 		"PathOpsFail":         {"GET", app.PathOpsFail()},
 		"PathTag":             {"GET", app.PathTag("hello world")},
@@ -174,6 +191,7 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathEvents":          {"GET", app.PathEvents()},
 	}
 	queryRoutes := map[string]bool{"PathProfile": true, "PathCard": true}
+	bodyRoutes := map[string]bool{"PathChangeEmail": true, "PathLogin": true}
 	for _, r := range app.Table {
 		if r.Query != "" && r.Helper != "" {
 			queryRoutes[r.Helper] = true
@@ -206,6 +224,12 @@ func TestRoundTripTotality(t *testing.T) {
 			continue
 		}
 		rec, body := serve(t, h, b.method, b.url)
+		if bodyRoutes[helper] {
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("%s → %s without a body: status %d, want 400", helper, b.url, rec.Code)
+			}
+			continue
+		}
 		if helper == "PathTeapot" {
 			if rec.Code != http.StatusTeapot {
 				t.Errorf("%s: status %d", helper, rec.Code)
@@ -468,6 +492,12 @@ func TestTableMatchesServedReality(t *testing.T) {
 		if row.Action == "Profile" || row.Action == "Card" {
 			if rec.Code != 404 {
 				t.Errorf("%s %s: the profile of a sampled user = %d, want 404 through the lookup", method, url, rec.Code)
+			}
+			continue
+		}
+		if row.Action == "ChangeEmail" || row.Action == "Login" {
+			if rec.Code != 400 {
+				t.Errorf("%s %s: a body route without a body = %d, want 400 before anything loads", method, url, rec.Code)
 			}
 			continue
 		}

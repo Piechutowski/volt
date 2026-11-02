@@ -517,3 +517,54 @@ Scope / {
           (string
             (string_content))
           (boolean))))))
+
+==================
+volt: route with a body setting
+==================
+
+Scope / {
+	patch /settings/:id(int) Settings.Save [body: db.SettingUpdate(id), only: (unit)]
+	post  /login             Session.Login [body: LoginForm]
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (route
+      (verb)
+      (route_path
+        (path_segment)
+        (path_parameter
+          (parameter_name)
+          (type_name)))
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (query_call
+            (go_ref
+              (identifier)
+              (identifier))
+            (identifier)))
+        (setting
+          (setting_name
+            (identifier))
+          (ident_group
+            (identifier)))))
+    (route
+      (verb)
+      (route_path
+        (path_segment))
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (identifier))))))

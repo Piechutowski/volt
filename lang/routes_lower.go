@@ -30,6 +30,8 @@ type routeEnv interface {
 	selectByMethod(path, name string) (sel *SelectInfo, member *check.TableInfo, ok bool)
 	selectByName(path, name string) (si *SelectInfo, hint string)
 	queryHint(path, name string) string
+	columnHandle(path, tableKey, col string) (handle string, ok bool)
+	goType(name string) (underlying string, ok bool)
 }
 
 type lookupKind uint8
@@ -42,6 +44,8 @@ const (
 	lkSelectByMethod
 	lkSelectByName
 	lkQueryHint
+	lkColumnHandle
+	lkGoType
 )
 
 type routeLookup struct {
@@ -77,6 +81,12 @@ func (l routeLookup) holds(env routeEnv) bool {
 		return si == l.sel && hint == l.hint
 	case lkQueryHint:
 		return env.queryHint(l.path, l.name) == l.hint
+	case lkColumnHandle:
+		h, ok := env.columnHandle(l.path, l.key, l.name)
+		return h == l.hint && ok == l.ok
+	case lkGoType:
+		u, ok := env.goType(l.name)
+		return u == l.hint && ok == l.ok
 	}
 	return false
 }
@@ -387,17 +397,37 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		}
 	}
 	timeout := 0
+	var bodyS, onlyS *ast.Setting
 	if r.Settings != nil {
-		_, dupDiags := settingsRepeated(r.Settings, "name", "timeout")
+		_, dupDiags := settingsRepeated(r.Settings, "name", "timeout", "body", "only")
 		l.diags = append(l.diags, dupDiags...)
 		for _, s := range r.Settings.Settings {
 			switch s.Name {
 			case "name":
 			case "timeout":
 				timeout, _ = l.timeout(s)
+			case "body":
+				bodyS = s
+			case "only":
+				onlyS = s
 			default:
-				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a route (§settings-whitelists); valid: name, timeout", s.Name)
+				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a route (§settings-whitelists); valid: name, timeout, body, only", s.Name)
 			}
+		}
+	}
+	var body *BodyInfo
+	if bodyS != nil || onlyS != nil {
+		if query != nil || events {
+			s := bodyS
+			if s == nil {
+				s = onlyS
+			}
+			l.errorf(s.Pos(), "request-bodies", "%s: belongs to a controller route; %s is a %s route, whose handler is generated (§request-bodies)", s.Name, r.Handler.String(), routeKind(query, events))
+			return nil
+		}
+		var ok bool
+		if body, ok = l.body(r, params, bodyS, onlyS); !ok {
+			return nil
 		}
 	}
 	var loads []LoadInfo
@@ -438,6 +468,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		ClientName:   client,
 		Pipes:        inh.pipes,
 		ErrorHandler: inh.errHandler,
+		Body:         body,
 		Loads:        loads,
 		Timeout:      timeout,
 		Pos:          r.Pos(),
@@ -566,14 +597,14 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		qr.Many = true
 	}
 	if !found {
-		if _, _, cm, ok := l.crudByName(target, name); ok {
+		if key, _, cm, ok := l.crudByName(target, name); ok {
 			found, op = true, cm.Op
 			for _, k := range cm.Key {
 				sig = append(sig, sigParam{name: k.GoName, goType: k.GoType, key: cm.Op == "update"})
 			}
 			if cm.Body != "" {
 				sig = append(sig, sigParam{name: "cs", goType: qual + "." + cm.Body, body: true})
-				qr.Changeset = &ChangesetBind{Params: cm.Params, New: cm.New, Get: cm.Get, Allow: cm.Allow}
+				qr.Changeset = &ChangesetBind{Type: cm.Body, Params: cm.Params, New: cm.New, Get: cm.Get, Allow: cm.Allow, Table: key}
 			}
 			qr.Result, qr.Many = cm.Result, cm.Many
 			switch cm.Op {
@@ -760,7 +791,7 @@ func paramsOf(segs []*ast.Segment, prefix int) ([]Param, []diag.Diagnostic, bool
 			continue
 		}
 		if naming.RouteSignatureName(name) {
-			fail(i, seg.Pos(), "path parameter %q collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx", name)
+			fail(i, seg.Pos(), "path parameter %q collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body", name)
 			continue
 		}
 		pt := TString
@@ -1115,4 +1146,16 @@ func (l *routeLowering) pkParamType(ti *check.TableInfo, pos token.Position) (Pa
 		l.errorf(pos, "resources", "primary-key type %q of table %q cannot be a route parameter (§table-resolution); routable: int, string", pk.Type.String(), ti.Key)
 		return "", false
 	}
+}
+
+func (l *routeLowering) columnHandle(path, tableKey, col string) (string, bool) {
+	h, ok := l.env.columnHandle(path, tableKey, col)
+	l.note(routeLookup{kind: lkColumnHandle, path: path, key: tableKey, name: col, hint: h, ok: ok})
+	return h, ok
+}
+
+func (l *routeLowering) goType(name string) (string, bool) {
+	u, ok := l.env.goType(name)
+	l.note(routeLookup{kind: lkGoType, name: name, hint: u, ok: ok})
+	return u, ok
 }

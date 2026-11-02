@@ -20,67 +20,75 @@ func New(base string) *Client {
 }
 
 func (c *Client) Root(ctx context.Context) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/"))
+	return c.Raw(ctx, "GET", volt.URL("/"), nil)
 }
 
 func (c *Client) Teapot(ctx context.Context) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/teapot"))
+	return c.Raw(ctx, "GET", volt.URL("/teapot"), nil)
 }
 
 func (c *Client) Ping(ctx context.Context) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/ping"))
+	return c.Raw(ctx, "GET", volt.URL("/ping"), nil)
 }
 
 func (c *Client) AdminStats(ctx context.Context) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/admin/stats"))
+	return c.Raw(ctx, "GET", volt.URL("/admin/stats"), nil)
 }
 
 func (c *Client) OpsFail(ctx context.Context) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/ops/fail"))
+	return c.Raw(ctx, "GET", volt.URL("/ops/fail"), nil)
 }
 
 func (c *Client) Users(ctx context.Context) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/users"))
+	return c.Raw(ctx, "GET", volt.URL("/users"), nil)
 }
 
 func (c *Client) NewUser(ctx context.Context) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/users/new"))
+	return c.Raw(ctx, "GET", volt.URL("/users/new"), nil)
 }
 
 func (c *Client) User(ctx context.Context, id int) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)))
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)), nil)
 }
 
 func (c *Client) EditUser(ctx context.Context, id int) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/edit"))
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/edit"), nil)
 }
 
 func (c *Client) Avatar(ctx context.Context, id int) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/avatar"))
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/avatar"), nil)
 }
 
 func (c *Client) Profile(ctx context.Context, id int) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/profile"))
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/profile"), nil)
 }
 
 func (c *Client) Card(ctx context.Context, id int) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/card"))
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/card"), nil)
+}
+
+func (c *Client) ChangeEmail(ctx context.Context, id int, cs db.UserChangeset) (*http.Response, error) {
+	return c.Raw(ctx, "PATCH", volt.URL("/users/"+volt.SegInt(id)+"/email"), cs.Params())
+}
+
+func (c *Client) Login(ctx context.Context, body any) (*http.Response, error) {
+	return c.Raw(ctx, "POST", volt.URL("/login"), body)
 }
 
 func (c *Client) Serve(ctx context.Context, path string) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/files/"+volt.SegWild(path)))
+	return c.Raw(ctx, "GET", volt.URL("/files/"+volt.SegWild(path)), nil)
 }
 
 func (c *Client) Tag(ctx context.Context, name string) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/tags/"+volt.Seg(name)))
+	return c.Raw(ctx, "GET", volt.URL("/tags/"+volt.Seg(name)), nil)
 }
 
 func (c *Client) Page(ctx context.Context, num int) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/pages/"+volt.SegInt(num)))
+	return c.Raw(ctx, "GET", volt.URL("/pages/"+volt.SegInt(num)), nil)
 }
 
 func (c *Client) Archive(ctx context.Context, stamp int) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/archive/"+volt.SegInt(stamp)))
+	return c.Raw(ctx, "GET", volt.URL("/archive/"+volt.SegInt(stamp)), nil)
 }
 
 func (c *Client) APIUserList(ctx context.Context) ([]db.User, error) {

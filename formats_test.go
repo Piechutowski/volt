@@ -248,7 +248,7 @@ func TestClientDoAndErrors(t *testing.T) {
 		if err := c.Do(context.Background(), "GET", "/tea", nil, nil); !errors.As(err, &he) || he.StatusCode() != 418 || !strings.Contains(he.Error(), "teapot") {
 			t.Fatalf("%v: 418 = %v", f, err)
 		}
-		resp, err := c.Raw(context.Background(), "GET", "/rows")
+		resp, err := c.Raw(context.Background(), "GET", "/rows", nil)
 		if err != nil || resp.StatusCode != 200 {
 			t.Fatalf("%v: raw = %v %v", f, resp, err)
 		}

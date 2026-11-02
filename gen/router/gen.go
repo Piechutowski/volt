@@ -180,6 +180,34 @@ func (g *generator) dataPackages() []*lang.QueryRef {
 	return out
 }
 
+// clientPackages lists the data packages the client's methods name: the
+// query routes' and the changeset bodies of controller routes
+// (§request-bodies), one per qualifier, in order.
+func (g *generator) clientPackages() []*lang.QueryRef {
+	seen := map[string]*lang.QueryRef{}
+	for _, r := range g.pkg.Routes {
+		if r.ClientName == "" {
+			continue
+		}
+		if r.Query != nil && seen[r.Query.Qualifier] == nil {
+			seen[r.Query.Qualifier] = r.Query
+		}
+		if b := r.Body; b != nil && b.Kind == lang.BodyChangeset && seen[b.Query.Qualifier] == nil {
+			seen[b.Query.Qualifier] = b.Query
+		}
+	}
+	quals := make([]string, 0, len(seen))
+	for q := range seen {
+		quals = append(quals, q)
+	}
+	sort.Strings(quals)
+	out := make([]*lang.QueryRef, len(quals))
+	for i, q := range quals {
+		out[i] = seen[q]
+	}
+	return out
+}
+
 func (g *generator) clientOmitted() bool {
 	if g.pkg.Name != "main" {
 		return false
@@ -234,7 +262,7 @@ func (g *generator) handlersEmit() error {
 		ci := g.pkg.Controllers[name]
 		g.pf("type %sController interface {\n", name)
 		for _, a := range ci.Actions {
-			g.pf("\t%s(r volt.Request%s%s) volt.Response\n", a.Name, sigParams(a.Params), loadParams(a.Loads))
+			g.pf("\t%s(r volt.Request%s%s%s) volt.Response\n", a.Name, sigParams(a.Params), bodyParam(a.Body), loadParams(a.Loads))
 		}
 		g.pf("}\n\n")
 	}
@@ -261,7 +289,7 @@ func (g *generator) handlersEmit() error {
 	g.pf("\tvar voltOut []string\n")
 	for _, name := range g.controllerNames() {
 		for _, a := range g.pkg.Controllers[name].Actions {
-			call := fmt.Sprintf("c.%s.%s(r%s%s)", name, a.Name, zeroArgs(a.Params), zeroLoads(a.Loads))
+			call := fmt.Sprintf("c.%s.%s(r%s%s%s)", name, a.Name, zeroArgs(a.Params), zeroBody(a.Body), zeroLoads(a.Loads))
 			g.pf("\tif !volt.Same(%s, %s) {\n\t\tvoltOut = append(voltOut, %q)\n\t}\n", call, call, name+"."+a.Name)
 		}
 	}
@@ -461,15 +489,20 @@ func (g *generator) routeEmit(r *lang.RouteInfo) {
 				call = append(call, parsed[p.Name])
 			}
 			handler := fmt.Sprintf("c.%s.%s(r%s", r.Controller, r.Action, prefixEach(call, ", "))
+			if r.Body != nil {
+				handler += ", voltBody"
+			}
 			for _, ld := range r.Loads {
 				handler += ", " + ld.Name
 			}
 			handler += ")"
+			indent, closer := g.bodyEmit(r, parsed)
 			if len(r.Loads) > 0 {
-				g.loadsEmit(r, parsed, handler)
+				g.loadsEmit(r, parsed, handler, indent)
 			} else {
-				g.pf("\t\treturn %s\n", handler)
+				g.pf("%sreturn %s\n", indent, handler)
 			}
+			g.pf("%s", closer)
 		}
 		g.pf("\t}, %s, voltPerform", eh)
 		if len(r.Params) > 0 {
@@ -627,7 +660,7 @@ func (g *generator) clientEmit() error {
 		imports = append(imports, "time")
 	}
 	imports = append(imports, "", voltImport)
-	for _, q := range g.dataPackages() {
+	for _, q := range g.clientPackages() {
 		if !g.opts.ClientBeside {
 			imports = append(imports, dataImport(q))
 		}
@@ -657,8 +690,18 @@ func (g *generator) clientEmit() error {
 			continue
 		}
 		if r.Query == nil {
-			g.pf("func (c *Client) %s(ctx context.Context%s) (*http.Response, error) {\n", r.ClientName, sigParams(r.Params))
-			g.pf("\treturn c.Raw(ctx, %q, volt.URL(%s))\n}\n\n", method, pathExpr(r))
+			sig, in := sigParams(r.Params), "nil"
+			if b := r.Body; b != nil && b.Kind == lang.BodyChangeset {
+				goType := b.GoType()
+				if g.opts.ClientBeside {
+					goType = strings.TrimPrefix(goType, b.Query.Qualifier+".")
+				}
+				sig, in = sig+", cs "+goType, "cs.Params()"
+			} else if b != nil {
+				sig, in = sig+", body any", "body"
+			}
+			g.pf("func (c *Client) %s(ctx context.Context%s) (*http.Response, error) {\n", r.ClientName, sig)
+			g.pf("\treturn c.Raw(ctx, %q, volt.URL(%s), %s)\n}\n\n", method, pathExpr(r), in)
 			continue
 		}
 		q := r.Query
@@ -741,9 +784,14 @@ func (g *generator) queryResult(q *lang.QueryRef) string {
 	return result
 }
 
+// loadPackages lists the data packages the loads and the changeset
+// bodies of controller routes bind, one per qualifier, in order.
 func (g *generator) loadPackages() []*lang.QueryRef {
 	seen := map[string]*lang.QueryRef{}
 	for _, r := range g.pkg.Routes {
+		if b := r.Body; b != nil && b.Kind == lang.BodyChangeset && !b.Query.Local && seen[b.Query.Qualifier] == nil {
+			seen[b.Query.Qualifier] = b.Query
+		}
 		for _, ld := range r.Loads {
 			if !ld.Query.Local && seen[ld.Query.Qualifier] == nil {
 				seen[ld.Query.Qualifier] = ld.Query
@@ -782,7 +830,7 @@ func zeroLoads(ls []lang.LoadInfo) string {
 	return b.String()
 }
 
-func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call string) {
+func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call, indent string) {
 	argsOf := make([][]string, len(r.Loads))
 	for i, ld := range r.Loads {
 		argsOf[i] = make([]string, len(ld.Query.Params))
@@ -794,16 +842,15 @@ func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call 
 				argsOf[i][j] = p.Literal
 			case lang.FromList:
 				v := "volt_" + ld.Name + "_" + p.Name
-				g.pf("\t\t%s, err := volt.QueryParams[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", v, strings.TrimPrefix(p.GoType, "[]"), p.Name)
+				g.pf("%s%s, err := volt.QueryParams[%s](r, %q)\n%sif err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, v, strings.TrimPrefix(p.GoType, "[]"), p.Name, indent, indent, indent)
 				argsOf[i][j] = v
 			default:
 				v := "volt_" + ld.Name + "_" + p.Name
-				g.pf("\t\t%s, err := volt.QueryParam[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", v, p.GoType, p.Name)
+				g.pf("%s%s, err := volt.QueryParam[%s](r, %q)\n%sif err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, v, p.GoType, p.Name, indent, indent, indent)
 				argsOf[i][j] = v
 			}
 		}
 	}
-	indent := "\t\t"
 	var closers []string
 	for i, ld := range r.Loads {
 		q := ld.Query
@@ -820,4 +867,65 @@ func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call 
 	for i := len(closers) - 1; i >= 0; i-- {
 		g.pf("%s", closers[i])
 	}
+}
+
+func bodyParam(b *lang.BodyInfo) string {
+	if b == nil {
+		return ""
+	}
+	return ", body " + b.GoType()
+}
+
+func zeroBody(b *lang.BodyInfo) string {
+	if b == nil {
+		return ""
+	}
+	return ", " + b.GoType() + "{}"
+}
+
+// bodyEmit writes the shim's binding of a controller route's body (spec
+// §request-bodies) and returns the indent the rest of the shim continues
+// at and the text that closes what it opened: a struct body decodes in
+// place; a changeset body decodes the write's Params, loads the row of an
+// update as a continuation, casts and validates.
+func (g *generator) bodyEmit(r *lang.RouteInfo, parsed map[string]string) (indent, closer string) {
+	indent = "\t\t"
+	b := r.Body
+	if b == nil {
+		return indent, ""
+	}
+	if b.Kind == lang.BodyStruct {
+		g.pf("%svar voltBody %s\n%sif err := volt.Decode(r, &voltBody); err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, b.Struct, indent, indent, indent)
+		return indent, ""
+	}
+	q := b.Query
+	cb := q.Changeset
+	name := func(n string) string {
+		if q.Local {
+			return n
+		}
+		return q.Qualifier + "." + n
+	}
+	g.pf("%svar voltParams %s\n%sif err := volt.Decode(r, &voltParams); err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, name(cb.Params), indent, indent, indent)
+	start := name(cb.New) + "()"
+	if cb.Get != "" {
+		args := make([]string, len(q.Params))
+		for i, p := range q.Params {
+			if p.Source == lang.FromLiteral {
+				args[i] = p.Literal
+			} else {
+				args[i] = parsed[p.Name]
+			}
+		}
+		g.pf("%sreturn volt.Then(%s(%s), func(voltRow %s) volt.Response {\n", indent, name(cb.Get), strings.Join(args, ", "), name(q.Result))
+		closer = indent + "})\n"
+		indent += "\t"
+		start = "voltRow.Changeset()"
+	}
+	allow := make([]string, len(cb.Allow))
+	for i, h := range cb.Allow {
+		allow[i] = name(h)
+	}
+	g.pf("%svoltBody := %s.Cast(voltParams%s).Validate()\n", indent, start, prefixEach(allow, ", "))
+	return indent, closer
 }

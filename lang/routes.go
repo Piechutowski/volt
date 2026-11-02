@@ -65,6 +65,9 @@ type RouteInfo struct {
 	// Timeout the seconds of its timeout: setting, 0 when none.
 	Loads   []LoadInfo
 	Timeout int
+	// Body is how a controller route binds its request body, nil when it
+	// takes none (§request-bodies).
+	Body *BodyInfo
 
 	Pos           token.Position
 	FromResources bool
@@ -124,10 +127,12 @@ func (ld LoadInfo) GoType() string {
 // is the FromPath parameters that precede the body in Params; every
 // key column of an update is one. The names are unqualified.
 type ChangesetBind struct {
+	Type   string   // changeset type, e.g. "UserChangeset"
 	Params string   // write body type, e.g. "UserParams"
 	New    string   // constructor of a create, e.g. "UserNew"; "" for an update
 	Get    string   // row loader of an update, e.g. "UserGet"; "" for a create
 	Allow  []string // column handles the cast allows, e.g. "UserEmail"
+	Table  string   // the table's key in its package, which only: of a body reads (§request-bodies)
 }
 
 // QueryRef binds a route to a generated query method of a data package
@@ -180,7 +185,8 @@ func (c *ControllerInfo) Action(name string) *ActionInfo {
 type ActionInfo struct {
 	Name   string
 	Params []Param
-	Loads  []LoadInfo // the loaded values the action receives after its parameters (§route-loads)
+	Body   *BodyInfo  // the body the action receives after its parameters, nil when none (§request-bodies)
+	Loads  []LoadInfo // the loaded values the action receives after the body (§route-loads)
 	Routes []*RouteInfo
 }
 

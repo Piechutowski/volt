@@ -18,7 +18,7 @@ app/i07_dup_route_shape.volt:6:2: error: spec/scopes-and-routes: route GET /user
 app/i08_helper_collision.volt:6:2: error: spec/scopes-and-routes: reverse-URL helper or client method "Show" already produced by the route at app/i08_helper_collision.volt:5:2 (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name
 
 ## i09_signature_conflict.volt
-app/i09_signature_conflict.volt:6:2: error: spec/scopes-and-routes: X.Show is reached by routes with different signatures (§handler-references, §route-loads): (id string) {} vs (id int) {} (first at app/i09_signature_conflict.volt:5:2)
+app/i09_signature_conflict.volt:6:2: error: spec/scopes-and-routes: X.Show is reached by routes with different signatures (§handler-references, §request-bodies, §route-loads): (id string) {} vs (id int) {} (first at app/i09_signature_conflict.volt:5:2)
 
 ## i100_query_body_verb
 app/routes.volt:10:2: error: spec/query-routes: db.UserCreate is routed with post, not get: the generated method a query route binds fixes its verb (§query-routes)
@@ -219,7 +219,7 @@ db/i190_literal_int_overflow.volt:10:40: error: spec/selects-over-groups: litera
 db/i191_literal_float_infinite.volt:10:41: error: spec/selects-over-groups: literal 1e400 does not fit float64, the storage type of column "score" (§predicates)
 
 ## i199_reserved_param_cs
-app/routes.volt:11:15: error: spec/scopes-and-routes: path parameter "cs" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx
+app/routes.volt:11:15: error: spec/scopes-and-routes: path parameter "cs" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body
 
 ## i19_only_and_except.volt
 app/i19_only_and_except.volt:9:34: error: spec/resources: only: and except: cannot be combined (§settings)
@@ -314,14 +314,14 @@ app/routes.volt:12:16: error: spec/scopes-and-routes: parameter "id" of db.Autho
 app/routes.volt:13:21: error: spec/query-routes: db.AuthorUpdate loads the row to update by "id", which must be a path parameter of the route (§query-routes)
 app/routes.volt:15:3: error: spec/scopes-and-routes: route GET /api/ranked conflicts with the route at app/routes.volt:14:3: identical method and path shape (§route-conflicts)
 app/routes.volt:16:3: error: spec/scopes-and-routes: reverse-URL helper or client method "AuthorRanked" already produced by the route at app/routes.volt:14:3 (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name
-app/routes.volt:17:44: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name, timeout
+app/routes.volt:17:44: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name, timeout, body, only
 app/routes.volt:19:17: error: spec/scopes-and-routes: path parameter "zzz" is not a parameter of db.AuthorShown (§query-routes)
 app/routes.volt:20:29: error: spec/datasets: only: "posts" is not a member of select "ranked"'s target (§dataset-settings)
 app/routes.volt:20:37: error: spec/settings-whitelists: setting "colour" is not valid on a dataset (§settings-whitelists); valid: strip, only, except
 app/routes.volt:21:19: error: spec/scopes-and-routes: no generated query db.AuthorMissing in package "db" — a query route names a select function or a default CRUD function (Get, List, Create, Update, Delete) (§query-routes)
 app/routes.volt:22:14: error: spec/datasets: no select "missing" in package "db" (§dataset-declaration)
 app/routes.volt:23:14: error: spec/scopes-and-routes: path parameter "nope" is not a parameter of db.AuthorRanked (§query-routes)
-app/routes.volt:24:39: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name, timeout
+app/routes.volt:24:39: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name, timeout, body, only
 app/routes.volt:25:3: error: spec/scopes-and-routes: route GET /api/authors/:id(int) conflicts with the route at app/routes.volt:24:3: identical method and path shape (§route-conflicts)
 app/routes.volt:29:34: error: spec/settings-whitelists: setting "colour" is not valid on resources (§settings-whitelists); valid: api, only, except, param, singular, default
 app/routes.volt:29:67: error: spec/resources: unknown action "bogus" (§the-action-table); valid: index, new, create, show, edit, update, delete
@@ -355,7 +355,7 @@ db/i235_migration_key_null.volt:16:17: error: spec/columns: column "id" carries 
 db/i235_migration_key_null.volt:20:25: error: spec/columns: column "tag" carries pk and null: a key column is never NULL (§columns)
 
 ## i23_route_setting.volt
-app/i23_route_setting.volt:5:14: error: spec/settings-whitelists: setting "pipe" is not valid on a route (§settings-whitelists); valid: name, timeout
+app/i23_route_setting.volt:5:14: error: spec/settings-whitelists: setting "pipe" is not valid on a route (§settings-whitelists); valid: name, timeout, body, only
 
 ## i243_group_takes_table_name.volt
 db/i243_group_takes_table_name.volt:13:7: error: spec/groups: group "users" takes the name of a table: tables and groups share one namespace (§groups)
@@ -541,7 +541,7 @@ app/i333_event_route_put.volt:6:2: error: spec/routes: put is not a route verb: 
 
 ## i334_scope_prefix_once
 app/routes.volt:9:18: error: spec/scopes-and-routes: unknown parameter type "uuid" (§route-paths); valid: int
-app/routes.volt:15:10: error: spec/scopes-and-routes: path parameter "w" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx
+app/routes.volt:15:10: error: spec/scopes-and-routes: path parameter "w" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body
 app/routes.volt:17:13: error: spec/scopes-and-routes: duplicate path parameter "x" (§route-paths)
 app/routes.volt:22:9: error: spec/scopes-and-routes: duplicate path parameter "n" (§route-paths)
 
@@ -583,10 +583,10 @@ app/schema.volt:5:6: error: spec/types: Type Client takes the Go name of the gen
 app/schema.volt:6:6: error: spec/types: Type NewClient takes the Go name of the generated client constructor, which gen -o writes beside the models; a declared type is named apart from the names generated code declares (§types)
 
 ## i353_reserved_param_ctx.volt
-app/i353_reserved_param_ctx.volt:6:9: error: spec/scopes-and-routes: path parameter "ctx" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx
+app/i353_reserved_param_ctx.volt:6:9: error: spec/scopes-and-routes: path parameter "ctx" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body
 
 ## i354_reserved_param_c.volt
-app/i354_reserved_param_c.volt:6:9: error: spec/scopes-and-routes: path parameter "c" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx
+app/i354_reserved_param_c.volt:6:9: error: spec/scopes-and-routes: path parameter "c" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body
 
 ## i355_client_method_runtime_name.volt
 app/i355_client_method_runtime_name.volt:6:2: error: spec/scopes-and-routes: client method "Raw" would take the name of the embedded volt.Client's method Raw (§generated-client); rename the route with [name:] or a scope name
@@ -602,7 +602,7 @@ app/i357_select_takes_other_table_list.volt:14:8: error: spec/selects-over-group
 app/i358_select_pair_across_tables.volt:15:8: error: spec/selects-over-groups: select "rows" collides with select "tag_rows": both generate UserTagRows (§selects-over-groups)
 
 ## i35_reserved_param.volt
-app/i35_reserved_param.volt:5:9: error: spec/scopes-and-routes: path parameter "volt" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx
+app/i35_reserved_param.volt:5:9: error: spec/scopes-and-routes: path parameter "volt" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body
 
 ## i360_time_column_string_literal.volt
 app/i360_time_column_string_literal.volt:10:36: error: spec/selects-over-groups: column "at" (time.Time) takes no literal: there is no date/time literal and a string is text; compare it with a parameter (§predicates)
@@ -623,7 +623,7 @@ app/i366_param_named_like_select_local.volt:13:45: error: spec/selects-over-grou
 app/i369_compare_columns_go_type.volt:11:41: error: spec/selects-over-groups: cannot compare column "hits" (int) with column "score" (float64) (§predicates)
 
 ## i36_reserved_param_w.volt
-app/i36_reserved_param_w.volt:5:9: error: spec/scopes-and-routes: path parameter "w" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx
+app/i36_reserved_param_w.volt:5:9: error: spec/scopes-and-routes: path parameter "w" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body
 
 ## i370_comparison_without_column.volt
 app/i370_comparison_without_column.volt:10:8: error: spec/selects-over-groups: select name "Params" collides with the generated CRUD surface (§selects-over-groups)
@@ -655,7 +655,7 @@ app/routes.volt:16:28: error: spec/route-loads: list parameter "ids" of db.Metri
 
 ## i378_load_name_taken
 app/routes.volt:13:3: error: spec/route-loads: load "id" takes the name of a path parameter of the route (§route-loads)
-app/routes.volt:14:3: error: spec/route-loads: load "r" is not a name a handler parameter can take: a lower-case Go identifier that is not r (§route-loads)
+app/routes.volt:14:3: error: spec/route-loads: load "r" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved (§route-loads, §route-paths)
 app/routes.volt:16:3: error: spec/route-loads: load "metric" is declared twice (first at app/routes.volt:15:3) (§route-loads)
 
 ## i379_timeout_not_seconds
@@ -665,8 +665,47 @@ app/routes.volt:7:28: error: spec/route-loads: timeout: takes a positive integer
 ## i37_ambiguous_overlap.volt
 app/i37_ambiguous_overlap.volt:8:2: error: spec/scopes-and-routes: route GET /:y/b is ambiguous with the route at app/i37_ambiguous_overlap.volt:7:2 (GET /a/:x): both match some requests and neither is more specific (§route-conflicts)
 
+## i380_body_on_query_route
+app/routes.volt:10:33: error: spec/request-bodies: body: belongs to a controller route; db.MetricCreate is a query route, whose handler is generated (§request-bodies)
+
+## i381_body_names_read
+app/routes.volt:10:38: error: spec/request-bodies: db.MetricGet is not a write a body binds to: body: names a Create or an Update of a data package (§request-bodies)
+
+## i382_body_key_count
+app/routes.volt:10:39: error: spec/request-bodies: db.SettingUpdate loads the row to update by 1 key column(s), the body: gives 0 argument(s) (§request-bodies)
+
+## i383_body_key_not_path_param
+app/routes.volt:10:56: error: spec/request-bodies: the key "id" of db.SettingUpdate must be a path parameter of the route (§request-bodies)
+
+## i384_body_key_type
+app/routes.volt:10:60: error: spec/request-bodies: path parameter "id" is string but db.SettingUpdate takes int (§request-bodies)
+
+## i385_only_without_body
+app/routes.volt:6:42: error: spec/request-bodies: only: narrows the columns a body: changeset casts; the route has no body (§request-bodies)
+
+## i386_only_unknown_column
+app/routes.volt:10:77: error: spec/request-bodies: only: names "colour", which db.SettingUpdate does not cast; the columns it casts: SettingRefresh, SettingNote (§request-bodies)
+
+## i387_only_on_struct_body
+app/routes.volt:6:46: error: spec/request-bodies: only: narrows the columns a body: changeset casts; LoginForm is a struct of this package (§request-bodies)
+
+## i388_body_struct_missing
+app/routes.volt:6:37: error: spec/request-bodies: no type Signup in package app's Go files; body: names a write query of a data package or a struct type declared beside the routes (§request-bodies)
+
+## i389_body_not_struct
+app/routes.volt:6:35: error: spec/request-bodies: Clock is int, not a struct type; a body decodes into a struct (§request-bodies)
+
 ## i38_trailing_slash.volt
 app/i38_trailing_slash.volt:5:12: error: syntax: '/' must be followed by a path segment; routes match exactly, without a trailing slash (§route-paths)
+
+## i390_body_signature_conflict
+app/routes.volt:7:2: error: spec/scopes-and-routes: Session.Login is reached by routes with different signatures (§handler-references, §request-bodies, §route-loads): () {} vs () [body: LoginForm] {} (first at app/routes.volt:6:2)
+
+## i391_load_named_body
+app/routes.volt:12:3: error: spec/route-loads: load "body" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved (§route-loads, §route-paths)
+
+## i392_param_named_body
+app/routes.volt:11:15: error: spec/scopes-and-routes: path parameter "body" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body
 
 ## i39_qualifier_conflict
 app/r.volt:8:2: error: spec/imports: import qualifier "db" already used for package "db" (§imports); alias one of them

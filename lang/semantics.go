@@ -112,6 +112,7 @@ type checker struct {
 	conflicts *routeIndex
 
 	gofuncs *goFuncsCache
+	goTypes map[string]GoType // the routes package's Go types, scanned before its routes lower (§request-bodies)
 
 	memos map[string]*declMemo
 	memo  *declMemo
@@ -362,6 +363,9 @@ func (c *checker) routing(pkg *Package) {
 	seenHelper := map[string]*RouteInfo{}
 	for _, d := range pkg.merged.Decls {
 		if sc, ok := d.(*ast.Scope); ok {
+			if c.goTypes == nil {
+				c.goTypes = c.goFuncs(pkg).types
+			}
 			c.scopeWalk(sc, inherited{}, facts, memo, seenShape, seenHelper)
 		}
 	}
@@ -746,14 +750,14 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 		c.pkg.Controllers[r.Controller] = ci
 	}
 	if a := ci.Action(r.Action); a != nil {
-		if !paramsEqual(a.Params, r.Params) || !loadsEqual(a.Loads, r.Loads) {
-			c.errorf(r.Pos, "scopes-and-routes", "%s.%s is reached by routes with different signatures (§handler-references, §route-loads): %s %s vs %s %s (first at %s)",
-				r.Controller, r.Action, paramsString(r.Params), loadsString(r.Loads), paramsString(a.Params), loadsString(a.Loads), a.Routes[0].Pos)
+		if !paramsEqual(a.Params, r.Params) || !bodiesEqual(a.Body, r.Body) || !loadsEqual(a.Loads, r.Loads) {
+			c.errorf(r.Pos, "scopes-and-routes", "%s.%s is reached by routes with different signatures (§handler-references, §request-bodies, §route-loads): %s vs %s (first at %s)",
+				r.Controller, r.Action, signatureString(r.Params, r.Body, r.Loads), signatureString(a.Params, a.Body, a.Loads), a.Routes[0].Pos)
 			return
 		}
 		a.Routes = append(a.Routes, &r)
 	} else {
-		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Params: r.Params, Loads: r.Loads, Routes: []*RouteInfo{&r}})
+		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Params: r.Params, Body: r.Body, Loads: r.Loads, Routes: []*RouteInfo{&r}})
 	}
 	c.routeAccept(&r)
 }
@@ -1079,4 +1083,28 @@ func (r *RouteInfo) HandlerRef() string {
 		return r.Query.Ref()
 	}
 	return r.Controller + "." + r.Action
+}
+
+func (o routeOracle) columnHandle(path, tableKey, col string) (string, bool) {
+	pkg := o.c.pr.Packages[path]
+	if pkg == nil || pkg.plan == nil {
+		return "", false
+	}
+	t, err := pkg.plan.Table(tableKey)
+	if err != nil {
+		return "", false
+	}
+	f := t.Field(col)
+	if f == nil {
+		return "", false
+	}
+	return t.Handle(f), true
+}
+
+func (o routeOracle) goType(name string) (string, bool) {
+	gt, ok := o.c.goTypes[name]
+	if !ok || gt.Generic {
+		return "", false
+	}
+	return gt.Underlying, true
 }

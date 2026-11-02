@@ -856,3 +856,40 @@ func TestRouteLoads(t *testing.T) {
 		t.Errorf("action = %+v; want Show with the three loads in order", action)
 	}
 }
+
+func TestRequestBodies(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod":         modFile,
+		"db/schema.volt": "package db\n\nTable metrics {\n\tid   int [pk, increment]\n\tunit string\n\tnote string\n}\n",
+		"app/forms.go":   "package app\n\ntype LoginForm struct {\n\tEmail string\n}\n",
+		"app/r.volt": "package app\n\nimport (\n\tdb\n)\n\nScope / {\n" +
+			"\tpatch /metrics/:id(int) Metrics.Save [body: db.MetricUpdate(id), only: (unit)]\n" +
+			"\tpost  /metrics          Metrics.Create [body: db.MetricCreate]\n" +
+			"\tpost  /login            Session.Login [body: LoginForm]\n}\n",
+	})
+	wantClean(t, diags)
+	app := pr.Packages["app"]
+	if len(app.Routes) != 3 {
+		t.Fatalf("routes = %d; want 3", len(app.Routes))
+	}
+	save, create, login := app.Routes[0].Body, app.Routes[1].Body, app.Routes[2].Body
+	if save == nil || save.Kind != BodyChangeset || save.GoType() != "db.MetricChangeset" || save.Query.Changeset.Get != "MetricGet" ||
+		len(save.Query.Params) != 1 || save.Query.Params[0].Source != FromPath || save.Query.Params[0].Name != "id" {
+		t.Errorf("save body = %+v %+v", save, save.Query)
+	}
+	if got := save.Query.Changeset.Allow; len(got) != 1 || got[0] != "MetricUnit" {
+		t.Errorf("only: narrowed the allow list to %v; want [MetricUnit]", got)
+	}
+	if create == nil || create.GoType() != "db.MetricChangeset" || create.Query.Changeset.New != "MetricNew" || len(create.Query.Params) != 0 {
+		t.Errorf("create body = %+v %+v", create, create.Query)
+	}
+	if got := create.Query.Changeset.Allow; len(got) != 2 {
+		t.Errorf("create allow list = %v; want the write's own", got)
+	}
+	if login == nil || login.Kind != BodyStruct || login.GoType() != "LoginForm" {
+		t.Errorf("login body = %+v", login)
+	}
+	if a := app.Controllers["Metrics"].Action("Save"); a == nil || a.Body != save {
+		t.Errorf("Save action = %+v; want the route's body", a)
+	}
+}

@@ -34,6 +34,8 @@ Scope / [pipe: api, error_handler: Errors] {
 		user db.UserGet(id)
 	}
 	get /users/:id(int)/card    Users.Card    [name: card]
+	patch /users/:id(int)/email Users.ChangeEmail [name: change_email, body: db.UserUpdate(id), only: (email)]
+	post  /login                Session.Login     [name: login, body: LoginForm]
 	get /files/:path...          Files.Serve
 
 	get /tags/:name             Tags.Show    [name: tag]

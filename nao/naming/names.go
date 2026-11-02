@@ -131,7 +131,7 @@ func paramName(goField string) string {
 }
 
 var routeSignatureNames = map[string]bool{
-	"w": true, "r": true, "opts": true, "volt": true, "cs": true, "c": true, "ctx": true,
+	"w": true, "r": true, "opts": true, "volt": true, "cs": true, "c": true, "ctx": true, "body": true,
 }
 
 // RouteSignatureName reports whether name is one a generated route file

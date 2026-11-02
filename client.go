@@ -42,9 +42,10 @@ func (c *Client) Do(ctx context.Context, method, url string, in, out any) error 
 }
 
 // Raw issues a request to a controller route and returns the response
-// for the caller to read and close.
-func (c *Client) Raw(ctx context.Context, method, url string) (*http.Response, error) {
-	return c.send(ctx, method, url, nil)
+// for the caller to read and close; in, when not nil, is encoded in the
+// client's format as the body (spec §generated-client).
+func (c *Client) Raw(ctx context.Context, method, url string, in any) (*http.Response, error) {
+	return c.send(ctx, method, url, in)
 }
 
 func (c *Client) send(ctx context.Context, method, url string, in any) (*http.Response, error) {

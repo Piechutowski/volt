@@ -151,18 +151,28 @@ func (x *Route) End() token.Position {
 }
 
 // Load is one line of a route's load block (spec §route-loads): the name
-// the handler receives the value under, the query function called and
-// its arguments, each an Ident, a BasicLit or a NegNumber.
+// the handler receives the value under and the query call that loads it.
 type Load struct {
-	Name   *Ident
-	Query  *GoRef
+	Name *Ident
+	Call *QueryCall
+}
+
+func (x *Load) Pos() token.Position { return x.Name.Pos() }
+func (x *Load) End() token.Position { return x.Call.End() }
+
+// QueryCall names a generated query of a data package with its
+// arguments, each an Ident, a BasicLit or a NegNumber (spec
+// §route-loads, §request-bodies): a load's query, or the value of a
+// body: setting.
+type QueryCall struct {
+	Ref    *GoRef
 	Args   []Node
 	Rparen token.Position
 }
 
-func (x *Load) Pos() token.Position { return x.Name.Pos() }
-func (x *Load) End() token.Position { return x.Rparen }
-func (x *Route) scopeItemNode()     {}
+func (x *QueryCall) Pos() token.Position { return x.Ref.Pos() }
+func (x *QueryCall) End() token.Position { return x.Rparen }
+func (x *Route) scopeItemNode()          {}
 
 // Verb returns the lowercased verb.
 func (x *Route) Verb() string { return lower(x.VerbTok.Val) }

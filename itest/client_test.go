@@ -158,3 +158,33 @@ func TestClientValidationErrors(t *testing.T) {
 		t.Fatalf("update of a missing row = %v, want volt.ErrNotFound", err)
 	}
 }
+
+// TestClientBodyRoutes proves §generated-client rule 4 for routes that
+// bind a body (§request-bodies): the raw method of a changeset body
+// sends the changeset's Params, in GOB as well as JSON, and the raw
+// method of a struct body sends whatever value it is handed.
+func TestClientBodyRoutes(t *testing.T) {
+	srv := httptest.NewServer(handlerWithDB(t))
+	defer srv.Close()
+	ctx := context.Background()
+	for _, f := range []volt.Format{volt.FormatJSON, volt.FormatGOB} {
+		c := client.New(srv.URL)
+		c.Format = f
+		resp, err := c.ChangeEmail(ctx, 1, db.UserNew().EmailSet("tres@example.com"))
+		if err != nil || resp.StatusCode != 200 {
+			t.Fatalf("%v: change email = %v, %v", f, resp, err)
+		}
+		resp.Body.Close()
+		resp, err = c.ChangeEmail(ctx, 1, db.UserNew().EmailSet("nope"))
+		if err != nil || resp.StatusCode != 422 {
+			t.Fatalf("%v: invalid email = %v, %v; want the handler's 422", f, resp, err)
+		}
+		resp.Body.Close()
+	}
+	c := client.New(srv.URL)
+	resp, err := c.Login(ctx, map[string]string{"Email": "one@example.com", "Password": "open sesame"})
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatalf("login = %v, %v", resp, err)
+	}
+	resp.Body.Close()
+}

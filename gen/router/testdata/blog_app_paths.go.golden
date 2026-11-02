@@ -38,6 +38,18 @@ func PathProfile(id int, opts ...volt.URLOption) string {
 	return volt.URL("/users/"+volt.SegInt(id)+"/profile", opts...)
 }
 
+func PathChangeEmail(id int, opts ...volt.URLOption) string {
+	return volt.URL("/users/"+volt.SegInt(id)+"/email", opts...)
+}
+
+func PathSignup(opts ...volt.URLOption) string {
+	return volt.URL("/signup", opts...)
+}
+
+func PathLogin(opts ...volt.URLOption) string {
+	return volt.URL("/login", opts...)
+}
+
 func PathPing(opts ...volt.URLOption) string {
 	return volt.URL("/ping", opts...)
 }
