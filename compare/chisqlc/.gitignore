@@ -1,0 +1,2 @@
+# sqlc generate writes db; go generate ./compare/... makes it
+/db/
