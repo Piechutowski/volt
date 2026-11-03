@@ -53,7 +53,7 @@ effect is performed by generated code you can read.
 | `lsp/` | the language server |
 | `grammar/`, `zed-extension/` | the editor stack |
 | `itest/` | the fixture application served over `httptest`, drift-checked against the generator |
-| `examples/` | one tiny program per feature (`tables`, `migrations`, `scopes`, `pipelines`, `validation`): its `.volt` files, a server in process and a guigui window that calls it through the generated client; `go generate` writes the generated code, which is not committed |
+| `examples/` | one tiny program per feature (`tables`, `migrations`, `scopes`, `pipelines`, `validation`): its `.volt` files, a server in process and a guigui window that calls it through the generated client; `go generate` writes the generated code, which is not committed; `examples/byhand` is the `tables` server and client written by hand, held to the same replies by a test |
 | `docs/` | `spec.md`, `lint.md`, `editor.md`, `roadmap.md`, `plan.md` |
 
 ## Crib sheet

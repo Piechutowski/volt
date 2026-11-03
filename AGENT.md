@@ -61,7 +61,10 @@ the checkout's `volt gen`, so `go generate ./examples/...` comes before
 building them, and `go run ./examples/run NAME` generates one and then
 runs it. Generated code is committed only where it is a golden: the
 generator testdata and the `itest/` and `nao/itest/` fixtures. Each
-example has a test over its server.
+example has a test over its server. `examples/byhand` is the `tables`
+server and client written by hand on the standard library, the measure
+of what `volt gen` saves; its parity test sends both servers the same
+requests and requires the same replies.
 The windows are guigui on Ebitengine, so building the module needs the
 X11 and OpenGL development headers Ebitengine needs on Linux; no test
 opens a window. Go floor is the
