@@ -45,7 +45,7 @@ var voltUserDesc = &rt.Desc[User]{
 	Table:   `"users"`,
 	Columns: `"id", "email", "name", "bio", "created_at"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "email", Wire: "email"},
 		{Column: "name", Wire: "displayName"},
 		{Column: "bio", Wire: "bio"},
@@ -188,7 +188,7 @@ var voltOrderDesc = &rt.Desc[Order]{
 	Table:   `"orders"`,
 	Columns: `"id", "user_id", "status", "total", "tip", "fee", "placed_at"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "user_id", Wire: "user_id"},
 		{Column: "status", Wire: "status"},
 		{Column: "total", Wire: "total"},
@@ -447,7 +447,7 @@ var voltPageViewDesc = &rt.Desc[PageView]{
 	Table:   `"page_views"`,
 	Columns: `"id", "site", "day", "hits"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "site", Wire: "site"},
 		{Column: "day", Wire: "day"},
 		{Column: "hits", Wire: "hits"},
@@ -574,7 +574,7 @@ var voltLinkClickDesc = &rt.Desc[LinkClick]{
 	Table:   `"link_clicks"`,
 	Columns: `"id", "site", "day", "target"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "site", Wire: "site"},
 		{Column: "day", Wire: "day"},
 		{Column: "target", Wire: "target"},
@@ -703,7 +703,7 @@ var voltSiteFlagDesc = &rt.Desc[SiteFlag]{
 	Table:   `"site_flags"`,
 	Columns: `"id", "featured", "pinned", "ratio", "weight"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "featured", Wire: "featured"},
 		{Column: "pinned", Wire: "pinned"},
 		{Column: "ratio", Wire: "ratio"},
@@ -846,7 +846,7 @@ var voltAttachmentDesc = &rt.Desc[Attachment]{
 	Table:   `"attachments"`,
 	Columns: `"id", "name", "body", "thumb", "digest"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "name", Wire: "name"},
 		{Column: "body", Wire: "body"},
 		{Column: "thumb", Wire: "thumb"},
@@ -1237,7 +1237,7 @@ var voltInviteDesc = &rt.Desc[Invite]{
 	Table:   `"invites"`,
 	Columns: `"id", "user_email", "code"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "user_email", Wire: "user_email"},
 		{Column: "code", Wire: "code"},
 	},
@@ -1344,7 +1344,7 @@ var voltPostFlagDesc = &rt.Desc[PostFlag]{
 	Table:   `"post_flags"`,
 	Columns: `"id", "reviewed", "approved"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "reviewed", Wire: "reviewed"},
 		{Column: "approved", Wire: "approved"},
 	},
@@ -1451,7 +1451,7 @@ var voltMetricEventDesc = &rt.Desc[MetricEvent]{
 	Table:   `"metric_events"`,
 	Columns: `"id", "name"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "name", Wire: "name"},
 	},
 	Scan:   voltMetricEventScan,

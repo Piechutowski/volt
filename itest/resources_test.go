@@ -141,7 +141,8 @@ func TestResourcesDefaultStringKey(t *testing.T) {
 // §changesets): a shared-key one-to-one, whose int key is also the
 // foreign key, is the rowid alias in the DDL but no database-assigned
 // key, so the generated create takes user_id from the body and
-// SQLite stores the value given, not a rowid of its choosing.
+// SQLite stores the value given, not a rowid of its choosing, and a body
+// that leaves user_id out is refused as not_null before any insert.
 func TestResourcesDefaultSharedKey(t *testing.T) {
 	h := handlerWithDB(t)
 	for _, email := range []string{"two@example.com", "three@example.com"} {
@@ -163,6 +164,16 @@ func TestResourcesDefaultSharedKey(t *testing.T) {
 	}
 	if rec = call(h, "POST", "/ref/profiles", strings.NewReader(`{"user_id":7,"bio":"nobody"}`), "Content-Type", "application/json"); rec.Code < 400 {
 		t.Fatalf("create for a user that does not exist: %d %s, want the foreign key refused", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "POST", "/ref/users", strings.NewReader(`{"email":"four@example.com"}`), "Content-Type", "application/json"); rec.Code != 201 {
+		t.Fatalf("user create: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = call(h, "POST", "/ref/profiles", strings.NewReader(`{"bio":"nokey"}`), "Content-Type", "application/json")
+	if rec.Code != 422 || !strings.Contains(rec.Body.String(), `"check":"not_null"`) || !strings.Contains(rec.Body.String(), `"user_id"`) {
+		t.Fatalf("create without user_id: %d %s, want 422 not_null on user_id, not the rowid 4 SQLite would assign to user 4's row", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "GET", app.PathRefProfile(4), nil); rec.Code != 404 {
+		t.Fatalf("a create without user_id stored a profile for user 4: %d %s", rec.Code, rec.Body.String())
 	}
 	if got := db.ProfileNew().From(db.Profile{UserID: 3, Bio: "x"}); !got.Changed(db.ProfileUserID) {
 		t.Fatal("From left the shared key unmarked; it is no database-assigned key (§changesets)")

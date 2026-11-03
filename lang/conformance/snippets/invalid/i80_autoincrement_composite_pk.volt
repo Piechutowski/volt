@@ -1,4 +1,4 @@
-// spec: §columns, no rowid alias under a composite key: autoincrement is valid only on a single int pk column
+// spec: §columns, no rowid alias under a composite key, so no database-assigned key, which alone takes autoincrement
 // want: composite primary key
 table user_tags {
   user_id int    [pk, autoincrement]

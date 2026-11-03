@@ -15,7 +15,8 @@ import (
 // of a declared type stored as int, a shared key that is also a
 // foreign key, by a ref element or an inline ref:, and every member of
 // a composite key are cast, and only the left-out key is Assigned, the
-// mark From skips.
+// mark From skips, while every single int key is RowidAlias, the mark
+// an insert refuses to leave unmarked unless it is Assigned.
 func TestCreateCastLeavesOutTheAssignedKeyAlone(t *testing.T) {
 	src := "type Level int\n\ntable posts {\n  id    int    [pk]\n  title string\n}\n\ntable pings {\n  id int [pk, autoincrement]\n}\n\ntable tiers {\n  id    Level  [pk]\n  label string\n}\n\ntable post_tags {\n  post_id int    [pk]\n  tag     string [pk]\n}\n\ntable post_stats {\n  post_id int [pk]\n  views   int\n}\n\ntable post_covers {\n  post_id int    [pk, ref: posts.id]\n  url     string\n}\n\nref: post_stats.post_id > posts.id\n"
 	f, diags := parser.ParseFile("keys.volt", src)
@@ -31,20 +32,20 @@ func TestCreateCastLeavesOutTheAssignedKeyAlone(t *testing.T) {
 		t.Fatal(pl.Err())
 	}
 	for _, c := range []struct {
-		table, want, assigned string
+		table, want, assigned, alias string
 	}{
-		{"posts", "title", "id"},
-		{"pings", "", "id"},
-		{"tiers", "id label", ""},
-		{"post_tags", "post_id tag", ""},
-		{"post_stats", "post_id views", ""},
-		{"post_covers", "post_id url", ""},
+		{"posts", "title", "id", "id"},
+		{"pings", "", "id", "id"},
+		{"tiers", "id label", "", "id"},
+		{"post_tags", "post_id tag", "", ""},
+		{"post_stats", "post_id views", "", "post_id"},
+		{"post_covers", "post_id url", "", "post_id"},
 	} {
 		tb, err := pl.Table(c.table)
 		if err != nil {
 			t.Fatal(err)
 		}
-		var got, assigned []string
+		var got, assigned, alias []string
 		for _, fd := range tb.CreateCast() {
 			got = append(got, fd.ColName)
 		}
@@ -52,12 +53,18 @@ func TestCreateCastLeavesOutTheAssignedKeyAlone(t *testing.T) {
 			if fd.Assigned {
 				assigned = append(assigned, fd.ColName)
 			}
+			if fd.RowidAlias {
+				alias = append(alias, fd.ColName)
+			}
 		}
 		if strings.Join(got, " ") != c.want {
 			t.Errorf("%s: a create casts %v, want %q", c.table, got, c.want)
 		}
 		if strings.Join(assigned, " ") != c.assigned {
 			t.Errorf("%s: the assigned key is %v, want %q", c.table, assigned, c.assigned)
+		}
+		if strings.Join(alias, " ") != c.alias {
+			t.Errorf("%s: the rowid alias is %v, want %q", c.table, alias, c.alias)
 		}
 	}
 }

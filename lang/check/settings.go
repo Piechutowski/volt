@@ -204,11 +204,12 @@ func isString(n ast.Node) bool {
 	return ok && lit.Tok.Kind == token.STRING
 }
 
-// autoincrementCheck enforces that autoincrement is written on a
-// built-in int rowid alias alone (spec §columns), the one column SQLite
-// takes it on that Volt treats as the rowid; whether that alias is the
-// database-assigned key, which alone keeps it, is keyAssignedCheck's
-// to decide once the relationships are known.
+// autoincrementCheck enforces the part of the rule that autoincrement is
+// written on the database-assigned key alone (spec §columns) that the
+// table decides by itself: the column is a rowid alias of the built-in
+// int; whether that alias is no foreign key, and so the
+// database-assigned key, is keyAssignedCheck's to decide once the
+// relationships are known.
 func (c *checker) autoincrementCheck(ti *TableInfo) {
 	pk := ti.PK()
 	alias := rowidAliasInt(ti)
@@ -223,20 +224,20 @@ func (c *checker) autoincrementCheck(ti *TableInfo) {
 		switch {
 		case cd.Type.Decl != nil && cd.Type.Storage == "int":
 			c.errorf(auto.Pos(), "columns",
-				"autoincrement on %q (%s): only a key of the built-in int is the rowid alias, which alone takes AUTOINCREMENT; a declared type stored as int is not (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
+				"autoincrement on %q (%s): a declared type stored as int is the rowid alias but an ordinary key, whose value the row gives; only the database-assigned key, a rowid alias of the built-in int that is no foreign key, takes AUTOINCREMENT (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
 		case cd.Type.Storage != "int" || cd.Type.Decl != nil:
 			c.errorf(auto.Pos(), "columns",
-				"autoincrement on %q (%s): only an int column can be the rowid alias, which alone takes AUTOINCREMENT (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
+				"autoincrement on %q (%s): only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; a column that is not int is never the rowid alias (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
 		case len(pk) > 1 && isPK:
 			key := make([]string, len(pk))
 			for i, cd := range pk {
 				key[i] = cd.Col.Name.Name()
 			}
 			c.errorf(auto.Pos(), "columns",
-				"autoincrement on %q in table %q, whose primary key is (%s): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key (§columns)", name, ti.Key, strings.Join(key, ", "))
+				"autoincrement on %q in table %q, whose primary key is (%s): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (§columns)", name, ti.Key, strings.Join(key, ", "))
 		default:
 			c.errorf(auto.Pos(), "columns",
-				"autoincrement on %q: only the rowid alias, the single-column int primary key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (§columns, §mapping-to-sqlite-ddl)", name)
+				"autoincrement on %q: only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (§columns, §mapping-to-sqlite-ddl)", name)
 		}
 	}
 }
@@ -256,26 +257,19 @@ func (c *checker) rowidAliasDefaultCheck(ti *TableInfo) {
 	}
 }
 
-// keyAssignedCheck enforces what sets the database-assigned key apart
-// from a built-in int rowid alias that is a foreign key (spec §columns,
-// §records-sample-data): required is an error on the database-assigned
-// key, since its zero value is no missing value, while the foreign key
-// takes no autoincrement, since its values come from the referenced
-// row, and every records list names it. assigned is the table's
-// database-assigned key, nil when it has none.
+// keyAssignedCheck enforces what sets a built-in int rowid alias that
+// is a foreign key apart from the database-assigned key (spec §columns,
+// §records-sample-data): it takes no autoincrement, since its values
+// come from the referenced row, and every records list names it.
+// assigned is the table's database-assigned key, nil when it has none.
+// It runs on a migration shape too, which takes no records.
 func (c *checker) keyAssignedCheck(ti *TableInfo, assigned *ColumnDef, records []*ast.Records) {
 	alias := rowidAliasInt(ti)
-	if alias == nil {
+	if alias == nil || alias == assigned {
 		return
 	}
 	col := alias.Col
 	name := col.Name.Name()
-	if alias == assigned {
-		if req := col.Settings.Get("required"); req != nil {
-			c.errorf(req.Pos(), "columns", "required on %q, the database-assigned key of table %q: the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)", name, ti.Key)
-		}
-		return
-	}
 	if auto := col.Settings.Get("autoincrement"); auto != nil {
 		c.errorf(auto.Pos(), "columns",
 			"autoincrement on %q, the rowid alias of table %q and a foreign key: its values come from the referenced row, so the never-reuse bookkeeping of AUTOINCREMENT has nothing to assign; it is valid on the database-assigned key alone (§columns)", name, ti.Key)
@@ -311,7 +305,23 @@ func (c *checker) keysAssignedCheck(f *ast.File) {
 				rs = append(rs, r)
 			}
 		}
-		c.keyAssignedCheck(ti, c.info.KeyAssigned(ti), rs)
+		assigned := c.info.KeyAssigned(ti)
+		c.keyAssignedCheck(ti, assigned, rs)
+		c.assignedRequiredCheck(ti, assigned)
+	}
+}
+
+// assignedRequiredCheck refuses required on the database-assigned key
+// (spec §columns): the database assigns it whenever an insert
+// leaves it unmarked, so its zero value is no missing value. A
+// migration shape never runs it, since required is no migration
+// setting at all (§migrations).
+func (c *checker) assignedRequiredCheck(ti *TableInfo, assigned *ColumnDef) {
+	if assigned == nil {
+		return
+	}
+	if req := assigned.Col.Settings.Get("required"); req != nil {
+		c.errorf(req.Pos(), "columns", "required on %q, the database-assigned key of table %q: the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)", assigned.Col.Name.Name(), ti.Key)
 	}
 }
 

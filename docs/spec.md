@@ -876,8 +876,9 @@ column setting  = "pk"
    a key that is also a foreign key, as in the shared-key one-to-one
    `user_id int [pk, ref: users.id]`, whose value comes from the
    referenced row. `From` marks an ordinary key, a generated create
-   casts it, a records list names it and `required` may be written on
-   it. `required` on the database-assigned key is an **error**, since
+   casts it, a records list names it, `required` may be written on it,
+   and an insert that leaves it unmarked is refused as `not_null`
+   rather than given a rowid SQLite picks (§changesets). `required` on the database-assigned key is an **error**, since
    the database may assign it, so its zero value is no missing value
    (rule 8). A records list may leave the database-assigned key out
    (§records-sample-data).
@@ -1140,8 +1141,9 @@ ref action   = "cascade" | "restrict" | "set_null" | "set_default" ;
    element whose left endpoint is that key: of the built-in `int`, it
    is the rowid alias in the DDL but no database-assigned key
    (§columns), since its value is the referenced row's, so `From`
-   marks it, the generated create casts it, a records list names it and
-   `autoincrement` on it is an error.
+   marks it, the generated create casts it, an insert that leaves it
+   unmarked is refused as `not_null` (§changesets), a records list
+   names it and `autoincrement` on it is an error.
 6. **Many-to-many.** There is no many-to-many operator: a junction
    table with two foreign keys models it.
 7. **Referential actions.** `delete:` and `update:` correspond to SQL
@@ -2477,7 +2479,8 @@ scope /api [pipe: api] {
      allowing every column but the database-assigned key (§columns),
      which the database assigns, so a client cannot choose an id, while
      a shared key that is also a foreign key is cast like any column,
-     since its value is the referenced row's; `Update` loads
+     since its value is the referenced row's, and a body that leaves it
+     out is a 422 with `not_null` on it (§changesets); `Update` loads
      the row by the key path parameters with `<Model>Get` (a miss is a
      404), casts into its `Changeset()` allowing every non-key column,
      and the route MUST carry every key column as a path parameter.
@@ -3656,12 +3659,20 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
    NULL column without a default reads as its zero value too, but the
    insert names no value for it, so the database writes NULL and
    refuses the row as a `not_null` field error (rule 8), unless
-   `Validate` refused that zero value first. The one exception is the
-   rowid alias, a single-column primary key stored as `int`
-   (§columns, §mapping-to-sqlite-ddl): left unmarked, SQLite assigns
-   it a rowid, which is the design for the database-assigned key, and
-   for an ordinary key a value the row never gave, which its foreign
-   key, if it has one, may refuse.
+   `Validate` refused that zero value first. The one NOT NULL column
+   SQLite fills rather than refuses is the rowid alias, a
+   single-column primary key stored as `int` (§columns,
+   §mapping-to-sqlite-ddl): left unmarked, it gets a rowid SQLite
+   picks. That is the design for the database-assigned key. Any other
+   rowid alias is an ordinary key, a shared key that is also a foreign
+   key or a key of a declared type stored as `int`, and a rowid SQLite
+   picked is a value the row never gave, one that may name a row of
+   the referenced table nobody chose, so `rt.Insert` refuses a
+   changeset that leaves it unmarked with a `not_null` field error on
+   the column, the error an ordinary NOT NULL column without a default
+   gets from the database, before any statement runs; it adds none
+   when an error on that column is recorded already, as `required`'s
+   is.
    `u.Changeset()` starts from `u` with nothing set and
    remembers that it was made from a row. A setter records a value
    for one column and **marks** it; `Changed` reports the mark; a
@@ -3792,7 +3803,7 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
     `rt.NullColumn` when nullable); and the unexported desc
     `volt<Model>Desc`, an `rt.Desc[M]` carrying the model's name, its
     quoted table and column list, one `rt.FieldDesc` per column
-    (column, wire name, key, database-assigned key), the row of literal defaults (rule 2), and the generated
+    (column, wire name, key, rowid alias, database-assigned key), the row of literal defaults (rule 2), and the generated
     functions `volt<Model>Scan` (a row from `rt.Row`),
     `volt<Model>Values` (a row's bound values in column order),
     `volt<Model>Apply` (a row with the marked values applied) and

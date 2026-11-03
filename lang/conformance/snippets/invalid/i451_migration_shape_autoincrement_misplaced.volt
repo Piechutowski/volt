@@ -1,5 +1,5 @@
-// spec: §migrations, §columns, a create table or rebuild table shape takes autoincrement on its rowid alias alone: not on a text key, a column outside the key or a member of a composite key
-// want: only the rowid alias, the single-column int primary key, takes AUTOINCREMENT
+// spec: §migrations, §columns, a create table or rebuild table shape takes autoincrement on its database-assigned key alone: not on a text key, a column outside the key or a member of a composite key
+// want: only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT
 package db
 
 table tags {

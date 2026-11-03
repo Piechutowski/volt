@@ -173,8 +173,8 @@ select totals (count() as n, max(hits) as top, sum(hits) as total) for page_view
 select carts    for users with orders where id = :id
 select everyone for users with orders [order: (id asc)]
 
-// §columns: the rowid alias with SQLite's AUTOINCREMENT, whose ids are
-// never reused, beside the plain rowid alias of users.
+// §columns: the database-assigned key with SQLite's AUTOINCREMENT, whose
+// ids are never reused, beside the plain database-assigned key of users.
 table metric_events {
   id   int    [pk, autoincrement]
   name string

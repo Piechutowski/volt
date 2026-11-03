@@ -146,6 +146,7 @@ db/schema.volt:19:11: error: spec/migrations: column "state": type "State" is no
 db/i166_migration_setting_tag.volt:18:27: error: spec/migrations: tag: describes the Go struct field, not the database, and is not a migration setting (§migrations)
 
 ## i167_migration_setting_required.volt
+db/i167_migration_setting_required.volt:12:23: error: spec/migrations: required describes Go-side validation, not the database, and is not a migration setting (§migrations)
 db/i167_migration_setting_required.volt:13:19: error: spec/migrations: required describes Go-side validation, not the database, and is not a migration setting (§migrations)
 
 ## i168_migration_setting_model.volt
@@ -894,9 +895,9 @@ app/i44_singular_collision.volt:11:2: error: spec/resources: resources "posty": 
 db/i450_migration_add_autoincrement.volt:20:24: error: spec/migrations: add "seq" to table "users": autoincrement cannot be added to an existing table; use rebuild table (§migrations)
 
 ## i451_migration_shape_autoincrement_misplaced.volt
-db/i451_migration_shape_autoincrement_misplaced.volt:17:22: error: spec/columns: autoincrement on "slug" (string): only an int column can be the rowid alias, which alone takes AUTOINCREMENT (§columns, §mapping-to-sqlite-ddl)
-db/i451_migration_shape_autoincrement_misplaced.volt:21:25: error: spec/columns: autoincrement on "post_id" in table "post_tags", whose primary key is (post_id, tag): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key (§columns)
-db/i451_migration_shape_autoincrement_misplaced.volt:29:24: error: spec/columns: autoincrement on "hits": only the rowid alias, the single-column int primary key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (§columns, §mapping-to-sqlite-ddl)
+db/i451_migration_shape_autoincrement_misplaced.volt:17:22: error: spec/columns: autoincrement on "slug" (string): only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; a column that is not int is never the rowid alias (§columns, §mapping-to-sqlite-ddl)
+db/i451_migration_shape_autoincrement_misplaced.volt:21:25: error: spec/columns: autoincrement on "post_id" in table "post_tags", whose primary key is (post_id, tag): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (§columns)
+db/i451_migration_shape_autoincrement_misplaced.volt:29:24: error: spec/columns: autoincrement on "hits": only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (§columns, §mapping-to-sqlite-ddl)
 
 ## i453_package_note.volt
 db/i453_package_note.volt:3:12: error: syntax: a package clause takes no settings list: a package carries no note (§notes), and its doc comment is written in a hand-written Go file of the package (§notes-become-doc-comments)

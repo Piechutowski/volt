@@ -24,7 +24,7 @@ var voltUserDesc = &rt.Desc[User]{
 	Table:   `"users"`,
 	Columns: `"id"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 	},
 	Scan:   voltUserScan,
 	Values: voltUserValues,
@@ -121,7 +121,7 @@ var voltCoreUserDesc = &rt.Desc[CoreUser]{
 	Table:   `"core_users"`,
 	Columns: `"id", "api_key", "homepage_url", "http_status", "full_name", "precision_value", "balance", "kind", "type", "func", "rt"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "api_key", Wire: "api_key"},
 		{Column: "homepage_url", Wire: "homepage_url"},
 		{Column: "http_status", Wire: "http_status"},

@@ -205,6 +205,9 @@ func (g *generator) descEmit(t *naming.Table) {
 		if t.IsPK(f) {
 			b.WriteString(", Key: true")
 		}
+		if f.RowidAlias {
+			b.WriteString(", RowidAlias: true")
+		}
 		if f.Assigned {
 			b.WriteString(", Assigned: true")
 		}

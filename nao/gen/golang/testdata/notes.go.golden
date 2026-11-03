@@ -39,7 +39,7 @@ var voltPostDesc = &rt.Desc[Post]{
 	Table:   `"posts"`,
 	Columns: `"id", "title", "status", "body", "published_at"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "title", Wire: "title"},
 		{Column: "status", Wire: "status"},
 		{Column: "body", Wire: "body"},
@@ -172,7 +172,7 @@ var voltTagDesc = &rt.Desc[Tag]{
 	Table:   `"tags"`,
 	Columns: `"id", "name"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "name", Wire: "name"},
 	},
 	Scan:   voltTagScan,

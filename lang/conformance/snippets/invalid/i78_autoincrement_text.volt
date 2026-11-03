@@ -1,5 +1,5 @@
-// spec: §columns, autoincrement is SQLite's keyword of the rowid alias, which only an int key is
-// want: only an int column can be the rowid alias
+// spec: §columns, autoincrement is valid on the database-assigned key alone, and a column that is not int is never the rowid alias
+// want: a column that is not int is never the rowid alias
 table users {
   code string [pk, autoincrement]
 }

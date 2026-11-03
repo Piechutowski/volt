@@ -137,6 +137,10 @@ type Field struct {
 	Declared bool
 	Kinded   bool
 	Required bool
+	// RowidAlias says the field is the table's rowid alias (spec
+	// §columns), the DDL fact: an insert that leaves it unmarked gets a
+	// rowid SQLite picks, so one that is not Assigned must be marked.
+	RowidAlias bool
 	// Assigned says the field is the table's database-assigned key (spec
 	// §columns), the built-in int rowid alias that is no foreign key:
 	// From leaves it unmarked and a generated create does not cast it,
@@ -349,6 +353,11 @@ func tableBuild(ti *check.TableInfo, assigned *check.ColumnDef) (*Table, map[str
 	}
 	for _, f := range tm.Fields {
 		f.Unique = ti.ColumnsUnique([]string{f.ColName})
+	}
+	if alias := ti.RowidAlias(); alias != nil {
+		if f := tm.Field(alias.Col.Name.Name()); f != nil {
+			f.RowidAlias = true
+		}
 	}
 	if assigned != nil {
 		if f := tm.Field(assigned.Col.Name.Name()); f != nil {

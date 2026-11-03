@@ -3,13 +3,15 @@ package rt
 import "slices"
 
 // FieldDesc is one column as a changeset knows it (spec §changesets): its
-// SQL name, its wire name, whether it is part of the key, and whether
-// it is the database-assigned key, which From leaves unmarked.
+// SQL name, its wire name, whether it is part of the key, whether it is
+// the rowid alias, the DDL fact, and whether it is the database-assigned
+// key, which From leaves unmarked and an insert may leave out.
 type FieldDesc struct {
-	Column   string
-	Wire     string
-	Key      bool
-	Assigned bool
+	Column     string
+	Wire       string
+	Key        bool
+	RowidAlias bool
+	Assigned   bool
 }
 
 // Desc is what a changeset knows of its model and reflection would
@@ -208,6 +210,27 @@ func (c Changeset[M]) marked() (cols []string, args []any) {
 		}
 	}
 	return cols, args
+}
+
+// keyUnmarkedRefuse records a not_null field error on an unmarked
+// rowid alias that is not the database-assigned key (spec §changesets),
+// the one NOT NULL column SQLite fills rather than refuses when an
+// insert leaves it out, unless an error on it is recorded already.
+func (c Changeset[M]) keyUnmarkedRefuse() Changeset[M] {
+	errs := c.Errors()
+	for i, f := range c.d().Fields {
+		if !f.RowidAlias || f.Assigned || (i < len(c.set) && c.set[i]) {
+			continue
+		}
+		named := false
+		for _, e := range errs {
+			named = named || slices.Contains(e.Columns, f.Column)
+		}
+		if !named {
+			c = c.errorAdd("not_null", "must not be null", f.Column)
+		}
+	}
+	return c
 }
 
 // InsertRender renders the INSERT of the marked columns, DEFAULT VALUES

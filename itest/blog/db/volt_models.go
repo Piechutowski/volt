@@ -28,7 +28,7 @@ var voltUserDesc = &rt.Desc[User]{
 	Table:   `"users"`,
 	Columns: `"id", "email", "created_at"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "email", Wire: "email"},
 		{Column: "created_at", Wire: "created_at"},
 	},
@@ -131,7 +131,7 @@ var voltProfileDesc = &rt.Desc[Profile]{
 	Table:   `"profiles"`,
 	Columns: `"user_id", "bio"`,
 	Fields: []rt.FieldDesc{
-		{Column: "user_id", Wire: "user_id", Key: true},
+		{Column: "user_id", Wire: "user_id", Key: true, RowidAlias: true},
 		{Column: "bio", Wire: "bio"},
 	},
 	Scan:   voltProfileScan,
@@ -315,7 +315,7 @@ var voltMsRevenueDesc = &rt.Desc[MsRevenue]{
 	Table:   `"ms_revenue"`,
 	Columns: `"id", "org", "year"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "org", Wire: "org"},
 		{Column: "year", Wire: "year"},
 	},
@@ -424,7 +424,7 @@ var voltMsUsageDesc = &rt.Desc[MsUsage]{
 	Table:   `"ms_usage"`,
 	Columns: `"id", "org", "year"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "org", Wire: "org"},
 		{Column: "year", Wire: "year"},
 	},

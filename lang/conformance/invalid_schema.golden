@@ -51,7 +51,7 @@ i130_default_type_mismatch.volt:4:19: error: spec/default-values: default of "n"
 i131_unknown_type.volt:4:8: error: spec/columns: column "name": unknown type "varchar"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 
 ## i133_autoincrement_declared_type.volt
-i133_autoincrement_declared_type.volt:5:14: error: spec/columns: autoincrement on "id" (ID): only a key of the built-in int is the rowid alias, which alone takes AUTOINCREMENT; a declared type stored as int is not (§columns, §mapping-to-sqlite-ddl)
+i133_autoincrement_declared_type.volt:5:14: error: spec/columns: autoincrement on "id" (ID): a declared type stored as int is the rowid alias but an ordinary key, whose value the row gives; only the database-assigned key, a rowid alias of the built-in int that is no foreign key, takes AUTOINCREMENT (§columns, §mapping-to-sqlite-ddl)
 
 ## i134_default_null_not_null.volt
 i134_default_null_not_null.volt:4:25: error: spec/default-values: null is not a default value: a column that carries null and has no default is NULL when a write leaves it out (§default-values)
@@ -335,8 +335,8 @@ i318_index_name_empty.volt:10:13: error: spec/indexes: index (a, b) on "posts" h
 i318_index_name_empty.volt:11:21: error: spec/indexes: index `lower(title)` on "posts" has an empty name:; write a name, or leave name: out for the derived one (§indexes)
 
 ## i319_autoincrement_partial_composite.volt
-i319_autoincrement_partial_composite.volt:4:15: error: spec/columns: autoincrement on "id" in table "a", whose primary key is (id, site): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key (§columns)
-i319_autoincrement_partial_composite.volt:4:15: error: spec/columns: autoincrement on "id" in table "b", whose primary key is (id, site): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key (§columns)
+i319_autoincrement_partial_composite.volt:4:15: error: spec/columns: autoincrement on "id" in table "a", whose primary key is (id, site): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (§columns)
+i319_autoincrement_partial_composite.volt:4:15: error: spec/columns: autoincrement on "id" in table "b", whose primary key is (id, site): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (§columns)
 
 ## i320_index_pk_alone.volt
 i320_index_pk_alone.volt:9:8: error: spec/indexes: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (§indexes)
@@ -440,13 +440,13 @@ i62_tag_db_reserved.volt:4:21: error: spec/columns: tag key "db" is reserved: th
 i63_tag_duplicate_key.volt:4:40: error: spec/columns: tag key "json" appears more than once on this column (§columns)
 
 ## i78_autoincrement_text.volt
-i78_autoincrement_text.volt:4:20: error: spec/columns: autoincrement on "code" (string): only an int column can be the rowid alias, which alone takes AUTOINCREMENT (§columns, §mapping-to-sqlite-ddl)
+i78_autoincrement_text.volt:4:20: error: spec/columns: autoincrement on "code" (string): only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; a column that is not int is never the rowid alias (§columns, §mapping-to-sqlite-ddl)
 
 ## i79_autoincrement_not_pk.volt
-i79_autoincrement_not_pk.volt:6:16: error: spec/columns: autoincrement on "counter": only the rowid alias, the single-column int primary key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (§columns, §mapping-to-sqlite-ddl)
+i79_autoincrement_not_pk.volt:7:16: error: spec/columns: autoincrement on "counter": only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (§columns, §mapping-to-sqlite-ddl)
 
 ## i80_autoincrement_composite_pk.volt
-i80_autoincrement_composite_pk.volt:4:23: error: spec/columns: autoincrement on "user_id" in table "user_tags", whose primary key is (user_id, tag): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key (§columns)
+i80_autoincrement_composite_pk.volt:4:23: error: spec/columns: autoincrement on "user_id" in table "user_tags", whose primary key is (user_id, tag): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (§columns)
 
 ## i81_element_boundary.volt
 i81_element_boundary.volt:12:1: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found the start of the next element (§line-structure-and-whitespace)

@@ -17,7 +17,7 @@ var entryDesc = &Desc[entry]{
 	Table:   `"entries"`,
 	Columns: `"id", "title", "body"`,
 	Fields: []FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "title", Wire: "title"},
 		{Column: "body", Wire: "body"},
 	},
@@ -128,7 +128,7 @@ func TestChangesetCast(t *testing.T) {
 		t.Errorf("Cast marks: title %v body %v id %v (%d)", c.Changed(entryTitle), c.Changed(entryBody), c.Changed(entryID), c.Row().ID)
 	}
 	if keyless := NewChangeset(entryDesc).Cast(p, entryTitle, entryBody); keyless.Changed(entryID) {
-		t.Errorf("Cast set the rowid alias key its allow list leaves out")
+		t.Errorf("Cast set the database-assigned key its allow list leaves out")
 	}
 	var inv *Invalid
 	if err := c.Err(); !errors.As(err, &inv) || inv.Model != "Post" || len(inv.Fields) != 2 {
@@ -140,5 +140,30 @@ func TestChangesetCast(t *testing.T) {
 	}
 	if len(c.Errors()) != 2 || custom.WithFindings(nil).Errors()[2].Check != "custom" || len(custom.WithFindings(nil).Errors()) != 3 {
 		t.Errorf("ErrorAdd or WithFindings touched its receiver")
+	}
+}
+
+func TestInsertRefusesAnUnmarkedOrdinaryRowidAlias(t *testing.T) {
+	shared := *entryDesc
+	shared.Fields = []FieldDesc{
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "title", Wire: "title"},
+		{Column: "body", Wire: "body"},
+	}
+	title := func(c Changeset[entry]) Changeset[entry] { return Set(c, 1, func(r *entry) { r.Title = "t" }) }
+	var inv *Invalid
+	w := Insert(title(NewChangeset(&shared)))
+	if !errors.As(w.Err, &inv) || len(inv.Fields) != 1 || inv.Fields[0].Check != "not_null" || !reflect.DeepEqual(inv.Fields[0].Columns, []string{"id"}) || w.SQL != "" {
+		t.Errorf("Insert of an unmarked ordinary rowid alias = %+v, err %v", w, w.Err)
+	}
+	if w := Insert(title(NewChangeset(&shared)).From(entry{ID: 3, Title: "t"})); w.Err != nil || w.SQL == "" || w.Args[0] != 3 {
+		t.Errorf("Insert of a marked ordinary rowid alias = %+v, err %v", w, w.Err)
+	}
+	required := title(NewChangeset(&shared)).WithFindings([]FieldError{{Check: "required", Columns: []string{"id"}, Message: "is required"}})
+	if w := Insert(required); !errors.As(w.Err, &inv) || len(inv.Fields) != 1 || inv.Fields[0].Check != "required" {
+		t.Errorf("Insert added a second error to a key refused already: %v", w.Err)
+	}
+	if w := Insert(title(NewChangeset(entryDesc))); w.Err != nil || w.SQL == "" || len(w.Args) != 1 {
+		t.Errorf("Insert of an unmarked database-assigned key = %+v, err %v", w, w.Err)
 	}
 }

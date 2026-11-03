@@ -151,8 +151,12 @@ func (w Write[M]) Perform(ctx context.Context, x Executor) (M, error) {
 func (w Write[M]) PerformAny(ctx context.Context, x Executor) (any, error) { return w.Perform(ctx, x) }
 
 // Insert is the Write that inserts the marked columns of c, DEFAULT
-// VALUES when none, and returns the stored row (spec §changesets).
+// VALUES when none, and returns the stored row (spec §changesets): an
+// unmarked rowid alias that is not the database-assigned key is a
+// not_null field error, since SQLite would store a rowid the row never
+// gave.
 func Insert[M any](c Changeset[M]) Write[M] {
+	c = c.keyUnmarkedRefuse()
 	if err := c.Err(); err != nil {
 		return Write[M]{Err: err}
 	}

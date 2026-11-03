@@ -574,10 +574,11 @@ migration 0001__rebuild [irreversible] {
 	}
 }
 
-// TestLowerRebuildIntroducingARowidAlias pins NULL as the source of an
-// int [pk] column the old table lacks, the one NOT NULL
-// column the checker admits without a source (spec §migrations).
-func TestLowerRebuildIntroducingARowidAlias(t *testing.T) {
+// TestLowerRebuildIntroducingAnAssignedKey pins NULL as the source of
+// a database-assigned key, an int [pk] without ref:, that the old table
+// lacks, the one NOT NULL column the checker admits without a source
+// (spec §migrations); a rowid alias carrying ref: needs a from:.
+func TestLowerRebuildIntroducingAnAssignedKey(t *testing.T) {
 	src := "package db\n\ntable posts {\n  id int [pk]\n  n  int [null]\n}\n\nmigration 0001__init {\n  create table posts {\n    n int [null]\n  }\n}\n\nmigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk]\n    n  int [null]\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)

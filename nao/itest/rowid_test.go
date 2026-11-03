@@ -1,5 +1,5 @@
-// The rowid alias against a real SQLite (spec §columns, §changesets,
-// §mapping-to-sqlite-ddl): a plain int key is assigned by the database
+// The database-assigned key against a real SQLite (spec §columns,
+// §changesets, §mapping-to-sqlite-ddl): a plain int key is assigned by the database
 // and may take the largest id again after its row is deleted, an
 // autoincrement key never reuses one, and an explicit IDSet is stored.
 package itest
@@ -24,7 +24,7 @@ func TestRowidAliasAssignsAndMayReuseTheLargestID(t *testing.T) {
 	}
 	third := seedUser(t, db, "cid@example.com")
 	if third.ID != 2 {
-		t.Errorf("a plain rowid alias takes the largest id plus one, so the deleted 2 comes back: got %d", third.ID)
+		t.Errorf("a database-assigned key without autoincrement takes the largest id plus one, so the deleted 2 comes back: got %d", third.ID)
 	}
 	explicit, err := run.Run(ctx, db, UserCreate(UserNew().IDSet(40).EmailSet("dee@example.com").NameSet("Dee")))
 	if err != nil {
@@ -38,7 +38,7 @@ func TestRowidAliasAssignsAndMayReuseTheLargestID(t *testing.T) {
 		t.Fatal(err)
 	}
 	if from.ID != 41 {
-		t.Errorf("From leaves the rowid alias unmarked, so a zero row is assigned the next id: got %d, want 41", from.ID)
+		t.Errorf("From leaves the database-assigned key unmarked, so a zero row is assigned the next id: got %d, want 41", from.ID)
 	}
 }
 

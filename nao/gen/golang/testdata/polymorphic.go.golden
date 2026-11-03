@@ -32,7 +32,7 @@ var voltCommentDesc = &rt.Desc[Comment]{
 	Table:   `"comments"`,
 	Columns: `"id", "commentable_type", "commentable_id", "body"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Assigned: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
 		{Column: "commentable_type", Wire: "commentable_type"},
 		{Column: "commentable_id", Wire: "commentable_id"},
 		{Column: "body", Wire: "body"},

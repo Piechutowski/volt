@@ -155,7 +155,7 @@ func TestChangesetValueSemantics(t *testing.T) {
 	u := User{ID: 3, Email: "e@example.com", Name: "N", CreatedAt: time.Now()}
 	from := UserNew().From(u)
 	if from.Changed(UserID) || !from.Changed(UserEmail) || !from.Changed(UserBio) || from.Row().Name != "N" {
-		t.Errorf("From marks every data column but the rowid alias key: %v", from.Params().Keys())
+		t.Errorf("From marks every data column but the database-assigned key: %v", from.Params().Keys())
 	}
 	if keys := from.Params().Keys(); !reflect.DeepEqual(keys, []string{"bio", "created_at", "displayName", "email"}) {
 		t.Errorf("Params keys = %v", keys)

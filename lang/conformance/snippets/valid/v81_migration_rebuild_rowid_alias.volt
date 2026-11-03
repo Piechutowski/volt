@@ -1,4 +1,4 @@
-// spec: §migrations, a rowid alias introduced by a rebuild takes NULL as its source and the database assigns it
+// spec: §migrations, a database-assigned key introduced by a rebuild takes NULL as its source and the database assigns it
 package db
 
 table events {
