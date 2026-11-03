@@ -43,25 +43,29 @@ green.
 
 ## Repository
 
-Three Go modules under `go.work`: the library at the root (runtime,
+Four Go modules under `go.work`: the library at the root (runtime,
 `lang/`, `gen/`, `nao/` with the value runtime `nao/rt` and the runner
-`nao/run`, `itest/`; stdlib only, sqlite3 test-only) and
-the tools `lsp/` and `cmd/volt/`, which carry the third-party
-dependencies; `cmd/volt` carries the `mattn/go-sqlite3` driver for the
-fold and `volt migration up`, so the tool is built with cgo (a C
+`nao/run`, `itest/`; stdlib only, sqlite3 test-only), the tools
+`lsp/` and `cmd/volt/`, and the example application
+`examples/voltmeter/`, which carry the third-party dependencies;
+`cmd/volt` carries the `mattn/go-sqlite3` driver for the fold and
+`volt migration up`, so the tool is built with cgo (a C
 compiler on the path; without it the driver is a stub and `volt`
 refuses the fold and the migration commands with exit 2), while the
-library and the runtime register none. Go floor is the newest stable
-Go, declared in all three `go.mod` files. `grammar/`,
+library and the runtime register none. `examples/voltmeter` is
+Voltmeter, the example application and end-to-end test, built on the
+same driver with cgo. Go floor is the newest stable Go,
+declared in all four `go.mod` files. `grammar/`,
 `zed-extension/` and `scripts/sync-grammar.sh` are the editor stack.
-`go test ./...` at the root does not cover the tool modules.
+`go test ./...` at the root does not cover the tool modules or the
+example.
 
 ## Verification bar, all of it, before claiming done
 
 ```sh
-go build ./... ./lsp/... ./cmd/volt/...
-go vet   ./... ./lsp/... ./cmd/volt/...
-go test  ./... ./lsp/... ./cmd/volt/...
+go build ./... ./lsp/... ./cmd/volt/... ./examples/voltmeter/...
+go vet   ./... ./lsp/... ./cmd/volt/... ./examples/voltmeter/...
+go test  ./... ./lsp/... ./cmd/volt/... ./examples/voltmeter/...
 go test  -race ./lang/... ./lsp/...
 gofmt -l . | grep -v zed-extension        # must be empty
 ```
