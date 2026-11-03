@@ -75,13 +75,14 @@ go test  -race ./lang/... ./lsp/...
 gofmt -l . | grep -v zed-extension        # must be empty
 ```
 
-Golden refresh is `go test ./gen/router -update` and `go test
-./nao/gen/... -update`; read the diff, goldens exist to surface
-unintended output changes. Grammar changes also need `tree-sitter
-generate`, `tree-sitter test`, the checklist in `editor.md` section 8
-and `./scripts/sync-grammar.sh`. Anything interactive in the language
-server gets a scripted stdio session; one is a golden
-(`cmd/volt/lsp_session_test.go`).
+Golden refresh is `go test ./gen/router -update`, `go test
+./nao/gen/... -update` and, for Voltmeter's route table, `go test
+./examples/voltmeter/e2e -run TestCLI -update`; read the diff, goldens
+exist to surface unintended output changes. Grammar changes also need
+`tree-sitter generate`, `tree-sitter test`, the checklist in
+`editor.md` section 8 and `./scripts/sync-grammar.sh`. Anything
+interactive in the language server gets a scripted stdio session; one
+is a golden (`cmd/volt/lsp_session_test.go`).
 
 ## Conventions
 

@@ -251,8 +251,10 @@ the generated client, run in process by the suite, and the guigui
 desktop client under `gui` (a pure state package driven by intents, a
 command runner over the generated client, and widgets that render the
 state), with its state suite against the live server and a window
-smoke test under Xvfb. Remaining, in order: the CLI leg and the
-spec-anchor coverage map. The Elm example waits
+smoke test under Xvfb, and the CLI leg, which builds `volt` from the
+checkout and runs check, vet, gen, routes and every migration command
+over the example. Remaining: the spec-anchor coverage map. The Elm
+example waits
 for step 5. The blog
 fixture under `itest/blog` is the application every step rebuilds, and
 the line counts below are measured on it.
@@ -272,7 +274,7 @@ gofmt -l . | grep -v zed-extension      # empty
 ```
 
 Goldens: `go test ./gen/router -update`, `go test ./nao/gen/... -update`,
-read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
+`go test ./examples/voltmeter/e2e -run TestCLI -update`, read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 `editor.md` checklist, `./scripts/sync-grammar.sh`.
 
 ## Order

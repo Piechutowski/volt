@@ -1,0 +1,57 @@
+package app
+  GET     /                                Home.Index PathRoot
+  any     /ping                            Home.Ping PathPing
+  GET     /assets/:path...                 Assets.Serve PathAsset
+  POST    /sign_in                         Session.SignIn PathSignIn
+  GET     /events                          volt.Events PathEvents
+  POST    /api/uploads                     Uploads.Create PathAPIUpload
+  POST    /api/thesis                      Thesis.Record PathAPIThesisRecord
+  GET     /api/thesis                      db.LineCountThesis PathAPILineCountThesis
+  GET     /api/commits                     db.CommitMatching PathAPICommitMatching
+  GET     /api/probe                       Probe.Count PathAPIProbe
+  GET     /api/runs                        Runs.Index PathAPIRuns
+  GET     /api/runs/:id(int)               Runs.Show PathAPIRun
+  DELETE  /api/runs/:id(int)               Runs.Delete 
+  OPTIONS /api/runs                        Runs.Options PathAPIRunsAllowed
+  GET     /api/runs/listed                 db.RunListed PathAPIRunListed
+  GET     /api/runs/untagged               db.RunUntagged PathAPIRunUntagged
+  GET     /api/runs/:id(int)/successors    db.RunSuccessors PathAPIRunSuccessors
+  PATCH   /api/runs/:id(int)               Runs.Annotate PathAPIRunAnnotate
+  POST    /api/runs/:id(int)/samples       Samples.Create PathAPISamplesRecord
+  GET     /api/runs/:run(int)/latency      db.SampleLatency PathAPISampleLatency
+  GET     /api/runs/:run(int)/routes       db.SamplePerRoute PathAPISamplePerRoute
+  GET     /api/runs/:run(int)/failures     db.SampleFailures PathAPISampleFailures
+  GET     /api/machines                    db.MachineList PathAPIMachines
+  GET     /api/machines/:id(int)           db.MachineGet PathAPIHost
+  GET     /api/fleet                       db.MachineFleet PathAPIMachineFleet
+  GET     /api/tags                        db.TagList PathAPITags
+  POST    /api/tags                        db.TagCreate 
+  GET     /api/tags/:slug                  db.TagGet PathAPITag
+  PATCH   /api/tags/:slug                  db.TagUpdate 
+  DELETE  /api/tags/:slug                  db.TagDelete 
+  GET     /api/users                       db.UserList PathAPIUsers
+  GET     /api/budgets                     Budgets.Index PathAPIBudgets
+  POST    /api/budgets                     Budgets.Create 
+  GET     /api/budgets/:id(int)            Budgets.Show PathAPIBudget
+  PATCH   /api/budgets/:id(int)            Budgets.Update PathAPIBudgetCeiling
+  POST    /api/budgets/reset               Budgets.Reset PathAPIBudgetsReset
+  GET     /api/phases/load                 db.MsLoadRows PathAPIPhaseMsLoadRows
+  GET     /api/phases/check                db.MsCheckRows PathAPIPhaseMsCheckRows
+  GET     /api/phases/vet                  db.MsVetRows PathAPIPhaseMsVetRows
+  GET     /api/phases/generate             db.MsGenerateRows PathAPIPhaseMsGenerateRows
+  GET     /api/trend/load                  db.MsLoadTrend PathAPITrendMsLoadTrend
+  GET     /api/trend/check                 db.MsCheckTrend PathAPITrendMsCheckTrend
+  GET     /api/trend/vet                   db.MsVetTrend PathAPITrendMsVetTrend
+  GET     /api/trend/generate              db.MsGenerateTrend PathAPITrendMsGenerateTrend
+  GET     /api/density/load                db.MsLoadDensity PathAPIDensityMsLoadDensity
+  GET     /api/density/check               db.MsCheckDensity PathAPIDensityMsCheckDensity
+  GET     /api/density/vet                 db.MsVetDensity PathAPIDensityMsVetDensity
+  GET     /api/me                          Me.Show PathAPIMeWho
+  GET     /api/me/dashboards               Dashboards.Index PathAPIMeDashboards
+  GET     /api/me/dashboards/:board(int)   Dashboards.Show PathAPIMeDashboard
+  POST    /api/me/dashboards               Dashboards.Create PathAPIMeDashboardAdd
+  POST    /api/me/dashboards/:board(int)/widgets Widgets.Create PathAPIMeBoardWidgetAdd
+  DELETE  /api/me/dashboards/:board(int)/widgets/:id(int) Widgets.Delete PathAPIMeBoardWidgetRemove
+  HEAD    /reports/runs/:id(int)           Reports.Probe PathReportProbe
+  GET     /reports/runs/:id(int)           Reports.Show PathReportShow
+  GET     /reports/runs/:id(int)/csv       Reports.Export PathReportExport
