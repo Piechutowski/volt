@@ -256,27 +256,37 @@ func resolve(ctx context.Context, req Request, resp Response, eh ErrorHandler, p
 // encoded is resp with a rendered value encoded in the negotiated format
 // before anything is written (spec §formats): a 406, and a value the
 // format cannot carry, an encoder's panic included, go to eh like every
-// other failure (spec §scopes). When eh's own answer fails the same way,
-// the default handler answers for the last failure.
+// other failure (spec §scopes). eh answers once; when its own answer
+// fails the same way, the default handler answers for that failure.
 func encoded(ctx context.Context, req Request, resp Response, eh ErrorHandler, perform Performer) Response {
-	var err error
-	for range 2 {
-		b, ok := resp.body.(renderBody)
-		if !ok {
-			return resp
-		}
-		var f Format
-		f, err = Negotiate(req)
-		if err == nil {
-			var enc []byte
-			if enc, err = renderEncode(f, b.v); err == nil {
-				resp.body = encodedBody{format: f, b: enc}
-				return resp
-			}
-		}
-		resp = resolve(ctx, req, eh(req, err), eh, perform)
+	resp, err := renderEncoded(req, resp)
+	if err == nil {
+		return resp
+	}
+	resp, err = renderEncoded(req, resolve(ctx, req, eh(req, err), eh, perform))
+	if err == nil {
+		return resp
 	}
 	return DefaultErrorHandler(req, err)
+}
+
+// renderEncoded is resp with its rendered value, if any, encoded in the
+// negotiated format, or the error that stops it.
+func renderEncoded(req Request, resp Response) (Response, error) {
+	b, ok := resp.body.(renderBody)
+	if !ok {
+		return resp, nil
+	}
+	f, err := Negotiate(req)
+	if err != nil {
+		return resp, err
+	}
+	enc, err := renderEncode(f, b.v)
+	if err != nil {
+		return resp, err
+	}
+	resp.body = encodedBody{format: f, b: enc}
+	return resp, nil
 }
 
 // renderEncode is v in the format, or an error for a value the format

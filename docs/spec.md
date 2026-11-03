@@ -2632,14 +2632,22 @@ for a format suffix.
    other: they go to the route's error handler (§scopes), whose answer
    replaces the response with its headers and cookies, so the default
    handler's answer is a 500 problem (the 406's own problem for a 406),
-   never a 200 with a cut body or a connection closed without one; when
-   the error handler's own answer fails the same way, the default
-   handler answers for that failure. What renders agrees across the
-   formats: a nil `v` is the status without a body in both; a nil
-   pointer, which GOB cannot encode and JSON would write as `null`, is
-   an encoding failure in both; a nil slice or map is JSON `null` and
-   an empty GOB value, which the generated client decodes as an empty
-   slice or map. A generated client decodes the body into a
+   never a 200 with a cut body or a connection closed without one. The
+   error handler answers a render failure once; when its own answer
+   fails the same way, the default handler answers for that failure,
+   and the error handler is not called again. The top-level value
+   renders alike in both formats: a nil `v` is the status without a
+   body; a nil pointer, which GOB cannot encode and JSON would write as
+   `null`, is an encoding failure in both; a nil slice or map is JSON
+   `null` and an empty GOB value, which the generated client decodes as
+   an empty slice or map. Below the top level the formats differ as
+   their encoders do, and Volt does not walk the value to hide it: a
+   nil pointer inside a slice, array or map is JSON `null` but a GOB
+   encoding failure, so a 500 problem in GOB; a nil pointer in a struct
+   field is JSON `null` and an absent GOB field, both decoding to nil;
+   a pointer to a nil pointer is JSON `null` but GOB's zero value of
+   the pointed type, since GOB flattens pointers. A value meant for
+   both formats carries no nil pointer in a collection. A generated client decodes the body into a
    `*volt.ProblemError`, so a caller reads `errors.As(err, &pe)` and
    marks the fields `pe.Details` name.
 

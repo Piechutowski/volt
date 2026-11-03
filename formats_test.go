@@ -395,11 +395,27 @@ func TestRenderFailuresReachTheRouteErrorHandler(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError || rec.Header().Get("X-Route-Handler") != "yes" || len(seen) != 1 || !strings.Contains(seen[0].Error(), "float64") {
 		t.Errorf("encode failure = %d, handler header %q, failures %v; want the route's handler to answer", rec.Code, rec.Header().Get("X-Route-Handler"), seen)
 	}
-	stubborn := func(Request, error) Response { return Render(math.Inf(1)) }
-	rec = serveWith(func(Request) Response { return Render(math.Inf(1)) }, stubborn, nil, httptest.NewRequest("GET", "/x", nil))
+	calls, performed := 0, 0
+	stubborn := func(Request, error) Response {
+		calls++
+		return Then(rt.Query[int]{SQL: "INSERT INTO audit DEFAULT VALUES"}, func([]int) Response { return Render(math.Inf(1)) })
+	}
+	perform := func(context.Context, rt.AnyEffect) (any, error) { performed++; return []int{}, nil }
+	rec = serveWith(func(Request) Response { return Render(math.Inf(1)) }, stubborn, perform, httptest.NewRequest("GET", "/x", nil))
 	var p Problem
 	if err := json.Unmarshal(rec.Body.Bytes(), &p); rec.Code != http.StatusInternalServerError || err != nil || p.Status != 500 {
 		t.Errorf("an error handler that renders the unencodable = %d %q, want the default 500 problem", rec.Code, rec.Body.String())
+	}
+	if calls != 1 || performed != 1 {
+		t.Errorf("an error handler whose answer does not encode ran %d times and performed %d effects, want once each", calls, performed)
+	}
+	calls = 0
+	rendering := func(Request, error) Response { calls++; return Render(row{ID: 1}) }
+	req = httptest.NewRequest("GET", "/x", nil)
+	req.Header.Set("Accept", "text/html")
+	rec = serveWith(func(Request) Response { return Render(row{ID: 1}) }, rendering, nil, req)
+	if rec.Code != http.StatusNotAcceptable || calls != 1 {
+		t.Errorf("a 406 to an error handler that renders = %d after %d calls, want the default 406 after one", rec.Code, calls)
 	}
 }
 
@@ -414,6 +430,26 @@ func TestResponsesCarryContentLength(t *testing.T) {
 		rec := serve(t, h, httptest.NewRequest("GET", "/x", nil))
 		if got := rec.Header().Get("Content-Length"); got == "" || got != strconv.Itoa(rec.Body.Len()) {
 			t.Errorf("%s: Content-Length %q for a body of %d bytes", name, got, rec.Body.Len())
+		}
+	}
+}
+
+// TestNestedNilPointersRenderAsTheirEncodersDo proves the difference
+// §formats states below the top level: a nil pointer in a slice or map
+// is JSON null but a GOB 500 problem, never a cut connection.
+func TestNestedNilPointersRenderAsTheirEncodersDo(t *testing.T) {
+	for name, v := range map[string]any{"slice": []*row{nil}, "map": map[string]*row{"a": nil}} {
+		req := httptest.NewRequest("GET", "/x", nil)
+		rec := serve(t, func(Request) Response { return Render(v) }, req)
+		if rec.Code != 200 || !strings.Contains(rec.Body.String(), "null") {
+			t.Errorf("%s as JSON = %d %q, want 200 with null", name, rec.Code, rec.Body.String())
+		}
+		req = httptest.NewRequest("GET", "/x", nil)
+		req.Header.Set("Accept", MIMEGOB)
+		rec = serve(t, func(Request) Response { return Render(v) }, req)
+		var p Problem
+		if err := DecodeBody(FormatGOB, rec.Body, &p); rec.Code != 500 || err != nil || p.Status != 500 {
+			t.Errorf("%s as GOB = %d (%v), want a 500 problem", name, rec.Code, err)
 		}
 	}
 }
