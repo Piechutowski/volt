@@ -18,27 +18,39 @@ type Uploads struct{}
 // adds the run, then writes every measurement, every budget it breaks
 // and the breaches in one transaction. The run's id is the database's,
 // so the run is inserted before the transaction that needs it, and a
-// failed transaction deletes the run again, and the machine and tag
-// this upload added when no other run took them, before the error
-// handler answers. Two first uploads of one machine or tag race to add
+// failed transaction deletes the run again before the error handler
+// answers. The machine and the tag stay: a concurrent upload may have
+// found them and stored its run on them, and a delete would cascade
+// through that run. Two first uploads of one machine or tag race to add
 // it; the one the unique index refuses reads the winner's row.
 func (Uploads) Create(r volt.Request, body Upload) volt.Response {
 	return negotiated(r, func() volt.Response {
-		commit, err := units.CommitParse(body.Commit)
-		if err != nil {
-			return volt.Reject(http.StatusUnprocessableEntity, "the upload is not valid").WithDetails(fieldErrors("commit", "commit", err.Error()))
-		}
-		if _, errs := UploadWrites(db.Run{}, body, nil); len(errs) > 0 {
+		if errs := UploadJudged(body); len(errs) > 0 {
 			return volt.Reject(http.StatusUnprocessableEntity, "the upload is not valid").WithDetails(errs)
 		}
+		commit, _ := units.CommitParse(body.Commit)
 		return uploadMachined(body, commit)
 	})
 }
 
-type uploaded struct {
-	machine    db.Machine
-	machineNew bool
-	tagNew     bool
+// UploadJudged is every finding against an upload before anything is
+// stored: its commit, its machine's identity, that it measured at least
+// one phase, and each row's own validators (spec §validators).
+func UploadJudged(body Upload) []rt.FieldError {
+	var errs []rt.FieldError
+	if _, err := units.CommitParse(body.Commit); err != nil {
+		errs = append(errs, fieldErrors("commit", "commit", err.Error())...)
+	}
+	errs = append(errs, machineNewOf(body.Machine).Validate().Errors()...)
+	if len(body.Phases) == 0 {
+		errs = append(errs, fieldErrors("required", "phases", "an upload measures at least one phase")...)
+	}
+	_, werrs := UploadWrites(db.Run{}, body, nil)
+	return append(errs, werrs...)
+}
+
+func machineNewOf(m UploadMachine) db.MachineChangeset {
+	return db.MachineNew().CPUSet(m.CPU).CoresSet(m.Cores).MemoryGbSet(m.MemoryGB).OsSet(m.OS).ArchSet(m.Arch).GoSet(m.Go)
 }
 
 func uploadMachined(body Upload, commit units.Commit) volt.Response {
@@ -46,11 +58,10 @@ func uploadMachined(body Upload, commit units.Commit) volt.Response {
 	identified := db.MachineIdentified(m.CPU, m.Cores, m.MemoryGB, m.OS, m.Arch, m.Go)
 	return volt.Then(identified, func(found []db.Machine) volt.Response {
 		if len(found) > 0 {
-			return uploadTagged(body, commit, uploaded{machine: found[0]})
+			return uploadTagged(body, commit, found[0])
 		}
-		add := db.MachineNew().CPUSet(m.CPU).CoresSet(m.Cores).MemoryGbSet(m.MemoryGB).OsSet(m.OS).ArchSet(m.Arch).GoSet(m.Go)
-		return volt.Then(db.MachineCreate(add), func(machine db.Machine) volt.Response {
-			return uploadTagged(body, commit, uploaded{machine: machine, machineNew: true})
+		return volt.Then(db.MachineCreate(machineNewOf(m)), func(machine db.Machine) volt.Response {
+			return uploadTagged(body, commit, machine)
 		}).Rescue(func(err error) volt.Response {
 			if !isDuplicate(err) {
 				return volt.Fail(err)
@@ -59,34 +70,33 @@ func uploadMachined(body Upload, commit units.Commit) volt.Response {
 				if len(found) == 0 {
 					return volt.Fail(err)
 				}
-				return uploadTagged(body, commit, uploaded{machine: found[0]})
+				return uploadTagged(body, commit, found[0])
 			})
 		})
 	})
 }
 
-func uploadTagged(body Upload, commit units.Commit, u uploaded) volt.Response {
+func uploadTagged(body Upload, commit units.Commit, machine db.Machine) volt.Response {
 	if body.Tag == "" {
-		return uploadStored(body, commit, u)
+		return uploadStored(body, commit, machine)
 	}
 	return volt.Then(db.TagExists(db.TagSlug.Eq(body.Tag)), func(ok bool) volt.Response {
 		if ok {
-			return uploadStored(body, commit, u)
+			return uploadStored(body, commit, machine)
 		}
 		return volt.Then(db.TagCreate(db.TagNew().SlugSet(body.Tag).NameSet(body.Tag)), func(db.Tag) volt.Response {
-			u.tagNew = true
-			return uploadStored(body, commit, u)
+			return uploadStored(body, commit, machine)
 		}).Rescue(func(err error) volt.Response {
 			if !isDuplicate(err) {
 				return volt.Fail(err)
 			}
-			return uploadStored(body, commit, u)
+			return uploadStored(body, commit, machine)
 		})
 	})
 }
 
-func uploadStored(body Upload, commit units.Commit, u uploaded) volt.Response {
-	add := db.RunNew().CommitSet(commit).DirtySet(body.Dirty).MachineIDSet(u.machine.ID)
+func uploadStored(body Upload, commit units.Commit, machine db.Machine) volt.Response {
+	add := db.RunNew().CommitSet(commit).DirtySet(body.Dirty).MachineIDSet(machine.ID)
 	if body.Tag != "" {
 		add = add.TagSet(rt.Some(body.Tag))
 	}
@@ -109,40 +119,11 @@ func uploadStored(body Upload, commit units.Commit, u uploaded) volt.Response {
 				return volt.Created(out)
 			}).Rescue(func(err error) volt.Response {
 				return volt.Then(db.RunDelete(run.ID), func(int64) volt.Response {
-					return uploadUndone(body, u, err)
+					return volt.Fail(err)
 				})
 			})
-		}).Rescue(func(err error) volt.Response {
-			return uploadUndone(body, u, err)
 		})
 	})
-}
-
-func uploadUndone(body Upload, u uploaded, err error) volt.Response {
-	if u.machineNew {
-		machine := u.machine.ID
-		u.machineNew = false
-		return volt.Then(db.RunExists(db.RunMachineID.Eq(machine)), func(taken bool) volt.Response {
-			if taken {
-				return uploadUndone(body, u, err)
-			}
-			return volt.Then(db.MachineDelete(machine), func(int64) volt.Response {
-				return uploadUndone(body, u, err)
-			})
-		})
-	}
-	if u.tagNew {
-		u.tagNew = false
-		return volt.Then(db.RunExists(db.RunTag.Eq(body.Tag)), func(taken bool) volt.Response {
-			if taken {
-				return uploadUndone(body, u, err)
-			}
-			return volt.Then(db.TagDelete(body.Tag), func(int64) volt.Response {
-				return uploadUndone(body, u, err)
-			})
-		})
-	}
-	return volt.Fail(err)
 }
 
 func isDuplicate(err error) bool {
@@ -217,12 +198,19 @@ func phaseWrite(run int, p UploadPhase) (rt.AnyEffect, []rt.FieldError) {
 type Thesis struct{}
 
 // Record stores the commits and counts the upload carries that are not
-// stored yet, in one transaction, and counts what it skipped.
+// stored yet, in one transaction, and counts what it skipped. A row the
+// upload would add is judged by its validators first, so nothing of a
+// malformed upload is stored. Two collectors may upload overlapping
+// history at once: when the unique key refuses a commit another upload
+// stored meanwhile, the upload reads again and writes what is still
+// missing.
 func (Thesis) Record(r volt.Request, body ThesisUpload) volt.Response {
-	return negotiated(r, func() volt.Response { return thesisRecorded(body) })
+	return negotiated(r, func() volt.Response { return thesisRecorded(body, thesisTries) })
 }
 
-func thesisRecorded(body ThesisUpload) volt.Response {
+const thesisTries = 3
+
+func thesisRecorded(body ThesisUpload, tries int) volt.Response {
 	if len(body.Commits) == 0 {
 		return volt.Reject(http.StatusUnprocessableEntity, "the upload holds no commit")
 	}
@@ -231,19 +219,28 @@ func thesisRecorded(body ThesisUpload) volt.Response {
 		shas = append(shas, c.SHA)
 	}
 	return volt.Then(rt.All(db.CommitGetMany(shas), db.LineCountQuery(db.LineCountSha.InList(shas))), func(res []any) volt.Response {
-		steps, skipped := ThesisWrites(body, res[0].([]db.Commit), res[1].([]db.LineCount))
+		steps, skipped, errs := ThesisWrites(body, res[0].([]db.Commit), res[1].([]db.LineCount))
+		if len(errs) > 0 {
+			return volt.Reject(http.StatusUnprocessableEntity, "the upload is not valid").WithDetails(errs)
+		}
 		if len(steps) == 0 {
 			return volt.RenderStatus(http.StatusOK, wire.Stored{Skipped: skipped})
 		}
 		return volt.Then(rt.Tx(steps...), func([]any) volt.Response {
 			return volt.Created(wire.Stored{Written: len(steps), Skipped: skipped})
+		}).Rescue(func(err error) volt.Response {
+			if tries <= 1 || !isDuplicate(err) {
+				return volt.Fail(err)
+			}
+			return thesisRecorded(body, tries-1)
 		})
 	})
 }
 
 // ThesisWrites is the creates an upload needs beside the commits and
-// counts already stored, and how many rows it found present.
-func ThesisWrites(body ThesisUpload, commits []db.Commit, counts []db.LineCount) ([]rt.AnyEffect, int) {
+// counts already stored, how many rows it found present, and the
+// validators' findings against the rows it would create.
+func ThesisWrites(body ThesisUpload, commits []db.Commit, counts []db.LineCount) ([]rt.AnyEffect, int, []rt.FieldError) {
 	known := map[string]bool{}
 	for _, c := range commits {
 		known[c.Sha] = true
@@ -253,13 +250,16 @@ func ThesisWrites(body ThesisUpload, commits []db.Commit, counts []db.LineCount)
 		counted[[2]string{lc.Sha, lc.Fixture}] = true
 	}
 	var steps []rt.AnyEffect
+	var errs []rt.FieldError
 	skipped := 0
 	for _, c := range body.Commits {
 		if known[c.SHA] {
 			skipped++
 		} else {
 			known[c.SHA] = true
-			steps = append(steps, db.CommitCreate(db.CommitNew().ShaSet(c.SHA).SubjectSet(c.Subject).AuthorSet(c.Author).AtSet(c.At)))
+			cs := db.CommitNew().ShaSet(c.SHA).SubjectSet(c.Subject).AuthorSet(c.Author).AtSet(c.At).Validate()
+			errs = append(errs, cs.Errors()...)
+			steps = append(steps, db.CommitCreate(cs))
 		}
 		for _, n := range c.Counts {
 			key := [2]string{c.SHA, n.Fixture}
@@ -268,8 +268,10 @@ func ThesisWrites(body ThesisUpload, commits []db.Commit, counts []db.LineCount)
 				continue
 			}
 			counted[key] = true
-			steps = append(steps, db.LineCountCreate(db.LineCountNew().ShaSet(c.SHA).FixtureSet(n.Fixture).VoltLinesSet(n.VoltLines).HandLinesSet(n.HandLines).GenLinesSet(n.GenLines)))
+			cs := db.LineCountNew().ShaSet(c.SHA).FixtureSet(n.Fixture).VoltLinesSet(n.VoltLines).HandLinesSet(n.HandLines).GenLinesSet(n.GenLines).Validate()
+			errs = append(errs, cs.Errors()...)
+			steps = append(steps, db.LineCountCreate(cs))
 		}
 	}
-	return steps, skipped
+	return steps, skipped, errs
 }

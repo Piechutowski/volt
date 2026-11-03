@@ -453,7 +453,7 @@ func TestKeysetPaging(t *testing.T) {
 	c := e.gob(0)
 	var want []int
 	for i := range 23 {
-		u := app.Upload{Commit: "cafe" + strconv.Itoa(1000+i), Machine: machine}
+		u := sweep("cafe"+strconv.Itoa(1000+i), []int{2}, 1)
 		if i%3 == 0 {
 			u.Tag = "third"
 		}
@@ -549,6 +549,9 @@ func TestTagsByDefaultHandlers(t *testing.T) {
 	_, err = c.APICreateTag(bg, db.TagNew().SlugSet("empty"))
 	if !errors.As(err, &pe) || pe.Status != 422 || pe.Problem.Details[0].Check != "required" {
 		t.Errorf("a tag without a name = %v", err)
+	}
+	if r := e.raw("POST", app.PathAPITags(), `{"slug": "", "name": "Empty"}`); r.StatusCode != 422 || r.problem(t).Details[0].Check != "required" || r.problem(t).Details[0].Columns[0] != "slug" {
+		t.Errorf("a tag with an empty slug, which no path could name again = %d %s", r.StatusCode, r.body)
 	}
 	if updated, err := c.APIUpdateTag(bg, "release", db.TagNew().NameSet("Releases")); err != nil || updated.Name != "Releases" {
 		t.Errorf("update = %+v, %v", updated, err)

@@ -227,7 +227,7 @@ func replyExpect(resp *http.Response, err error) func(status int, out any) error
 }
 
 func targetsFind(ctx context.Context, c *client.Client, cfg Config, run db.Run) (Targets, error) {
-	t := Targets{Run: run.ID, Machine: run.MachineID, Tag: "baseline", Tables: cfg.Sizes[0], Owner: cfg.User}
+	t := Targets{Run: run.ID, Machine: run.MachineID, Tag: "baseline", Tables: cfg.Sizes[0]}
 	if run.Tag.Valid {
 		t.Tag = run.Tag.V
 	}

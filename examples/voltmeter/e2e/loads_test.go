@@ -55,24 +55,32 @@ func TestRouteLoadsBindFromTheQuery(t *testing.T) {
 // TestQueryRouteUnderAScopeLoad proves a query route beneath a scope
 // load runs the load for its halt and drops its value (spec
 // §scope-loads, rule 3): no member is the load's 401, a member who is
-// no row is its 404, and a member sees the boards of the owner the
-// query names, not their own.
+// no row is its 404, and a member reads the runs no one has tagged,
+// which are the team's, not the member's. A query route cannot bind a
+// parameter from the load's value, so no member-private list is a
+// query route.
 func TestQueryRouteUnderAScopeLoad(t *testing.T) {
 	e := envStart(t)
-	var boards []db.DashboardWithWidgets
-	if r := e.rawJSON("POST", app.PathAPIMeDashboardAdd(), `{"name": "Grace's"}`, nil, "X-User", "2"); r.StatusCode != http.StatusCreated {
-		t.Fatalf("Grace's board = %d %s", r.StatusCode, r.body)
-	}
-	path := app.PathAPIMeBoardsOf(volt.Query("owner", "2"))
+	c := e.gob(0)
+	runUpload(t, c, sweep("ae000001", []int{2}, 1))
+	tagged := sweep("ae000002", []int{2}, 1)
+	tagged.Tag = "baseline"
+	runUpload(t, c, tagged)
+	path := app.PathAPIMeTodo()
 	if r := e.raw("GET", path, ""); r.StatusCode != http.StatusUnauthorized {
 		t.Errorf("no member = %d", r.StatusCode)
 	}
 	if r := e.raw("GET", path, "", "X-User", "77"); r.StatusCode != http.StatusNotFound {
 		t.Errorf("a member who is no row = %d", r.StatusCode)
 	}
-	r := e.rawJSON("GET", path, "", &boards, "X-User", "1")
-	if r.StatusCode != 200 || len(boards) != 1 || boards[0].Name != "Grace's" || boards[0].OwnerID != 2 || r.Header.Get("Cache-Control") != "private" {
-		t.Errorf("Ada reading Grace's boards = %d %+v %v", r.StatusCode, boards, r.Header)
+	var runs []db.Run
+	r := e.rawJSON("GET", path, "", &runs, "X-User", "1")
+	if r.StatusCode != 200 || len(runs) != 1 || runs[0].ID != 1 || r.Header.Get("Cache-Control") != "private" {
+		t.Errorf("Ada's untagged runs = %d %+v %v", r.StatusCode, runs, r.Header)
+	}
+	var grace []db.Run
+	if r := e.rawJSON("GET", path, "", &grace, "X-User", "2"); r.StatusCode != 200 || len(grace) != 1 || grace[0].ID != 1 {
+		t.Errorf("Grace's untagged runs = %d %+v; the list is the team's", r.StatusCode, grace)
 	}
 }
 

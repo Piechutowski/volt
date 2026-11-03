@@ -22,12 +22,23 @@ func (c UserChangeset) Validate() UserChangeset {
 }
 
 func (c MachineChangeset) Validate() MachineChangeset {
-	return MachineChangeset{c.WithFindings(nil)}
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if voltErr := MachineNamed(voltV.CPU, voltV.Os, voltV.Arch, voltV.Go); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "MachineNamed", Columns: []string{"cpu", "os", "arch", "go"}, Message: voltErr.Error()})
+	}
+	if voltErr := MachineSized(voltV.Cores, voltV.MemoryGb); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "MachineSized", Columns: []string{"cores", "memory_gb"}, Message: voltErr.Error()})
+	}
+	return MachineChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c TagChangeset) Validate() TagChangeset {
 	voltV := c.Row()
 	var voltErrs []rt.FieldError
+	if voltV.Slug == "" {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"slug"}, Message: "slug is required"})
+	}
 	if voltV.Name == "" {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"name"}, Message: "name is required"})
 	}
@@ -50,6 +61,9 @@ func (c MsLoadChangeset) Validate() MsLoadChangeset {
 	if voltErr := AllocsCounted(voltV.Allocs); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "AllocsCounted", Columns: []string{"allocs"}, Message: voltErr.Error()})
 	}
+	if voltErr := MegabytesMeasured(voltV.AllocMb, voltV.HeapMb, voltV.OutputMb, voltV.SourceKb); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "MegabytesMeasured", Columns: []string{"alloc_mb", "heap_mb", "output_mb", "source_kb"}, Message: voltErr.Error()})
+	}
 	return MsLoadChangeset{c.WithFindings(voltErrs)}
 }
 
@@ -64,6 +78,9 @@ func (c MsCheckChangeset) Validate() MsCheckChangeset {
 	}
 	if voltErr := AllocsCounted(voltV.Allocs); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "AllocsCounted", Columns: []string{"allocs"}, Message: voltErr.Error()})
+	}
+	if voltErr := MegabytesMeasured(voltV.AllocMb, voltV.HeapMb, voltV.OutputMb, voltV.SourceKb); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "MegabytesMeasured", Columns: []string{"alloc_mb", "heap_mb", "output_mb", "source_kb"}, Message: voltErr.Error()})
 	}
 	return MsCheckChangeset{c.WithFindings(voltErrs)}
 }
@@ -80,6 +97,9 @@ func (c MsVetChangeset) Validate() MsVetChangeset {
 	if voltErr := AllocsCounted(voltV.Allocs); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "AllocsCounted", Columns: []string{"allocs"}, Message: voltErr.Error()})
 	}
+	if voltErr := MegabytesMeasured(voltV.AllocMb, voltV.HeapMb, voltV.OutputMb, voltV.SourceKb); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "MegabytesMeasured", Columns: []string{"alloc_mb", "heap_mb", "output_mb", "source_kb"}, Message: voltErr.Error()})
+	}
 	return MsVetChangeset{c.WithFindings(voltErrs)}
 }
 
@@ -94,6 +114,9 @@ func (c MsGenerateChangeset) Validate() MsGenerateChangeset {
 	}
 	if voltErr := AllocsCounted(voltV.Allocs); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "AllocsCounted", Columns: []string{"allocs"}, Message: voltErr.Error()})
+	}
+	if voltErr := MegabytesMeasured(voltV.AllocMb, voltV.HeapMb, voltV.OutputMb, voltV.SourceKb); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "MegabytesMeasured", Columns: []string{"alloc_mb", "heap_mb", "output_mb", "source_kb"}, Message: voltErr.Error()})
 	}
 	return MsGenerateChangeset{c.WithFindings(voltErrs)}
 }
@@ -111,11 +134,33 @@ func (c KeystrokeChangeset) Validate() KeystrokeChangeset {
 }
 
 func (c CommitChangeset) Validate() CommitChangeset {
-	return CommitChangeset{c.WithFindings(nil)}
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if voltV.Author == "" {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"author"}, Message: "author is required"})
+	}
+	if voltErr := ShaShape(voltV.Sha); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "ShaShape", Columns: []string{"sha"}, Message: voltErr.Error()})
+	}
+	if voltErr := CommitDated(voltV.At); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "CommitDated", Columns: []string{"at"}, Message: voltErr.Error()})
+	}
+	return CommitChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c LineCountChangeset) Validate() LineCountChangeset {
-	return LineCountChangeset{c.WithFindings(nil)}
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if voltErr := ShaShape(voltV.Sha); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "ShaShape", Columns: []string{"sha"}, Message: voltErr.Error()})
+	}
+	if voltErr := FixtureShape(voltV.Fixture); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "FixtureShape", Columns: []string{"fixture"}, Message: voltErr.Error()})
+	}
+	if voltErr := LinesCounted(voltV.VoltLines, voltV.HandLines, voltV.GenLines); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "LinesCounted", Columns: []string{"volt_lines", "hand_lines", "gen_lines"}, Message: voltErr.Error()})
+	}
+	return LineCountChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c SampleChangeset) Validate() SampleChangeset {

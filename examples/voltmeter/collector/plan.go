@@ -1,8 +1,11 @@
 // Package collector is voltmeter collect: the sweep, the keystroke and
 // the thesis line counts stored through the generated client, then the
-// latency of the read routes. Collect and RepoFind are the edge that
-// runs the sweep, git, the file system and HTTP; every other function is
-// pure (spec §values-and-effects).
+// latency of the read routes. Collect and RepoFind are the command's
+// runner, the one place it runs the sweep, git, the file system and
+// HTTP, as gui/remote is the desktop client's; every other function is
+// pure and plans what Collect performs (spec §values-and-effects, rule
+// 3). The runner lives here rather than in main so the end-to-end suite
+// can run a collection in process.
 package collector
 
 import (
@@ -260,7 +263,6 @@ type Targets struct {
 	Tables  int
 	Board   int
 	Budget  int
-	Owner   int
 }
 
 // Call is one read route to time: the method, the route as the router
@@ -328,7 +330,7 @@ func ReadCalls(t Targets) []Call {
 		get("/api/per_size/generate", app.PathAPIPerSizeMsGeneratePerSize(q("sizes", t.Tables))),
 		get("/api/sizes", app.PathAPISizes()),
 		get("/api/me", app.PathAPIMeWho()),
-		get("/api/me/boards", app.PathAPIMeBoardsOf(q("owner", t.Owner))),
+		get("/api/me/untagged", app.PathAPIMeTodo()),
 		get("/api/me/dashboards", app.PathAPIMeDashboards()),
 		get("/api/me/dashboards/{board}", app.PathAPIMeDashboard(t.Board)),
 		{Method: "HEAD", Route: "HEAD /reports/runs/{id}", Path: app.PathReportProbe(t.Run)},

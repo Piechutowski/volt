@@ -55,7 +55,7 @@ package app
   GET     /api/per_size/generate           db.MsGeneratePerSize PathAPIPerSizeMsGeneratePerSize
   GET     /api/sizes                       db.MsLoadSizes PathAPISizes
   GET     /api/me                          Me.Show PathAPIMeWho
-  GET     /api/me/boards                   db.DashboardBoards PathAPIMeBoardsOf
+  GET     /api/me/untagged                 db.RunUntagged PathAPIMeTodo
   GET     /api/me/dashboards               Dashboards.Index PathAPIMeDashboards
   GET     /api/me/dashboards/:board(int)   Dashboards.Show PathAPIMeDashboard
   POST    /api/me/dashboards               Dashboards.Create PathAPIMeDashboardAdd

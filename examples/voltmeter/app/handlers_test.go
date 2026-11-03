@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -114,10 +115,18 @@ func TestHandlersRefuseBeforeAnyEffect(t *testing.T) {
 		{"a zero limit", runs("?limit=0"), volt.Reject(400, "limit runs from 1 to 100")},
 		{"a limit over the cap", runs("?limit=101"), volt.Reject(400, "limit runs from 1 to 100")},
 		{"after with offset", runs("?after=3&offset=2"), volt.Reject(400, "after and offset do not combine")},
-		{"a malformed commit", app.Uploads{}.Create(request("POST", "/api/uploads", "POST /api/uploads"), app.Upload{Commit: "not hex"}),
+		{"a malformed commit", app.Uploads{}.Create(request("POST", "/api/uploads", "POST /api/uploads"), app.Upload{Commit: "not hex", Machine: machineFull, Phases: phaseOne}),
 			volt.Reject(422, "the upload is not valid").WithDetails([]rt.FieldError{{Check: "commit", Columns: []string{"commit"}, Message: commitErr("not hex")}})},
-		{"an unknown phase", app.Uploads{}.Create(request("POST", "/api/uploads", "POST /api/uploads"), app.Upload{Commit: "abcd1234", Phases: []app.UploadPhase{{Phase: "link", Tables: 2}}}),
+		{"an unknown phase", app.Uploads{}.Create(request("POST", "/api/uploads", "POST /api/uploads"), app.Upload{Commit: "abcd1234", Machine: machineFull, Phases: []app.UploadPhase{{Phase: "link", Tables: 2}}}),
 			volt.Reject(422, "the upload is not valid").WithDetails([]rt.FieldError{{Check: "PhaseKnown", Columns: []string{"phase"}, Message: "phase link is not one of the sweep's"}})},
+		{"an empty machine and no phase", app.Uploads{}.Create(request("POST", "/api/uploads", "POST /api/uploads"), app.Upload{Commit: "abcd1234", Machine: app.UploadMachine{Cores: -4}}),
+			volt.Reject(422, "the upload is not valid").WithDetails([]rt.FieldError{
+				{Check: "MachineNamed", Columns: []string{"cpu", "os", "arch", "go"}, Message: "a machine names its processor, system, architecture and Go version"},
+				{Check: "MachineSized", Columns: []string{"cores", "memory_gb"}, Message: "-4 cores is not a machine"},
+				{Check: "required", Columns: []string{"phases"}, Message: "an upload measures at least one phase"},
+			})},
+		{"a phase of negative sizes", app.Uploads{}.Create(request("POST", "/api/uploads", "POST /api/uploads"), app.Upload{Commit: "abcd1234", Machine: machineFull, Phases: []app.UploadPhase{{Phase: db.PhaseLoad, Tables: 2, AllocMB: -3, SourceKB: -2}}}),
+			volt.Reject(422, "the upload is not valid").WithDetails([]rt.FieldError{{Check: "MegabytesMeasured", Columns: []string{"alloc_mb", "heap_mb", "output_mb", "source_kb"}, Message: "a phase's allocated, heap, output and source sizes are never negative"}})},
 		{"a sign-in that is no email", app.Session{}.SignIn(request("POST", "/sign_in", "POST /sign_in"), app.SignIn{Email: "ada"}),
 			volt.Reject(422, "check the email").WithDetails([]rt.FieldError{{Check: "EmailShape", Columns: []string{"email"}, Message: `"ada" is not an email address`}})},
 		{"a probe of no steps", app.Probe{}.Count(request("GET", "/api/probe?steps=0", "GET /api/probe")), volt.Reject(400, "steps must be at least 1")},
@@ -134,6 +143,11 @@ func TestHandlersRefuseBeforeAnyEffect(t *testing.T) {
 		}
 	}
 }
+
+var (
+	machineFull = app.UploadMachine{CPU: "Test CPU", Cores: 4, MemoryGB: 8, OS: "linux", Arch: "amd64", Go: "go1.27.0"}
+	phaseOne    = []app.UploadPhase{{Phase: db.PhaseLoad, Tables: 2, WallMS: 1}}
+)
 
 func commitErr(s string) string {
 	_, err := units.CommitParse(s)
@@ -194,15 +208,37 @@ func TestUploadWrites(t *testing.T) {
 }
 
 // TestThesisWrites proves a thesis upload writes only the commits and
-// counts not stored yet and counts the rest as skipped.
+// counts not stored yet and counts the rest as skipped, and that each
+// row it would add is judged by its validators: a sha that is not
+// lower-case hex, an empty author, a zero date, a fixture outside the
+// repository and a negative count are findings (spec §validators).
 func TestThesisWrites(t *testing.T) {
+	at := time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC)
 	body := app.ThesisUpload{Commits: []app.ThesisCommit{
-		{SHA: "aaaa", Counts: []app.ThesisCount{{Fixture: "itest/blog"}, {Fixture: "examples/voltmeter"}}},
-		{SHA: "bbbb", Counts: []app.ThesisCount{{Fixture: "itest/blog"}}},
+		{SHA: "aaaa", Author: "Ada", At: at, Counts: []app.ThesisCount{{Fixture: "itest/blog"}, {Fixture: "examples/voltmeter"}}},
+		{SHA: "bbbb", Author: "Ada", At: at, Counts: []app.ThesisCount{{Fixture: "itest/blog"}}},
 	}}
-	steps, skipped := app.ThesisWrites(body, []db.Commit{{Sha: "aaaa"}}, []db.LineCount{{Sha: "aaaa", Fixture: "itest/blog"}})
-	if len(steps) != 3 || skipped != 2 {
-		t.Errorf("steps %d, skipped %d; want 3 writes (one count of aaaa, commit bbbb and its count) and 2 skipped", len(steps), skipped)
+	steps, skipped, errs := app.ThesisWrites(body, []db.Commit{{Sha: "aaaa"}}, []db.LineCount{{Sha: "aaaa", Fixture: "itest/blog"}})
+	if len(steps) != 3 || skipped != 2 || len(errs) != 0 {
+		t.Errorf("steps %d, skipped %d, errors %v; want 3 writes (one count of aaaa, commit bbbb and its count), 2 skipped and no error", len(steps), skipped, errs)
+	}
+	bad := app.ThesisUpload{Commits: []app.ThesisCommit{
+		{SHA: "Not a sha", Counts: []app.ThesisCount{{Fixture: "../../etc", VoltLines: -5}}},
+		{SHA: "CCCC", Author: "Ada", At: at, Counts: []app.ThesisCount{{Fixture: "itest/blog/"}}},
+	}}
+	_, _, errs = app.ThesisWrites(bad, nil, nil)
+	var checks []string
+	for _, e := range errs {
+		checks = append(checks, e.Check+"("+strings.Join(e.Columns, ",")+")")
+	}
+	want := []string{
+		"required(author)", "ShaShape(sha)", "CommitDated(at)",
+		"ShaShape(sha)", "FixtureShape(fixture)", "LinesCounted(volt_lines,hand_lines,gen_lines)",
+		"ShaShape(sha)",
+		"ShaShape(sha)", "FixtureShape(fixture)",
+	}
+	if !slices.Equal(checks, want) {
+		t.Errorf("findings = %v\nwant %v", checks, want)
 	}
 }
 

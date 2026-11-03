@@ -210,8 +210,8 @@ func PathAPIMeWho(opts ...volt.URLOption) string {
 	return volt.URL("/api/me", opts...)
 }
 
-func PathAPIMeBoardsOf(opts ...volt.URLOption) string {
-	return volt.URL("/api/me/boards", opts...)
+func PathAPIMeTodo(opts ...volt.URLOption) string {
+	return volt.URL("/api/me/untagged", opts...)
 }
 
 func PathAPIMeDashboards(opts ...volt.URLOption) string {

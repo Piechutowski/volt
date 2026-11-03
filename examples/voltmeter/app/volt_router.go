@@ -617,16 +617,12 @@ func register(mux *http.ServeMux, c Controllers) {
 		})
 	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /api/me/boards", pipe1(volt.Handler("GET /api/me/boards", func(r volt.Request) volt.Response {
+	mux.Handle("GET /api/me/untagged", pipe1(volt.Handler("GET /api/me/untagged", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
 			return volt.Fail(err)
 		}
 		return volt.Continue(CurrentUser(r), func(user db.User) volt.Response {
-			voltowner, err := volt.QueryParam[int](r, "owner")
-			if err != nil {
-				return volt.Fail(err)
-			}
-			return volt.Then(db.DashboardBoards(voltowner), func(voltOut []db.DashboardWithWidgets) volt.Response {
+			return volt.Then(db.RunUntagged(), func(voltOut []db.Run) volt.Response {
 				return volt.RenderStatus(200, voltOut)
 			})
 		})

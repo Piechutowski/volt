@@ -29,6 +29,7 @@ table_partial measured {
     MillisMeasured(wall_ms)
     TablesCounted(tables)
     AllocsCounted(allocs)
+    MegabytesMeasured(alloc_mb, heap_mb, output_mb, source_kb)
   }
 }
 
@@ -62,10 +63,15 @@ table machines [note: "The machine a run measured on, as perfsweep.Info reports 
   indexes {
     (cpu, cores, memory_gb, os, arch, go) [unique]
   }
+
+  validators {
+    MachineNamed(cpu, os, arch, go)
+    MachineSized(cores, memory_gb)
+  }
 }
 
 table tags [note: "A label a run can carry, such as \"v0.3\" or an experiment."] {
-  slug string [pk]
+  slug string [pk, required]
   name string [required]
 
   indexes {
@@ -135,11 +141,16 @@ ref: keystrokes.run_id > runs.id [delete: cascade]
 table commits [note: "A commit of Volt's history whose lines were counted."] {
   sha     string    [pk]
   subject string
-  author  string
+  author  string    [required]
   at      time.Time [note: "The author date"]
 
   indexes {
     `lower(author)` [name: "idx_commits_author_ci"]
+  }
+
+  validators {
+    ShaShape(sha)
+    CommitDated(at)
   }
 }
 
@@ -149,6 +160,12 @@ table line_counts [note: "The thesis numbers of one fixture at one commit: what 
   volt_lines int    [note: "Lines of .volt files"]
   hand_lines int    [note: "Lines of hand-written Go"]
   gen_lines  int    [note: "Lines of Go carrying the generated marker"]
+
+  validators {
+    ShaShape(sha)
+    FixtureShape(fixture)
+    LinesCounted(volt_lines, hand_lines, gen_lines)
+  }
 }
 
 ref: line_counts.sha > commits.sha [delete: cascade, as: commit]

@@ -7,7 +7,9 @@ package db
 import (
 	"errors"
 	"fmt"
+	"path"
 	"strings"
+	"time"
 
 	"github.com/Piechutowski/volt/examples/voltmeter/units"
 )
@@ -116,6 +118,79 @@ func SampleSane(status int, ms float64) error {
 	}
 	if ms < 0 {
 		return fmt.Errorf("a call cannot take %v ms", ms)
+	}
+	return nil
+}
+
+// MegabytesMeasured refuses a negative size (spec §validators): bytes
+// allocated, held and emitted, and a schema's size, are never below
+// zero.
+func MegabytesMeasured(allocMB, heapMB, outputMB, sourceKB float64) error {
+	if allocMB < 0 || heapMB < 0 || outputMB < 0 || sourceKB < 0 {
+		return errors.New("a phase's allocated, heap, output and source sizes are never negative")
+	}
+	return nil
+}
+
+// MachineNamed refuses a machine missing a part of its identity (spec
+// §validators): the processor, the system, the architecture and the Go
+// version together tell one machine from another.
+func MachineNamed(cpu, os, arch, toolchain string) error {
+	if cpu == "" || os == "" || arch == "" || toolchain == "" {
+		return errors.New("a machine names its processor, system, architecture and Go version")
+	}
+	return nil
+}
+
+// MachineSized refuses a machine with no processor or a negative
+// memory (spec §validators); zero memory is what perfsweep.Info reports
+// on a system it cannot ask.
+func MachineSized(cores int, memoryGB float64) error {
+	if cores < 1 {
+		return fmt.Errorf("%d cores is not a machine", cores)
+	}
+	if memoryGB < 0 {
+		return fmt.Errorf("%v GiB of memory is not a machine", memoryGB)
+	}
+	return nil
+}
+
+// ShaShape refuses a commit id that is not lower-case hex, as
+// units.CommitParse reads one (spec §validators).
+func ShaShape(sha string) error {
+	c, err := units.CommitParse(sha)
+	if err != nil {
+		return err
+	}
+	if string(c) != sha {
+		return fmt.Errorf("commit %q is not lower-case", sha)
+	}
+	return nil
+}
+
+// CommitDated refuses a commit without an author date (spec
+// §validators).
+func CommitDated(at time.Time) error {
+	if at.IsZero() {
+		return errors.New("a commit carries its author date")
+	}
+	return nil
+}
+
+// FixtureShape refuses a fixture that is not a directory of the
+// repository written as git writes it: relative, slash-separated and
+// clean (spec §validators).
+func FixtureShape(fixture string) error {
+	if fixture == "" || path.IsAbs(fixture) || path.Clean(fixture) != fixture || fixture == "." || fixture == ".." || strings.HasPrefix(fixture, "../") {
+		return fmt.Errorf("%q is not a directory of the repository", fixture)
+	}
+	return nil
+}
+
+// LinesCounted refuses a negative line count (spec §validators).
+func LinesCounted(voltLines, handLines, genLines int) error {
+	if voltLines < 0 || handLines < 0 || genLines < 0 {
+		return errors.New("a line count is never negative")
 	}
 	return nil
 }

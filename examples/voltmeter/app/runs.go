@@ -105,7 +105,8 @@ func (Runs) Delete(r volt.Request, id int) volt.Response {
 // Compare sets the load phase of a run beside its baseline at the sizes
 // asked, from the route's loads (spec §route-loads): the run binds from
 // the path, the baseline and the repeated sizes key from the query
-// string, so a request missing either is a 400 before any load runs.
+// string. A request missing the baseline is a 400 before any load runs;
+// absent sizes read as an empty list and compare nothing.
 func (Runs) Compare(r volt.Request, id int, run db.Run, against db.Run, mine []db.MsLoad, theirs []db.MsLoad) volt.Response {
 	return volt.Render(wire.ComparisonOf(run, against, mine, theirs))
 }

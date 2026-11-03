@@ -339,10 +339,9 @@ func (c *Client) APIMeWho(ctx context.Context) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/api/me"), nil)
 }
 
-func (c *Client) APIMeBoardsOf(ctx context.Context, owner int) ([]db.DashboardWithWidgets, error) {
-	voltQ := []volt.URLOption{volt.Query("owner", volt.FormatQuery(owner))}
-	var voltOut []db.DashboardWithWidgets
-	voltErr := c.Do(ctx, "GET", volt.URL("/api/me/boards", voltQ...), nil, &voltOut)
+func (c *Client) APIMeTodo(ctx context.Context) ([]db.Run, error) {
+	var voltOut []db.Run
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/me/untagged"), nil, &voltOut)
 	return voltOut, voltErr
 }
 

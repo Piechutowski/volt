@@ -76,7 +76,7 @@ func TestReverseURLsRoundTrip(t *testing.T) {
 		"PathAPIPerSizeMsGeneratePerSize": {"GET", app.PathAPIPerSizeMsGeneratePerSize()},
 		"PathAPISizes":                    {"GET", app.PathAPISizes()},
 		"PathAPIMeWho":                    {"GET", app.PathAPIMeWho()},
-		"PathAPIMeBoardsOf":               {"GET", app.PathAPIMeBoardsOf(q("owner", "1"))},
+		"PathAPIMeTodo":                   {"GET", app.PathAPIMeTodo()},
 		"PathAPIRunCompare":               {"GET", app.PathAPIRunCompare(1, q("baseline", "1"))},
 		"PathAPIMeDashboards":             {"GET", app.PathAPIMeDashboards()},
 		"PathAPIMeDashboard":              {"GET", app.PathAPIMeDashboard(1)},

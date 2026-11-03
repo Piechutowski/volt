@@ -2,14 +2,18 @@ package e2e
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/examples/voltmeter/app"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 	"github.com/Piechutowski/volt/nao/rt"
 	"github.com/Piechutowski/volt/nao/run"
 )
@@ -112,12 +116,13 @@ func TestFirstUploadsRace(t *testing.T) {
 	}
 }
 
-// TestRefusedUploadLeavesNothing proves an upload refused after it added
-// its machine and tag removes them again with its run, whether the
-// transaction of measurements failed (a duplicated row) or the run
-// itself was refused (a baseline no run has), while a machine and a tag
-// that runs already use stay.
-func TestRefusedUploadLeavesNothing(t *testing.T) {
+// TestRefusedUploadLeavesNoRun proves an upload refused after its run
+// was stored deletes the run again, whether the transaction of
+// measurements failed (a duplicated row) or the run itself was refused
+// (a baseline no run has), while the machine and tag it found or added
+// stay: a concurrent upload may already have stored its run on them
+// (TestRefusedFirstUploadsKeepTheirNeighbours).
+func TestRefusedUploadLeavesNoRun(t *testing.T) {
 	e := envStart(t)
 	c := e.gob(0)
 	kept := sweep("cafe0001", []int{2}, 1)
@@ -140,34 +145,113 @@ func TestRefusedUploadLeavesNothing(t *testing.T) {
 		t.Errorf("an upload naming a missing baseline = %s", r.body)
 	}
 
-	again := sweep("cafe0004", []int{2}, 1)
-	again.Tag = "kept"
-	again.Phases = append(again.Phases, again.Phases[0])
-	resp, err = c.APIUpload(bg, again)
-	replyRead(t, resp, err, http.StatusConflict, nil)
-
 	ms, err := c.APIMachines(bg)
-	if err != nil || len(ms) != 1 || ms[0].CPU != machine.CPU {
-		t.Errorf("machines after the refused uploads = %+v, %v", ms, err)
+	var cpus []string
+	for _, m := range ms {
+		cpus = append(cpus, m.CPU)
+	}
+	if err != nil || !slices.Equal(cpus, []string{machine.CPU, "Orphan CPU", "Unborn CPU"}) {
+		t.Errorf("machines after the refused uploads = %v, %v", cpus, err)
 	}
 	tags, err := c.APITags(bg)
 	var slugs []string
 	for _, tg := range tags {
 		slugs = append(slugs, tg.Slug)
 	}
-	if err != nil || !slices.Equal(slugs, []string{"baseline", "kept"}) {
+	if err != nil || !slices.Equal(slugs, []string{"baseline", "kept", "orphan", "unborn"}) {
 		t.Errorf("tags after the refused uploads = %v, %v", slugs, err)
 	}
 	if n := e.count(t, db.RunCount()); n != 1 {
 		t.Errorf("%d runs after the refused uploads, want 1", n)
+	}
+	if n := e.count(t, db.MsLoadCount(), db.MsCheckCount(), db.MsVetCount(), db.MsGenerateCount(), db.KeystrokeCount()); n != 5 {
+		t.Errorf("%d measurement rows after the refused uploads, want the kept run's 5", n)
+	}
+}
+
+// TestRefusedFirstUploadsKeepTheirNeighbours proves a refused first
+// upload of a new machine and tag never takes a concurrent valid
+// upload's run with it: each pair races an upload refused for a
+// duplicated row against a valid one on the same new machine and tag,
+// and every valid upload answers 201 and its run stays with its tag.
+func TestRefusedFirstUploadsKeepTheirNeighbours(t *testing.T) {
+	e := envStart(t)
+	c := e.gob(0)
+	const pairs = 60
+	stored := make([]int, pairs)
+	var wg sync.WaitGroup
+	for i := range pairs {
+		wg.Go(func() {
+			good := sweep(fmt.Sprintf("beef%04d", i), []int{2}, 1)
+			good.Machine.CPU = fmt.Sprintf("Pair CPU %d", i)
+			good.Tag = fmt.Sprintf("pair-%d", i)
+			bad := good
+			bad.Commit = fmt.Sprintf("bad0%04d", i)
+			bad.Phases = append(slices.Clip(good.Phases), good.Phases[0])
+			var pair sync.WaitGroup
+			pair.Go(func() {
+				resp, err := c.APIUpload(bg, bad)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				resp.Body.Close()
+				if resp.StatusCode != http.StatusConflict {
+					t.Errorf("pair %d: the duplicated upload = %d, want 409", i, resp.StatusCode)
+				}
+			})
+			pair.Go(func() {
+				resp, err := c.APIUpload(bg, good)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				var out wire.UploadResult
+				if resp.StatusCode != http.StatusCreated {
+					b, _ := io.ReadAll(resp.Body)
+					resp.Body.Close()
+					t.Errorf("pair %d: the valid upload = %d %s, want 201", i, resp.StatusCode, b)
+					return
+				}
+				err = volt.DecodeBody(volt.FormatGOB, resp.Body, &out)
+				resp.Body.Close()
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				stored[i] = out.Run.ID
+			})
+			pair.Wait()
+		})
+	}
+	wg.Wait()
+	runs, err := c.APIRunListed(bg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tagged := map[int]string{}
+	for _, r := range runs {
+		tagged[r.ID] = r.TagName.V
+	}
+	for i, id := range stored {
+		if id == 0 {
+			continue
+		}
+		if want := fmt.Sprintf("pair-%d", i); tagged[id] != want {
+			t.Errorf("pair %d: run %d answered 201 and now reads tag %q, want %q (gone: %t)", i, id, tagged[id], want, tagged[id] == "")
+		}
+	}
+	if len(runs) != pairs {
+		t.Errorf("%d runs stored, want %d", len(runs), pairs)
 	}
 }
 
 // TestMeasurementsValidated proves an upload and a sample batch holding
 // a value no measurement produces are a 422 itemized per field, with
 // nothing stored (spec §validators): sizes below one table, negative
-// counts and costs, an empty route, a status outside HTTP's and a
-// negative duration.
+// counts, costs and sizes, a machine without an identity or a
+// processor, an upload measuring no phase, an empty route, a status
+// outside HTTP's and a negative duration.
 func TestMeasurementsValidated(t *testing.T) {
 	e := envStart(t)
 	c := e.gob(0)
@@ -189,6 +273,26 @@ func TestMeasurementsValidated(t *testing.T) {
 		t.Errorf("an upload of impossible numbers = %v, want %v", checks, want)
 	}
 
+	empty := app.Upload{Commit: "dead0003", Machine: app.UploadMachine{Cores: -4, MemoryGB: -1}}
+	resp, err = c.APIUpload(bg, empty)
+	r = replyRead(t, resp, err, http.StatusUnprocessableEntity, nil)
+	checks = checks[:0]
+	for _, d := range r.problem(t).Details {
+		checks = append(checks, d.Check+"("+strings.Join(d.Columns, ",")+")")
+	}
+	if want := []string{"MachineNamed(cpu,os,arch,go)", "MachineSized(cores,memory_gb)", "required(phases)"}; !slices.Equal(checks, want) {
+		t.Errorf("an upload of no machine and no phase = %v, want %v", checks, want)
+	}
+	negative := sweep("dead0004", []int{2}, 1)
+	negative.Phases[3].OutputMB = -7
+	resp, err = c.APIUpload(bg, negative)
+	if r := replyRead(t, resp, err, http.StatusUnprocessableEntity, nil); r.problem(t).Details[0].Check != "MegabytesMeasured" {
+		t.Errorf("an upload of a negative output size = %s", r.body)
+	}
+	if ms, err := c.APIMachines(bg); err != nil || len(ms) != 1 {
+		t.Errorf("machines after the refused uploads = %+v, %v", ms, err)
+	}
+
 	samples := app.SampleBatch{Samples: []app.SampleTimed{
 		{Route: "GET /ping", Status: 200, MS: 0.2, At: 1},
 		{Route: "", Status: -5, MS: -3, At: 2},
@@ -207,5 +311,75 @@ func TestMeasurementsValidated(t *testing.T) {
 	}
 	if n := e.count(t, db.RunCount()); n != 1 {
 		t.Errorf("%d runs after the refused upload", n)
+	}
+}
+
+// TestThesisJudgedAndRaced proves a thesis upload stores no row its
+// validators refuse (spec §validators), and that collectors uploading
+// the same history at once all succeed: the one the unique key refuses
+// reads again and finds the rows stored, so each row is written once
+// and no upload answers 409.
+func TestThesisJudgedAndRaced(t *testing.T) {
+	e := envStart(t)
+	c := e.gob(0)
+	malformed := app.ThesisUpload{Commits: []app.ThesisCommit{{SHA: "not a sha / ../", Counts: []app.ThesisCount{{Fixture: "../../etc", VoltLines: -5, HandLines: -1, GenLines: -9}}}}}
+	resp, err := c.APIThesisRecord(bg, malformed)
+	r := replyRead(t, resp, err, http.StatusUnprocessableEntity, nil)
+	var checks []string
+	for _, d := range r.problem(t).Details {
+		checks = append(checks, d.Check)
+	}
+	if want := []string{"required", "ShaShape", "CommitDated", "ShaShape", "FixtureShape", "LinesCounted"}; !slices.Equal(checks, want) {
+		t.Errorf("a malformed thesis upload = %v, want %v", checks, want)
+	}
+	if n := e.count(t, db.CommitCount(), db.LineCountCount()); n != 0 {
+		t.Errorf("%d thesis rows after the refused upload", n)
+	}
+
+	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	var body app.ThesisUpload
+	for i := range 300 {
+		body.Commits = append(body.Commits, app.ThesisCommit{
+			SHA: fmt.Sprintf("%040x", i+1), Subject: "Commit", Author: "Ada", At: at.Add(time.Duration(i) * time.Minute),
+			Counts: []app.ThesisCount{{Fixture: "itest/blog", VoltLines: i, HandLines: 2 * i, GenLines: 3 * i}},
+		})
+	}
+	const together = 4
+	var wg sync.WaitGroup
+	written := make([]int, together)
+	for i := range together {
+		wg.Go(func() {
+			resp, err := c.APIThesisRecord(bg, body)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+				b, _ := io.ReadAll(resp.Body)
+				t.Errorf("upload %d = %d %s, want 201 or 200", i, resp.StatusCode, b)
+				return
+			}
+			var out wire.Stored
+			if err := volt.DecodeBody(volt.FormatGOB, resp.Body, &out); err != nil {
+				t.Error(err)
+				return
+			}
+			if out.Written+out.Skipped != 600 {
+				t.Errorf("upload %d = %+v, want 600 rows written or skipped", i, out)
+			}
+			written[i] = out.Written
+		})
+	}
+	wg.Wait()
+	sum := 0
+	for _, w := range written {
+		sum += w
+	}
+	if sum != 600 {
+		t.Errorf("the uploads wrote %v, want 600 rows in all", written)
+	}
+	if n := e.count(t, db.CommitCount(), db.LineCountCount()); n != 600 {
+		t.Errorf("%d thesis rows stored, want 600", n)
 	}
 }

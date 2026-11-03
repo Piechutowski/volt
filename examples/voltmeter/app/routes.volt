@@ -89,7 +89,7 @@ scope / [pipe: api, error_handler: Errors] {
       load user CurrentUser
 
       get  /           Me.Show           [name: who]
-      get  /boards     db.DashboardBoards [name: boards_of]
+      get  /untagged   db.RunUntagged     [name: todo]
       resources db.dashboards [only: (index, show), param: board]
       post /dashboards Dashboards.Create [name: dashboard_add, body: db.DashboardCreate, only: (name)]
 

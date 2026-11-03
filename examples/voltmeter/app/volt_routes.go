@@ -63,7 +63,7 @@ var Table = []volt.Route{
 	{Method: "GET", Pattern: "/api/per_size/generate", Spelled: "/api/per_size/generate", Query: "db.MsGeneratePerSize", Helper: "PathAPIPerSizeMsGeneratePerSize"},
 	{Method: "GET", Pattern: "/api/sizes", Spelled: "/api/sizes", Query: "db.MsLoadSizes", Helper: "PathAPISizes"},
 	{Method: "GET", Pattern: "/api/me", Spelled: "/api/me", Controller: "Me", Action: "Show", Helper: "PathAPIMeWho"},
-	{Method: "GET", Pattern: "/api/me/boards", Spelled: "/api/me/boards", Query: "db.DashboardBoards", Helper: "PathAPIMeBoardsOf"},
+	{Method: "GET", Pattern: "/api/me/untagged", Spelled: "/api/me/untagged", Query: "db.RunUntagged", Helper: "PathAPIMeTodo"},
 	{Method: "GET", Pattern: "/api/me/dashboards", Spelled: "/api/me/dashboards", Controller: "Dashboards", Action: "Index", Helper: "PathAPIMeDashboards"},
 	{Method: "GET", Pattern: "/api/me/dashboards/{board}", Spelled: "/api/me/dashboards/:board(int)", Controller: "Dashboards", Action: "Show", Helper: "PathAPIMeDashboard", Params: []volt.RouteParam{{Name: "board", Type: "int"}}},
 	{Method: "POST", Pattern: "/api/me/dashboards", Spelled: "/api/me/dashboards", Controller: "Dashboards", Action: "Create", Helper: "PathAPIMeDashboardAdd"},
