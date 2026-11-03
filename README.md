@@ -53,7 +53,7 @@ effect is performed by generated code you can read.
 | `lsp/` | the language server |
 | `grammar/`, `zed-extension/` | the editor stack |
 | `itest/` | the fixture application served over `httptest`, drift-checked against the generator |
-| `examples/voltmeter` | Voltmeter, the example application that measures Volt with Volt; its own module, data layer built so far |
+| `examples/voltmeter` | Voltmeter, the example application that measures Volt with Volt; its own module; data layer, routes and server built so far |
 | `docs/` | `spec.md`, `lint.md`, `editor.md`, `roadmap.md`, `plan.md` |
 
 ## Crib sheet

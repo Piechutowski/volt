@@ -240,11 +240,14 @@ section 8 marked unverified for that step.
 
 In progress: Voltmeter, under `examples/voltmeter`, measures Volt with
 Volt (the profiling sweep, the keystroke benchmark, the thesis line
-counts and its own route latency). Its data package `db` is built: the
+counts and its own route latency). Built: the data package `db` (the
 schema, the selects and a migration history that folds to the schema,
-tested on a real SQLite. Remaining, in order: the routes and their
-controllers, the collector, the guigui client, and the end-to-end
-suites over all of them. The Elm example waits for step 5. The blog
+tested on a real SQLite), the routes package `app` with its controllers
+and generated router and client, `server.Handler` and `voltmeter serve`,
+and the end-to-end API suite under `e2e` that serves every route.
+Remaining, in order: the collector, the guigui client with its state
+suite and window smoke test, the CLI leg and the spec-anchor coverage
+map. The Elm example waits for step 5. The blog
 fixture under `itest/blog` is the application every step rebuilds, and
 the line counts below are measured on it.
 
