@@ -67,6 +67,7 @@ func TestEvents(t *testing.T) {
 	}
 
 	e.srv.CloseClientConnections()
+	c.HTTP.CloseIdleConnections()
 	if err := c.APIDeleteTag(bg, "release"); err != nil {
 		t.Fatal(err)
 	}
