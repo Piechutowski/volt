@@ -4,10 +4,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // ColumnType is a column's resolved type (spec §columns): a built-in or
@@ -327,7 +329,10 @@ func (c *checker) recordsCoverageCheck(ti *TableInfo, d *ast.Records) {
 func (c *checker) valueTypeCheck(cd *ColumnDef, v ast.Node, section, what string) {
 	name := cd.Col.Name.Name()
 	typ := cd.Col.Type.String()
-	if _, expr := v.(*ast.FuncExpr); expr {
+	if expr, ok := v.(*ast.FuncExpr); ok {
+		if text, isString := sqlStringOf(strings.TrimSpace(expr.Text())); isString && cd.Type.Storage == "time.Time" {
+			c.timeTextCheck(cd, v, text, section, what, " a SQL string of")
+		}
 		return
 	}
 	kind := defaultKind(v)
@@ -360,93 +365,50 @@ func (c *checker) valueTypeCheck(cd *ColumnDef, v ast.Node, section, what string
 		c.errorf(v.Pos(), section, "%s %q (%s) must be %s %s, found %s (§%s)", what, name, typ, article, want, kind, section)
 		return
 	}
-	if lit, isLit := v.(*ast.BasicLit); isLit && cd.Type.Storage == "time.Time" && !isoTimeOK(lit.Tok.Val) {
-		c.errorf(v.Pos(), section, "%s %q (%s) must be ISO 8601 text such as \"2024-01-15 10:30:00\", found %q (§%s)", what, name, typ, lit.Tok.Val, section)
+	if lit, isLit := v.(*ast.BasicLit); isLit && cd.Type.Storage == "time.Time" {
+		c.timeTextCheck(cd, v, lit.Tok.Val, section, what, "")
 	}
 }
 
-func isoTimeOK(s string) bool {
-	s = strings.TrimSuffix(s, "Z")
-	num := func(min, max int) (int, bool) {
-		n, v := 0, 0
-		for n < max && n < len(s) && '0' <= s[n] && s[n] <= '9' {
-			v = v*10 + int(s[n]-'0')
-			n++
-		}
-		s = s[n:]
-		return v, n >= min
+// timeTextCheck enforces that time text a default or a record writes is
+// the one stored form of a time.Time (spec §go-types), so that a value
+// read back from the row compares equal to it.
+func (c *checker) timeTextCheck(cd *ColumnDef, v ast.Node, text, section, what, sqlString string) {
+	canon, ok := timeTextCanonical(text)
+	if ok && canon == text {
+		return
 	}
-	lit := func(c byte) bool {
-		if s == "" || s[0] != c {
-			return false
-		}
-		s = s[1:]
-		return true
+	name, typ := cd.Col.Name.Name(), cd.Col.Type.String()
+	if !ok {
+		c.errorf(v.Pos(), section, "%s %q (%s) must be%s date/time text in SQLite's canonical UTC form, such as \"2024-01-15 10:30:00\", found %q (§%s)", what, name, typ, sqlString, text, section)
+		return
 	}
-	year, okY := num(4, 4)
-	if !okY || !lit('-') {
-		return false
-	}
-	month, okM := num(2, 2)
-	if !okM || !lit('-') {
-		return false
-	}
-	day, okD := num(2, 2)
-	if !okD || month < 1 || month > 12 || day < 1 || day > monthDays(year, month) {
-		return false
-	}
-	if s == "" {
-		return true
-	}
-	if !lit(' ') && !lit('T') {
-		return false
-	}
-	hour, okH := num(1, 2)
-	if !okH || hour > 23 || !lit(':') {
-		return false
-	}
-	if minute, ok := num(2, 2); !ok || minute > 59 {
-		return false
-	}
-	if s == "" {
-		return true
-	}
-	if !lit(':') {
-		return false
-	}
-	if second, ok := num(2, 2); !ok || second > 59 {
-		return false
-	}
-	if lit('.') {
-		if _, ok := num(1, 9); !ok {
-			return false
-		}
-	}
-	if s == "" {
-		return true
-	}
-	if !lit('+') && !lit('-') {
-		return false
-	}
-	offHour, okOH := num(2, 2)
-	if !okOH || offHour > 23 || !lit(':') {
-		return false
-	}
-	offMinute, okOM := num(2, 2)
-	return okOM && offMinute <= 59 && s == ""
+	c.errorf(v.Pos(), section, "%s %q (%s) must be%s SQLite's canonical UTC date/time text, %q, found %q (§%s)", what, name, typ, sqlString, canon, text, section)
 }
 
-func monthDays(year, month int) int {
-	switch month {
-	case 2:
-		if year%4 == 0 && (year%100 != 0 || year%400 == 0) {
-			return 29
-		}
-		return 28
-	case 4, 6, 9, 11:
-		return 30
+// timeTextCanonical is the stored form of the instant s names (spec
+// §go-types), the text rt.TimeText writes, and whether s names one in a
+// layout SQLite or the driver reads.
+func timeTextCanonical(s string) (string, bool) {
+	var t rt.Time
+	if err := t.Scan(s); err != nil {
+		return "", false
 	}
-	return 31
+	canon, err := rt.TimeText(time.Time(t))
+	return canon, err == nil
+}
+
+// sqlStringOf is the value of an expression literal that is one SQL
+// string literal, such as '2024-01-15 10:30:00', and whether it is one.
+func sqlStringOf(expr string) (string, bool) {
+	if len(expr) < 2 || expr[0] != '\'' || expr[len(expr)-1] != '\'' {
+		return "", false
+	}
+	inner := expr[1 : len(expr)-1]
+	if strings.Contains(strings.ReplaceAll(inner, "''", ""), "'") {
+		return "", false
+	}
+	return strings.ReplaceAll(inner, "''", "'"), true
 }
 
 func defaultKind(v ast.Node) string {

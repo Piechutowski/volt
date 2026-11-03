@@ -1,4 +1,4 @@
-// spec: §records-sample-data, every record value kind, null, a string for a declared type stored as string
+// spec: §records-sample-data, every record value kind, null, a string for a declared type stored as string, canonical date/time text with and without fractional seconds
 type Status string
 table users {
   id int
@@ -10,8 +10,8 @@ table users {
   records (id, name, age, status, created_at) {
     1, "Alice", 30, "active", "2024-01-15 10:30:00"
     2, "Bob", null, "inactive", `CURRENT_TIMESTAMP`
-    3, "Charlie", null, "pending", "2024-01-15"
-    4, "", -5, "pending", "2024-01-15T10:30:00.000+07:00"
+    3, "Charlie", null, "pending", "2024-01-15 00:00:00"
+    4, "", -5, "pending", "2024-01-15 03:30:00.25"
     5, "Dora", 15000000000, "active", `uuid_generate_v4()`
   }
 }

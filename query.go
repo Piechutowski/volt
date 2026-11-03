@@ -74,7 +74,8 @@ func typeName(dst any) string {
 }
 
 // FormatQuery renders a query-string value the way QueryParam parses it
-// (§generated-client).
+// (§generated-client), a time.Time as RFC 3339 with its fractional
+// seconds, so the instant arrives whole.
 func FormatQuery[T QueryValue](v T) string {
 	switch v := any(v).(type) {
 	case string:
@@ -82,7 +83,7 @@ func FormatQuery[T QueryValue](v T) string {
 	case bool:
 		return strconv.FormatBool(v)
 	case time.Time:
-		return v.Format(time.RFC3339)
+		return v.Format(time.RFC3339Nano)
 	case float64:
 		return strconv.FormatFloat(v, 'g', -1, 64)
 	default:

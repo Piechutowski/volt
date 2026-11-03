@@ -983,8 +983,14 @@ such as `state.pending`, is **not** a valid default value.
    literal of its storage type, so the default of a value set is the
    value as written (`default: "pending"`). An expression literal is accepted on any column and is
    SQLite's to judge. `[]byte` and `time.Time` columns take only an
-   expression literal. A default that does not fit is an error naming
-   the column and its type.
+   expression literal. On a `time.Time` column, an expression literal
+   that is one SQL string (`` default: `'2024-01-15 10:30:00'` ``)
+   MUST be the stored form of a `time.Time` (§go-types), as a record
+   value must (§records-sample-data), or it is an error spelling the
+   stored form of the same instant; any other expression is SQLite's
+   to judge, and `CURRENT_TIMESTAMP` and `datetime()` write the stored
+   form. A default that does not fit is an error naming the column
+   and its type.
 2. **NULL has one spelling.** `null` is not a default value: a column
    that carries `null` and has no `default:` is NULL when a write
    leaves it out, so `default: null` would only say that twice and is
@@ -1490,13 +1496,24 @@ record value    = string
 4. **Value typing.** Each value MUST fit the target column's type
    (§columns), as a default must (§default-values): an integer literal
    for `int`; a number for `float64`; a string for `string` and for
-   `time.Time` (ISO 8601 text, `"2024-01-15 10:30:00"`); `true` or
+   `time.Time`; `true` or
    `false` for `bool`; for a declared type, a literal of its storage
    type (`"paid"` for a value set stored as `string`, §types). `null`
    is NULL and is allowed only on a column that carries `null`.
    A `[]byte` column takes an expression literal or NULL. An expression
    literal (backticks) is accepted on any column and is SQLite's to
-   judge. A bare identifier other than `true`, `false` and `null`, and
+   judge.
+   A `time.Time` value, of a declared type stored as one too, MUST be
+   the stored form of a `time.Time` (§go-types), SQLite's datetime
+   text in UTC (`"2024-01-15 10:30:00"`, `"2024-01-15 10:30:00.5"`),
+   so that the row read back binds as the text it holds. Other
+   date/time text, with a `T`, a `Z` or an offset, without seconds, a
+   date alone or a fraction with trailing zeros, is an error whose
+   message spells the stored form of the same instant; the checker
+   refuses rather than rewrites it, so the source shows the text the
+   database holds. An expression literal that is one SQL string
+   (`` `'2024-01-15 10:30:00'` ``) on such a column is held to the
+   same form; any other expression is SQLite's to judge. A bare identifier other than `true`, `false` and `null`, and
    a dotted name, is **not** a value. A value that does not fit is an
    error naming the column and its type.
 5. **No empty field.** Every field of a row holds a value: NULL is
@@ -2623,7 +2640,9 @@ the routes through typed methods instead of hand-built requests.
    query's result: `func (c *Client) APIUserGet(ctx, id int)
    (db.User, error)`, `APIUserDelete(ctx, id int) error`. Path
    parameters render through the same builders as `Path*` helpers,
-   query-string parameters through `volt.FormatQuery`, a list as a
+   query-string parameters through `volt.FormatQuery`, a `time.Time`
+   as RFC 3339 with its fractional seconds, so the instant arrives
+   whole, a list as a
    repeated key, a changeset as the body: `APIUserCreate(ctx, cs
    db.UserChangeset) (db.User, error)`, `APIUserUpdate(ctx, id int, cs
    db.UserChangeset) (db.User, error)`, sent as `cs.Params()`
@@ -3193,9 +3212,10 @@ pred chosen  { org in :orgs }
      and `1E2` bind `-10`, `7` and `100.0`;
    - `in :name` makes `:name` a **list parameter**: its Go type is a
      slice of the column's Go type without `rt.Null` (`[]string` for
-     both `string` and `string [null]`, `[]int`), and the column MUST
-     NOT be `time.Time`, since JSON, the list's wire form
-     (§selects-over-groups), carries no date/time value;
+     both `string` and `string [null]`, `[]int`, `[]time.Time`); a
+     `time.Time` item travels in the JSON array, the list's wire form
+     (§selects-over-groups), as the text the column holds, its stored
+     form (§go-types);
    - `[]byte` columns may not appear in predicates;
    - a `param` adopts the type of the expression position it appears
      in, the column's Go type without `rt.Null` for a nullable column
@@ -3222,9 +3242,10 @@ pred chosen  { org in :orgs }
    of the storage type, and a declared type stored as `time.Time` or
    `[]byte` takes no literal. A list parameter of a declared type is
    bound as one JSON array of its values, by kind for a kinded type
-   and through the type's driver value otherwise (§types). A declared
-   type stored as `time.Time` cannot take one, as rule 3 says of
-   `time.Time`, and neither can one stored as `[]byte`: JSON carries
+   and through the type's driver value otherwise (§types), so a
+   declared type stored as `time.Time` travels as the stored form of
+   its driver value (§go-types). A declared type stored as `[]byte`
+   cannot take one: JSON carries
    no blob, and the text its bytes would travel as never equals the
    stored value.
 6. **Rendering.** There is one SQL renderer for the generated query
@@ -3510,7 +3531,8 @@ the optional projection narrows the emitted columns.
 11. **`with`: nested results.** `with` names a reverse relation of the
     `for` table (§relationships-ref), which MUST be a table, over one
     key column that is never NULL and travels as a list parameter
-    does (§predicates: not `time.Time`, not `[]byte`); the relation is
+    does (§predicates: not `[]byte`; a `time.Time` key travels as its
+    stored form, §go-types); the relation is
     not ambiguous, the select does not aggregate, and when it
     projects, the key column is a bare item of the projection. The row type is `<Row>With<Relation>`, a struct
     embedding the parent's row type `<Row>` (rule 7) with a field named
@@ -4536,25 +4558,67 @@ the set.
 so a route parameter or primary key of type `int` carries the full
 SQLite INTEGER range there, and only there.
 
-A `time.Time` binds in UTC, whatever its location: the runtime
-converts every `time.Time` argument of a statement and every valid
-`rt.Null[time.Time]`, so the text the driver stores carries `+00:00`
-and SQLite's text comparison, in `where`, `order:`, `min` and `max`,
-orders the values as the instants are ordered. A value reads back in
-UTC, the same instant as the one written. A NOT NULL `time.Time`
-field, of a model or of a select's row, scans through
-`(*rt.Time)(&v.At)`, which reads the
-driver's value of a declared column and the text SQLite answers for
-`min` or `max` of one, which carries no declared type for the driver
-to convert by (§selects-over-groups); `rt.Null[time.Time]` reads both
-the same way.
+A `time.Time` has one stored form: SQLite's own datetime text in
+UTC, `YYYY-MM-DD HH:MM:SS`, followed by `.` and the fractional
+seconds without their trailing zeros only when the fraction is not
+zero (`2026-11-03 05:18:49`, `2026-11-03 05:18:49.5`). In Go it is
+`t.UTC().Format("2006-01-02 15:04:05.999999999")`, the layout
+`rt.TimeLayout`, written by `rt.TimeText`. It is the text
+`CURRENT_TIMESTAMP` and `datetime()` write, so a default, a value
+written from Go and a value read back and bound again are one text;
+and since every value spells its seconds in the same width and a
+shorter fraction sorts before a longer one, text order is instant
+order. Equality, the ordering comparisons, `in` and list parameters,
+`order:`, `min` and `max`, the key of a `with`, keyset paging with
+`After` and SQLite's date and time functions (`date(created_at)`)
+therefore all agree with the instants.
+
+The runtime binds every `time.Time` as that text, whatever its
+location, and never hands a `time.Time` to the driver: every argument
+of every statement the runner executes passes through
+`rt.ArgsBound`, which rewrites a `time.Time` and any `driver.Valuer`
+whose value is a `time.Time`, so a changeset write, a key path
+(`Get`, `GetMany`, `Update`, `Delete`), an operator argument, an `In`
+item, a `Set`, an `After` key and a `Raw` argument bind it alike; a
+valid `rt.Null[time.Time]` binds as that text itself, a declared type
+stored as `time.Time` through its own `Value` and then as that text,
+and every item of a list parameter or an `InList` travels in the JSON
+array as that text (`rt.JSONList`, §predicates). A year outside 0000
+to 9999, past which SQLite's date functions and the text order end,
+is an error: the statement fails without running, and `rt.JSONList`
+panics, as it does when an item's `Value` fails.
+
+A value reads back in UTC. A NOT NULL `time.Time` field, of a model or
+of a select's row, scans through `(*rt.Time)(&v.At)`, and
+`rt.Null[time.Time]` reads the same way: the driver's `time.Time` for
+a declared column; for `min` or `max` of one, which carries no
+declared type for the driver to convert by (§selects-over-groups),
+SQLite's text in any layout SQLite or the driver writes (a `T` or a
+space, a trailing `Z` or an offset, with or without seconds, or a
+date alone) and integer unix seconds (`unixepoch()`). NULL in a NOT
+NULL field, text in no such layout and any other value are errors.
+
+Two limits remain. The sqlite3 driver converts a `TIMESTAMP` column
+itself and reads text it cannot parse as the zero `time.Time`,
+without any other sign, so such text in a declared column reads as
+`0001-01-01 00:00:00`, which is also a value Volt can store, and Volt
+cannot refuse it there; `min` and `max` of the column refuse it. A
+row stored in another form, by older code that bound a `time.Time`
+with its offset (`2026-03-01 14:00:00+02:00`) or by SQL written by
+hand, reads back as its instant in UTC, but SQLite compares only the
+stored text: such a row does not equal its own read-back value, and
+it orders among canonical rows by its text. Volt generates no
+migration for such rows; reading one and writing its value back
+stores the canonical form.
 
 ### Nullability
 
 A column that carries `null` (§columns) is nullable and generated as
 `rt.Null[T]`, a value plus a validity bit, never a pointer, for every
 type, `[]byte` included (`rt.Null[[]byte]`). Every other column is NOT
-NULL and generated as `T`. A plain `[]byte` is therefore bytes and
+NULL and generated as `T`. A valid `rt.Null[time.Time]` binds as the stored form of a `time.Time`
+and reads as a NOT NULL one does, NULL aside (§go-types). A plain
+`[]byte` is therefore bytes and
 never NULL (§columns), and `rt.Bytes` is the one place that says
 so: generated code binds a `[]byte` field as `rt.Bytes(v.Body)`, whose
 `Value` writes nil as empty bytes, in a changeset write and on every
@@ -4703,7 +4767,9 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
 3. Every statement is rendered by the runtime (§predicates, rendering):
    `Get`, `GetBy*`, `List`, `Delete` and the select functions carry
    constants rendered at generation time, bound positionally in the
-   order the text names their parameters; `GetMany` and the dynamic
+   order the text names their parameters, every argument through
+   `rt.ArgsBound`, which binds a `time.Time` as its stored form
+   (§go-types); `GetMany` and the dynamic
    layer render when the function is called, so a rendering that
    fails (an `After` without an `OrderBy`) is a value carrying its
    error in `Err`, which the runner returns without running a
@@ -4787,7 +4853,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | `int`, `bool` | `INTEGER` (booleans stored 0/1; `true`/`false` in records and defaults become 1/0) |
 | `float64` | `REAL` |
 | `string` | `TEXT` |
-| `time.Time` | `TIMESTAMP` (ISO-8601 text; the DDL spelling is what the sqlite3 driver keys its time conversion on) |
+| `time.Time` | `TIMESTAMP`, holding the stored form of §go-types, SQLite's datetime text in UTC (the DDL spelling is what the sqlite3 driver keys its time conversion on) |
 | `[]byte` | `BLOB` |
 | declared `type` (§types) | the column type of its storage type; a value set (§types) carries no `CHECK`, its values are the Go constants |
 | backtick expressions | verbatim; parenthesized in `DEFAULT` as SQLite requires |

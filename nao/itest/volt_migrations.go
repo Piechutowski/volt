@@ -162,4 +162,22 @@ var Migrations = []rt.Migration{
 			`DROP TABLE metric_events`,
 		},
 	},
+	{
+		Name: "0009__batches",
+		Up: []string{
+			`CREATE TABLE batches (
+  opened_at TIMESTAMP PRIMARY KEY NOT NULL,
+  label TEXT NOT NULL DEFAULT ''
+)`,
+			`CREATE TABLE batch_items (
+  id INTEGER PRIMARY KEY,
+  opened_at TIMESTAMP NOT NULL,
+  FOREIGN KEY (opened_at) REFERENCES batches (opened_at)
+)`,
+		},
+		Down: []string{
+			`DROP TABLE batch_items`,
+			`DROP TABLE batches`,
+		},
+	},
 }

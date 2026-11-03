@@ -4,6 +4,7 @@ package itest
 
 import (
 	"github.com/Piechutowski/volt/nao/rt"
+	"time"
 )
 
 const voltUserGetSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "id" = ?`
@@ -348,6 +349,68 @@ const voltPostFlagDeleteSQL = `DELETE FROM "post_flags" WHERE "id" = ?`
 
 func PostFlagDelete(id int) rt.Exec {
 	return rt.Exec{SQL: voltPostFlagDeleteSQL, Args: []any{id}, Model: "PostFlag", One: true}
+}
+
+const voltBatchGetSQL = `SELECT "opened_at", "label" FROM "batches" WHERE "opened_at" = ?`
+
+func BatchGet(openedAt time.Time) rt.Lookup[Batch] {
+	return rt.Lookup[Batch]{SQL: voltBatchGetSQL, Args: []any{openedAt}, Scan: voltBatchScan}
+}
+
+func BatchGetMany(openedAts []time.Time) rt.Query[Batch] {
+	if len(openedAts) == 0 {
+		return rt.Query[Batch]{}
+	}
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltBatchTableSQL, voltBatchColumnsSQL, []rt.Opt[Batch]{BatchOpenedAt.In(openedAts...)})
+	return rt.Query[Batch]{SQL: voltSQL, Args: voltArgs, Scan: voltBatchScan, Err: voltErr}
+}
+
+const voltBatchListSQL = `SELECT "opened_at", "label" FROM "batches"`
+
+func BatchList() rt.Query[Batch] { return rt.Query[Batch]{SQL: voltBatchListSQL, Scan: voltBatchScan} }
+
+func BatchCreate(c BatchChangeset) rt.Write[Batch] { return rt.Insert(c.Validate().Changeset) }
+
+func BatchUpdate(c BatchChangeset) rt.Write[Batch] { return rt.Update(c.Validate().Changeset) }
+
+const voltBatchDeleteSQL = `DELETE FROM "batches" WHERE "opened_at" = ?`
+
+func BatchDelete(openedAt time.Time) rt.Exec {
+	return rt.Exec{SQL: voltBatchDeleteSQL, Args: []any{openedAt}, Model: "Batch", One: true}
+}
+
+const voltBatchItemGetSQL = `SELECT "id", "opened_at" FROM "batch_items" WHERE "id" = ?`
+
+func BatchItemGet(id int) rt.Lookup[BatchItem] {
+	return rt.Lookup[BatchItem]{SQL: voltBatchItemGetSQL, Args: []any{id}, Scan: voltBatchItemScan}
+}
+
+func BatchItemGetMany(ids []int) rt.Query[BatchItem] {
+	if len(ids) == 0 {
+		return rt.Query[BatchItem]{}
+	}
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltBatchItemTableSQL, voltBatchItemColumnsSQL, []rt.Opt[BatchItem]{BatchItemID.In(ids...)})
+	return rt.Query[BatchItem]{SQL: voltSQL, Args: voltArgs, Scan: voltBatchItemScan, Err: voltErr}
+}
+
+const voltBatchItemListSQL = `SELECT "id", "opened_at" FROM "batch_items"`
+
+func BatchItemList() rt.Query[BatchItem] {
+	return rt.Query[BatchItem]{SQL: voltBatchItemListSQL, Scan: voltBatchItemScan}
+}
+
+func BatchItemCreate(c BatchItemChangeset) rt.Write[BatchItem] {
+	return rt.Insert(c.Validate().Changeset)
+}
+
+func BatchItemUpdate(c BatchItemChangeset) rt.Write[BatchItem] {
+	return rt.Update(c.Validate().Changeset)
+}
+
+const voltBatchItemDeleteSQL = `DELETE FROM "batch_items" WHERE "id" = ?`
+
+func BatchItemDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltBatchItemDeleteSQL, Args: []any{id}, Model: "BatchItem", One: true}
 }
 
 const voltMetricEventGetSQL = `SELECT "id", "name" FROM "metric_events" WHERE "id" = ?`

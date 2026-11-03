@@ -84,8 +84,12 @@ func (x poolExecutor) Query(ctx context.Context, query string, args []any) (rt.R
 	if err != nil {
 		return nil, err
 	}
+	bound, err := rt.ArgsBound(args)
+	if err != nil {
+		return nil, err
+	}
 	start := time.Now()
-	rows, err := stmt.QueryContext(ctx, rt.ArgsBound(args)...)
+	rows, err := stmt.QueryContext(ctx, bound...)
 	x.db.logged(query, start, err)
 	return rows, err
 }
@@ -95,8 +99,12 @@ func (x poolExecutor) QueryRow(ctx context.Context, query string, args []any) rt
 	if err != nil {
 		return errRow{err}
 	}
+	bound, err := rt.ArgsBound(args)
+	if err != nil {
+		return errRow{err}
+	}
 	start := time.Now()
-	r := stmt.QueryRowContext(ctx, rt.ArgsBound(args)...)
+	r := stmt.QueryRowContext(ctx, bound...)
 	x.db.logged(query, start, r.Err())
 	return row{r}
 }
@@ -106,8 +114,12 @@ func (x poolExecutor) Exec(ctx context.Context, query string, args []any) (int64
 	if err != nil {
 		return 0, err
 	}
+	bound, err := rt.ArgsBound(args)
+	if err != nil {
+		return 0, err
+	}
 	start := time.Now()
-	res, err := stmt.ExecContext(ctx, rt.ArgsBound(args)...)
+	res, err := stmt.ExecContext(ctx, bound...)
 	x.db.logged(query, start, err)
 	if err != nil {
 		return 0, err
@@ -139,22 +151,34 @@ type txExecutor struct {
 }
 
 func (x txExecutor) Query(ctx context.Context, query string, args []any) (rt.Rows, error) {
+	bound, err := rt.ArgsBound(args)
+	if err != nil {
+		return nil, err
+	}
 	start := time.Now()
-	rows, err := x.tx.QueryContext(ctx, query, rt.ArgsBound(args)...)
+	rows, err := x.tx.QueryContext(ctx, query, bound...)
 	x.db.logged(query, start, err)
 	return rows, err
 }
 
 func (x txExecutor) QueryRow(ctx context.Context, query string, args []any) rt.Row {
+	bound, err := rt.ArgsBound(args)
+	if err != nil {
+		return errRow{err}
+	}
 	start := time.Now()
-	r := x.tx.QueryRowContext(ctx, query, rt.ArgsBound(args)...)
+	r := x.tx.QueryRowContext(ctx, query, bound...)
 	x.db.logged(query, start, r.Err())
 	return row{r}
 }
 
 func (x txExecutor) Exec(ctx context.Context, query string, args []any) (int64, error) {
+	bound, err := rt.ArgsBound(args)
+	if err != nil {
+		return 0, err
+	}
 	start := time.Now()
-	res, err := x.tx.ExecContext(ctx, query, rt.ArgsBound(args)...)
+	res, err := x.tx.ExecContext(ctx, query, bound...)
 	x.db.logged(query, start, err)
 	if err != nil {
 		return 0, err

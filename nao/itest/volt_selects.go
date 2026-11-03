@@ -283,3 +283,31 @@ func UserEveryone() rt.With[User, Order, int, UserWithOrders] {
 }
 
 const voltUserEveryoneChildrenSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "user_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+
+const voltUserStampedSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "created_at" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+
+func UserStamped(stamps []time.Time) rt.Query[User] {
+	return rt.Query[User]{SQL: voltUserStampedSQL, Args: []any{rt.JSONList(stamps)}, Scan: voltUserScan}
+}
+
+const voltBatchTrailSQL = `SELECT "opened_at", "label" FROM "batches" ORDER BY "opened_at" ASC`
+
+func BatchTrail() rt.With[Batch, BatchItem, time.Time, BatchWithBatchItems] {
+	return rt.With[Batch, BatchItem, time.Time, BatchWithBatchItems]{
+		Parent:    rt.Query[Batch]{SQL: voltBatchTrailSQL, Args: nil, Scan: voltBatchScan},
+		Child:     voltBatchTrailChildrenSQL,
+		ChildScan: voltBatchItemScan,
+		ParentKey: func(voltP Batch) time.Time { return voltP.OpenedAt },
+		ChildKey:  func(voltC BatchItem) time.Time { return voltC.OpenedAt },
+		Build: func(voltP Batch, voltCs []BatchItem) BatchWithBatchItems {
+			return BatchWithBatchItems{Batch: voltP, BatchItems: voltCs}
+		},
+	}
+}
+
+type BatchWithBatchItems struct {
+	Batch
+	BatchItems []BatchItem
+}
+
+const voltBatchTrailChildrenSQL = `SELECT "id", "opened_at" FROM "batch_items" WHERE "opened_at" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`

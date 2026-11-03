@@ -824,7 +824,7 @@ func (l *selectLowering) withCheck(si *SelectInfo) bool {
 		case cd.Nullable:
 			l.errorf(id.Pos(), "with %s matches the parent's %q, which carries null; a NULL key matches no child, so the key is a column that is never NULL (§selects-over-groups)", name, parentKey)
 			return false
-		case cd.Type.Known() && (cd.Type.Storage == "time.Time" || cd.Type.Storage == "[]byte"):
+		case cd.Type.Known() && cd.Type.Storage == "[]byte":
 			l.errorf(id.Pos(), "with %s matches the parent's %q (%s), whose keys cannot travel as one JSON list, as a list parameter cannot (§selects-over-groups, §predicates)", name, parentKey, cd.Col.Type.String())
 			return false
 		}
@@ -1889,14 +1889,6 @@ func (e *selectEnv) inLower(x *ast.PredIn) rt.GenPred {
 		return rt.GenPred{}
 	}
 	if x.List != nil {
-		if b.class == classTime {
-			e.errorf(x.Col.Pos(), "column %q (%s) cannot take a list parameter: JSON carries no date/time value (§predicates)", b.name, b.goType)
-			return rt.GenPred{}
-		}
-		if b.class == classEqOnly && b.storage == classTime {
-			e.errorf(x.Col.Pos(), "column %q has declared type %s stored as time.Time; it cannot take a list parameter: JSON carries no date/time value (§predicates)", b.name, b.goType)
-			return rt.GenPred{}
-		}
 		if b.class == classEqOnly && b.storage == classForbidden {
 			e.errorf(x.Col.Pos(), "column %q has declared type %s stored as []byte; it cannot take a list parameter: JSON carries no blob, and its text never equals the stored bytes (§predicates)", b.name, b.goType)
 			return rt.GenPred{}

@@ -186,7 +186,7 @@ func TestNoRowsIs404(t *testing.T) {
 }
 
 func TestFormatQueryRoundTrip(t *testing.T) {
-	at := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+	at := time.Date(2024, 1, 2, 3, 4, 5, 250_000_000, time.UTC)
 	r := requestOf(httptest.NewRequest("GET", URL("/x",
 		Query("s", FormatQuery("a b")), Query("i", FormatQuery(-7)),
 		Query("f", FormatQuery(1.25)), Query("b", FormatQuery(true)), Query("t", FormatQuery(at))), nil))

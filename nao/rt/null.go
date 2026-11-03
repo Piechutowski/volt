@@ -76,13 +76,13 @@ func (n *Null[T]) Scan(src any) error {
 
 // Value implements driver.Valuer: the value, or nil for NULL; a valid
 // []byte binds through Bytes, nil as empty bytes (spec §columns), and a
-// valid time.Time binds in UTC (spec §go-types).
+// valid time.Time as its TimeText (spec §go-types).
 func (n Null[T]) Value() (driver.Value, error) {
 	if b, ok := any(n.V).([]byte); ok && n.Valid {
 		return Bytes(b).Value()
 	}
 	if t, ok := any(n.V).(time.Time); ok && n.Valid {
-		return t.UTC(), nil
+		return TimeText(t)
 	}
 	return sql.Null[T]{V: n.V, Valid: n.Valid}.Value()
 }

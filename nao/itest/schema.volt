@@ -177,6 +177,22 @@ select joined (name, min(created_at) as first, max(created_at) as last) for user
 select carts    for users with orders where id = :id
 select everyone for users with orders [order: (id asc)]
 
+// A date/time list parameter and a date/time with key travel as JSON
+// arrays of the canonical text the column holds (spec §go-types).
+select stamped for users where created_at in :stamps [order: (id asc)]
+
+table batches {
+  opened_at time.Time [pk]
+  label     string    [default: ""]
+}
+
+table batch_items {
+  id        int       [pk]
+  opened_at time.Time [ref: batches.opened_at]
+}
+
+select trail for batches with batch_items [order: (opened_at asc)]
+
 // §columns: the database-assigned key with SQLite's AUTOINCREMENT, whose
 // ids are never reused, beside the plain database-assigned key of users.
 table metric_events {

@@ -1,5 +1,5 @@
-// spec: §records-sample-data, a time.Time record value is ISO 8601 text
-// want: must be ISO 8601 text
+// spec: §records-sample-data, a time.Time record value is date/time text
+// want: must be date/time text in SQLite's canonical UTC form
 table posts {
   id        int       [pk]
   posted_at time.Time
@@ -8,5 +8,4 @@ table posts {
 records posts(id, posted_at) {
   1, "2024-01-15 10:30:00"
   2, "not a date at all"
-  3, "2024-01-15T10:30:00Z"
 }

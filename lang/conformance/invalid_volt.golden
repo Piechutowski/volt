@@ -118,9 +118,6 @@ db/i157_declared_type_order.volt:12:35: error: spec/selects-over-groups: column 
 ## i158_declared_type_string_literal.volt
 db/i158_declared_type_string_literal.volt:12:37: error: spec/selects-over-groups: column "price" (money.Money) cannot be compared with the string "x" (§predicates)
 
-## i159_declared_type_list_time.volt
-db/i159_declared_type_list_time.volt:12:32: error: spec/selects-over-groups: column "at" has declared type stamp.Stamp stored as time.Time; it cannot take a list parameter: JSON carries no date/time value (§predicates)
-
 ## i15_keyword_param.volt
 app/i15_keyword_param.volt:5:9: error: spec/scopes-and-routes: path parameter "type" must be a valid, non-keyword Go identifier (§route-paths)
 
@@ -870,9 +867,6 @@ db/i440_alias_names_joined_column.volt:19:40: error: spec/selects-over-groups: a
 ## i441_with_nullable_key.volt
 db/i441_with_nullable_key.volt:15:30: error: spec/selects-over-groups: with visits matches the parent's "code", which carries null; a NULL key matches no child, so the key is a column that is never NULL (§selects-over-groups)
 
-## i442_with_time_key.volt
-db/i442_with_time_key.volt:14:28: error: spec/selects-over-groups: with samples matches the parent's "started_at" (time.Time), whose keys cannot travel as one JSON list, as a list parameter cannot (§selects-over-groups, §predicates)
-
 ## i443_load_named_err
 app/routes.volt:12:3: error: spec/route-loads: load "err" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§route-loads, §route-paths)
 
@@ -1016,9 +1010,6 @@ db/i94_group_set_remove_missing.volt:17:52: error: spec/groups: table "ms_dict" 
 
 ## i95_projection_minus.volt
 db/i95_projection_minus.volt:10:18: error: syntax: '-' is not a projection operator: exclusion is spelled '\' (§selects-over-groups)
-
-## i96_list_param_time.volt
-db/i96_list_param_time.volt:10:36: error: spec/selects-over-groups: column "at" (time.Time) cannot take a list parameter: JSON carries no date/time value (§predicates)
 
 ## i97_list_param_scalar_conflict.volt
 db/i97_list_param_scalar_conflict.volt:10:60: error: spec/selects-over-groups: parameter :site used as string here but []string earlier — one name, one type (§predicates)

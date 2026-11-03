@@ -9,7 +9,9 @@ import (
 // array a generated select binds to `json_each(?)`: one static statement
 // whatever the list length, prepared once. An element that implements
 // driver.Valuer is encoded as its driver value, the form the column
-// holds. A nil or empty slice is "[]", which matches no row.
+// holds, and a time.Time, or an element whose driver value is one, as its
+// TimeText, the text the column holds (spec §go-types). A nil or empty
+// slice is "[]", which matches no row.
 func JSONList[T any](v []T) string {
 	if len(v) == 0 {
 		return "[]"
@@ -17,6 +19,13 @@ func JSONList[T any](v []T) string {
 	vals := make([]any, len(v))
 	for i, x := range v {
 		vals[i] = x
+		if s, ok, err := timeBound(x); ok || err != nil {
+			if err != nil {
+				panic("rt.JSONList: " + err.Error())
+			}
+			vals[i] = s
+			continue
+		}
 		if dv, ok := any(x).(driver.Valuer); ok {
 			val, err := dv.Value()
 			if err != nil {

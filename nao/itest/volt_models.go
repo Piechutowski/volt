@@ -1432,6 +1432,188 @@ func voltPostFlagCast(c rt.Changeset[PostFlag], p rt.Params[PostFlag], i int) (r
 	return c, nil
 }
 
+type Batch struct {
+	OpenedAt time.Time `db:"opened_at" json:"opened_at"`
+	Label    string    `db:"label" json:"label"`
+}
+
+type BatchColumn = rt.ColumnOf[Batch]
+
+type BatchParams = rt.Params[Batch]
+
+var (
+	BatchOpenedAt = rt.Column[Batch, time.Time]{Name: "opened_at"}
+	BatchLabel    = rt.Column[Batch, string]{Name: "label"}
+)
+
+var voltBatchDesc = &rt.Desc[Batch]{
+	Model:   "Batch",
+	Table:   `"batches"`,
+	Columns: `"opened_at", "label"`,
+	Fields: []rt.FieldDesc{
+		{Column: "opened_at", Wire: "opened_at", Key: true},
+		{Column: "label", Wire: "label"},
+	},
+	Scan:   voltBatchScan,
+	Values: voltBatchValues,
+	Apply:  voltBatchApply,
+	Cast:   voltBatchCast,
+}
+
+type BatchChangeset struct{ rt.Changeset[Batch] }
+
+func BatchNew() BatchChangeset { return BatchChangeset{rt.NewChangeset(voltBatchDesc)} }
+
+func (r Batch) Changeset() BatchChangeset { return BatchChangeset{rt.ChangesetOf(voltBatchDesc, r)} }
+
+func (c BatchChangeset) From(r Batch) BatchChangeset { return BatchChangeset{c.Changeset.From(r)} }
+
+func (c BatchChangeset) OpenedAtSet(v time.Time) BatchChangeset {
+	return BatchChangeset{rt.Set(c.Changeset, 0, func(voltR *Batch) { voltR.OpenedAt = v })}
+}
+
+func (c BatchChangeset) LabelSet(v string) BatchChangeset {
+	return BatchChangeset{rt.Set(c.Changeset, 1, func(voltR *Batch) { voltR.Label = v })}
+}
+
+func (c BatchChangeset) Cast(p BatchParams, allow ...BatchColumn) BatchChangeset {
+	return BatchChangeset{c.Changeset.Cast(p, allow...)}
+}
+
+func (c BatchChangeset) ErrorAdd(col BatchColumn, msg string) BatchChangeset {
+	return BatchChangeset{c.Changeset.ErrorAdd(col, msg)}
+}
+
+func voltBatchScan(r rt.Row) (Batch, error) {
+	var voltV Batch
+	voltErr := r.Scan((*rt.Time)(&voltV.OpenedAt), &voltV.Label)
+	return voltV, rt.Refused("Batch", voltErr)
+}
+
+func voltBatchValues(voltR Batch) []any { return []any{voltR.OpenedAt, voltR.Label} }
+
+func voltBatchApply(voltData, voltVals Batch, voltSet []bool) Batch {
+	voltR := voltData
+	if voltSet[0] {
+		voltR.OpenedAt = voltVals.OpenedAt
+	}
+	if voltSet[1] {
+		voltR.Label = voltVals.Label
+	}
+	return voltR
+}
+
+func voltBatchCast(c rt.Changeset[Batch], p rt.Params[Batch], i int) (rt.Changeset[Batch], error) {
+	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "opened_at", "time.Time", false, func(voltR *Batch) time.Time { return voltR.OpenedAt })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return BatchChangeset{c}.OpenedAtSet(voltV).Changeset, nil
+	case 1:
+		voltV, voltOK, voltErr := rt.Field(p, "label", "string", false, func(voltR *Batch) string { return voltR.Label })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return BatchChangeset{c}.LabelSet(voltV).Changeset, nil
+	}
+	return c, nil
+}
+
+type BatchItem struct {
+	ID       int       `db:"id" json:"id"`
+	OpenedAt time.Time `db:"opened_at" json:"opened_at"`
+}
+
+type BatchItemColumn = rt.ColumnOf[BatchItem]
+
+type BatchItemParams = rt.Params[BatchItem]
+
+var (
+	BatchItemID       = rt.Column[BatchItem, int]{Name: "id"}
+	BatchItemOpenedAt = rt.Column[BatchItem, time.Time]{Name: "opened_at"}
+)
+
+var voltBatchItemDesc = &rt.Desc[BatchItem]{
+	Model:   "BatchItem",
+	Table:   `"batch_items"`,
+	Columns: `"id", "opened_at"`,
+	Fields: []rt.FieldDesc{
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
+		{Column: "opened_at", Wire: "opened_at"},
+	},
+	Scan:   voltBatchItemScan,
+	Values: voltBatchItemValues,
+	Apply:  voltBatchItemApply,
+	Cast:   voltBatchItemCast,
+}
+
+type BatchItemChangeset struct{ rt.Changeset[BatchItem] }
+
+func BatchItemNew() BatchItemChangeset { return BatchItemChangeset{rt.NewChangeset(voltBatchItemDesc)} }
+
+func (r BatchItem) Changeset() BatchItemChangeset {
+	return BatchItemChangeset{rt.ChangesetOf(voltBatchItemDesc, r)}
+}
+
+func (c BatchItemChangeset) From(r BatchItem) BatchItemChangeset {
+	return BatchItemChangeset{c.Changeset.From(r)}
+}
+
+func (c BatchItemChangeset) IDSet(v int) BatchItemChangeset {
+	return BatchItemChangeset{rt.Set(c.Changeset, 0, func(voltR *BatchItem) { voltR.ID = v })}
+}
+
+func (c BatchItemChangeset) OpenedAtSet(v time.Time) BatchItemChangeset {
+	return BatchItemChangeset{rt.Set(c.Changeset, 1, func(voltR *BatchItem) { voltR.OpenedAt = v })}
+}
+
+func (c BatchItemChangeset) Cast(p BatchItemParams, allow ...BatchItemColumn) BatchItemChangeset {
+	return BatchItemChangeset{c.Changeset.Cast(p, allow...)}
+}
+
+func (c BatchItemChangeset) ErrorAdd(col BatchItemColumn, msg string) BatchItemChangeset {
+	return BatchItemChangeset{c.Changeset.ErrorAdd(col, msg)}
+}
+
+func voltBatchItemScan(r rt.Row) (BatchItem, error) {
+	var voltV BatchItem
+	voltErr := r.Scan(&voltV.ID, (*rt.Time)(&voltV.OpenedAt))
+	return voltV, rt.Refused("BatchItem", voltErr)
+}
+
+func voltBatchItemValues(voltR BatchItem) []any { return []any{voltR.ID, voltR.OpenedAt} }
+
+func voltBatchItemApply(voltData, voltVals BatchItem, voltSet []bool) BatchItem {
+	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
+	if voltSet[1] {
+		voltR.OpenedAt = voltVals.OpenedAt
+	}
+	return voltR
+}
+
+func voltBatchItemCast(c rt.Changeset[BatchItem], p rt.Params[BatchItem], i int) (rt.Changeset[BatchItem], error) {
+	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *BatchItem) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return BatchItemChangeset{c}.IDSet(voltV).Changeset, nil
+	case 1:
+		voltV, voltOK, voltErr := rt.Field(p, "opened_at", "time.Time", false, func(voltR *BatchItem) time.Time { return voltR.OpenedAt })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return BatchItemChangeset{c}.OpenedAtSet(voltV).Changeset, nil
+	}
+	return c, nil
+}
+
 type MetricEvent struct {
 	ID   int    `db:"id" json:"id"`
 	Name string `db:"name" json:"name"`

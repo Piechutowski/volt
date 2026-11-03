@@ -103,3 +103,14 @@ migration 0008__metric_events {
     name string
   }
 }
+
+migration 0009__batches {
+  create table batches {
+    opened_at time.Time [pk]
+    label     string    [default: ""]
+  }
+  create table batch_items {
+    id        int       [pk]
+    opened_at time.Time [ref: batches.opened_at]
+  }
+}

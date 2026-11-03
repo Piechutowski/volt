@@ -93,6 +93,17 @@ CREATE TABLE post_flags (
   approved TEXT
 );
 
+CREATE TABLE batches (
+  opened_at TIMESTAMP PRIMARY KEY NOT NULL,
+  label TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE batch_items (
+  id INTEGER PRIMARY KEY,
+  opened_at TIMESTAMP NOT NULL,
+  FOREIGN KEY (opened_at) REFERENCES batches (opened_at)
+);
+
 CREATE TABLE metric_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL

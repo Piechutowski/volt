@@ -378,8 +378,8 @@ i363_type_alias_two_paths.volt:4:6: error: spec/types: type "a.Hits" imports "ex
 ## i364_type_from_not_import_path.volt
 i364_type_from_not_import_path.volt:3:27: error: spec/types: type "money.Money" has from path "not a path!", which is not a Go import path (§types)
 
-## i365_records_time_not_iso.volt
-i365_records_time_not_iso.volt:10:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be ISO 8601 text such as "2024-01-15 10:30:00", found "not a date at all" (§records-sample-data)
+## i365_records_time_not_a_date.volt
+i365_records_time_not_a_date.volt:10:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be date/time text in SQLite's canonical UTC form, such as "2024-01-15 10:30:00", found "not a date at all" (§records-sample-data)
 
 ## i367_type_from_next_line.volt
 i367_type_from_next_line.volt:4:3: error: syntax: expected end of line after type declaration (§types), found string "\"example.com/app/money\""
@@ -429,6 +429,20 @@ i456_default_rowid_alias.volt:6:15: error: spec/columns: default on "id", the ro
 i456_default_rowid_alias.volt:10:35: error: spec/columns: default on "id", the rowid alias of table "events": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
 i456_default_rowid_alias.volt:15:38: error: spec/columns: default on "user_id", the rowid alias of table "user_profiles": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
 i456_default_rowid_alias.volt:20:21: error: spec/columns: default on "code", the rowid alias of table "tickets": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
+
+## i458_records_time_not_canonical.volt
+i458_records_time_not_canonical.volt:9:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15T10:30:00Z" (§records-sample-data)
+i458_records_time_not_canonical.volt:10:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15 12:30:00+02:00" (§records-sample-data)
+i458_records_time_not_canonical.volt:11:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15 10:30" (§records-sample-data)
+i458_records_time_not_canonical.volt:12:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 00:00:00", found "2024-01-15" (§records-sample-data)
+i458_records_time_not_canonical.volt:13:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 10:30:00.5", found "2024-01-15 10:30:00.500" (§records-sample-data)
+i458_records_time_not_canonical.volt:14:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be a SQL string of SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15T10:30:00" (§records-sample-data)
+
+## i459_records_declared_time_not_canonical.volt
+i459_records_declared_time_not_canonical.volt:10:8: error: spec/records-sample-data: record value for "at" (stamp.Stamp) must be SQLite's canonical UTC date/time text, "2024-01-15 08:30:00", found "2024-01-15 10:30:00+02:00" (§records-sample-data)
+
+## i460_default_time_sql_string.volt
+i460_default_time_sql_string.volt:5:33: error: spec/default-values: default of "posted_at" (time.Time) must be a SQL string of SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15T10:30:00Z" (§default-values)
 
 ## i61_tag_malformed.volt
 i61_tag_malformed.volt:4:21: error: spec/columns: tag "json=name" is not one key:"value" pair: write e.g. "json:\"name\"" (§columns)
