@@ -39,7 +39,29 @@ type GoFile struct {
 	Handlers bool
 	Vars     map[string]bool
 	Types    map[string]*goast.TypeSpec
+	Bodies   []Body
 	fset     *gotoken.FileSet
+}
+
+// Body is where an action of the routes package receives its request
+// body, as the generated interface declares it (spec §request-bodies):
+// the action's name, the body's position among its parameters, the
+// request at 0, and the Go type it spells.
+type Body struct {
+	Action string
+	At     int
+	Type   string
+}
+
+// bodyAt reports whether the parameter at position at of the method,
+// of the spelled type, is the request body of an action of its name.
+func (f *GoFile) bodyAt(method string, at int, typ string) bool {
+	for _, b := range f.Bodies {
+		if b.Action == method && b.At == at && b.Type == typ {
+			return true
+		}
+	}
+	return false
 }
 
 // Pos is the position of n in the file, as diagnostics carry it.
@@ -50,9 +72,10 @@ func (f *GoFile) Pos(n goast.Node) token.Position {
 
 // RunGo parses the sources of the routes package at dir and runs every
 // Go rule among analyzers (all registered ones if none are named) over
-// each file; a file that does not parse is skipped, the compiler
-// reporting it. The warnings come file by file, sorted by position.
-func RunGo(dir string, srcs []GoSource, analyzers ...Analyzer) []diag.Diagnostic {
+// each file, bodies telling where its actions receive a request body; a
+// file that does not parse is skipped, the compiler reporting it. The
+// warnings come file by file, sorted by position.
+func RunGo(dir string, srcs []GoSource, bodies []Body, analyzers ...Analyzer) []diag.Diagnostic {
 	if len(analyzers) == 0 {
 		analyzers = All()
 	}
@@ -96,7 +119,7 @@ func RunGo(dir string, srcs []GoSource, analyzers ...Analyzer) []diag.Diagnostic
 	}
 	var out []diag.Diagnostic
 	for _, f := range files {
-		f.Vars, f.Types = vars, types
+		f.Vars, f.Types, f.Bodies = vars, types, bodies
 		for _, r := range rules {
 			out = append(out, r.Go(f)...)
 		}

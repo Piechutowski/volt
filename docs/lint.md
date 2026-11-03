@@ -408,12 +408,17 @@ each use keeps the count visible, so it stays the exception.
 
 **What it does.** Reports a handler that returns `volt.Then` over a
 query whose every argument is a parameter of the handler or a literal.
-The handler's `body` is no such parameter, since no load binds it
-(spec §request-bodies), so a create or an update of the body, which
-takes a changeset, is never reported; nor is a function of the runtime
-packages, `volt` and `rt`, which no load names, or a delete, a call
-whose name ends in `Delete` or `DeleteWhere`, since a load is a read
-(spec §route-loads).
+The handler's request body is no such parameter, since no load binds
+it (spec §request-bodies), so a create or an update of the body, which
+takes a changeset, is never reported. The rule tells the body by where
+the generated interface declares it, not by its name: the routes say
+which actions take a body, its position among the parameters (after
+the request, the scope loads and the route's parameters, spec
+§handler-references) and its type, and a parameter at that position
+spelling that type is the body whatever the handler calls it. Nor is a
+function of the runtime packages, `volt` and `rt`, reported, which no
+load names, or a delete, a call whose name ends in `Delete` or
+`DeleteWhere`, since a load is a read (spec §route-loads).
 
 **Why.** A route load (spec §route-loads) spells that lookup once, in
 the route, and hands the handler the row: the handler never sees a
@@ -425,13 +430,20 @@ request's body, its headers or a computed value.
 `Show` looks a metric up by its path parameter and `Touched` runs a
 select named `last_update` by its own, so both warn; `Peers` computes
 an argument from the query string and `Recent` builds a dynamic query,
-so both pass; `Save` updates and `Add` inserts the changeset body, and
-`Drop` and `Purge` delete, writes no load could spell, so all four
-pass.
+so both pass; `Save` updates and `Add` inserts the changeset body,
+`Rename` updates it under the name `cs`, and `Drop` and `Purge`
+delete, writes no load could spell, so all five pass; `Mirror` names a
+parameter `body` that the routes do not declare as its body, so its
+lookup by it warns. The file's `// bodies:` line stands in for the
+routes, naming each action that takes a body, the body's position and
+its type.
 
 **Limitations.** Without type information a delete is told by its
 name, so a select whose function name ends in `Delete` or
-`DeleteWhere` is skipped too.
+`DeleteWhere` is skipped too, and the body's type is compared as
+spelled, so a handler that imports the data package under another
+name than the generated interface does is not seen to receive its
+body.
 
 ---
 

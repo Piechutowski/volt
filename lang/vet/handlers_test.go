@@ -1,6 +1,7 @@
 package vet_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,6 +34,20 @@ func TestGoAnalyzers(t *testing.T) {
 				}
 				analyzers = append(analyzers, a)
 			}
+			var bodies []vet.Body
+			for _, ln := range lines {
+				spec, ok := strings.CutPrefix(strings.TrimSpace(ln), "// bodies:")
+				if !ok {
+					continue
+				}
+				for _, item := range strings.Split(spec, ",") {
+					var b vet.Body
+					if _, err := fmt.Sscan(item, &b.Action, &b.At, &b.Type); err != nil {
+						t.Fatalf("bodies header item %q: %v", item, err)
+					}
+					bodies = append(bodies, b)
+				}
+			}
 			want := map[int][]string{}
 			for i, ln := range lines {
 				if m := wantRE.FindStringSubmatch(ln); m != nil {
@@ -41,7 +56,7 @@ func TestGoAnalyzers(t *testing.T) {
 					}
 				}
 			}
-			for _, w := range vet.RunGo("testdata", []vet.GoSource{{Name: filepath.Base(file), Text: string(src)}}, analyzers...) {
+			for _, w := range vet.RunGo("testdata", []vet.GoSource{{Name: filepath.Base(file), Text: string(src)}}, bodies, analyzers...) {
 				name := strings.TrimPrefix(w.Code, "vet/")
 				matched := false
 				rest := want[int(w.Pos.Line())][:0]

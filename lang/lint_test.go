@@ -41,3 +41,62 @@ func TestVetRunsAnalyzers(t *testing.T) {
 		}
 	}
 }
+
+// TestVetTellsTheBodyByItsPlace proves loadspelledlong learns from the
+// routes where each action receives its body, so an update of the body
+// under any name passes, while a lookup by a path parameter still warns
+// (lint.md, loadspelledlong; spec §request-bodies).
+func TestVetTellsTheBodyByItsPlace(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"go.mod":          "module vetted\n",
+		"db/schema.volt":  "package db\n\ntable metrics {\n  id   int    [pk]\n  unit string\n}\n",
+		"app/routes.volt": "package app\n\nimport (\n\tdb\n)\n\nscope / {\n\tget   /metrics/:id(int) Metrics.Show\n\tpatch /metrics/:id(int) Metrics.Save [body: db.MetricUpdate(id)]\n\tpost  /metrics          Metrics.Add  [body: db.MetricCreate]\n}\n",
+		"app/metrics.go": `package app
+
+import (
+	"github.com/Piechutowski/volt"
+	"vetted/db"
+)
+
+type Metrics struct{}
+
+func (Metrics) Show(r volt.Request, id int) volt.Response {
+	return volt.Then(db.MetricGet(id), func(m db.Metric) volt.Response { return volt.Render(m) })
+}
+
+func (Metrics) Save(r volt.Request, id int, cs db.MetricChangeset) volt.Response {
+	return volt.Then(db.MetricUpdate(cs), func(m db.Metric) volt.Response { return volt.Render(m) })
+}
+
+func (Metrics) Add(r volt.Request, in db.MetricChangeset) volt.Response {
+	return volt.Then(db.MetricCreate(in), func(m db.Metric) volt.Response { return volt.Render(m) })
+}
+`,
+	}
+	for name, text := range files {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pr, err := lang.Load(disk.Source{}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags := lang.Check(pr); diag.HasErrors(diags) {
+		t.Fatal(diags)
+	}
+	var lines []int
+	for _, d := range lang.Vet(pr) {
+		if d.Code == "vet/loadspelledlong" {
+			lines = append(lines, int(d.Pos.Line()))
+		}
+	}
+	if len(lines) != 1 || lines[0] != 11 {
+		t.Errorf("loadspelledlong warned at lines %v, want only Show's lookup at line 11", lines)
+	}
+}

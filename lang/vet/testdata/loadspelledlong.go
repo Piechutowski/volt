@@ -1,4 +1,5 @@
 // analyzers: loadspelledlong
+// bodies: Save 2 db.MetricChangeset, Add 1 db.MetricChangeset, Rename 2 db.MetricChangeset
 package app
 
 import (
@@ -24,6 +25,14 @@ func (Metrics) Recent(r volt.Request) volt.Response {
 
 func (Metrics) Save(r volt.Request, id int, body db.MetricChangeset) volt.Response {
 	return volt.Then(db.MetricUpdate(body), func(m db.Metric) volt.Response { return volt.Render(m) })
+}
+
+func (Metrics) Rename(r volt.Request, id int, cs db.MetricChangeset) volt.Response {
+	return volt.Then(db.MetricUpdate(cs), func(m db.Metric) volt.Response { return volt.Render(m) })
+}
+
+func (Metrics) Mirror(r volt.Request, id int, body int) volt.Response {
+	return volt.Then(db.MetricGet(body), func(m db.Metric) volt.Response { return volt.Render(m) }) //WANT loadspelledlong
 }
 
 func (Metrics) Drop(r volt.Request, id int) volt.Response {

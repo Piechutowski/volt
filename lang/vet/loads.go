@@ -22,11 +22,16 @@ func (r *loadSpelledLongRule) Go(f *GoFile) []diag.Diagnostic {
 			continue
 		}
 		params := map[string]bool{}
-		for i, field := range fd.Type.Params.List {
+		at := 0
+		for _, field := range fd.Type.Params.List {
+			if len(field.Names) == 0 {
+				at++
+			}
 			for _, id := range field.Names {
-				if i > 0 && id.Name != "body" {
+				if at > 0 && !f.bodyAt(fd.Name.Name, at, spelled(field.Type)) {
 					params[id.Name] = true
 				}
+				at++
 			}
 		}
 		runtime := runtimeNames(f.File)
