@@ -80,8 +80,12 @@ func ChangesetOf[M any](d *Desc[M], r M) Changeset[M] {
 }
 
 // Set marks column i of c with the value set writes into a copy of the
-// proposed values (spec §changesets); the generated setters call it.
+// proposed values (spec §changesets); the generated setters call it. On
+// the zero changeset, which knows no column, it marks nothing.
 func Set[M any](c Changeset[M], i int, set func(*M)) Changeset[M] {
+	if i < 0 || i >= len(c.d().Fields) {
+		return c
+	}
 	vals := c.vals
 	set(&vals)
 	c.vals = vals

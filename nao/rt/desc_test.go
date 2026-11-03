@@ -167,3 +167,15 @@ func TestInsertRefusesAnUnmarkedOrdinaryRowidAlias(t *testing.T) {
 		t.Errorf("Insert of an unmarked database-assigned key = %+v, err %v", w, w.Err)
 	}
 }
+
+// TestZeroChangesetMarksNothing proves a setter on the changeset no
+// constructor made marks nothing and does not panic (spec §changesets),
+// so a handler that sets a column on its body can be called with the
+// zero body ControllersDeterministic hands it.
+func TestZeroChangesetMarksNothing(t *testing.T) {
+	var c Changeset[entry]
+	set := Set(c, 1, func(r *entry) { r.Title = "hello" })
+	if set.Changed(entryTitle) || set.Row() != (entry{}) || !set.Valid() {
+		t.Errorf("Set on the zero changeset = %+v, changed %v", set.Row(), set.Changed(entryTitle))
+	}
+}
