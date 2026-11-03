@@ -4,6 +4,8 @@
 // through and RequireKey refuses a request without the key.
 package main
 
+//go:generate go run github.com/Piechutowski/volt/cmd/volt gen --sql ./...
+
 import (
 	"context"
 	"fmt"

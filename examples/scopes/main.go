@@ -4,6 +4,8 @@
 // route through the generated client and shows what came back.
 package main
 
+//go:generate go run github.com/Piechutowski/volt/cmd/volt gen --sql ./...
+
 import (
 	"context"
 	"fmt"

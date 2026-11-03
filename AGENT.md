@@ -54,11 +54,14 @@ driver is a stub and `volt` refuses the fold and the migration
 commands with exit 2), while the library and the runtime register
 none. `examples/` holds one tiny program per feature (`tables`,
 `migrations`, `scopes`, `pipelines`, `validation`), each its `.volt`
-files, their committed generated code, a server started in process and
-a guigui window that calls it through the generated client;
-`go run ./examples/run NAME` runs `volt gen` on one and then runs it.
-Each has a test over its server, and `examples/run` regenerates all of
-them with the checkout's `volt` and proves the committed files current.
+files, a server started in process and a guigui window that calls it
+through the generated client. Their generated code is not committed
+(`examples/.gitignore`): a `//go:generate` line in each `main.go` runs
+the checkout's `volt gen`, so `go generate ./examples/...` comes before
+building them, and `go run ./examples/run NAME` generates one and then
+runs it. Generated code is committed only where it is a golden: the
+generator testdata and the `itest/` and `nao/itest/` fixtures. Each
+example has a test over its server.
 The windows are guigui on Ebitengine, so building the module needs the
 X11 and OpenGL development headers Ebitengine needs on Linux; no test
 opens a window. Go floor is the
@@ -70,6 +73,7 @@ examples.
 ## Verification bar, all of it, before claiming done
 
 ```sh
+go generate ./examples/...
 go build ./... ./lsp/... ./cmd/volt/... ./examples/...
 go vet   ./... ./lsp/... ./cmd/volt/... ./examples/...
 go test  ./... ./lsp/... ./cmd/volt/... ./examples/...
@@ -78,8 +82,7 @@ gofmt -l . | grep -v zed-extension        # must be empty
 ```
 
 Golden refresh is `go test ./gen/router -update` and `go test
-./nao/gen/... -update`, and an example regenerates with `go run
-./examples/run NAME`; read the diff, goldens
+./nao/gen/... -update`; read the diff, goldens
 exist to surface unintended output changes. Grammar changes also need
 `tree-sitter generate`, `tree-sitter test`, the checklist in
 `editor.md` section 8 and `./scripts/sync-grammar.sh`. Anything

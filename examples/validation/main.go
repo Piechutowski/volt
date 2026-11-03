@@ -4,6 +4,8 @@
 // Problem the client receives under its field.
 package main
 
+//go:generate go run github.com/Piechutowski/volt/cmd/volt gen --sql ./...
+
 import (
 	"context"
 	_ "embed"

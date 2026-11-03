@@ -1,6 +1,7 @@
-// Run regenerates one example's Go code from its .volt files with volt
-// gen, then runs the example, so the generated files sit beside the
-// .volt files they come from while the window shows the result:
+// Run regenerates one example's Go code from its .volt files with go
+// generate, whose directive in the example's main.go runs volt gen, then
+// runs the example, so the generated files sit beside the .volt files
+// they come from while the window shows the result:
 //
 //	go run ./examples/run tables
 //
@@ -29,8 +30,8 @@ func main() {
 		os.Exit(2)
 	}
 	example := filepath.Join(dir, os.Args[1])
-	fmt.Printf("volt gen --sql ./... in %s\n", example)
-	if err := step(example, "go", "run", "github.com/Piechutowski/volt/cmd/volt", "gen", "--sql", "./..."); err != nil {
+	fmt.Printf("go generate %s\n", example)
+	if err := step(example, "go", "generate", "."); err != nil {
 		fail(err)
 	}
 	fmt.Printf("go run %s\n", example)

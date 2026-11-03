@@ -1,0 +1,2 @@
+# volt gen writes these; go generate ./examples/... makes them (see AGENT.md)
+volt_*

@@ -4,6 +4,8 @@
 // column 0002 adds and its down drops.
 package main
 
+//go:generate go run github.com/Piechutowski/volt/cmd/volt gen --sql ./...
+
 import (
 	"context"
 	_ "embed"

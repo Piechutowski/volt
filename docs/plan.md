@@ -249,6 +249,7 @@ landed; more follow one feature at a time.
 Before claiming any step done:
 
 ```sh
+go generate ./examples/...
 go build ./... ./lsp/... ./cmd/volt/... ./examples/...
 go vet   ./... ./lsp/... ./cmd/volt/... ./examples/...
 go test  ./... ./lsp/... ./cmd/volt/... ./examples/...
@@ -257,7 +258,7 @@ gofmt -l . | grep -v zed-extension      # empty
 ```
 
 Goldens: `go test ./gen/router -update`, `go test ./nao/gen/... -update`,
-read the diff; an example regenerates with `go run ./examples/run NAME`. Grammar: `tree-sitter generate`, `tree-sitter test`, the
+read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 `editor.md` checklist, `./scripts/sync-grammar.sh`.
 
 ## Order
