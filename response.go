@@ -1,6 +1,7 @@
 package volt
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -245,6 +246,19 @@ func resolve(ctx context.Context, req Request, resp Response, eh ErrorHandler, p
 }
 
 func (r Response) write(w http.ResponseWriter, hr *http.Request, req Request) error {
+	var encoded bytes.Buffer
+	var format Format
+	if b, ok := r.body.(renderBody); ok {
+		f, err := Negotiate(req)
+		if err != nil {
+			return DefaultErrorHandler(req, err).write(w, hr, req)
+		}
+		if err := Encode(&encoded, f, b.v); err != nil {
+			slog.Error("volt: encoding the response", "route", req.Route(), "err", err)
+			return Reject(http.StatusInternalServerError, "internal server error").write(w, hr, req)
+		}
+		format = f
+	}
 	for k, vs := range r.header {
 		w.Header()[k] = vs
 	}
@@ -257,13 +271,10 @@ func (r Response) write(w http.ResponseWriter, hr *http.Request, req Request) er
 	}
 	switch b := r.body.(type) {
 	case renderBody:
-		f, err := Negotiate(req)
-		if err != nil {
-			return DefaultErrorHandler(req, err).write(w, hr, req)
-		}
-		w.Header().Set("Content-Type", f.MIME())
+		w.Header().Set("Content-Type", format.MIME())
 		w.WriteHeader(status)
-		return Encode(w, f, b.v)
+		_, err := w.Write(encoded.Bytes())
+		return err
 	case problemBody:
 		f, _ := Negotiate(req)
 		w.Header().Set("Content-Type", f.MIME())

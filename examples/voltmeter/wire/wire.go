@@ -26,19 +26,25 @@ type Stored struct {
 }
 
 // RunPage is one page of the keyset-paged run list: Next is the id to
-// pass as after for the following page, 0 on the last.
+// pass as after for the following page, 0 on the last, and Breached the
+// runs of the page that went over a budget, in the page's order.
 type RunPage struct {
-	Runs  []db.Run `json:"runs"`
-	Total int64    `json:"total"`
-	Next  int      `json:"next"`
+	Runs     []db.Run `json:"runs"`
+	Total    int64    `json:"total"`
+	Next     int      `json:"next"`
+	Breached []int    `json:"breached"`
 }
 
-// RunDetail is everything one run measured.
+// RunDetail is everything one run measured: Latency summarizes every
+// timed call, Failed counts those answered 400 or above, and Breaches are
+// the budgets the run went over.
 type RunDetail struct {
 	Run        db.Run         `json:"run"`
 	Phases     []PhaseRow     `json:"phases"`
 	Keystrokes []db.Keystroke `json:"keystrokes"`
 	Latency    db.Latency     `json:"latency"`
+	Failed     int64          `json:"failed"`
+	Breaches   []db.Breach    `json:"breaches"`
 }
 
 // PhaseRow is one row of a phase table with the phase it came from; the

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -145,8 +146,28 @@ func TestChangesRefetchWhatTheyTouch(t *testing.T) {
 		"Dashboards.Create": {state.BoardsFetch{}},
 	} {
 		got, cmds := state.Update(s, state.Changed{Handler: handler, Path: "/p"})
-		if !reflect.DeepEqual(cmds, want) || got.Live != handler+" /p" {
+		if !reflect.DeepEqual(cmds, want) || got.Live != state.ChangeText(state.Changed{Handler: handler, Path: "/p"}) {
 			t.Errorf("%s asked %v, want %v (live %q)", handler, cmds, want, got.Live)
+		}
+		replayed, again := state.Update(s, state.Changed{Handler: handler, Path: "/p", Replayed: true})
+		if !reflect.DeepEqual(again, want) || replayed.Live != "" {
+			t.Errorf("%s replayed asked %v and set the live line %q; want the same refetch and no news", handler, again, replayed.Live)
+		}
+	}
+	for c, want := range map[state.Changed]string{
+		{Handler: "Samples.Create", Path: "/api/runs/2/samples"}:    "run 2 got route timings",
+		{Handler: "Uploads.Create", Path: "/api/uploads"}:           "a run was uploaded",
+		{Handler: "Runs.Delete", Path: "/api/runs/12"}:              "run 12 was deleted",
+		{Handler: "Widgets.Create", Path: "/api/me/dashboards/1/w"}: "a dashboard changed",
+		{Handler: "Things.Make", Path: "/things"}:                   "Things.Make /things",
+	} {
+		if got := state.ChangeText(c); got != want {
+			t.Errorf("ChangeText(%s %s) = %q, want %q", c.Handler, c.Path, got, want)
+		}
+	}
+	for n, want := range map[int64]string{0: "No budget was breached", 1: "Reset 1 budget to ok", 3: "Reset 3 budgets to ok"} {
+		if got := state.ResetText(n); got != want {
+			t.Errorf("ResetText(%d) = %q, want %q", n, got, want)
 		}
 	}
 	at := time.Date(2026, 11, 3, 9, 30, 0, 0, time.UTC)
@@ -352,6 +373,30 @@ func TestSignedOutFailureIsShownAndRetried(t *testing.T) {
 	if down.Errors[state.FieldEmail] != "" || down.Notice != (state.Notice{Text: "signing in: dial tcp: connection refused", Failed: true, Of: "signing in"}) {
 		t.Errorf("a sign-in that reached no server: errors %v, notice %+v; the address is not at fault", down.Errors, down.Notice)
 	}
+	down.Fields = map[state.Field]string{state.FieldEmail: "ada@voltmeter.test"}
+	if again, cmds := state.Update(down, state.SignInSubmit{}); again.Notice != (state.Notice{}) || !reflect.DeepEqual(cmds, []state.Command{state.SignInPost{Email: "ada@voltmeter.test"}}) {
+		t.Errorf("signing in again kept the notice %+v and asked %v", again.Notice, cmds)
+	}
+}
+
+// TestUnknownEmailIsTheFieldsAlone proves a refused sign-in puts the
+// server's message under the email field once, without its status and
+// without a banner, and that submitting again replaces it rather than
+// leaving a stale one beside the new finding.
+func TestUnknownEmailIsTheFieldsAlone(t *testing.T) {
+	s, _ := state.Update(state.State{}, state.Started{})
+	s.Fields = map[state.Field]string{state.FieldEmail: "nobody@voltmeter.test"}
+	s, _ = state.Update(s, state.SignInSubmit{})
+	refused := &volt.ProblemError{Problem: volt.Problem{Status: 401, Message: "no member signs in as nobody@voltmeter.test"}}
+	s, _ = state.Update(s, state.SignedIn{Err: refused})
+	if s.Errors[state.FieldEmail] != "no member signs in as nobody@voltmeter.test" || s.Notice != (state.Notice{}) {
+		t.Errorf("an unknown email: errors %v, notice %+v", s.Errors, s.Notice)
+	}
+	s.Fields = map[state.Field]string{state.FieldEmail: ""}
+	s, _ = state.Update(s, state.SignInSubmit{})
+	if s.Errors[state.FieldEmail] != "name a member by email" || s.Notice != (state.Notice{}) {
+		t.Errorf("an empty email after it: errors %v, notice %+v", s.Errors, s.Notice)
+	}
 }
 
 // TestCeilingFollowsAnotherMembersChange proves the ceiling field takes
@@ -380,5 +425,41 @@ func TestCeilingFollowsAnotherMembersChange(t *testing.T) {
 	saved, _ = state.Update(saved, state.BudgetsFetched{Budgets: []db.Budget{list[0], {ID: 2, MaxMs: 40}}})
 	if saved.Fields[state.FieldCeiling] != "40" {
 		t.Errorf("after saving, a later change by another member reads %q, want 40", saved.Fields[state.FieldCeiling])
+	}
+}
+
+// TestBudgetStateTextAgreesWithItsBreaches proves the budget's state
+// line never says no upload went over beside a listed breach without
+// saying the breach came before the reset, and that a breached budget
+// names the newest breach.
+func TestBudgetStateTextAgreesWithItsBreaches(t *testing.T) {
+	ok := db.Budget{ID: 1, Phase: db.PhaseGenerate, Tables: 160, MaxMs: 20, State: db.HealthOK}
+	breaches := []db.Breach{{ID: 2, RunID: 4, WallMs: 25.4}, {ID: 1, RunID: 3, WallMs: 33.7}}
+	if text, danger := state.BudgetStateText(ok, nil); danger || !strings.Contains(text, "since this budget was set") {
+		t.Errorf("a fresh ok budget says %q (warning %v)", text, danger)
+	}
+	if text, danger := state.BudgetStateText(ok, breaches); danger || !strings.Contains(text, "came before the reset") {
+		t.Errorf("an ok budget with breaches says %q (warning %v)", text, danger)
+	}
+	broken := ok
+	broken.State = db.HealthBreached
+	if text, danger := state.BudgetStateText(broken, breaches); !danger || !strings.Contains(text, "run 4 took 25.4 ms") {
+		t.Errorf("a breached budget says %q (warning %v), want the newest breach, run 4", text, danger)
+	}
+}
+
+// TestRunJudgedTextNamesBaselineAndBreaches proves the run screen says
+// which baseline a run was collected against and which budgets it went
+// over, so a breaching run never looks like any other.
+func TestRunJudgedTextNamesBaselineAndBreaches(t *testing.T) {
+	plain := wire.RunDetail{Run: db.Run{ID: 2}}
+	if text, over := state.RunJudgedText(plain, nil); over || text != "No baseline. Within every budget set when it was uploaded." {
+		t.Errorf("a plain run says %q (over %v)", text, over)
+	}
+	broke := wire.RunDetail{Run: db.Run{ID: 3, BaselineID: rt.Some(1)}, Breaches: []db.Breach{{BudgetID: 1, RunID: 3, WallMs: 33.7}, {BudgetID: 9, RunID: 3, WallMs: 5}}}
+	budgets := []db.Budget{{ID: 1, Phase: db.PhaseGenerate, Tables: 160}}
+	want := "Baseline: run 1. Over budget: generate at 160 tables, took 33.7 ms; budget 9, took 5.0 ms."
+	if text, over := state.RunJudgedText(broke, budgets); !over || text != want {
+		t.Errorf("a breaching run says %q (over %v), want %q", text, over, want)
 	}
 }

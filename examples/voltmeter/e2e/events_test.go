@@ -91,6 +91,10 @@ func TestEvents(t *testing.T) {
 		t.Errorf("the upload's event %d %+v; want 4, the sign-in changing no row", ev.ID, ch)
 	}
 
+	epoch := ev.Epoch
+	if epoch == "" {
+		t.Fatalf("event %d names no broker", ev.ID)
+	}
 	replayed := func(lastID string) []string {
 		t.Helper()
 		sctx, stop := context.WithTimeout(ctx, 5*time.Second)
@@ -111,33 +115,40 @@ func TestEvents(t *testing.T) {
 			t.Errorf("stream headers %v", resp.Header)
 		}
 		want := 4
-		if epoch, n, ok := strings.Cut(lastID, "-"); ok && epoch+"-0" == e.broker.WireID(0) {
+		if from, n, ok := strings.Cut(lastID, "-"); ok && from == epoch {
 			k, _ := strconv.Atoi(n)
 			want -= k
 		}
 		var ids []string
+		marked := 0
 		sc := bufio.NewScanner(resp.Body)
 		for len(ids) < want && sc.Scan() {
+			if sc.Text() == ": replayed" {
+				marked++
+			}
 			if id, ok := strings.CutPrefix(sc.Text(), "id: "); ok {
 				ids = append(ids, id)
 			}
+		}
+		if marked != len(ids) {
+			t.Errorf("Last-Event-ID %q: %d of %d replayed events marked replayed", lastID, marked, len(ids))
 		}
 		return ids
 	}
 	wire := func(ns ...uint64) string {
 		var ids []string
 		for _, n := range ns {
-			ids = append(ids, e.broker.WireID(n))
+			ids = append(ids, volt.Event{ID: n, Epoch: epoch}.WireID())
 		}
 		return strings.Join(ids, " ")
 	}
 	if got := strings.Join(replayed(""), " "); got != wire(1, 2, 3, 4) {
 		t.Errorf("a new stream replays %q", got)
 	}
-	if got := strings.Join(replayed(e.broker.WireID(2)), " "); got != wire(3, 4) {
+	if got := strings.Join(replayed(wire(2)), " "); got != wire(3, 4) {
 		t.Errorf("Last-Event-ID 2 replays %q", got)
 	}
-	for _, foreign := range []string{"2", "99", volt.NewBroker().WireID(2)} {
+	for _, foreign := range []string{"2", "99", "1-2"} {
 		if got := strings.Join(replayed(foreign), " "); got != wire(1, 2, 3, 4) {
 			t.Errorf("Last-Event-ID %q, from a broker before a restart, replays %q", foreign, got)
 		}

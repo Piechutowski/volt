@@ -306,7 +306,20 @@ func (g *generator) timeParams() bool {
 			return true
 		}
 	}
-	return g.queryTimeParams()
+	if g.queryTimeParams() {
+		return true
+	}
+	for _, r := range g.pkg.Routes {
+		for _, ld := range r.Loads {
+			for _, p := range ld.Query.Params {
+				bound := p.Source != lang.FromPath && p.Source != lang.FromLiteral
+				if bound && strings.TrimPrefix(p.GoType, "[]") == "time.Time" {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func (g *generator) queryTimeParams() bool {
@@ -893,6 +906,13 @@ func bodyParam(b *lang.BodyInfo) string {
 func zeroBody(b *lang.BodyInfo) string {
 	if b == nil {
 		return ""
+	}
+	if b.Kind == lang.BodyChangeset {
+		ctor := strings.TrimSuffix(b.Query.Changeset.Type, "Changeset") + "New"
+		if !b.Query.Local {
+			ctor = b.Query.Qualifier + "." + ctor
+		}
+		return ", " + ctor + "()"
 	}
 	return ", " + b.GoType() + "{}"
 }

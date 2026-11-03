@@ -222,7 +222,7 @@ func TestUpdateAndDeleteByKey(t *testing.T) {
 }
 
 // TestChangesetsLeaveTheirReceiver proves a changeset is a value (spec
-// §values-and-effects, rule 1; §changesets): a setter, Cast, Validate
+// §values-and-effects; §changesets): a setter, Cast, Validate
 // and ErrorAdd return a new changeset and the one they were called on
 // marks and holds what it did before.
 func TestChangesetsLeaveTheirReceiver(t *testing.T) {

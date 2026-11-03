@@ -189,6 +189,7 @@ func (f *field) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBounds)
 		u := basicwidget.UnitSize(context)
 		b := widgetBounds.Bounds()
 		b.Min.Y += u*3/4 + u/8
+		b.Max.Y = min(b.Max.Y, b.Min.Y+u)
 		m.probe.place("field:"+string(f.name), b)
 	}
 	return nil

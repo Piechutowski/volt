@@ -80,8 +80,8 @@ func TestGUISignInBrowseAndOpen(t *testing.T) {
 		t.Fatalf("the sign-in screen = %v with members %+v", g.s.Screen, g.s.Members)
 	}
 	g.do(state.MemberPick{Email: "nobody@voltmeter.test"})
-	if g.s.User.ID != 0 || !strings.Contains(g.s.Errors[state.FieldEmail], "401") {
-		t.Errorf("an unknown member: user %+v, email error %q", g.s.User, g.s.Errors[state.FieldEmail])
+	if g.s.User.ID != 0 || g.s.Errors[state.FieldEmail] != "no member signs in as nobody@voltmeter.test" || g.s.Notice.Text != "" {
+		t.Errorf("an unknown member: user %+v, email error %q, notice %+v; want the server's message under the field alone", g.s.User, g.s.Errors[state.FieldEmail], g.s.Notice)
 	}
 	g.do(state.MemberPick{Email: "ada"})
 	if got := g.s.Errors[state.FieldEmail]; !strings.Contains(got, "not an email address") {
@@ -341,7 +341,7 @@ func TestGUIBudgetsLive(t *testing.T) {
 	}
 	ada.edit(state.FieldCeiling, "-1")
 	ada.do(state.BudgetCeilingSave{})
-	if got := ada.s.Errors[state.FieldCeiling]; got != "the ceiling must be above zero" {
+	if got := ada.s.Errors[state.FieldCeiling]; got != "the ceiling must be a finite number above zero" {
 		t.Errorf("a negative ceiling shows %q under the field", got)
 	}
 	ada.edit(state.FieldCeiling, "fast")
@@ -391,12 +391,12 @@ func TestGUIBudgetsLive(t *testing.T) {
 	if gb.State != db.HealthBreached || len(breaches) != 1 || breaches[0].RunID != over.Run.ID || breaches[0].WallMs != 16 {
 		t.Errorf("Grace sees budget %+v with breaches %+v", gb, breaches)
 	}
-	if grace.s.Live != "Uploads.Create /api/uploads" || grace.s.Runs.Page.Total != 2 {
+	if grace.s.Live != "a run was uploaded" || grace.s.Runs.Page.Total != 2 {
 		t.Errorf("Grace's live line %q, runs %+v", grace.s.Live, grace.s.Runs.Page)
 	}
 
 	ada.do(state.BudgetsReset{})
-	if ada.s.Notice.Text != "Reset 1 budgets to ok" {
+	if ada.s.Notice.Text != "Reset 1 budget to ok" {
 		t.Errorf("the reset says %q", ada.s.Notice.Text)
 	}
 	await("Budgets.Reset")

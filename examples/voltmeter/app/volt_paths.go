@@ -62,10 +62,6 @@ func PathAPIRunListed(opts ...volt.URLOption) string {
 	return volt.URL("/api/runs/listed", opts...)
 }
 
-func PathAPIRunUntagged(opts ...volt.URLOption) string {
-	return volt.URL("/api/runs/untagged", opts...)
-}
-
 func PathAPIRunSuccessors(id int, opts ...volt.URLOption) string {
 	return volt.URL("/api/runs/"+volt.SegInt(id)+"/successors", opts...)
 }

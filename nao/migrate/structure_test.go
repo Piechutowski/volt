@@ -408,8 +408,8 @@ func TestDiff(t *testing.T) {
 	}
 }
 
-// TestDriftCloses is the promise of the drift report (spec §the-fold
-// rule 5): its operations, written into one migration after the
+// TestDriftCloses is the promise of the drift report (spec
+// §the-fold): its operations, written into one migration after the
 // migration that made the fold, pass the checker, lower, run and leave
 // no drift behind, in the order reported. The fold's migration is its
 // tables as shapeVolt renders them, so it also proves the rendering

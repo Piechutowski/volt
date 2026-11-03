@@ -14,14 +14,21 @@ import (
 )
 
 // Event is one server-sent event (spec §event-routes): a name the client
-// dispatches on and a JSON payload. The broker assigns IDs in
-// publication order; on the wire an ID also names the broker, so a
-// client resuming after a restart is told from one resuming here.
+// dispatches on and a JSON payload, numbered in publication order by the
+// broker its Epoch names, so the pair tells a restart and deduplicates.
+// Replayed marks an event delivered from the replay buffer, published
+// before the stream opened.
 type Event struct {
-	ID   uint64
-	Name string
-	Data json.RawMessage
+	ID       uint64
+	Epoch    string
+	Name     string
+	Data     json.RawMessage
+	Replayed bool
 }
+
+// WireID is the event's ID as Serve writes it, the broker's epoch, a dash
+// and the position (spec §event-routes).
+func (e Event) WireID() string { return e.Epoch + "-" + strconv.FormatUint(e.ID, 10) }
 
 // Decode unmarshals the payload into v.
 func (e Event) Decode(v any) error { return json.Unmarshal(e.Data, v) }
@@ -80,9 +87,8 @@ func (b *Broker) Publish(name string, data any) error {
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.epochOf()
 	b.next++
-	ev := Event{ID: b.next, Name: name, Data: raw}
+	ev := Event{ID: b.next, Epoch: b.epochOf(), Name: name, Data: raw}
 	b.buffer = append(b.buffer, ev)
 	if n := b.replay(); len(b.buffer) > n {
 		b.buffer = b.buffer[len(b.buffer)-n:]
@@ -98,20 +104,22 @@ func (b *Broker) Publish(name string, data any) error {
 	return nil
 }
 
-// Subscribe returns a channel of events after the given ID (0 for
-// none), replaying the buffer first, and a cancel to unsubscribe. An ID
-// this broker never assigned replays the whole buffer. The channel is
-// closed when the subscriber falls too far behind.
+// Subscribe returns a channel of events after the given position (0 for
+// none), replaying the buffer first, each replayed event marked so, and
+// a cancel to unsubscribe. A position this broker never assigned
+// replays the whole buffer. The channel is closed when the subscriber
+// falls too far behind.
 func (b *Broker) Subscribe(after uint64) (<-chan Event, func()) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.subscribe(after)
 }
 
-// SubscribeAfter is Subscribe from a Last-Event-ID as Serve writes IDs:
-// an ID of this broker resumes after it, and any other, one from an
-// earlier process before a restart or none at all, replays the whole
-// buffer, so a client never misses what this process published.
+// SubscribeAfter is Subscribe from a Last-Event-ID as Serve writes IDs
+// (spec §event-routes): an ID of this broker resumes after it, and any
+// other, none, one of an earlier process or a bare position, replays
+// the whole buffer, so a client never misses what this process
+// published.
 func (b *Broker) SubscribeAfter(lastEventID string) (<-chan Event, func()) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -122,14 +130,6 @@ func (b *Broker) SubscribeAfter(lastEventID string) (<-chan Event, func()) {
 	return b.subscribe(after)
 }
 
-// WireID is how Serve spells an event's ID: the broker's epoch, a dash
-// and the event's position, so IDs of two processes never coincide.
-func (b *Broker) WireID(id uint64) string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.epochOf() + "-" + strconv.FormatUint(id, 10)
-}
-
 func (b *Broker) subscribe(after uint64) (<-chan Event, func()) {
 	if after > b.next {
 		after = 0
@@ -137,6 +137,7 @@ func (b *Broker) subscribe(after uint64) (<-chan Event, func()) {
 	ch := make(chan Event, b.replay()+64)
 	for _, ev := range b.buffer {
 		if ev.ID > after {
+			ev.Replayed = true
 			ch <- ev
 		}
 	}
@@ -173,9 +174,6 @@ func (b *Broker) Serve(w http.ResponseWriter, r *http.Request) error {
 
 	ch, cancel := b.SubscribeAfter(r.Header.Get("Last-Event-ID"))
 	defer cancel()
-	b.mu.Lock()
-	epoch := b.epochOf()
-	b.mu.Unlock()
 	hb := b.Heartbeat
 	if hb <= 0 {
 		hb = 15 * time.Second
@@ -191,7 +189,7 @@ func (b *Broker) Serve(w http.ResponseWriter, r *http.Request) error {
 			if !ok {
 				return nil
 			}
-			if err := writeEvent(w, epoch, ev); err != nil {
+			if err := writeEvent(w, ev); err != nil {
 				return nil
 			}
 		case <-ticker.C:
@@ -205,9 +203,12 @@ func (b *Broker) Serve(w http.ResponseWriter, r *http.Request) error {
 	}
 }
 
-func writeEvent(w http.ResponseWriter, epoch string, ev Event) error {
+func writeEvent(w http.ResponseWriter, ev Event) error {
 	var b strings.Builder
-	fmt.Fprintf(&b, "id: %s-%d\nevent: %s\n", epoch, ev.ID, ev.Name)
+	if ev.Replayed {
+		b.WriteString(": replayed\n")
+	}
+	fmt.Fprintf(&b, "id: %s\nevent: %s\n", ev.WireID(), ev.Name)
 	for _, line := range strings.Split(string(ev.Data), "\n") {
 		fmt.Fprintf(&b, "data: %s\n", line)
 	}
@@ -292,12 +293,14 @@ func (c *Client) streamOnce(ctx context.Context, url string, last *string, out c
 				}
 			}
 			ev, id, data = Event{}, "", nil
+		case line == ": replayed":
+			ev.Replayed = true
 		case strings.HasPrefix(line, ":"):
 		case strings.HasPrefix(line, "id:"):
 			id = strings.TrimSpace(line[3:])
 			n := id
 			if i := strings.LastIndexByte(id, '-'); i >= 0 {
-				n = id[i+1:]
+				ev.Epoch, n = id[:i], id[i+1:]
 			}
 			ev.ID, _ = strconv.ParseUint(n, 10, 64)
 		case strings.HasPrefix(line, "event:"):

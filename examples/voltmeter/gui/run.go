@@ -20,6 +20,7 @@ type runScreen struct {
 
 	none    basicwidget.Text
 	title   basicwidget.Text
+	judged  basicwidget.Text
 	tag     field
 	note    field
 	save    basicwidget.Button
@@ -30,8 +31,9 @@ type runScreen struct {
 	footer  basicwidget.Text
 	latency basicwidget.Text
 
-	rows []basicwidget.TableRow[int]
-	lay  layouts
+	rows  []basicwidget.TableRow[int]
+	lay   layouts
+	spots spots
 }
 
 func (r *runScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -50,7 +52,7 @@ func (r *runScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) err
 		r.none.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 		return nil
 	}
-	for _, w := range []guigui.Widget{&r.title, &r.tag, &r.note, &r.save, &r.export, &r.saved, &r.chart, &r.table, &r.footer, &r.latency} {
+	for _, w := range []guigui.Widget{&r.title, &r.judged, &r.tag, &r.note, &r.save, &r.export, &r.saved, &r.chart, &r.table, &r.footer, &r.latency} {
 		adder.AddWidget(w)
 	}
 	d := s.Run.Detail
@@ -59,6 +61,13 @@ func (r *runScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) err
 		dirty = " with uncommitted changes"
 	}
 	heading(&r.title, fmt.Sprintf("Run %d at %s%s, %s", d.Run.ID, d.Run.Commit.Short(), dirty, d.Run.CreatedAt.Local().Format("2006-01-02 15:04")), 1.2)
+	judged, over := state.RunJudgedText(d, s.Budgets.List)
+	if over {
+		caption(&r.judged, judged, basicwidget.DangerTintColor())
+	} else {
+		caption(&r.judged, judged, basicwidgetdraw.TextColor(context.ColorMode(), false))
+	}
+	r.judged.SetEllipsisString("...")
 	r.tag.FieldSet(state.FieldRunTag, "Tag slug", "none")
 	r.tag.OnSubmitted(func(context *guigui.Context) { m.dispatch(state.RunAnnotate{}) })
 	r.note.FieldSet(state.FieldRunNote, "Note", "what this run measured")
@@ -119,7 +128,11 @@ func (r *runScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) err
 	caption(&r.footer, "Language server: "+strings.Join(keys, ", "), nil)
 	lat := "Routes: no latency samples"
 	if d.Latency.N > 0 {
-		lat = fmt.Sprintf("Routes: %d timed calls, mean %s, best %s, worst %s", d.Latency.N, units.Millis(d.Latency.Mean.V), units.Millis(d.Latency.Best.V), units.Millis(d.Latency.Worst.V))
+		failed := "all answered below 400"
+		if d.Failed > 0 {
+			failed = fmt.Sprintf("%d answered 400 or above", d.Failed)
+		}
+		lat = fmt.Sprintf("Routes: %d timed calls, %s; over all of them mean %s, best %s, worst %s", d.Latency.N, failed, units.Millis(d.Latency.Mean.V), units.Millis(d.Latency.Best.V), units.Millis(d.Latency.Worst.V))
 	}
 	caption(&r.latency, lat, nil)
 	return nil
@@ -136,13 +149,25 @@ func (r *runScreen) Layout(context *guigui.Context, widgetBounds *guigui.WidgetB
 	}
 	form := a.row(u/2, flex(&r.tag, 2), flex(&r.note, 5), a.besideField(&r.save, u, 4*u), a.besideField(&r.export, u, 5*u))
 	tableHeight := u * (len(r.rows) + 2)
+	recorded := r.spots.recorded(m, layouter, func(name func(guigui.Widget, string)) {
+		name(&r.save, "run:save")
+		name(&r.export, "run:export")
+	})
 	padded(a.column(u/2,
 		fixed(&r.title, u*3/2),
+		fixed(&r.judged, u),
 		a.nested(form, guigui.Size{}),
 		fixed(&r.saved, u),
 		flex(&r.chart, 1),
 		fixed(&r.table, tableHeight),
 		fixed(&r.footer, u),
 		fixed(&r.latency, u),
-	), u/2).LayoutWidgets(context, b, layouter)
+	), u/2).LayoutWidgets(context, b, recorded)
+}
+
+func (r *runScreen) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBounds) error {
+	if m := modelOf(context, r); m != nil && m.s.Run.Loaded {
+		r.spots.placed(m)
+	}
+	return nil
 }

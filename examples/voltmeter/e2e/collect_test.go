@@ -284,6 +284,7 @@ func linesOracle(t *testing.T, repo, sha, fixture string) (app.ThesisCount, bool
 		switch {
 		case strings.HasSuffix(h.Name, ".volt"):
 			c.VoltLines += lines
+		case strings.HasSuffix(h.Name, "_test.go"):
 		case strings.HasSuffix(h.Name, ".go"):
 			f, err := parser.ParseFile(token.NewFileSet(), h.Name, data, parser.PackageClauseOnly|parser.ParseComments)
 			if err != nil {

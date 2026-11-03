@@ -70,7 +70,7 @@ func (b *boardsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 
 	msg := "This dashboard has no widgets yet. Add one below."
 	if !ok {
-		msg = "No dashboard yet. Name one above to start."
+		msg = "No dashboard yet. Name one under New dashboard, below the list, to start."
 	}
 	caption(&b.none, msg, basicwidgetdraw.TextColor(context.ColorMode(), false))
 	b.none.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
@@ -106,6 +106,7 @@ func (b *boardsScreen) Layout(context *guigui.Context, widgetBounds *guigui.Widg
 	recorded := b.spots.recorded(modelOf(context, b), layouter, func(name func(guigui.Widget, string)) {
 		name(&b.none, "boards:none")
 		name(&b.addWidget, "boards:add_widget")
+		name(&b.addBoard, "boards:add_board")
 	})
 	right := a.column(u/2,
 		flex(shown, 1),
@@ -212,12 +213,13 @@ func (c *boardCard) Build(context *guigui.Context, adder *guigui.ChildAdder) err
 		adder.AddWidget(w)
 	}
 	spot := state.Spot{Phase: c.widget.Phase, Tables: c.widget.Tables}
-	heading(&c.title, string(spot.Phase)+" at "+strconv.Itoa(spot.Tables)+" tables", 1)
+	heading(&c.title, string(spot.Phase), 1)
 	c.title.SetEllipsisString("...")
-	latest := "no runs measured this size"
+	latest := strconv.Itoa(spot.Tables) + " tables: no run measured this size"
 	if n := len(c.points); n > 0 {
-		latest = "run " + strconv.Itoa(c.points[n-1].RunID) + ": " + units.Millis(c.points[n-1].WallMS).String() + ", " + strconv.Itoa(n) + " runs"
+		latest = strconv.Itoa(spot.Tables) + " tables: run " + strconv.Itoa(c.points[n-1].RunID) + " took " + units.Millis(c.points[n-1].WallMS).String() + ", " + strconv.Itoa(n) + " runs"
 	}
+	c.latest.SetEllipsisString("...")
 	caption(&c.latest, latest, basicwidgetdraw.TextColor(context.ColorMode(), false))
 	c.chart.ChartSet(state.TrendChart(spot, c.points), true)
 	c.remove.SetText("Remove")

@@ -14,11 +14,15 @@ import (
 // stored as REAL (spec §types).
 type Millis float64
 
-// String renders the duration with a unit, to a tenth of a millisecond
-// below ten seconds and in seconds above.
+// String renders the duration with a unit: to a hundredth of a
+// millisecond below one, so two sub-millisecond times that differ read
+// apart, to a tenth below ten seconds and in seconds above.
 func (m Millis) String() string {
-	if m >= 10000 {
+	switch {
+	case m >= 10000:
 		return strconv.FormatFloat(float64(m)/1000, 'f', 2, 64) + " s"
+	case m < 1:
+		return strconv.FormatFloat(float64(m), 'f', 2, 64) + " ms"
 	}
 	return strconv.FormatFloat(float64(m), 'f', 1, 64) + " ms"
 }

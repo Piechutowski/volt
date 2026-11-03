@@ -27,11 +27,15 @@ func TestCommitNormalizesCase(t *testing.T) {
 	}
 }
 
-// TestMillisString proves the unit switches at ten seconds and the value
+// TestMillisString proves the unit switches at ten seconds, a time below
+// one millisecond keeps two decimals, and the value
 // scans from either numeric storage class.
 func TestMillisString(t *testing.T) {
 	if got := Millis(12.34).String(); got != "12.3 ms" {
 		t.Errorf("String = %q", got)
+	}
+	if got := Millis(0.384).String(); got != "0.38 ms" {
+		t.Errorf("Millis(0.384) = %q", got)
 	}
 	if got := Millis(12345).String(); got != "12.35 s" {
 		t.Errorf("String = %q", got)

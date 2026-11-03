@@ -64,8 +64,10 @@ func TestEffectFailureInsideThenReachesTheSpine(t *testing.T) {
 // changeset body is decoded, loaded, cast with the narrowed allow list
 // and validated before the handler, which sees the findings and
 // decides; a struct body decodes with volt.Decode's rules; a body that
-// does not decode is a 400 before anything loads, and a missing row of
-// an update is a 404 through the scope's error handler.
+// does not decode is a 400 before anything loads, a missing row of
+// an update is a 404 through the scope's error handler, and a handler
+// that negotiates before its write answers a 406 having written nothing
+// (spec §formats).
 func TestRequestBodies(t *testing.T) {
 	h := handler()
 	post := func(method, path, contentType, body string) (*httptest.ResponseRecorder, map[string]any) {
@@ -115,6 +117,18 @@ func TestRequestBodies(t *testing.T) {
 	rec, _ = post("PATCH", app.PathChangeEmail(999), "application/json", `{"email": "two@example.com"}`)
 	if rec.Code != http.StatusNotFound || rec.Header().Get("X-Error-Handler") != "app" {
 		t.Errorf("missing row = %d via %q; want 404 through the scope's handler", rec.Code, rec.Header().Get("X-Error-Handler"))
+	}
+
+	html := httptest.NewRequest("PATCH", app.PathChangeEmail(1), strings.NewReader(`{"email": "three@example.com"}`))
+	html.Header.Set("Content-Type", "application/json")
+	html.Header.Set("Accept", "text/html")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, html)
+	if rec.Code != http.StatusNotAcceptable {
+		t.Errorf("a change that accepts HTML = %d; want 406 from the handler's Negotiate", rec.Code)
+	}
+	if rec, card := serve(t, h, "GET", app.PathCard(1)); rec.Code != 200 || card["email"] != "two@example.com" {
+		t.Errorf("after the 406 the row reads %d %v; want the email unchanged, since a 406 writes nothing", rec.Code, card)
 	}
 
 	rec, body = post("POST", app.PathLogin(), "application/json", `{"Email": "one@example.com", "Password": "open sesame"}`)

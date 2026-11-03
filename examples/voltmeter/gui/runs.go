@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -29,8 +30,9 @@ type runsScreen struct {
 	rename      basicwidget.Button
 	remove      basicwidget.Button
 
-	rows []basicwidget.TableRow[int]
-	lay  layouts
+	rows  []basicwidget.TableRow[int]
+	lay   layouts
+	spots spots
 }
 
 func (r *runsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -82,6 +84,8 @@ func (r *runsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) er
 		columnOf("Commit", 2, false),
 		columnOf("Tag", 2, false),
 		columnOf("Note", 4, false),
+		columnOf("Baseline", 2, false),
+		columnOf("Budgets", 2, false),
 		columnOf("Created", 3, false),
 	})
 	r.rows = r.rows[:0]
@@ -90,11 +94,23 @@ func (r *runsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) er
 		if run.Dirty {
 			commit += " dirty"
 		}
+		baseline := ""
+		if id, ok := run.BaselineID.Get(); ok {
+			baseline = "run " + strconv.Itoa(id)
+		}
+		budgets := cell("")
+		if slices.Contains(page.Breached, run.ID) {
+			budgets = cell("over")
+			budgets.TextStyle.Style.SetBold(true)
+			budgets.TextStyle.Style.SetColor(basicwidget.DangerTintColor())
+		}
 		r.rows = append(r.rows, basicwidget.TableRow[int]{Value: run.ID, Cells: []basicwidget.TableCell{
 			cellRight(strconv.Itoa(run.ID)),
 			cell(commit),
 			cell(tagName(s, run.Tag.V)),
 			cell(run.Note.V),
+			cell(baseline),
+			budgets,
 			cell(run.CreatedAt.Local().Format("2006-01-02 15:04")),
 		}})
 	}
@@ -129,6 +145,7 @@ func (r *runsScreen) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBo
 		for i, row := range r.rows {
 			m.probe.place(probeRow("runs", row.Value), r.table.ItemBounds(i))
 		}
+		r.spots.placed(m)
 	}
 	return nil
 }
@@ -148,10 +165,18 @@ func (r *runsScreen) Layout(context *guigui.Context, widgetBounds *guigui.Widget
 	bar := a.row(u/2, fixed(&r.filterLabel, 2*u), fixed(&r.filter, 8*u), flex(&r.pageText, 1), fixed(&r.prev, 4*u), fixed(&r.next, 4*u))
 	tagForm := a.row(u/2, flex(&r.slug, 2), flex(&r.name, 3),
 		a.besideField(&r.add, u, 4*u), a.besideField(&r.rename, u, 4*u), a.besideField(&r.remove, u, 4*u))
+	recorded := r.spots.recorded(modelOf(context, r), layouter, func(name func(guigui.Widget, string)) {
+		name(&r.filter, "runs:tag_filter")
+		name(&r.prev, "runs:previous")
+		name(&r.next, "runs:next")
+		name(&r.add, "tags:add")
+		name(&r.rename, "tags:rename")
+		name(&r.remove, "tags:remove")
+	})
 	padded(a.column(u/2,
 		a.nested(bar, guigui.FixedSize(u*3/2)),
 		flex(&r.table, 1),
 		a.nested(a.row(u/2, fixed(&r.tagsTitle, 3*u), flex(&r.tagsText, 1)), guigui.FixedSize(u)),
 		a.nested(tagForm, guigui.Size{}),
-	), u/2).LayoutWidgets(context, widgetBounds.Bounds(), layouter)
+	), u/2).LayoutWidgets(context, widgetBounds.Bounds(), recorded)
 }

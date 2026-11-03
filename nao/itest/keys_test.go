@@ -16,8 +16,7 @@ import (
 
 // TestCompositeKeyInDeclarationOrder runs the generated CRUD of
 // daily_hits, whose key is its pk columns in declaration order, day then
-// site, with hits between them (spec §columns, §generated-query-surface
-// rule 1): the PRIMARY KEY lists day then site, and Get, Update and
+// site, with hits between them (spec §columns, §generated-query-surface): the PRIMARY KEY lists day then site, and Get, Update and
 // Delete take them in that order.
 func TestCompositeKeyInDeclarationOrder(t *testing.T) {
 	ctx := context.Background()

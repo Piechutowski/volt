@@ -1,5 +1,4 @@
-// The dynamic query layer and the one SQL renderer (spec §predicates
-// rule 6): predicates, orderings, limits and assignments as inert data,
+// The dynamic query layer and the one SQL renderer (spec §predicates): predicates, orderings, limits and assignments as inert data,
 // plain values forming a small expression tree, never closures and never
 // a mutable builder. The interpreter is deterministic: identical trees
 // render identical SQL, which is what makes the rendered text a
@@ -39,8 +38,8 @@ func (c Column[M, T]) cmp(op string, v T) Pred[M] {
 // NULL with IsNull.
 func (c Column[M, T]) Eq(v T) Pred[M] { return c.cmp("=", v) }
 
-// Ne is "column != v", the one spelling of inequality (spec §predicates
-// rule 6). Rows where the column is NULL never match.
+// Ne is "column != v", the one spelling of inequality (spec
+// §predicates). Rows where the column is NULL never match.
 func (c Column[M, T]) Ne(v T) Pred[M] { return c.cmp("!=", v) }
 
 // Gt is "column > v".

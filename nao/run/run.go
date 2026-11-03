@@ -85,7 +85,7 @@ func (x poolExecutor) Query(ctx context.Context, query string, args []any) (rt.R
 		return nil, err
 	}
 	start := time.Now()
-	rows, err := stmt.QueryContext(ctx, args...)
+	rows, err := stmt.QueryContext(ctx, rt.ArgsBound(args)...)
 	x.db.logged(query, start, err)
 	return rows, err
 }
@@ -96,7 +96,7 @@ func (x poolExecutor) QueryRow(ctx context.Context, query string, args []any) rt
 		return errRow{err}
 	}
 	start := time.Now()
-	r := stmt.QueryRowContext(ctx, args...)
+	r := stmt.QueryRowContext(ctx, rt.ArgsBound(args)...)
 	x.db.logged(query, start, r.Err())
 	return row{r}
 }
@@ -107,7 +107,7 @@ func (x poolExecutor) Exec(ctx context.Context, query string, args []any) (int64
 		return 0, err
 	}
 	start := time.Now()
-	res, err := stmt.ExecContext(ctx, args...)
+	res, err := stmt.ExecContext(ctx, rt.ArgsBound(args)...)
 	x.db.logged(query, start, err)
 	if err != nil {
 		return 0, err
@@ -140,21 +140,21 @@ type txExecutor struct {
 
 func (x txExecutor) Query(ctx context.Context, query string, args []any) (rt.Rows, error) {
 	start := time.Now()
-	rows, err := x.tx.QueryContext(ctx, query, args...)
+	rows, err := x.tx.QueryContext(ctx, query, rt.ArgsBound(args)...)
 	x.db.logged(query, start, err)
 	return rows, err
 }
 
 func (x txExecutor) QueryRow(ctx context.Context, query string, args []any) rt.Row {
 	start := time.Now()
-	r := x.tx.QueryRowContext(ctx, query, args...)
+	r := x.tx.QueryRowContext(ctx, query, rt.ArgsBound(args)...)
 	x.db.logged(query, start, r.Err())
 	return row{r}
 }
 
 func (x txExecutor) Exec(ctx context.Context, query string, args []any) (int64, error) {
 	start := time.Now()
-	res, err := x.tx.ExecContext(ctx, query, args...)
+	res, err := x.tx.ExecContext(ctx, query, rt.ArgsBound(args)...)
 	x.db.logged(query, start, err)
 	if err != nil {
 		return 0, err

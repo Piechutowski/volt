@@ -82,12 +82,6 @@ func (c *Client) APIRunListed(ctx context.Context) ([]db.Listed, error) {
 	return voltOut, voltErr
 }
 
-func (c *Client) APIRunUntagged(ctx context.Context) ([]db.Run, error) {
-	var voltOut []db.Run
-	voltErr := c.Do(ctx, "GET", volt.URL("/api/runs/untagged"), nil, &voltOut)
-	return voltOut, voltErr
-}
-
 func (c *Client) APIRunSuccessors(ctx context.Context, id int) ([]db.Successors, error) {
 	var voltOut []db.Successors
 	voltErr := c.Do(ctx, "GET", volt.URL("/api/runs/"+volt.SegInt(id)+"/successors"), nil, &voltOut)

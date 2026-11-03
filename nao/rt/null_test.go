@@ -9,7 +9,7 @@ import (
 // TestNullTimeScansText proves a nullable time.Time reads the text
 // SQLite answers for min or max of a date/time column, in each layout a
 // driver writes, keeps the offset it names, and refuses text that is no
-// date/time (spec §selects-over-groups, rule 9).
+// date/time (spec §selects-over-groups, §go-types).
 func TestNullTimeScansText(t *testing.T) {
 	want := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 	for _, text := range []string{"2026-03-01 12:00:00+00:00", "2026-03-01T12:00:00Z", "2026-03-01 12:00:00", "2026-03-01 12:00"} {

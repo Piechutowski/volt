@@ -7,6 +7,7 @@ package db
 import (
 	"errors"
 	"fmt"
+	"math"
 	"path"
 	"strings"
 	"time"
@@ -61,8 +62,8 @@ func BudgetSane(tables int, maxMS float64) error {
 	if tables < 1 {
 		return errors.New("tables must be at least 1")
 	}
-	if maxMS <= 0 {
-		return errors.New("the ceiling must be above zero")
+	if !(maxMS > 0) || math.IsInf(maxMS, 1) {
+		return errors.New("the ceiling must be a finite number above zero")
 	}
 	return nil
 }
@@ -77,10 +78,11 @@ func EmailShape(email string) error {
 	return nil
 }
 
-// MillisMeasured refuses a negative wall time (spec §validators).
+// MillisMeasured refuses a negative or non-finite wall time (spec
+// §validators).
 func MillisMeasured(ms units.Millis) error {
-	if ms < 0 {
-		return fmt.Errorf("wall time %v is negative", ms)
+	if !measured(float64(ms)) {
+		return fmt.Errorf("wall time %v is not a measurement", ms)
 	}
 	return nil
 }
@@ -102,32 +104,34 @@ func AllocsCounted(allocs int) error {
 	return nil
 }
 
-// KeystrokeSane refuses a negative cost per keystroke (spec §validators).
+// KeystrokeSane refuses a negative or non-finite cost per keystroke
+// (spec §validators).
 func KeystrokeSane(msPerOp, mbPerOp float64, allocsPerOp int) error {
-	if msPerOp < 0 || mbPerOp < 0 || allocsPerOp < 0 {
-		return errors.New("a keystroke's time, bytes and allocations are never negative")
+	if !measured(msPerOp, mbPerOp) || allocsPerOp < 0 {
+		return errors.New("a keystroke's time, bytes and allocations are finite and never negative")
 	}
 	return nil
 }
 
 // SampleSane refuses a timed call no HTTP exchange produces (spec
-// §validators): a status outside 100 to 599 or a negative duration.
+// §validators): a status outside 100 to 599 or a negative or non-finite
+// duration.
 func SampleSane(status int, ms float64) error {
 	if status < 100 || status > 599 {
 		return fmt.Errorf("%d is not an HTTP status", status)
 	}
-	if ms < 0 {
+	if !measured(ms) {
 		return fmt.Errorf("a call cannot take %v ms", ms)
 	}
 	return nil
 }
 
-// MegabytesMeasured refuses a negative size (spec §validators): bytes
-// allocated, held and emitted, and a schema's size, are never below
-// zero.
+// MegabytesMeasured refuses a negative or non-finite size (spec
+// §validators): bytes allocated, held and emitted, and a schema's size,
+// are finite and never below zero.
 func MegabytesMeasured(allocMB, heapMB, outputMB, sourceKB float64) error {
-	if allocMB < 0 || heapMB < 0 || outputMB < 0 || sourceKB < 0 {
-		return errors.New("a phase's allocated, heap, output and source sizes are never negative")
+	if !measured(allocMB, heapMB, outputMB, sourceKB) {
+		return errors.New("a phase's allocated, heap, output and source sizes are finite and never negative")
 	}
 	return nil
 }
@@ -142,14 +146,14 @@ func MachineNamed(cpu, os, arch, toolchain string) error {
 	return nil
 }
 
-// MachineSized refuses a machine with no processor or a negative
-// memory (spec §validators); zero memory is what perfsweep.Info reports
+// MachineSized refuses a machine with no processor or a negative or
+// non-finite memory (spec §validators); zero memory is what perfsweep.Info reports
 // on a system it cannot ask.
 func MachineSized(cores int, memoryGB float64) error {
 	if cores < 1 {
 		return fmt.Errorf("%d cores is not a machine", cores)
 	}
-	if memoryGB < 0 {
+	if !measured(memoryGB) {
 		return fmt.Errorf("%v GiB of memory is not a machine", memoryGB)
 	}
 	return nil
@@ -193,4 +197,13 @@ func LinesCounted(voltLines, handLines, genLines int) error {
 		return errors.New("a line count is never negative")
 	}
 	return nil
+}
+
+func measured(vs ...float64) bool {
+	for _, v := range vs {
+		if !(v >= 0) || math.IsInf(v, 1) {
+			return false
+		}
+	}
+	return true
 }

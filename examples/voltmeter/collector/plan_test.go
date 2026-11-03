@@ -100,7 +100,7 @@ func TestLinesCount(t *testing.T) {
 		{Path: "itest/blog/empty.go", Data: nil},
 	}
 	got := collector.LinesCount("itest/blog", files)
-	if want := (app.ThesisCount{Fixture: "itest/blog", VoltLines: 3, GenLines: 3, HandLines: 3 + 1 + 4}); got != want {
+	if want := (app.ThesisCount{Fixture: "itest/blog", VoltLines: 3, GenLines: 3, HandLines: 3 + 4}); got != want {
 		t.Errorf("LinesCount = %+v, want %+v", got, want)
 	}
 

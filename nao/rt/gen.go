@@ -17,8 +17,8 @@ type Gen struct{}
 // the tree a Volt predicate lowers to.
 type GenPred = Pred[Gen]
 
-// GenOrder is an ORDER BY term of the generator's view (spec §predicates
-// rule 6).
+// GenOrder is an ORDER BY term of the generator's view (spec
+// §predicates).
 type GenOrder = Order[Gen]
 
 func cmpOpOK(op string) bool {

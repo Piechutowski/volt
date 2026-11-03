@@ -80,14 +80,10 @@ func ChangesetOf[M any](d *Desc[M], r M) Changeset[M] {
 }
 
 // Set marks column i of c with the value set writes into a copy of the
-// proposed values (spec §changesets); the generated setters call it. On
-// the zero changeset, which knows no column, it marks nothing; an index
-// outside a constructed changeset's columns is a generator bug and
-// panics.
+// proposed values (spec §changesets); the generated setters call it. A
+// changeset no constructor made, or an index outside its columns, is a
+// bug and panics rather than drop the write.
 func Set[M any](c Changeset[M], i int, set func(*M)) Changeset[M] {
-	if c.desc == nil {
-		return c
-	}
 	vals := c.vals
 	set(&vals)
 	c.vals = vals

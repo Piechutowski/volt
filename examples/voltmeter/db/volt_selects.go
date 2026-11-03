@@ -300,7 +300,7 @@ type Listed struct {
 
 func voltListedScan(r rt.Row) (Listed, error) {
 	var voltV Listed
-	voltErr := r.Scan(&voltV.ID, &voltV.Commit, &voltV.Dirty, &voltV.Note, &voltV.CreatedAt, &voltV.MachineCPU, &voltV.MachineOs, &voltV.TagName)
+	voltErr := r.Scan(&voltV.ID, &voltV.Commit, &voltV.Dirty, &voltV.Note, (*rt.Time)(&voltV.CreatedAt), &voltV.MachineCPU, &voltV.MachineOs, &voltV.TagName)
 	return voltV, voltErr
 }
 
@@ -421,7 +421,7 @@ type Thesis struct {
 
 func voltThesisScan(r rt.Row) (Thesis, error) {
 	var voltV Thesis
-	voltErr := r.Scan(&voltV.Sha, &voltV.Fixture, &voltV.VoltLines, &voltV.HandLines, &voltV.GenLines, &voltV.CommitSubject, &voltV.CommitAt)
+	voltErr := r.Scan(&voltV.Sha, &voltV.Fixture, &voltV.VoltLines, &voltV.HandLines, &voltV.GenLines, &voltV.CommitSubject, (*rt.Time)(&voltV.CommitAt))
 	return voltV, voltErr
 }
 

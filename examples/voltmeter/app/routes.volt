@@ -35,7 +35,6 @@ scope / [pipe: api, error_handler: Errors] {
     resources db.runs [only: (index, show, delete)]
     options /runs                     Runs.Options   [name: runs_allowed]
     get     /runs/listed              db.RunListed
-    get     /runs/untagged            db.RunUntagged
     get     /runs/:id(int)/successors db.RunSuccessors
     patch   /runs/:id(int)            Runs.Annotate  [name: run_annotate, body: db.RunUpdate(id), only: (tag, note)]
     post    /runs/:id(int)/samples    Samples.Create [name: samples_record, body: SampleBatch]
@@ -84,7 +83,9 @@ scope / [pipe: api, error_handler: Errors] {
 
     get /sizes db.MsLoadSizes [name: sizes]
 
-    // A member's own things; the scope load answers 401 for no one.
+    // A member's own things, and the runs left for a member to tag, the
+    // team's list only a member reads; the scope load answers 401 for
+    // no one.
     scope /me [pipe: member, name: me] {
       load user CurrentUser
 

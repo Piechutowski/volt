@@ -158,7 +158,7 @@ table line_counts [note: "The thesis numbers of one fixture at one commit: what 
   sha        string [pk]
   fixture    string [pk, note: "The fixture's directory, such as itest/blog"]
   volt_lines int    [note: "Lines of .volt files"]
-  hand_lines int    [note: "Lines of hand-written Go"]
+  hand_lines int    [note: "Lines of hand-written Go, tests left out"]
   gen_lines  int    [note: "Lines of Go carrying the generated marker"]
 
   validators {

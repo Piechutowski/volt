@@ -29,3 +29,15 @@ func (Metrics) Save(r volt.Request, id int, body db.MetricChangeset) volt.Respon
 func (Metrics) Drop(r volt.Request, id int) volt.Response {
 	return volt.Then(db.MetricDelete(id), func(int64) volt.Response { return volt.NoContent() })
 }
+
+func (Metrics) Add(r volt.Request, body db.MetricChangeset) volt.Response {
+	return volt.Then(rt.Insert(body), func(m db.Metric) volt.Response { return volt.Render(m) })
+}
+
+func (Metrics) Purge(r volt.Request) volt.Response {
+	return volt.Then(db.MetricDeleteWhere(), func(int64) volt.Response { return volt.NoContent() })
+}
+
+func (Metrics) Touched(r volt.Request, id int) volt.Response {
+	return volt.Then(db.MetricLastUpdate(id), func(m db.Metric) volt.Response { return volt.Render(m) }) //WANT loadspelledlong
+}

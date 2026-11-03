@@ -168,21 +168,21 @@ func TestInsertRefusesAnUnmarkedOrdinaryRowidAlias(t *testing.T) {
 	}
 }
 
-// TestZeroChangesetMarksNothing proves a setter on the changeset no
-// constructor made marks nothing and does not panic (spec §changesets),
-// so a handler that sets a column on its body can be called with the
-// zero body ControllersDeterministic hands it.
-func TestZeroChangesetMarksNothing(t *testing.T) {
+// TestSetRefusesTheZeroChangeset proves a setter on a changeset no
+// constructor made panics rather than drop the write (spec §changesets).
+func TestSetRefusesTheZeroChangeset(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("Set on the zero changeset did not panic")
+		}
+	}()
 	var c Changeset[entry]
-	set := Set(c, 1, func(r *entry) { r.Title = "hello" })
-	if set.Changed(entryTitle) || set.Row() != (entry{}) || !set.Valid() {
-		t.Errorf("Set on the zero changeset = %+v, changed %v", set.Row(), set.Changed(entryTitle))
-	}
+	Set(c, 1, func(r *entry) { r.Title = "hello" })
 }
 
-// TestSetRefusesAColumnTheChangesetLacks proves the zero changeset's
-// leniency stops there: a constructed changeset given an index outside
-// its columns panics rather than dropping the write (spec §changesets).
+// TestSetRefusesAColumnTheChangesetLacks proves a constructed changeset
+// given an index outside its columns panics rather than dropping the
+// write (spec §changesets).
 func TestSetRefusesAColumnTheChangesetLacks(t *testing.T) {
 	defer func() {
 		if recover() == nil {

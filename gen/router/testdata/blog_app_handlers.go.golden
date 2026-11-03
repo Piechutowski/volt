@@ -97,10 +97,10 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Users.Profile(r, 0, db.User{}, nil, nil), c.Users.Profile(r, 0, db.User{}, nil, nil)) {
 		voltOut = append(voltOut, "Users.Profile")
 	}
-	if !volt.Same(c.Users.ChangeEmail(r, 0, db.UserChangeset{}), c.Users.ChangeEmail(r, 0, db.UserChangeset{})) {
+	if !volt.Same(c.Users.ChangeEmail(r, 0, db.UserNew()), c.Users.ChangeEmail(r, 0, db.UserNew())) {
 		voltOut = append(voltOut, "Users.ChangeEmail")
 	}
-	if !volt.Same(c.Users.Signup(r, db.UserChangeset{}), c.Users.Signup(r, db.UserChangeset{})) {
+	if !volt.Same(c.Users.Signup(r, db.UserNew()), c.Users.Signup(r, db.UserNew())) {
 		voltOut = append(voltOut, "Users.Signup")
 	}
 	return voltOut

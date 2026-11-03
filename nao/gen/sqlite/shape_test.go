@@ -11,8 +11,8 @@ import (
 
 // TestTableDDLOneToOneAndActions pins the shape rendering of a
 // one-to-one, unique plus a ref:, of a composite key and an index
-// column, and of delete: and update: beside a ref: (spec §migrations
-// rules 4 and 5, §relationships-ref, §indexes): the same DDL as a schema
+// column, and of delete: and update: beside a ref: (spec §migrations,
+// §relationships-ref, §indexes): the same DDL as a schema
 // Table of the same shape, which testdata/inline_one_to_one.volt pins as
 // a golden. A unique or index column is a CREATE INDEX after the table,
 // never an inline UNIQUE.

@@ -15,8 +15,8 @@ import (
 // driver.Valuer instead.
 type Bytes []byte
 
-// Value binds the bytes, nil as empty bytes, never NULL (spec §columns
-// rule 2).
+// Value binds the bytes, nil as empty bytes, never NULL (spec
+// §columns).
 func (b Bytes) Value() (driver.Value, error) {
 	if b == nil {
 		return []byte{}, nil

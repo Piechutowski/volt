@@ -5,6 +5,7 @@ package itest
 import (
 	pay "github.com/Piechutowski/volt/nao/itest/pay"
 	"github.com/Piechutowski/volt/nao/rt"
+	"time"
 )
 
 const voltOrderByFeeSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "fee" = ?`
@@ -224,6 +225,24 @@ const voltPageViewTotalsSQL = `SELECT count(*) AS "n", max("hits") AS "top", sum
 
 func PageViewTotals() rt.Lookup[Totals] {
 	return rt.Lookup[Totals]{SQL: voltPageViewTotalsSQL, Args: nil, Scan: voltTotalsScan}
+}
+
+type Joined struct {
+	Name  string    `db:"name" json:"name"`
+	First time.Time `db:"first" json:"first"`
+	Last  time.Time `db:"last" json:"last"`
+}
+
+func voltJoinedScan(r rt.Row) (Joined, error) {
+	var voltV Joined
+	voltErr := r.Scan(&voltV.Name, (*rt.Time)(&voltV.First), (*rt.Time)(&voltV.Last))
+	return voltV, voltErr
+}
+
+const voltUserJoinedSQL = `SELECT "name", min("created_at") AS "first", max("created_at") AS "last" FROM "users" GROUP BY "name" ORDER BY "name" ASC`
+
+func UserJoined() rt.Query[Joined] {
+	return rt.Query[Joined]{SQL: voltUserJoinedSQL, Args: nil, Scan: voltJoinedScan}
 }
 
 const voltUserCartsSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "id" = ?`

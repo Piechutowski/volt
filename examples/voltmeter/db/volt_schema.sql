@@ -176,7 +176,7 @@ CREATE TABLE line_counts (
   fixture TEXT NOT NULL,
   -- Lines of .volt files
   volt_lines INTEGER NOT NULL,
-  -- Lines of hand-written Go
+  -- Lines of hand-written Go, tests left out
   hand_lines INTEGER NOT NULL,
   -- Lines of Go carrying the generated marker
   gen_lines INTEGER NOT NULL,

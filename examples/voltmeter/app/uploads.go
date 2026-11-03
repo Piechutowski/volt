@@ -35,7 +35,8 @@ func (Uploads) Create(r volt.Request, body Upload) volt.Response {
 
 // UploadJudged is every finding against an upload before anything is
 // stored: its commit, its machine's identity, that it measured at least
-// one phase, and each row's own validators (spec §validators).
+// one phase, that a baseline it names is a run id, and each row's own
+// validators (spec §validators).
 func UploadJudged(body Upload) []rt.FieldError {
 	var errs []rt.FieldError
 	if _, err := units.CommitParse(body.Commit); err != nil {
@@ -44,6 +45,9 @@ func UploadJudged(body Upload) []rt.FieldError {
 	errs = append(errs, machineNewOf(body.Machine).Validate().Errors()...)
 	if len(body.Phases) == 0 {
 		errs = append(errs, fieldErrors("required", "phases", "an upload measures at least one phase")...)
+	}
+	if body.Baseline < 0 {
+		errs = append(errs, fieldErrors("foreign_key", "baseline_id", "a baseline names a run by its id, never below 1")...)
 	}
 	_, werrs := UploadWrites(db.Run{}, body, nil)
 	return append(errs, werrs...)
@@ -103,7 +107,7 @@ func uploadStored(body Upload, commit units.Commit, machine db.Machine) volt.Res
 	if body.Note != "" {
 		add = add.NoteSet(rt.Some(body.Note))
 	}
-	if body.Baseline > 0 {
+	if body.Baseline != 0 {
 		add = add.BaselineIDSet(rt.Some(body.Baseline))
 	}
 	return volt.Then(db.BudgetList(), func(budgets []db.Budget) volt.Response {

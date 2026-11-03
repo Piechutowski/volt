@@ -89,7 +89,7 @@ func (c InvoiceChangeset) ErrorAdd(col InvoiceColumn, msg string) InvoiceChanges
 
 func voltInvoiceScan(r rt.Row) (Invoice, error) {
 	var voltV Invoice
-	voltErr := r.Scan(&voltV.ID, &voltV.Total, &voltV.CreatedAt, &voltV.UpdatedAt, &voltV.DeletedAt)
+	voltErr := r.Scan(&voltV.ID, &voltV.Total, (*rt.Time)(&voltV.CreatedAt), &voltV.UpdatedAt, &voltV.DeletedAt)
 	return voltV, rt.Refused("Invoice", voltErr)
 }
 

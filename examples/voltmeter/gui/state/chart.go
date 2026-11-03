@@ -147,7 +147,7 @@ func TrendChart(spot Spot, points []TrendPoint) Chart {
 }
 
 // ThesisChart is a fixture's lines per commit, oldest first: the Volt
-// lines a person writes, the Go lines a person writes, and the Go lines
+// lines a person writes, the Go lines a person writes but tests, and the Go lines
 // volt gen writes.
 func ThesisChart(rows []db.Thesis) Chart {
 	c := Chart{XLabel: "commit", YLabel: "lines"}

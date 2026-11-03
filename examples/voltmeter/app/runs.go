@@ -22,7 +22,8 @@ type Runs struct{}
 // given), after continues past a run id from the previous page's Next,
 // offset skips rows instead, and tag keeps the runs carrying that tag.
 // It reads one run past the page, so Next is set only when a run
-// follows and a full last page offers no empty one.
+// follows and a full last page offers no empty one, then reads the
+// page's breaches to name the runs that went over a budget.
 func (Runs) Index(r volt.Request) volt.Response {
 	q := r.Query()
 	limit := 20
@@ -61,12 +62,27 @@ func (Runs) Index(r volt.Request) volt.Response {
 		opts = append(opts, db.RunOffset(offset))
 	}
 	return volt.Then(rt.All(db.RunQuery(opts...), db.RunCount(preds...)), func(res []any) volt.Response {
-		page := wire.RunPage{Runs: res[0].([]db.Run), Total: res[1].(int64)}
+		page := wire.RunPage{Runs: res[0].([]db.Run), Total: res[1].(int64), Breached: []int{}}
 		if len(page.Runs) > limit {
 			page.Runs = page.Runs[:limit]
 			page.Next = page.Runs[limit-1].ID
 		}
-		return volt.Render(page).WithHeader("X-Total", strconv.FormatInt(page.Total, 10))
+		ids := make([]int, len(page.Runs))
+		for i, run := range page.Runs {
+			ids[i] = run.ID
+		}
+		return volt.Then(db.BreachQuery(db.BreachRunID.InList(ids)), func(breaches []db.Breach) volt.Response {
+			over := map[int]bool{}
+			for _, b := range breaches {
+				over[b.RunID] = true
+			}
+			for _, id := range ids {
+				if over[id] {
+					page.Breached = append(page.Breached, id)
+				}
+			}
+			return volt.Render(page).WithHeader("X-Total", strconv.FormatInt(page.Total, 10))
+		})
 	})
 }
 
@@ -81,12 +97,16 @@ func (Runs) Show(r volt.Request, id int) volt.Response {
 		db.MsGenerateRows(id),
 		db.KeystrokeQuery(db.KeystrokeRunID.Eq(id), db.KeystrokeOrderBy(db.KeystrokeTables.Asc())),
 		db.SampleLatency(id),
+		db.SampleCount(db.SampleRunID.Eq(id), db.SampleStatus.Ge(400)),
+		db.BreachQuery(db.BreachRunID.Eq(id), db.BreachOrderBy(db.BreachID.Asc())),
 	), func(res []any) volt.Response {
 		return volt.Render(wire.RunDetail{
 			Run:        res[0].(db.Run),
 			Phases:     wire.PhaseRowsOf(res[1].([]db.MsLoad), res[2].([]db.MsCheck), res[3].([]db.MsVet), res[4].([]db.MsGenerate)),
 			Keystrokes: res[5].([]db.Keystroke),
 			Latency:    res[6].(db.Latency),
+			Failed:     res[7].(int64),
+			Breaches:   res[8].([]db.Breach),
 		})
 	})
 }

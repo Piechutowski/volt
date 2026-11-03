@@ -2,6 +2,7 @@ package db_test
 
 import (
 	"context"
+	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -15,7 +16,7 @@ import (
 )
 
 // TestNotesBecomeComments proves every note reaches the generated files
-// as the spec says (§notes, rule 4; §notes-become-doc-comments;
+// as the spec says (§notes; §notes-become-doc-comments;
 // §mapping-to-sqlite-ddl): a table's note is its model's doc comment, a
 // multi-line note keeps its lines, an escaped quote comes out as a
 // quote, a column's note is its field's doc comment, a partial's column
@@ -99,11 +100,14 @@ func TestNotesBecomeComments(t *testing.T) {
 
 // TestPartialsInjectInSourceOrder proves a table's columns are its
 // injected and direct columns concatenated in source order (spec
-// §partial-injection-order, rule 1): users and runs end with the
-// stamped partial's created_at because they inject it last, and a
-// phase table is the measured partial's columns in the partial's order,
-// both in the generated model's fields and in the table the schema's
-// DDL creates.
+// §partial-injection-order) for the shapes Voltmeter has: users, runs,
+// machines and breaches end with the stamped partial's created_at
+// because they inject it last, and a phase table is the measured
+// partial's columns in the partial's order, both in the generated
+// model's fields and in the table the schema's DDL creates. Each table
+// injects one partial, last or alone, so a generator appending every
+// injection after the direct columns would pass too; lang/check's
+// TestPartialInjectionKeepsSourceOrder proves the other shapes.
 func TestPartialsInjectInSourceOrder(t *testing.T) {
 	fieldsOf := func(v any) []string {
 		var out []string
@@ -145,6 +149,48 @@ func TestPartialsInjectInSourceOrder(t *testing.T) {
 		}
 		if got := columnsOf(c.table); !slices.Equal(got, c.want) {
 			t.Errorf("columns volt_schema.sql gives %s = %v, want %v", c.table, got, c.want)
+		}
+	}
+}
+
+// TestStructTagsNameEveryColumn proves every model field carries the
+// default tag pair, db and json both the column's name, that a JSON
+// document carries every column with NULL as null and nothing omitted,
+// and that a struct derivative copies each kept field's tag unchanged
+// (spec §struct-tags).
+func TestStructTagsNameEveryColumn(t *testing.T) {
+	for _, model := range []any{db.User{}, db.Run{}, db.Machine{}, db.Breach{}, db.MsLoad{}} {
+		typ := reflect.TypeOf(model)
+		for _, f := range reflect.VisibleFields(typ) {
+			col := f.Tag.Get("db")
+			if col == "" || f.Tag != reflect.StructTag(`db:"`+col+`" json:"`+col+`"`) {
+				t.Errorf("%s.%s is tagged %q, want the default db and json pair", typ.Name(), f.Name, f.Tag)
+			}
+		}
+	}
+	b, err := json.Marshal(db.Run{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range reflect.VisibleFields(reflect.TypeOf(db.Run{})) {
+		if _, ok := doc[f.Tag.Get("db")]; !ok {
+			t.Errorf("a zero run's JSON %s omits %s", b, f.Tag.Get("db"))
+		}
+	}
+	for _, col := range []string{"tag", "baseline_id", "note"} {
+		if string(doc[col]) != "null" {
+			t.Errorf("a zero run's %s renders %s, want null", col, doc[col])
+		}
+	}
+	model := reflect.TypeOf(db.MsLoad{})
+	for _, f := range reflect.VisibleFields(reflect.TypeOf(db.MsLoadLeanRow{})) {
+		src, ok := model.FieldByName(f.Name)
+		if !ok || src.Tag != f.Tag || src.Type != f.Type {
+			t.Errorf("MsLoadLeanRow.%s %s %q does not copy the model's field", f.Name, f.Type, f.Tag)
 		}
 	}
 }

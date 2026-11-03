@@ -41,6 +41,8 @@ func scanTarget(f *naming.Field) string {
 		return "(*rt.Bytes)(&voltV." + f.GoField + ")"
 	case f.Kinded && !f.Nullable:
 		return "(*" + f.Storage + ")(&voltV." + f.GoField + ")"
+	case f.GoType == "time.Time":
+		return "(*rt.Time)(&voltV." + f.GoField + ")"
 	}
 	return "&voltV." + f.GoField
 }

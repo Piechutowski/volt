@@ -30,6 +30,7 @@ type root struct {
 	m      *model
 	script *script
 	lay    layouts
+	spots  spots
 }
 
 func (r *root) Env(context *guigui.Context, key guigui.EnvKey, source *guigui.EnvSource) (any, bool) {
@@ -49,6 +50,7 @@ func (r *root) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBounds) 
 		for i, sc := range state.Screens {
 			r.m.probe.place("screen:"+sc.String(), r.sidebar.ItemBounds(i))
 		}
+		r.spots.placed(r.m)
 	}
 	r.m.probe.emit(r.m)
 	if r.script != nil {
@@ -136,8 +138,11 @@ func (r *root) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds
 		a.nested(a.column(0, fixed(&r.who, u*3/2), fixed(&r.live, u)), guigui.FlexibleSize(2)),
 		a.nested(a.column(0, fixed(&r.signOut, u*3/2)), guigui.FixedSize(5*u)),
 	), u/2)
+	recorded := r.spots.recorded(r.m, layouter, func(name func(guigui.Widget, string)) {
+		name(&r.signOut, "sign_out")
+	})
 	a.row(0,
 		fixed(&r.sidebar, 8*u),
 		a.nested(a.column(0, a.nested(header, guigui.FixedSize(3*u+u/2)), flex(r.screen(), 1)), guigui.FlexibleSize(1)),
-	).LayoutWidgets(context, b, layouter)
+	).LayoutWidgets(context, b, recorded)
 }

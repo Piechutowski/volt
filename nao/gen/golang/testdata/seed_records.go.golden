@@ -183,7 +183,7 @@ func (c RateChangeset) ErrorAdd(col RateColumn, msg string) RateChangeset {
 
 func voltRateScan(r rt.Row) (Rate, error) {
 	var voltV Rate
-	voltErr := r.Scan(&voltV.ID, &voltV.CurrencyCode, &voltV.Rate, &voltV.FetchedAt, &voltV.Active, &voltV.Comment)
+	voltErr := r.Scan(&voltV.ID, &voltV.CurrencyCode, &voltV.Rate, (*rt.Time)(&voltV.FetchedAt), &voltV.Active, &voltV.Comment)
 	return voltV, rt.Refused("Rate", voltErr)
 }
 

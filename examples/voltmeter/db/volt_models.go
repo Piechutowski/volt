@@ -88,7 +88,7 @@ func (c UserChangeset) ErrorAdd(col UserColumn, msg string) UserChangeset {
 
 func voltUserScan(r rt.Row) (User, error) {
 	var voltV User
-	voltErr := r.Scan(&voltV.ID, &voltV.Email, &voltV.Name, &voltV.CreatedAt)
+	voltErr := r.Scan(&voltV.ID, &voltV.Email, &voltV.Name, (*rt.Time)(&voltV.CreatedAt))
 	return voltV, rt.Refused("User", voltErr)
 }
 
@@ -249,7 +249,7 @@ func (c MachineChangeset) ErrorAdd(col MachineColumn, msg string) MachineChanges
 
 func voltMachineScan(r rt.Row) (Machine, error) {
 	var voltV Machine
-	voltErr := r.Scan(&voltV.ID, &voltV.CPU, &voltV.Cores, &voltV.MemoryGb, &voltV.Os, &voltV.Arch, &voltV.Go, &voltV.CreatedAt)
+	voltErr := r.Scan(&voltV.ID, &voltV.CPU, &voltV.Cores, &voltV.MemoryGb, &voltV.Os, &voltV.Arch, &voltV.Go, (*rt.Time)(&voltV.CreatedAt))
 	return voltV, rt.Refused("Machine", voltErr)
 }
 
@@ -533,7 +533,7 @@ func (c RunChangeset) ErrorAdd(col RunColumn, msg string) RunChangeset {
 
 func voltRunScan(r rt.Row) (Run, error) {
 	var voltV Run
-	voltErr := r.Scan(&voltV.ID, &voltV.Commit, &voltV.Dirty, &voltV.MachineID, &voltV.Tag, &voltV.BaselineID, &voltV.Note, &voltV.CreatedAt)
+	voltErr := r.Scan(&voltV.ID, &voltV.Commit, &voltV.Dirty, &voltV.MachineID, &voltV.Tag, &voltV.BaselineID, &voltV.Note, (*rt.Time)(&voltV.CreatedAt))
 	return voltV, rt.Refused("Run", voltErr)
 }
 
@@ -1632,7 +1632,7 @@ func (c CommitChangeset) ErrorAdd(col CommitColumn, msg string) CommitChangeset 
 
 func voltCommitScan(r rt.Row) (Commit, error) {
 	var voltV Commit
-	voltErr := r.Scan(&voltV.Sha, &voltV.Subject, &voltV.Author, &voltV.At)
+	voltErr := r.Scan(&voltV.Sha, &voltV.Subject, &voltV.Author, (*rt.Time)(&voltV.At))
 	return voltV, rt.Refused("Commit", voltErr)
 }
 
@@ -1694,7 +1694,7 @@ type LineCount struct {
 	Fixture string `db:"fixture" json:"fixture"`
 	// Lines of .volt files
 	VoltLines int `db:"volt_lines" json:"volt_lines"`
-	// Lines of hand-written Go
+	// Lines of hand-written Go, tests left out
 	HandLines int `db:"hand_lines" json:"hand_lines"`
 	// Lines of Go carrying the generated marker
 	GenLines int `db:"gen_lines" json:"gen_lines"`
@@ -2217,7 +2217,7 @@ func (c BreachChangeset) ErrorAdd(col BreachColumn, msg string) BreachChangeset 
 
 func voltBreachScan(r rt.Row) (Breach, error) {
 	var voltV Breach
-	voltErr := r.Scan(&voltV.ID, &voltV.BudgetID, &voltV.RunID, &voltV.WallMs, &voltV.CreatedAt)
+	voltErr := r.Scan(&voltV.ID, &voltV.BudgetID, &voltV.RunID, &voltV.WallMs, (*rt.Time)(&voltV.CreatedAt))
 	return voltV, rt.Refused("Breach", voltErr)
 }
 

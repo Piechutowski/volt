@@ -40,7 +40,6 @@ func TestReverseURLsRoundTrip(t *testing.T) {
 		"PathAPIRun":                      {"GET", app.PathAPIRun(1)},
 		"PathAPIRunsAllowed":              {"OPTIONS", app.PathAPIRunsAllowed()},
 		"PathAPIRunListed":                {"GET", app.PathAPIRunListed()},
-		"PathAPIRunUntagged":              {"GET", app.PathAPIRunUntagged()},
 		"PathAPIRunSuccessors":            {"GET", app.PathAPIRunSuccessors(1)},
 		"PathAPIRunAnnotate":              {"PATCH", app.PathAPIRunAnnotate(1)},
 		"PathAPISamplesRecord":            {"POST", app.PathAPISamplesRecord(1)},

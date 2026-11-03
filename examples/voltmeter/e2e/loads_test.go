@@ -12,7 +12,7 @@ import (
 )
 
 // TestRouteLoadsBindFromTheQuery proves the binding rules of a load
-// block beyond the path (spec §route-loads, rule 2): a load argument
+// block beyond the path (spec §route-loads): a load argument
 // that is no path parameter binds from the query string, a list one from
 // the repeated key, a missing or unparseable value is a 400 naming the
 // key before any load runs, and a load's row miss is the spine's 404.
@@ -54,7 +54,7 @@ func TestRouteLoadsBindFromTheQuery(t *testing.T) {
 
 // TestQueryRouteUnderAScopeLoad proves a query route beneath a scope
 // load runs the load for its halt and drops its value (spec
-// §scope-loads, rule 3): no member is the load's 401, a member who is
+// §scope-loads): no member is the load's 401, a member who is
 // no row is its 404, and a member reads the runs no one has tagged,
 // which are the team's, not the member's. A query route cannot bind a
 // parameter from the load's value, so no member-private list is a
@@ -85,7 +85,7 @@ func TestQueryRouteUnderAScopeLoad(t *testing.T) {
 }
 
 // TestMalformedBodiesBeforeTheRow proves a body is decoded before any
-// row loads (spec §request-bodies, rule 5; §query-routes): a malformed
+// row loads (spec §request-bodies; §query-routes): a malformed
 // body is a 400 whether or not the row exists, on a controller's
 // changeset body and on a generated update alike.
 func TestMalformedBodiesBeforeTheRow(t *testing.T) {

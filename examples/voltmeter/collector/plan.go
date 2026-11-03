@@ -3,8 +3,8 @@
 // latency of the read routes. Collect and RepoFind are the command's
 // runner, the one place it runs the sweep, git, the file system and
 // HTTP, as gui/remote is the desktop client's; every other function is
-// pure and plans what Collect performs (spec §values-and-effects, rule
-// 3). The runner lives here rather than in main so the end-to-end suite
+// pure and plans what Collect performs (spec
+// §values-and-effects). The runner lives here rather than in main so the end-to-end suite
 // can run a collection in process.
 package collector
 
@@ -187,8 +187,9 @@ type File struct {
 // LinesCount is the thesis numbers of one fixture's files: lines of
 // .volt files, lines of Go files carrying the Code generated marker
 // before the package clause (the rule of go/ast.IsGenerated), and lines
-// of every other Go file, tests included, since a person writes those.
-// Other files are not counted.
+// of every other Go file but tests, so the hand-written count is the
+// code beside the generated code, not the code that checks it. Tests
+// and other files are not counted.
 func LinesCount(fixture string, files []File) app.ThesisCount {
 	c := app.ThesisCount{Fixture: fixture}
 	for _, f := range files {
@@ -196,7 +197,7 @@ func LinesCount(fixture string, files []File) app.ThesisCount {
 		switch {
 		case strings.HasSuffix(f.Path, ".volt"):
 			c.VoltLines += n
-		case !strings.HasSuffix(f.Path, ".go"):
+		case !strings.HasSuffix(f.Path, ".go"), strings.HasSuffix(f.Path, "_test.go"):
 		case generated(f.Data):
 			c.GenLines += n
 		default:
@@ -297,7 +298,6 @@ func ReadCalls(t Targets) []Call {
 		get("/api/runs/{id}", app.PathAPIRun(t.Run)),
 		{Method: "OPTIONS", Route: "OPTIONS /api/runs", Path: app.PathAPIRunsAllowed()},
 		get("/api/runs/listed", app.PathAPIRunListed()),
-		get("/api/runs/untagged", app.PathAPIRunUntagged()),
 		get("/api/runs/{id}/successors", app.PathAPIRunSuccessors(t.Run)),
 		get("/api/runs/{run}/latency", app.PathAPISampleLatency(t.Run)),
 		get("/api/runs/{run}/routes", app.PathAPISamplePerRoute(t.Run)),

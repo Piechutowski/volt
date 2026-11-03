@@ -14,7 +14,6 @@ package app
   DELETE  /api/runs/:id(int)               Runs.Delete 
   OPTIONS /api/runs                        Runs.Options PathAPIRunsAllowed
   GET     /api/runs/listed                 db.RunListed PathAPIRunListed
-  GET     /api/runs/untagged               db.RunUntagged PathAPIRunUntagged
   GET     /api/runs/:id(int)/successors    db.RunSuccessors PathAPIRunSuccessors
   PATCH   /api/runs/:id(int)               Runs.Annotate PathAPIRunAnnotate
   POST    /api/runs/:id(int)/samples       Samples.Create PathAPISamplesRecord

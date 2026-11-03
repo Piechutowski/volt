@@ -168,6 +168,10 @@ select buyers (id, name, orders.total) for users join orders [order: (id asc, or
 select hourly (site, day / 2 * 2 as bucket, sum(hits) as total, avg(hits) as mean, count() as n) for page_views [group: (site, bucket), order: (site asc, bucket asc)]
 select totals (count() as n, max(hits) as top, sum(hits) as total) for page_views
 
+// min and max of a NOT NULL date/time column keep time.Time under group:,
+// read from the text SQLite answers (spec §go-types).
+select joined (name, min(created_at) as first, max(created_at) as last) for users [group: (name), order: (name asc)]
+
 // Nested results (spec §selects-over-groups): a user with the orders that
 // refer to it, two statements in one transaction.
 select carts    for users with orders where id = :id

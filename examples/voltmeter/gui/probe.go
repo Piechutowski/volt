@@ -26,6 +26,7 @@ type probeLine struct {
 	Loaded  bool              `json:"loaded"`
 	Latency int               `json:"latency"`
 	Fields  map[string]string `json:"fields"`
+	Errors  map[string]string `json:"errors"`
 	Notice  string            `json:"notice"`
 	Board   int               `json:"board"`
 	Widgets int               `json:"widgets"`
@@ -61,6 +62,7 @@ func (p *probe) emit(m *model) {
 		Loaded:  s.Run.Loaded,
 		Latency: s.Run.Detail.Latency.N,
 		Fields:  map[string]string{},
+		Errors:  map[string]string{},
 		Notice:  s.Notice.Text,
 		Board:   s.Boards.Selected,
 		Budget:  s.Budgets.Selected,
@@ -82,6 +84,9 @@ func (p *probe) emit(m *model) {
 	line.Window[0], line.Window[1] = ebiten.WindowPosition()
 	for f, v := range s.Fields {
 		line.Fields[string(f)] = v
+	}
+	for f, v := range s.Errors {
+		line.Errors[string(f)] = v
 	}
 	b, err := json.Marshal(line)
 	if err != nil || bytes.Equal(b, p.last) {

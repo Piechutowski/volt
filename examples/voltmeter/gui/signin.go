@@ -22,7 +22,9 @@ type signInScreen struct {
 	email    field
 	submit   basicwidget.Button
 	failed   bool
+	retries  bool
 	lay      layouts
+	spots    spots
 }
 
 func (s *signInScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -34,8 +36,18 @@ func (s *signInScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 	adder.AddWidget(&s.title)
 	adder.AddWidget(&s.subtitle)
 	s.failed = m.s.Notice.Failed
+	retry := state.Intent(nil)
+	switch m.s.Notice.Of {
+	case "loading the team":
+		retry = state.MembersReload{}
+	case "signing in":
+		retry = state.SignInSubmit{}
+	}
+	s.retries = s.failed && retry != nil
 	if s.failed {
 		adder.AddWidget(&s.notice)
+	}
+	if s.retries {
 		adder.AddWidget(&s.retry)
 	}
 	for _, b := range s.members.All() {
@@ -61,7 +73,7 @@ func (s *signInScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 	s.notice.SetWrapMode(basicwidget.WrapModeNormal)
 	s.notice.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 	s.retry.SetText("Try again")
-	s.retry.OnDown(func(context *guigui.Context) { m.dispatch(state.MembersReload{}) })
+	s.retry.OnDown(func(context *guigui.Context) { m.dispatch(retry) })
 	caption(&s.or, "or sign in by email", basicwidgetdraw.TextColor(context.ColorMode(), false))
 	s.or.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 	s.email.FieldSet(state.FieldEmail, "Email", "name@voltmeter.test")
@@ -79,7 +91,10 @@ func (s *signInScreen) Layout(context *guigui.Context, widgetBounds *guigui.Widg
 	w := min(b.Dx()-2*u, 18*u)
 	items := a.list(fixed(&s.title, 2*u), fixed(&s.subtitle, u), fixed(nil, u/2))
 	if s.failed {
-		items = append(items, natural(&s.notice), fixed(&s.retry, u*3/2))
+		items = append(items, natural(&s.notice))
+	}
+	if s.retries {
+		items = append(items, fixed(&s.retry, u*3/2))
 	}
 	for _, btn := range s.members.All() {
 		items = append(items, fixed(btn, u*3/2))
@@ -89,5 +104,20 @@ func (s *signInScreen) Layout(context *guigui.Context, widgetBounds *guigui.Widg
 	h := l.Measure(context, guigui.FixedWidthConstraints(w)).Y
 	x := b.Min.X + (b.Dx()-w)/2
 	y := b.Min.Y + max(u, (b.Dy()-h)/3)
-	l.LayoutWidgets(context, image.Rect(x, y, x+w, y+h), layouter)
+	m := modelOf(context, s)
+	recorded := s.spots.recorded(m, layouter, func(name func(guigui.Widget, string)) {
+		name(&s.retry, "signin:retry")
+		name(&s.submit, "signin:submit")
+		for i, btn := range s.members.All() {
+			if m != nil && i < len(m.s.Members) {
+				name(btn, probeRow("member", m.s.Members[i].ID))
+			}
+		}
+	})
+	l.LayoutWidgets(context, image.Rect(x, y, x+w, y+h), recorded)
+}
+
+func (s *signInScreen) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBounds) error {
+	s.spots.placed(modelOf(context, s))
+	return nil
 }

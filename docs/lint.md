@@ -408,8 +408,12 @@ each use keeps the count visible, so it stays the exception.
 
 **What it does.** Reports a handler that returns `volt.Then` over a
 query whose every argument is a parameter of the handler or a literal.
-A write, a call whose name ends in `Create`, `Update` or `Delete`, is
-never reported, since a load is a read (spec §route-loads).
+The handler's `body` is no such parameter, since no load binds it
+(spec §request-bodies), so a create or an update of the body, which
+takes a changeset, is never reported; nor is a function of the runtime
+packages, `volt` and `rt`, which no load names, or a delete, a call
+whose name ends in `Delete` or `DeleteWhere`, since a load is a read
+(spec §route-loads).
 
 **Why.** A route load (spec §route-loads) spells that lookup once, in
 the route, and hands the handler the row: the handler never sees a
@@ -418,14 +422,16 @@ handler reads. A continuation is for a lookup that depends on the
 request's body, its headers or a computed value.
 
 **Examples.** [testdata/loadspelledlong.go](../lang/vet/testdata/loadspelledlong.go):
-`Show` looks a metric up by its path parameter and warns; `Peers`
-computes an argument from the query string and `Recent` builds a
-dynamic query, so both pass; `Save` writes its changeset body and `Drop`
-deletes by its path parameter, writes no load could spell, so both pass.
+`Show` looks a metric up by its path parameter and `Touched` runs a
+select named `last_update` by its own, so both warn; `Peers` computes
+an argument from the query string and `Recent` builds a dynamic query,
+so both pass; `Save` updates and `Add` inserts the changeset body, and
+`Drop` and `Purge` delete, writes no load could spell, so all four
+pass.
 
-**Limitations.** Without type information a write is told by its name,
-so a select whose function name ends in one of the three verbs is
-skipped too.
+**Limitations.** Without type information a delete is told by its
+name, so a select whose function name ends in `Delete` or
+`DeleteWhere` is skipped too.
 
 ---
 

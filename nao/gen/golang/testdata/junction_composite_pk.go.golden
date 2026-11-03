@@ -235,7 +235,7 @@ func (c UserRoleChangeset) ErrorAdd(col UserRoleColumn, msg string) UserRoleChan
 
 func voltUserRoleScan(r rt.Row) (UserRole, error) {
 	var voltV UserRole
-	voltErr := r.Scan(&voltV.UserID, &voltV.RoleID, &voltV.GrantedAt)
+	voltErr := r.Scan(&voltV.UserID, &voltV.RoleID, (*rt.Time)(&voltV.GrantedAt))
 	return voltV, rt.Refused("UserRole", voltErr)
 }
 

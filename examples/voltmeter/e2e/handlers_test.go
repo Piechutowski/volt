@@ -29,6 +29,7 @@ type probeLine struct {
 	Loaded  bool              `json:"loaded"`
 	Latency int               `json:"latency"`
 	Fields  map[string]string `json:"fields"`
+	Errors  map[string]string `json:"errors"`
 	Notice  string            `json:"notice"`
 	Board   int               `json:"board"`
 	Widgets int               `json:"widgets"`
@@ -46,12 +47,19 @@ type window struct {
 	last  probeLine
 }
 
+// until waits for a line that satisfies ok and then for the window to
+// go quiet, so the targets it returns are laid out for that state: a
+// line reports the targets the frames before it placed, which lag a
+// change of layout by a frame or two.
 func (w *window) until(what string, ok func(probeLine) bool) probeLine {
 	w.t.Helper()
 	deadline := time.After(30 * time.Second)
 	for {
 		if !w.last.Busy && ok(w.last) {
-			return w.last
+			if w.quiet() && !w.last.Busy && ok(w.last) {
+				return w.last
+			}
+			continue
 		}
 		select {
 		case l, open := <-w.lines:
@@ -61,6 +69,22 @@ func (w *window) until(what string, ok func(probeLine) bool) probeLine {
 			w.last = l
 		case <-deadline:
 			w.t.Fatalf("waiting for %s; last state %+v", what, w.last)
+		}
+	}
+}
+
+// quiet reads lines until none arrives for a quarter second and
+// reports whether the window stayed open.
+func (w *window) quiet() bool {
+	for {
+		select {
+		case l, open := <-w.lines:
+			if !open {
+				return false
+			}
+			w.last = l
+		case <-time.After(250 * time.Millisecond):
+			return true
 		}
 	}
 }
@@ -119,9 +143,60 @@ func xvfbStop(cmd *exec.Cmd, n string) {
 		<-done
 	}
 	if n != "" {
-		os.Remove("/tmp/.X" + n + "-lock")
-		os.Remove("/tmp/.X11-unix/X" + n)
+		xvfbFilesRemove("/tmp", n, cmd.Process.Pid)
 	}
+}
+
+// xvfbFilesRemove removes the lock and socket of display n when the
+// lock still holds pid, as after a killed Xvfb that could not clean up;
+// a server that exited cleanly removed them itself, and another one
+// that has since taken the number holds the lock with its own pid.
+func xvfbFilesRemove(dir, n string, pid int) {
+	lock := filepath.Join(dir, ".X"+n+"-lock")
+	b, err := os.ReadFile(lock)
+	if err != nil {
+		return
+	}
+	if held, err := strconv.Atoi(strings.TrimSpace(string(b))); err != nil || held != pid {
+		return
+	}
+	os.Remove(filepath.Join(dir, ".X11-unix", "X"+n))
+	os.Remove(lock)
+}
+
+// TestXvfbFilesRemovedOnlyWhenOwned proves the cleanup after Xvfb leaves
+// a display's files alone unless their lock names the server this test
+// started, so a server another run started on the freed number keeps
+// its lock and socket.
+func TestXvfbFilesRemovedOnlyWhenOwned(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, ".X11-unix"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := func(pid int) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, ".X7-lock"), []byte(fmt.Sprintf("%10d\n", pid)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".X11-unix", "X7"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	present := func() bool {
+		_, lockErr := os.Stat(filepath.Join(dir, ".X7-lock"))
+		_, sockErr := os.Stat(filepath.Join(dir, ".X11-unix", "X7"))
+		return lockErr == nil && sockErr == nil
+	}
+	files(4242)
+	xvfbFilesRemove(dir, "7", 1001)
+	if !present() {
+		t.Error("the files of another server's display were removed")
+	}
+	xvfbFilesRemove(dir, "7", 4242)
+	if present() {
+		t.Error("the files of the server this test started were kept")
+	}
+	xvfbFilesRemove(dir, "7", 4242)
 }
 
 func guiBuild(t *testing.T) string {
@@ -184,7 +259,8 @@ func has(target string) func(probeLine) bool {
 // opens it again after the member went back, a note typed into its field
 // survives a live refetch of the run and Enter saves what was typed, and
 // a tag form saved by Enter shows the empty fields State holds, so a
-// second Enter sends what the member sees.
+// second Enter sends what the member sees, and the sign-out button and a
+// member's row on the sign-in screen sign another member in.
 func TestWindowHandlersDriveTheState(t *testing.T) {
 	e := envStart(t)
 	c := e.gob(0)
@@ -246,6 +322,11 @@ func TestWindowHandlersDriveTheState(t *testing.T) {
 			t.Errorf("tag %s = %+v, %v; want the name %q the field showed when Enter was pressed", slug, tag, err, want)
 		}
 	}
+
+	w.click("sign_out")
+	w.until("the sign-in screen with the team's rows", func(l probeLine) bool { return l.Screen == "Sign in" && has("member:2")(l) })
+	w.click("member:2")
+	w.until("Grace signed in by her row", func(l probeLine) bool { return l.Screen == "Runs" && l.Notice == "Signed in as Grace" })
 }
 
 // TestWindowHandlersDriveBoardsAndBudgets drives the dashboards and
@@ -254,8 +335,10 @@ func TestWindowHandlersDriveTheState(t *testing.T) {
 // rather than a blank area, each card's Remove removes its widget down
 // to none, the phase picker and Add widget add one back, a budget row
 // picks the budget, a ceiling typed and saved by its button is stored,
-// Reset breached returns the breached budget to ok, and a budget added
-// through the phase picker is stored with that phase.
+// Reset breached returns the breached budget to ok, an empty budget is
+// refused under its fields and a click on a field in that state still
+// lands in its input, and a budget added through the phase picker is
+// stored with that phase.
 func TestWindowHandlersDriveBoardsAndBudgets(t *testing.T) {
 	e := envStart(t)
 	c := e.gob(0)
@@ -332,6 +415,8 @@ func TestWindowHandlersDriveBoardsAndBudgets(t *testing.T) {
 	})
 	w.click("budgets:reset")
 	w.until("the breached budget reset", func(l probeLine) bool { return l.Breach == 0 && strings.HasPrefix(l.Notice, "Reset 1") })
+	w.click("budgets:add")
+	w.until("the empty budget refused under its fields", func(l probeLine) bool { return l.Errors["budget_tables"] != "" })
 	w.click("budget_phase:check")
 	w.click("field:budget_tables")
 	x.textType("4")

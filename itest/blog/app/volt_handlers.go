@@ -148,7 +148,7 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Users.Card(r, 0), c.Users.Card(r, 0)) {
 		voltOut = append(voltOut, "Users.Card")
 	}
-	if !volt.Same(c.Users.ChangeEmail(r, 0, db.UserChangeset{}), c.Users.ChangeEmail(r, 0, db.UserChangeset{})) {
+	if !volt.Same(c.Users.ChangeEmail(r, 0, db.UserNew()), c.Users.ChangeEmail(r, 0, db.UserNew())) {
 		voltOut = append(voltOut, "Users.ChangeEmail")
 	}
 	return voltOut

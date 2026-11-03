@@ -989,8 +989,7 @@ such as `state.pending`, is **not** a valid default value.
    that carries `null` and has no `default:` is NULL when a write
    leaves it out, so `default: null` would only say that twice and is
    an error.
-3. **Not on the rowid alias.** A default on the rowid alias (§columns
-   rule 4), the database-assigned key with or without `autoincrement`,
+3. **Not on the rowid alias.** A default on the rowid alias (§columns), the database-assigned key with or without `autoincrement`,
    a key that is also a foreign key and a declared type stored as `int`
    alike, is an error citing §columns: SQLite ignores a `DEFAULT` on
    the rowid alias and assigns a rowid to an insert that leaves the
@@ -2215,7 +2214,9 @@ func (r Response) Rescue(on func(error) Response) Response
 5. **Determinism.** Two calls of a handler with one request value
    return the same response value, and `volt_handlers.go` declares
    `ControllersDeterministic(c Controllers, r volt.Request) []string`,
-   which calls every action twice with zero-valued parameters and
+   which calls every action twice with zero-valued parameters, a
+   changeset body as the fresh changeset `<Model>New()` (§changesets)
+   since a changeset no constructor made refuses a setter, and
    names the ones whose responses differ (`volt.Same`: the same status,
    headers, cookies and body, or continuations of the same effect;
    streams compare as the same). An application's test calls it with
@@ -2543,8 +2544,10 @@ for a format suffix.
 1. **Responses** follow `Accept`: the first listed media type that is
    `application/json`, `application/x-gob`, `application/*` or `*/*`
    decides; an absent header means JSON; a header offering neither is
-   a 406 naming both. Negotiation happens before the handler runs
-   anything: a 406 decodes no body, loads no row and writes nothing.
+   a 406 naming both. A query route's shim negotiates before it runs
+   anything: its 406 decodes no body, loads no row and writes nothing.
+   A controller route's answer is the handler's, so rule 4 says when
+   it negotiates.
 2. **Request bodies** follow `Content-Type`: absent or
    `application/json` decodes JSON, `application/x-gob` decodes GOB,
    anything else is a 415; an empty or malformed body is a 400. A write
@@ -2571,10 +2574,13 @@ for a format suffix.
    and `volt.Decode` over the request value's body
    (§requests-and-responses), so a controller route speaks both
    formats without repeating them. A controller route negotiates when
-   it renders, after whatever effects it ran, since its answer may be
-   HTML, a file or a stream that neither format covers; a controller
-   that writes and renders a format calls `volt.Negotiate` before its
-   first effect to keep rule 1's guarantee that a 406 writes nothing.
+   it renders, since its answer may be HTML, a redirect, a file or a
+   stream that neither format covers. Its shim decodes the body, loads
+   an update's row and runs the route's loads before the handler
+   starts (§request-bodies, §route-loads), all of them reads, so a body
+   that does not decode is still a 400 or a 415 whatever `Accept`
+   says. A handler that writes and then renders a format calls
+   `volt.Negotiate` before its first write, so its 406 writes nothing.
 5. **Error bodies** are structured: the default error handler writes a
    `volt.Problem` (status, message, and details: check, columns,
    message, when the error itemizes them) in the negotiated format,
@@ -2584,7 +2590,10 @@ for a format suffix.
    write, the data runtime's `*rt.Invalid` (§changesets), is 409 when a
    `unique` field error is among its fields and 422 otherwise; a query's
    row miss is 404; any other error has none and is the default
-   handler's 500. A generated client decodes the body into a
+   handler's 500. A rendered value the negotiated format cannot carry,
+   such as an infinite float in JSON, is encoded before anything is
+   written, so it is a 500 problem without the response's headers and
+   cookies, never a 200 with a cut body. A generated client decodes the body into a
    `*volt.ProblemError`, so a caller reads `errors.As(err, &pe)` and
    marks the fields `pe.Details` name.
 
@@ -2668,19 +2677,31 @@ scope / [pipe: api] {
    (`PathEvents`, `client.Events`).
 2. The `Controllers` manifest (§handler-references) gains `Events *volt.Broker`; the
    application publishes with `Events.Publish(name, data)`. The
-   broker fans every event out to every open stream, assigns IDs in
-   order, and keeps a replay buffer so a client that reconnects with
-   `Last-Event-ID` resumes where it was. An ID on the wire names the
-   broker as well as the position (`<epoch>-<n>`, the epoch taken from
-   the clock when the broker starts), so IDs of two processes never
-   coincide. A stream opened without `Last-Event-ID` starts at the
-   oldest event the buffer keeps, and so does one naming an ID of
-   another broker, one from before the process restarted, however far
-   the new broker has counted. The client sends back the ID of the last
-   event it delivered, so after such a replay it resumes on the new
-   broker's IDs. Events are
-   `text/event-stream` with a JSON payload; a subscriber that falls
-   behind is dropped and reconnects.
+   broker fans every event out to every open stream, numbers events in
+   order, and keeps a replay buffer of the last `Replay` events (256
+   unless set). An ID on the wire is `<epoch>-<n>`: the position and
+   the broker's epoch, read from the clock in nanoseconds when the
+   broker first numbers or serves an event and distinct among the
+   brokers of one process, so the IDs of a process and of the one that
+   replaced it differ unless both read the clock at the same
+   nanosecond. A stream that sends back a `Last-Event-ID` of this
+   broker resumes after it. Every other stream starts at the oldest
+   event the buffer keeps: one opened without the header, one naming
+   an ID of another broker, one from before the process restarted
+   however far the new broker has counted, and one naming an ID in any
+   other form, a bare position among them. An event delivered from the
+   buffer carries the comment line `: replayed`, which `EventSource`
+   ignores and `volt.Event` reads as `Replayed`, so a client tells what
+   was published before it connected from what happens while it
+   listens. A `volt.Event` keeps the broker's `Epoch` beside its `ID`,
+   so a consumer tells a restart and deduplicates by the pair, and
+   `WireID()` spells the two as the wire does. The client sends back
+   the ID of the last event it delivered, so after a replay it resumes
+   on the new broker's IDs. `Broker.Subscribe(after)`, from a
+   position, and `Broker.SubscribeAfter(lastEventID)`, from a wire ID,
+   are the same streams as a channel, for a program that reads events
+   in process. Events are `text/event-stream` with a JSON payload; a
+   subscriber that falls behind is dropped and reconnects.
 3. The generated client's `Events(ctx) <-chan volt.Event` connects,
    delivers every event, reconnects with backoff on any drop, and
    closes the channel when ctx is done.
@@ -3014,7 +3035,7 @@ The identifier-list value form `(a, b, c)` (production in Collected
 grammar (Part II)) is valid only as the value of `only:`, `except:` and
 a select's `group:`: an action list on resources, a table list on a
 dataset, a column list on a route (§request-bodies), the grouping
-columns of a select (§selects-over-groups, rule 10). A select's
+columns of a select (§selects-over-groups). A select's
 `order:` takes its order list (§selects-over-groups). The query-call
 value form `pkg.Query(a)` is valid only as the value of a route's
 `body:`.
@@ -4514,6 +4535,19 @@ the set.
 `int` is Go's `int`: Volt targets 64-bit platforms (amd64 and arm64),
 so a route parameter or primary key of type `int` carries the full
 SQLite INTEGER range there, and only there.
+
+A `time.Time` binds in UTC, whatever its location: the runtime
+converts every `time.Time` argument of a statement and every valid
+`rt.Null[time.Time]`, so the text the driver stores carries `+00:00`
+and SQLite's text comparison, in `where`, `order:`, `min` and `max`,
+orders the values as the instants are ordered. A value reads back in
+UTC, the same instant as the one written. A NOT NULL `time.Time`
+field, of a model or of a select's row, scans through
+`(*rt.Time)(&v.At)`, which reads the
+driver's value of a declared column and the text SQLite answers for
+`min` or `max` of one, which carries no declared type for the driver
+to convert by (§selects-over-groups); `rt.Null[time.Time]` reads both
+the same way.
 
 ### Nullability
 

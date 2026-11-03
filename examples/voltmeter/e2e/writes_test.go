@@ -3,6 +3,7 @@ package e2e
 import (
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"slices"
 	"strings"
@@ -19,7 +20,7 @@ import (
 )
 
 // TestWritesNegotiateFirst proves a writing controller answers a 406
-// before its first effect (spec §formats, rules 1 and 4): an upload, a
+// before its first effect (spec §formats): an upload, a
 // budget, an annotation, a sample batch and a dashboard asked for in a
 // format the server does not speak store nothing.
 func TestWritesNegotiateFirst(t *testing.T) {
@@ -249,9 +250,11 @@ func TestRefusedFirstUploadsKeepTheirNeighbours(t *testing.T) {
 // TestMeasurementsValidated proves an upload and a sample batch holding
 // a value no measurement produces are a 422 itemized per field, with
 // nothing stored (spec §validators): sizes below one table, negative
-// counts, costs and sizes, a machine without an identity or a
-// processor, an upload measuring no phase, an empty route, a status
-// outside HTTP's and a negative duration.
+// counts, costs and sizes, infinite and NaN ones sent over GOB, a
+// machine without an identity or a processor, an upload measuring no
+// phase or naming a negative baseline, an empty route, a status outside
+// HTTP's and a negative or infinite duration; the machine list still
+// renders as JSON after them.
 func TestMeasurementsValidated(t *testing.T) {
 	e := envStart(t)
 	c := e.gob(0)
@@ -289,13 +292,37 @@ func TestMeasurementsValidated(t *testing.T) {
 	if r := replyRead(t, resp, err, http.StatusUnprocessableEntity, nil); r.problem(t).Details[0].Check != "MegabytesMeasured" {
 		t.Errorf("an upload of a negative output size = %s", r.body)
 	}
+	inf, nan := math.Inf(1), math.NaN()
+	for _, tc := range []struct {
+		name  string
+		bend  func(*app.Upload)
+		check string
+	}{
+		{"an infinite wall time", func(u *app.Upload) { u.Phases[0].WallMS = inf }, "MillisMeasured"},
+		{"a NaN wall time", func(u *app.Upload) { u.Phases[0].WallMS = nan }, "MillisMeasured"},
+		{"an infinite allocation", func(u *app.Upload) { u.Phases[1].AllocMB = inf }, "MegabytesMeasured"},
+		{"an infinite keystroke", func(u *app.Upload) { u.Keystrokes[0].MSPerOp = inf }, "KeystrokeSane"},
+		{"an infinite memory", func(u *app.Upload) { u.Machine.CPU = "Infinite CPU"; u.Machine.MemoryGB = inf }, "MachineSized"},
+		{"a negative baseline", func(u *app.Upload) { u.Baseline = -5 }, "foreign_key"},
+	} {
+		up := sweep("dead0005", []int{2}, 1)
+		tc.bend(&up)
+		resp, err = c.APIUpload(bg, up)
+		if r := replyRead(t, resp, err, http.StatusUnprocessableEntity, nil); r.problem(t).Details[0].Check != tc.check {
+			t.Errorf("an upload of %s over GOB = %s, want %s first", tc.name, r.body, tc.check)
+		}
+	}
 	if ms, err := c.APIMachines(bg); err != nil || len(ms) != 1 {
 		t.Errorf("machines after the refused uploads = %+v, %v", ms, err)
+	}
+	if _, err := e.json(0).APIMachines(bg); err != nil {
+		t.Errorf("the machine list as JSON after the refused uploads: %v", err)
 	}
 
 	samples := app.SampleBatch{Samples: []app.SampleTimed{
 		{Route: "GET /ping", Status: 200, MS: 0.2, At: 1},
 		{Route: "", Status: -5, MS: -3, At: 2},
+		{Route: "GET /ping", Status: 200, MS: math.Inf(1), At: 3},
 	}}
 	resp, err = c.APISamplesRecord(bg, run.ID, samples)
 	r = replyRead(t, resp, err, http.StatusUnprocessableEntity, nil)
@@ -303,7 +330,7 @@ func TestMeasurementsValidated(t *testing.T) {
 	for _, d := range r.problem(t).Details {
 		checks = append(checks, d.Check+"("+strings.Join(d.Columns, ",")+")")
 	}
-	if !slices.Equal(checks, []string{"required(route)", "SampleSane(status,ms)"}) {
+	if !slices.Equal(checks, []string{"required(route)", "SampleSane(status,ms)", "SampleSane(status,ms)"}) {
 		t.Errorf("a batch with an impossible sample = %v", checks)
 	}
 	if lat, err := c.APISampleLatency(bg, run.ID); err != nil || lat.N != 0 {

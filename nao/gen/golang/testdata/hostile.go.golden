@@ -388,7 +388,7 @@ func (c X2faCodeChangeset) ErrorAdd(col X2faCodeColumn, msg string) X2faCodeChan
 
 func voltX2faCodeScan(r rt.Row) (X2faCode, error) {
 	var voltV X2faCode
-	voltErr := r.Scan(&voltV.Code, &voltV.UserID, &voltV.ExpiresAt)
+	voltErr := r.Scan(&voltV.Code, &voltV.UserID, (*rt.Time)(&voltV.ExpiresAt))
 	return voltV, rt.Refused("X2faCode", voltErr)
 }
 

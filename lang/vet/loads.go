@@ -24,11 +24,12 @@ func (r *loadSpelledLongRule) Go(f *GoFile) []diag.Diagnostic {
 		params := map[string]bool{}
 		for i, field := range fd.Type.Params.List {
 			for _, id := range field.Names {
-				if i > 0 {
+				if i > 0 && id.Name != "body" {
 					params[id.Name] = true
 				}
 			}
 		}
+		runtime := runtimeNames(f.File)
 		for _, stmt := range fd.Body.List {
 			ret, ok := stmt.(*goast.ReturnStmt)
 			if !ok || len(ret.Results) != 1 {
@@ -39,7 +40,7 @@ func (r *loadSpelledLongRule) Go(f *GoFile) []diag.Diagnostic {
 				continue
 			}
 			query, ok := call.Args[0].(*goast.CallExpr)
-			if !ok || writeSpelled(spelled(query.Fun)) || !routeBound(query.Args, params) {
+			if !ok || runtime[qualifier(query.Fun)] || deleteSpelled(spelled(query.Fun)) || !routeBound(query.Args, params) {
 				continue
 			}
 			out = append(out, r.warnf(f.Pos(query), "%s runs on the route's parameters alone; a load of the route hands the handler its result and spells it once (§route-loads)", spelled(query.Fun)))
@@ -48,13 +49,39 @@ func (r *loadSpelledLongRule) Go(f *GoFile) []diag.Diagnostic {
 	return out
 }
 
-func writeSpelled(name string) bool {
-	for _, verb := range []string{"Create", "Update", "Delete"} {
-		if strings.HasSuffix(name, verb) {
-			return true
+// deleteSpelled tells a delete of the generated surface by its name,
+// since its key arguments may all be route parameters; a create or an
+// update takes a changeset, the handler's body or a value it computed,
+// which no load binds (spec §request-bodies).
+func deleteSpelled(name string) bool {
+	return strings.HasSuffix(name, "Delete") || strings.HasSuffix(name, "DeleteWhere")
+}
+
+// runtimeNames is the names the file imports the runtime packages
+// under, whose functions no load names (spec §route-loads).
+func runtimeNames(file *goast.File) map[string]bool {
+	out := map[string]bool{}
+	for _, im := range file.Imports {
+		path := strings.Trim(im.Path.Value, `"`)
+		if path != "github.com/Piechutowski/volt" && path != "github.com/Piechutowski/volt/nao/rt" {
+			continue
+		}
+		name := path[strings.LastIndex(path, "/")+1:]
+		if im.Name != nil {
+			name = im.Name.Name
+		}
+		out[name] = true
+	}
+	return out
+}
+
+func qualifier(fun goast.Expr) string {
+	if sel, ok := fun.(*goast.SelectorExpr); ok {
+		if id, ok := sel.X.(*goast.Ident); ok {
+			return id.Name
 		}
 	}
-	return false
+	return ""
 }
 
 func routeBound(args []goast.Expr, params map[string]bool) bool {

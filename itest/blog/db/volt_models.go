@@ -68,7 +68,7 @@ func (c UserChangeset) ErrorAdd(col UserColumn, msg string) UserChangeset {
 
 func voltUserScan(r rt.Row) (User, error) {
 	var voltV User
-	voltErr := r.Scan(&voltV.ID, &voltV.Email, &voltV.CreatedAt)
+	voltErr := r.Scan(&voltV.ID, &voltV.Email, (*rt.Time)(&voltV.CreatedAt))
 	return voltV, rt.Refused("User", voltErr)
 }
 

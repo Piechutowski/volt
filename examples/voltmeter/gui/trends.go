@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/guigui-gui/guigui"
@@ -60,7 +61,7 @@ func (t *trendsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 		p := points[i]
 		change := ""
 		if i > 0 && points[i-1].WallMS > 0 {
-			change = strconv.FormatFloat(100*(float64(p.WallMS)/float64(points[i-1].WallMS)-1), 'f', 1, 64) + " %"
+			change = fmt.Sprintf("%+.1f %%", 100*(float64(p.WallMS)/float64(points[i-1].WallMS)-1))
 		}
 		t.rows = append(t.rows, basicwidget.TableRow[int]{Value: p.RunID, Cells: []basicwidget.TableCell{
 			cellRight(strconv.Itoa(p.RunID)), cellRight(units.Millis(p.WallMS).String()), cellRight(change),
@@ -139,7 +140,7 @@ func (t *thesisScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 	})
 	t.chart.ChartSet(state.ThesisChart(s.Thesis.Rows), false)
 	t.table.SetColumns([]basicwidget.TableColumn{
-		columnOf("Commit", 2, false), columnOf("Subject", 8, false), columnOf("Volt", 2, true), columnOf("Hand Go", 2, true), columnOf("Generated Go", 2, true), columnOf("Generated per Volt line", 3, true),
+		columnOf("Commit", 2, false), columnOf("Subject", 8, false), columnOf("Volt", 2, true), columnOf("Hand Go, no tests", 3, true), columnOf("Generated Go", 2, true), columnOf("Generated per Volt line", 3, true),
 	})
 	t.rows = t.rows[:0]
 	t.subjects.SetLen(len(s.Thesis.Rows))

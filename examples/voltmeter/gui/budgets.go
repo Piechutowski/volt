@@ -54,8 +54,10 @@ func (b *budgetsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder)
 	for _, x := range s.Budgets.List {
 		st := cell(string(x.State))
 		if x.State == db.HealthBreached {
-			st.TextStyle.Style.SetColor(basicwidget.DangerTintColor())
 			st.TextStyle.Style.SetBold(true)
+			if x.ID != s.Budgets.Selected {
+				st.TextStyle.Style.SetColor(basicwidget.DangerTintColor())
+			}
 		}
 		b.rows = append(b.rows, basicwidget.TableRow[int]{Value: x.ID, Cells: []basicwidget.TableCell{
 			cellRight(strconv.Itoa(x.ID)), cell(string(x.Phase)), cellRight(strconv.Itoa(x.Tables)), cellRight(units.Millis(x.MaxMs).String()), st,
@@ -93,10 +95,13 @@ func (b *budgetsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder)
 		caption(&b.detailState, "Add a budget, then pick it to edit its ceiling.", muted)
 	} else {
 		heading(&b.detailTitle, fmt.Sprintf("Budget %d: %s at %d tables", sel.ID, sel.Phase, sel.Tables), 1)
-		text := "OK: since this budget was set or reset, no upload has gone over " + units.Millis(sel.MaxMs).String() + ". Earlier runs are not judged."
+		var breaches []db.Breach
+		if s.Budgets.Detail.Budget.ID == sel.ID {
+			breaches = s.Budgets.Detail.Breaches
+		}
+		text, danger := state.BudgetStateText(sel, breaches)
 		var clr = muted
-		if sel.State == db.HealthBreached {
-			text = "Breached: a run went over " + units.Millis(sel.MaxMs).String()
+		if danger {
 			clr = basicwidget.DangerTintColor()
 		}
 		caption(&b.detailState, text, clr)

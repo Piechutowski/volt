@@ -53,6 +53,9 @@ func (users) Card(r volt.Request, id int) volt.Response {
 	return volt.Then(db.UserGet(id), func(u db.User) volt.Response { return volt.Render(u) })
 }
 func (users) ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response {
+	if _, err := volt.Negotiate(r); err != nil {
+		return volt.Fail(err)
+	}
 	if !body.Valid() {
 		return volt.Reject(http.StatusUnprocessableEntity, "check the fields").WithDetails(body.Errors())
 	}

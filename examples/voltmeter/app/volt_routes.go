@@ -22,7 +22,6 @@ var Table = []volt.Route{
 	{Method: "DELETE", Pattern: "/api/runs/{id}", Spelled: "/api/runs/:id(int)", Controller: "Runs", Action: "Delete", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "OPTIONS", Pattern: "/api/runs", Spelled: "/api/runs", Controller: "Runs", Action: "Options", Helper: "PathAPIRunsAllowed"},
 	{Method: "GET", Pattern: "/api/runs/listed", Spelled: "/api/runs/listed", Query: "db.RunListed", Helper: "PathAPIRunListed"},
-	{Method: "GET", Pattern: "/api/runs/untagged", Spelled: "/api/runs/untagged", Query: "db.RunUntagged", Helper: "PathAPIRunUntagged"},
 	{Method: "GET", Pattern: "/api/runs/{id}/successors", Spelled: "/api/runs/:id(int)/successors", Query: "db.RunSuccessors", Helper: "PathAPIRunSuccessors", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "PATCH", Pattern: "/api/runs/{id}", Spelled: "/api/runs/:id(int)", Controller: "Runs", Action: "Annotate", Helper: "PathAPIRunAnnotate", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "POST", Pattern: "/api/runs/{id}/samples", Spelled: "/api/runs/:id(int)/samples", Controller: "Samples", Action: "Create", Helper: "PathAPISamplesRecord", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},

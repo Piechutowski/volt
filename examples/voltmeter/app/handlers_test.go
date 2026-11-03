@@ -50,7 +50,8 @@ func TestHandlersDescribeTheirEffects(t *testing.T) {
 			"Runs.Show reads the run and its rows in parallel",
 			app.Runs{}.Show(r, 7),
 			volt.Then(rt.All(db.RunGet(7), db.MsLoadRows(7), db.MsCheckRows(7), db.MsVetRows(7), db.MsGenerateRows(7),
-				db.KeystrokeQuery(db.KeystrokeRunID.Eq(7), db.KeystrokeOrderBy(db.KeystrokeTables.Asc())), db.SampleLatency(7)),
+				db.KeystrokeQuery(db.KeystrokeRunID.Eq(7), db.KeystrokeOrderBy(db.KeystrokeTables.Asc())), db.SampleLatency(7),
+				db.SampleCount(db.SampleRunID.Eq(7), db.SampleStatus.Ge(400)), db.BreachQuery(db.BreachRunID.Eq(7), db.BreachOrderBy(db.BreachID.Asc()))),
 				func([]any) volt.Response { return volt.NoContent() }),
 			app.Runs{}.Show(r, 8),
 		},
@@ -126,7 +127,7 @@ func TestHandlersRefuseBeforeAnyEffect(t *testing.T) {
 				{Check: "required", Columns: []string{"phases"}, Message: "an upload measures at least one phase"},
 			})},
 		{"a phase of negative sizes", app.Uploads{}.Create(request("POST", "/api/uploads", "POST /api/uploads"), app.Upload{Commit: "abcd1234", Machine: machineFull, Phases: []app.UploadPhase{{Phase: db.PhaseLoad, Tables: 2, AllocMB: -3, SourceKB: -2}}}),
-			volt.Reject(422, "the upload is not valid").WithDetails([]rt.FieldError{{Check: "MegabytesMeasured", Columns: []string{"alloc_mb", "heap_mb", "output_mb", "source_kb"}, Message: "a phase's allocated, heap, output and source sizes are never negative"}})},
+			volt.Reject(422, "the upload is not valid").WithDetails([]rt.FieldError{{Check: "MegabytesMeasured", Columns: []string{"alloc_mb", "heap_mb", "output_mb", "source_kb"}, Message: "a phase's allocated, heap, output and source sizes are finite and never negative"}})},
 		{"a sign-in that is no email", app.Session{}.SignIn(request("POST", "/sign_in", "POST /sign_in"), app.SignIn{Email: "ada"}),
 			volt.Reject(422, "check the email").WithDetails([]rt.FieldError{{Check: "EmailShape", Columns: []string{"email"}, Message: `"ada" is not an email address`}})},
 		{"a probe of no steps", app.Probe{}.Count(request("GET", "/api/probe?steps=0", "GET /api/probe")), volt.Reject(400, "steps must be at least 1")},
@@ -135,7 +136,7 @@ func TestHandlersRefuseBeforeAnyEffect(t *testing.T) {
 			volt.Reject(404, "no such dashboard")},
 		{"an empty sample batch", app.Samples{}.Create(request("POST", "/api/runs/1/samples", "POST /api/runs/{id}/samples"), 1, app.SampleBatch{}), volt.Reject(422, "the batch holds no sample")},
 		{"an invalid ceiling", app.Budgets{}.Update(request("PATCH", "/api/budgets/1", "PATCH /api/budgets/{id}"), 1, db.Budget{ID: 1, Phase: db.PhaseLoad, Tables: 2, MaxMs: 5, State: db.HealthOK}.Changeset().MaxMsSet(-1).Validate()),
-			volt.Reject(422, "check the ceiling").WithDetails([]rt.FieldError{{Check: "BudgetSane", Columns: []string{"tables", "max_ms"}, Message: "the ceiling must be above zero"}})},
+			volt.Reject(422, "check the ceiling").WithDetails([]rt.FieldError{{Check: "BudgetSane", Columns: []string{"tables", "max_ms"}, Message: "the ceiling must be a finite number above zero"}})},
 	}
 	for _, c := range cases {
 		if !volt.Same(c.got, c.want) {
@@ -282,7 +283,7 @@ func TestReportRendering(t *testing.T) {
 }
 
 // TestResponsesLeaveTheirReceiver proves a response is a value (spec
-// §values-and-effects, rule 1; §requests-and-responses, rule 4):
+// §values-and-effects; §requests-and-responses):
 // WithHeader, WithCookie and WithStatus return a new response and leave
 // the one they were called on as it was.
 func TestResponsesLeaveTheirReceiver(t *testing.T) {

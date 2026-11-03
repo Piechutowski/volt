@@ -121,15 +121,6 @@ func register(mux *http.ServeMux, c Controllers) {
 		})
 	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /api/runs/untagged", pipe0(volt.Handler("GET /api/runs/untagged", func(r volt.Request) volt.Response {
-		if _, err := volt.Negotiate(r); err != nil {
-			return volt.Fail(err)
-		}
-		return volt.Then(db.RunUntagged(), func(voltOut []db.Run) volt.Response {
-			return volt.RenderStatus(200, voltOut)
-		})
-	}, errHandlerErrors, voltPerform)))
-
 	mux.Handle("GET /api/runs/{id}/successors", pipe0(volt.Handler("GET /api/runs/{id}/successors", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
 			return volt.Fail(err)

@@ -197,7 +197,7 @@ func TestUploadsAndRuns(t *testing.T) {
 	if err != nil || len(listed) != 2 || listed[0].ID != 2 || listed[0].TagName != rt.Some("nightly") || listed[1].TagName.Valid || listed[0].MachineCPU != machine.CPU {
 		t.Errorf("listed = %+v, %v", listed, err)
 	}
-	if untagged, err := c.APIRunUntagged(bg); err != nil || len(untagged) != 1 || untagged[0].ID != 1 {
+	if untagged, err := e.gob(1).APIMeTodo(bg); err != nil || len(untagged) != 1 || untagged[0].ID != 1 {
 		t.Errorf("untagged = %+v, %v", untagged, err)
 	}
 	if succ, err := c.APIRunSuccessors(bg, 1); err != nil || len(succ) != 1 || succ[0].FollowersID != rt.Some(2) {
@@ -270,6 +270,12 @@ func TestUploadsAndRuns(t *testing.T) {
 	}
 	if fails, err := c.APISampleFailures(bg, 1); err != nil || len(fails) != 1 || fails[0].Status != 404 {
 		t.Errorf("failures = %+v, %v", fails, err)
+	}
+	resp, err = c.APIRun(bg, 1)
+	var timed wire.RunDetail
+	replyRead(t, resp, err, 200, &timed)
+	if timed.Latency.N != 3 || timed.Failed != 1 {
+		t.Errorf("the run's detail counts %d timed calls and %d failed, want 3 and the one 404", timed.Latency.N, timed.Failed)
 	}
 	if r := e.raw("POST", app.PathAPISamplesRecord(99), `{"samples": [{"route": "GET /", "status": 200, "ms": 1, "at": 1}]}`); r.StatusCode != 422 || r.problem(t).Details[0].Check != "foreign_key" {
 		t.Errorf("samples of a missing run = %d %s", r.StatusCode, r.body)
@@ -380,6 +386,15 @@ func TestBudgetsBreachesAndTransactions(t *testing.T) {
 	replyRead(t, resp, err, 200, &page)
 	if page.Total != 2 {
 		t.Errorf("runs after the failed upload = %d, want 2: the run is deleted again", page.Total)
+	}
+	if !slices.Equal(page.Breached, []int{over.Run.ID}) {
+		t.Errorf("the page names %v as over a budget, want only run %d", page.Breached, over.Run.ID)
+	}
+	resp, err = c.APIRun(bg, over.Run.ID)
+	var shown wire.RunDetail
+	replyRead(t, resp, err, 200, &shown)
+	if len(shown.Breaches) != 1 || shown.Breaches[0].BudgetID != check.ID || shown.Failed != 0 {
+		t.Errorf("the breaching run shows breaches %+v and %d failed calls", shown.Breaches, shown.Failed)
 	}
 	resp, err = c.APIBudget(bg, check.ID)
 	replyRead(t, resp, err, 200, &detail)

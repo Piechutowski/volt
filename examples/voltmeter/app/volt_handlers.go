@@ -115,7 +115,7 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Budgets.Show(r, 0), c.Budgets.Show(r, 0)) {
 		voltOut = append(voltOut, "Budgets.Show")
 	}
-	if !volt.Same(c.Budgets.Update(r, 0, db.BudgetChangeset{}), c.Budgets.Update(r, 0, db.BudgetChangeset{})) {
+	if !volt.Same(c.Budgets.Update(r, 0, db.BudgetNew()), c.Budgets.Update(r, 0, db.BudgetNew())) {
 		voltOut = append(voltOut, "Budgets.Update")
 	}
 	if !volt.Same(c.Budgets.Reset(r), c.Budgets.Reset(r)) {
@@ -127,7 +127,7 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Dashboards.Show(r, *new(db.User), 0), c.Dashboards.Show(r, *new(db.User), 0)) {
 		voltOut = append(voltOut, "Dashboards.Show")
 	}
-	if !volt.Same(c.Dashboards.Create(r, *new(db.User), db.DashboardChangeset{}), c.Dashboards.Create(r, *new(db.User), db.DashboardChangeset{})) {
+	if !volt.Same(c.Dashboards.Create(r, *new(db.User), db.DashboardNew()), c.Dashboards.Create(r, *new(db.User), db.DashboardNew())) {
 		voltOut = append(voltOut, "Dashboards.Create")
 	}
 	if !volt.Same(c.Home.Index(r), c.Home.Index(r)) {
@@ -163,7 +163,7 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Runs.Options(r), c.Runs.Options(r)) {
 		voltOut = append(voltOut, "Runs.Options")
 	}
-	if !volt.Same(c.Runs.Annotate(r, 0, db.RunChangeset{}), c.Runs.Annotate(r, 0, db.RunChangeset{})) {
+	if !volt.Same(c.Runs.Annotate(r, 0, db.RunNew()), c.Runs.Annotate(r, 0, db.RunNew())) {
 		voltOut = append(voltOut, "Runs.Annotate")
 	}
 	if !volt.Same(c.Runs.Compare(r, 0, db.Run{}, db.Run{}, nil, nil), c.Runs.Compare(r, 0, db.Run{}, db.Run{}, nil, nil)) {
@@ -181,7 +181,7 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Uploads.Create(r, Upload{}), c.Uploads.Create(r, Upload{})) {
 		voltOut = append(voltOut, "Uploads.Create")
 	}
-	if !volt.Same(c.Widgets.Create(r, *new(db.User), *new(db.Dashboard), 0, db.WidgetChangeset{}), c.Widgets.Create(r, *new(db.User), *new(db.Dashboard), 0, db.WidgetChangeset{})) {
+	if !volt.Same(c.Widgets.Create(r, *new(db.User), *new(db.Dashboard), 0, db.WidgetNew()), c.Widgets.Create(r, *new(db.User), *new(db.Dashboard), 0, db.WidgetNew())) {
 		voltOut = append(voltOut, "Widgets.Create")
 	}
 	if !volt.Same(c.Widgets.Delete(r, *new(db.User), *new(db.Dashboard), 0, 0), c.Widgets.Delete(r, *new(db.User), *new(db.Dashboard), 0, 0)) {

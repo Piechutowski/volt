@@ -279,14 +279,17 @@ type WidgetAdd struct{}
 type WidgetRemove struct{ ID int }
 
 // Changed is the server's change event (spec §event-routes): which
-// route wrote, so the client refetches what it shows.
+// route wrote, so the client refetches what it shows. Replayed marks an
+// event published before the stream opened, which refetches but is not
+// news of a change.
 type Changed struct {
-	Method  string    `json:"method"`
-	Route   string    `json:"route"`
-	Handler string    `json:"handler"`
-	Path    string    `json:"path"`
-	Status  int       `json:"status"`
-	At      time.Time `json:"at"`
+	Method   string    `json:"method"`
+	Route    string    `json:"route"`
+	Handler  string    `json:"handler"`
+	Path     string    `json:"path"`
+	Status   int       `json:"status"`
+	At       time.Time `json:"at"`
+	Replayed bool      `json:"-"`
 }
 
 // UsersFetch asks for the team.
@@ -630,6 +633,7 @@ func Update(s State, in Intent) (State, []Command) {
 	case SignInSubmit:
 		email := strings.TrimSpace(s.Fields[FieldEmail])
 		s.Errors = without(s.Errors, FieldEmail)
+		s = recovered(s, "signing in")
 		if email == "" {
 			s.Errors = with(s.Errors, FieldEmail, "name a member by email")
 			return s, nil
@@ -667,8 +671,9 @@ func signedOut(s State, in Intent) (State, []Command) {
 			}
 			s, placed := formFailed(s, in.Err, emailForm)
 			if !placed {
-				s.Errors = with(s.Errors, FieldEmail, problemText(in.Err))
+				s.Errors = with(s.Errors, FieldEmail, pe.Message)
 			}
+			s.Notice = Notice{}
 			return s, nil
 		}
 		s.User = in.User
@@ -792,7 +797,7 @@ func member(s State, in Intent) (State, []Command) {
 		if in.ID == s.Run.ID {
 			s.Run.Export = in.Path
 		}
-		s.Notice = Notice{Text: "Saved " + strconv.Itoa(in.Size) + " bytes to " + in.Path}
+		s.Notice = Notice{Text: "Exported run " + strconv.Itoa(in.ID) + " as CSV, " + strconv.Itoa(in.Size) + " bytes"}
 		return s, nil
 	case TagsFetched:
 		if in.Err != nil {
@@ -939,7 +944,7 @@ func member(s State, in Intent) (State, []Command) {
 			return s, nil
 		}
 		s.Fields = without(s.Fields, FieldBudgetTables, FieldBudgetMax)
-		s.Notice = Notice{Text: "Added budget " + strconv.Itoa(in.Budget.ID)}
+		s.Notice = Notice{Text: "Added budget " + strconv.Itoa(in.Budget.ID) + "; it judges the uploads after it"}
 		s.Budgets.Selected = in.Budget.ID
 		s.Budgets.Edited = false
 		s.Fields = with(s.Fields, FieldCeiling, strconv.FormatFloat(in.Budget.MaxMs, 'f', -1, 64))
@@ -950,7 +955,7 @@ func member(s State, in Intent) (State, []Command) {
 		if in.Err != nil {
 			return failed(s, "resetting budgets", in.Err), nil
 		}
-		s.Notice = Notice{Text: "Reset " + strconv.FormatInt(in.Reset.Reset, 10) + " budgets to ok"}
+		s.Notice = Notice{Text: ResetText(in.Reset.Reset)}
 		return s, budgetsFetch(s)
 	case BoardsFetched:
 		if in.Err != nil {
@@ -1070,7 +1075,9 @@ func screenShow(s State, to Screen) (State, []Command) {
 }
 
 func changed(s State, c Changed) (State, []Command) {
-	s.Live, s.LiveAt = c.Handler+" "+c.Path, c.At
+	if !c.Replayed {
+		s.Live, s.LiveAt = ChangeText(c), c.At
+	}
 	if s.User.ID == 0 {
 		if len(s.Members) == 0 {
 			return s, []Command{UsersFetch{}}
@@ -1121,7 +1128,92 @@ func ChangedOf(ev volt.Event) (Intent, bool) {
 	if err := json.Unmarshal(ev.Data, &c); err != nil {
 		return nil, false
 	}
+	c.Replayed = ev.Replayed
 	return c, true
+}
+
+// BudgetStateText says what a budget's state means beside the breaches
+// listed under it, newest first, and whether it is a warning: a
+// breached budget names the last run that went over; an ok one with breaches says they came
+// before it was set back to ok, since a reset judges only later uploads.
+func BudgetStateText(b db.Budget, breaches []db.Breach) (string, bool) {
+	ceiling := units.Millis(b.MaxMs).String()
+	if b.State == db.HealthBreached {
+		if len(breaches) > 0 {
+			last := breaches[0]
+			return "Breached: run " + strconv.Itoa(last.RunID) + " took " + units.Millis(last.WallMs).String() + ", over " + ceiling + ". Reset to judge later uploads only.", true
+		}
+		return "Breached: a run went over " + ceiling + ".", true
+	}
+	if len(breaches) > 0 {
+		return "OK since it was reset: no upload has gone over " + ceiling + " since. The breaches below came before the reset.", false
+	}
+	return "OK: no upload has gone over " + ceiling + " since this budget was set. Runs stored before it are not judged.", false
+}
+
+// RunJudgedText is what a run was measured against: the baseline it
+// names, if any, and the budgets it went over, by phase and size when
+// the budget list holds them; true when it went over one.
+func RunJudgedText(d wire.RunDetail, budgets []db.Budget) (string, bool) {
+	text := "No baseline"
+	if id, ok := d.Run.BaselineID.Get(); ok {
+		text = "Baseline: run " + strconv.Itoa(id)
+	}
+	if len(d.Breaches) == 0 {
+		return text + ". Within every budget set when it was uploaded.", false
+	}
+	var over []string
+	for _, b := range d.Breaches {
+		name := "budget " + strconv.Itoa(b.BudgetID)
+		for _, x := range budgets {
+			if x.ID == b.BudgetID {
+				name = string(x.Phase) + " at " + strconv.Itoa(x.Tables) + " tables"
+			}
+		}
+		over = append(over, name+", took "+units.Millis(b.WallMs).String())
+	}
+	return text + ". Over budget: " + strings.Join(over, "; ") + ".", true
+}
+
+// ResetText says how many breached budgets a reset set back to ok.
+func ResetText(n int64) string {
+	switch n {
+	case 0:
+		return "No budget was breached"
+	case 1:
+		return "Reset 1 budget to ok"
+	}
+	return "Reset " + strconv.FormatInt(n, 10) + " budgets to ok"
+}
+
+// ChangeText says what a change event changed in a few words, naming
+// the run its path names when there is one.
+func ChangeText(c Changed) string {
+	run := ""
+	if rest, ok := strings.CutPrefix(c.Path, "/api/runs/"); ok {
+		if id, _, _ := strings.Cut(rest, "/"); id != "" && strings.Trim(id, "0123456789") == "" {
+			run = "run " + id
+		}
+	}
+	switch {
+	case c.Handler == "Uploads.Create":
+		return "a run was uploaded"
+	case c.Handler == "Samples.Create":
+		return run + " got route timings"
+	case c.Handler == "Runs.Annotate":
+		return run + " was annotated"
+	case c.Handler == "Runs.Delete":
+		return run + " was deleted"
+	case strings.HasPrefix(c.Handler, "db.Tag"):
+		return "the tags changed"
+	case strings.HasPrefix(c.Handler, "Budgets.") || strings.HasPrefix(c.Handler, "db.Budget"):
+		return "the budgets changed"
+	case c.Handler == "Dashboards.Create" || strings.HasPrefix(c.Handler, "Widgets."):
+		return "a dashboard changed"
+	case c.Handler == "Thesis.Record":
+		return "line counts were recorded"
+	}
+	return c.Handler + " " + c.Path
 }
 
 func measuredRefetch(s State) []Command {

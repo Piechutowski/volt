@@ -6,6 +6,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -315,5 +316,23 @@ func TestProblemBodyRoundTrip(t *testing.T) {
 	var p Problem
 	if rec.Code != 404 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || p.Status != 404 || p.Message != "not found" {
 		t.Fatalf("problem body = %d %q", rec.Code, rec.Body.String())
+	}
+}
+
+// TestRenderThatDoesNotEncodeIs500 proves a value the negotiated format
+// cannot carry, such as an infinite float in JSON, is a 500 problem
+// rather than a 200 with an empty body, and the handler's headers and
+// cookies do not ride on it (spec §formats).
+func TestRenderThatDoesNotEncodeIs500(t *testing.T) {
+	h := func(Request) Response {
+		return Render(map[string]float64{"wall_ms": math.Inf(1)}).WithHeader("X-Kept", "no")
+	}
+	rec := serve(t, h, httptest.NewRequest("GET", "/x", nil))
+	var p Problem
+	if err := json.Unmarshal(rec.Body.Bytes(), &p); rec.Code != http.StatusInternalServerError || err != nil || p.Status != 500 {
+		t.Fatalf("an unencodable render = %d %q (%v), want a 500 problem", rec.Code, rec.Body.String(), err)
+	}
+	if rec.Header().Get("X-Kept") != "" {
+		t.Errorf("the failed render kept its header %q", rec.Header().Get("X-Kept"))
 	}
 }

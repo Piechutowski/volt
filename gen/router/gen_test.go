@@ -645,3 +645,11 @@ func TestClientImportsTimeForTimeParamsAlone(t *testing.T) {
 		t.Errorf("volt_client.go imports time with no time parameter to use it:\n%s", files[filepath.Join("client", "volt_client.go")])
 	}
 }
+
+// TestLoadTimeParamCompiles proves a controller route whose load binds a
+// time.Time from the query string imports time in its router, with no
+// timeout to import it, and the generated program builds (spec
+// §route-loads).
+func TestLoadTimeParamCompiles(t *testing.T) {
+	snippetCompiles(t, "v108_route_load_time_param")
+}

@@ -31,8 +31,8 @@ func TestBrokerFanOutReplayAndReconnect(t *testing.T) {
 	z := c.Stream(ctx, "/events")
 
 	first := <-a
-	if first.Name != "compute.started" || first.ID != 1 {
-		t.Fatalf("replayed event = %+v", first)
+	if first.Name != "compute.started" || first.ID != 1 || !first.Replayed || first.Epoch != b.epochOf() {
+		t.Fatalf("replayed event = %+v, want ID 1 of this broker marked replayed", first)
 	}
 	<-z
 
@@ -43,7 +43,7 @@ func TestBrokerFanOutReplayAndReconnect(t *testing.T) {
 			select {
 			case ev := <-ch:
 				var p progress
-				if err := ev.Decode(&p); err != nil || ev.Name != "compute.progress" || p.Done != want {
+				if err := ev.Decode(&p); err != nil || ev.Name != "compute.progress" || p.Done != want || ev.Replayed {
 					t.Fatalf("%s: event %d = %+v (%v)", name, want, ev, err)
 				}
 			case <-time.After(2 * time.Second):
@@ -53,7 +53,7 @@ func TestBrokerFanOutReplayAndReconnect(t *testing.T) {
 	}
 
 	b.Publish("compute.finished", progress{3, 3})
-	resumed := c.streamAfter(t, srv.URL, b.WireID(3))
+	resumed := c.streamAfter(t, srv.URL, Event{ID: 3, Epoch: b.epochOf()}.WireID())
 	if resumed.ID != 4 || resumed.Name != "compute.finished" {
 		t.Fatalf("resumed event = %+v", resumed)
 	}
@@ -180,14 +180,14 @@ func TestStreamResumesAcrossABrokerRestart(t *testing.T) {
 	case <-time.After(300 * time.Millisecond):
 	}
 
-	for _, last := range []string{"6", before.WireID(6), "garbage", ""} {
+	for _, last := range []string{"6", Event{ID: 6, Epoch: before.epochOf()}.WireID(), "garbage", ""} {
 		ch, stop := after.SubscribeAfter(last)
 		if ev := <-ch; ev.ID != 1 {
 			t.Errorf("Last-Event-ID %q on the new broker starts at %d, want the whole buffer", last, ev.ID)
 		}
 		stop()
 	}
-	ch, stop := after.SubscribeAfter(after.WireID(1))
+	ch, stop := after.SubscribeAfter(Event{ID: 1, Epoch: after.epochOf()}.WireID())
 	defer stop()
 	if ev := <-ch; ev.ID != 2 {
 		t.Errorf("resuming at 1, an ID this broker assigned, starts at %d, want 2", ev.ID)
