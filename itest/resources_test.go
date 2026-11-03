@@ -136,3 +136,35 @@ func TestResourcesDefaultStringKey(t *testing.T) {
 		srv.Close()
 	}
 }
+
+// TestResourcesDefaultSharedKey (§default-handlers, §columns,
+// §changesets): a shared-key one-to-one, whose int key is also the
+// foreign key, is the rowid alias in the DDL but no database-assigned
+// key, so the generated create takes user_id from the body and
+// SQLite stores the value given, not a rowid of its choosing.
+func TestResourcesDefaultSharedKey(t *testing.T) {
+	h := handlerWithDB(t)
+	for _, email := range []string{"two@example.com", "three@example.com"} {
+		if rec := call(h, "POST", "/ref/users", strings.NewReader(`{"email":"`+email+`"}`), "Content-Type", "application/json"); rec.Code != 201 {
+			t.Fatalf("user create: %d %s", rec.Code, rec.Body.String())
+		}
+	}
+	rec := call(h, "POST", "/ref/profiles", strings.NewReader(`{"user_id":3,"bio":"third"}`), "Content-Type", "application/json")
+	var made db.Profile
+	if rec.Code != 201 || json.Unmarshal(rec.Body.Bytes(), &made) != nil || made.UserID != 3 || made.Bio != "third" {
+		t.Fatalf("create: %d %s, want 201 with user_id 3 from the body, not the rowid 2 SQLite would assign", rec.Code, rec.Body.String())
+	}
+	rec = call(h, "GET", app.PathRefProfile(3), nil)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"user_id":3`) || !strings.Contains(rec.Body.String(), `"bio":"third"`) {
+		t.Fatalf("show: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "GET", app.PathRefProfile(2), nil); rec.Code != 404 {
+		t.Fatalf("show of a profile never created: %d %s, want 404", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "POST", "/ref/profiles", strings.NewReader(`{"user_id":7,"bio":"nobody"}`), "Content-Type", "application/json"); rec.Code < 400 {
+		t.Fatalf("create for a user that does not exist: %d %s, want the foreign key refused", rec.Code, rec.Body.String())
+	}
+	if got := db.ProfileNew().From(db.Profile{UserID: 3, Bio: "x"}); !got.Changed(db.ProfileUserID) {
+		t.Fatal("From left the shared key unmarked; it is no database-assigned key (§changesets)")
+	}
+}

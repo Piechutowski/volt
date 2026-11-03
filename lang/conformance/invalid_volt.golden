@@ -901,6 +901,12 @@ db/i451_migration_shape_autoincrement_misplaced.volt:29:24: error: spec/columns:
 ## i453_package_note.volt
 db/i453_package_note.volt:3:12: error: syntax: a package clause takes no settings list: a package carries no note (§notes), and its doc comment is written in a hand-written Go file of the package (§notes-become-doc-comments)
 
+## i457_migration_shape_rowid_alias.volt
+db/i457_migration_shape_rowid_alias.volt:21:17: error: spec/columns: default on "id", the rowid alias of table "users": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
+db/i457_migration_shape_rowid_alias.volt:27:25: error: spec/columns: autoincrement on "user_id", the rowid alias of table "user_profiles" and a foreign key: its values come from the referenced row, so the never-reuse bookkeeping of AUTOINCREMENT has nothing to assign; it is valid on the database-assigned key alone (§columns)
+db/i457_migration_shape_rowid_alias.volt:34:37: error: spec/columns: default on "id", the rowid alias of table "events": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
+db/i457_migration_shape_rowid_alias.volt:38:5: error: spec/migrations: rebuild table "user_profiles" in migration "0002__keys": column "owner_id" is the rowid alias and a foreign key, but its source is NULL, since no column of that name exists before the rebuild, and the database would assign it ids the referenced table never held; give it a from: (§migrations, §columns)
+
 ## i45_model_setting_removed.volt
 app/i45_model_setting_removed.volt:10:19: error: spec/resources: model: is not a setting; name the table in the declaration itself — `resources <table>` (§declaration)
 

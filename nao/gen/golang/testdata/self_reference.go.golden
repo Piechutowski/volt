@@ -28,7 +28,7 @@ var voltEmployeeDesc = &rt.Desc[Employee]{
 	Table:   `"employees"`,
 	Columns: `"id", "full_name", "manager_id"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "full_name", Wire: "full_name"},
 		{Column: "manager_id", Wire: "manager_id"},
 	},

@@ -69,8 +69,9 @@ scope / [pipe: api, error_handler: Errors] {
 	// Default handlers (§default-handlers): every action is a query route over
 	// the table's generated CRUD; no controller to write.
 	scope /ref [name: ref] {
-		resources db.users [default]
-		resources db.tags  [default]
+		resources db.users    [default]
+		resources db.tags     [default]
+		resources db.profiles [default]
 	}
 
 	// The event stream (§event-routes).

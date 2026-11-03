@@ -126,6 +126,14 @@ func PathRefTag(slug string, opts ...volt.URLOption) string {
 	return volt.URL("/ref/tags/"+volt.Seg(slug), opts...)
 }
 
+func PathRefProfiles(opts ...volt.URLOption) string {
+	return volt.URL("/ref/profiles", opts...)
+}
+
+func PathRefProfile(userID int, opts ...volt.URLOption) string {
+	return volt.URL("/ref/profiles/"+volt.SegInt(userID), opts...)
+}
+
 func PathEvents(opts ...volt.URLOption) string {
 	return volt.URL("/events", opts...)
 }

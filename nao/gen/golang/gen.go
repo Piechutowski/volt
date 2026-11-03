@@ -205,8 +205,8 @@ func (g *generator) descEmit(t *naming.Table) {
 		if t.IsPK(f) {
 			b.WriteString(", Key: true")
 		}
-		if f.RowidAlias {
-			b.WriteString(", RowidAlias: true")
+		if f.Assigned {
+			b.WriteString(", Assigned: true")
 		}
 		b.WriteString("},\n")
 	}
@@ -300,7 +300,7 @@ func defaultsGo(t *naming.Table) string {
 // gets no seed: its default is the database's.
 func defaultGo(f *naming.Field) (string, bool) {
 	s := f.Col.Settings.Get("default")
-	if s == nil || (f.Declared && !f.Kinded) || f.RowidAlias {
+	if s == nil || (f.Declared && !f.Kinded) || f.Assigned {
 		return "", false
 	}
 	var expr string

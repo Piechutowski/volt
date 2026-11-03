@@ -204,11 +204,14 @@ func isString(n ast.Node) bool {
 	return ok && lit.Tok.Kind == token.STRING
 }
 
-// rowidAliasCheck enforces that autoincrement is written on the rowid
-// alias alone (spec §columns), the one column SQLite takes it on.
-func (c *checker) rowidAliasCheck(ti *TableInfo) {
+// autoincrementCheck enforces that autoincrement is written on a
+// built-in int rowid alias alone (spec §columns), the one column SQLite
+// takes it on that Volt treats as the rowid; whether that alias is the
+// database-assigned key, which alone keeps it, is keyAssignedCheck's
+// to decide once the relationships are known.
+func (c *checker) autoincrementCheck(ti *TableInfo) {
 	pk := ti.PK()
-	alias := ti.RowidAlias()
+	alias := rowidAliasInt(ti)
 	for _, cd := range ti.Columns {
 		col := cd.Col
 		name := col.Name.Name()
@@ -238,8 +241,82 @@ func (c *checker) rowidAliasCheck(ti *TableInfo) {
 	}
 }
 
-func (c *checker) requiredCheck(ti *TableInfo) {
+// rowidAliasDefaultCheck refuses a default: on the rowid alias (spec
+// §columns, §default-values): SQLite ignores a DEFAULT on it and
+// assigns a rowid to an insert that leaves it out, so the default
+// would never be written.
+func (c *checker) rowidAliasDefaultCheck(ti *TableInfo) {
 	alias := ti.RowidAlias()
+	if alias == nil {
+		return
+	}
+	if def := alias.Col.Settings.Get("default"); def != nil {
+		c.errorf(def.Pos(), "columns",
+			"default on %q, the rowid alias of table %q: SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)", alias.Col.Name.Name(), ti.Key)
+	}
+}
+
+// keyAssignedCheck enforces what sets the database-assigned key apart
+// from a built-in int rowid alias that is a foreign key (spec §columns,
+// §records-sample-data): required is an error on the database-assigned
+// key, since its zero value is no missing value, while the foreign key
+// takes no autoincrement, since its values come from the referenced
+// row, and every records list names it. assigned is the table's
+// database-assigned key, nil when it has none.
+func (c *checker) keyAssignedCheck(ti *TableInfo, assigned *ColumnDef, records []*ast.Records) {
+	alias := rowidAliasInt(ti)
+	if alias == nil {
+		return
+	}
+	col := alias.Col
+	name := col.Name.Name()
+	if alias == assigned {
+		if req := col.Settings.Get("required"); req != nil {
+			c.errorf(req.Pos(), "columns", "required on %q, the database-assigned key of table %q: the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)", name, ti.Key)
+		}
+		return
+	}
+	if auto := col.Settings.Get("autoincrement"); auto != nil {
+		c.errorf(auto.Pos(), "columns",
+			"autoincrement on %q, the rowid alias of table %q and a foreign key: its values come from the referenced row, so the never-reuse bookkeeping of AUTOINCREMENT has nothing to assign; it is valid on the database-assigned key alone (§columns)", name, ti.Key)
+	}
+	for _, r := range records {
+		if !r.HasColumns || alias.Nullable {
+			continue
+		}
+		listed := false
+		for _, id := range r.Columns {
+			listed = listed || id.Name() == name
+		}
+		if !listed {
+			c.errorf(r.Pos(), "records-sample-data", "records of table %q do not list column %q, the rowid alias and a foreign key: its value comes from the referenced row, and only the database-assigned key leaves a column's value to the database; list the column (§records-sample-data, §columns)", ti.Key, name)
+		}
+	}
+}
+
+// keysAssignedCheck runs keyAssignedCheck over every table once the
+// relationships are resolved (spec §columns), with the records blocks
+// of each, in the table and at the top level.
+func (c *checker) keysAssignedCheck(f *ast.File) {
+	records := map[string][]*ast.Records{}
+	for _, d := range f.Decls {
+		if r, ok := d.(*ast.Records); ok && r.Table != nil {
+			records[r.Table.Name()] = append(records[r.Table.Name()], r)
+		}
+	}
+	for _, ti := range c.info.Tables {
+		rs := records[ti.Key]
+		for _, item := range ti.Decl.Body {
+			if r, ok := item.(*ast.Records); ok {
+				rs = append(rs, r)
+			}
+		}
+		c.keyAssignedCheck(ti, c.info.KeyAssigned(ti), rs)
+	}
+}
+
+func (c *checker) requiredCheck(ti *TableInfo) {
+	alias := rowidAliasInt(ti)
 	for _, cd := range ti.Columns {
 		col := cd.Col
 		req := col.Settings.Get("required")
@@ -251,7 +328,6 @@ func (c *checker) requiredCheck(ti *TableInfo) {
 			continue
 		}
 		if cd == alias {
-			c.errorf(req.Pos(), "columns", "required on %q, the rowid alias of table %q: the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)", name, ti.Key)
 			continue
 		}
 		if _, ok := cd.Type.RequiredKind(); !ok {

@@ -25,7 +25,7 @@ var voltCategoryDesc = &rt.Desc[Category]{
 	Table:   `"categories"`,
 	Columns: `"id", "name"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "name", Wire: "name"},
 	},
 	Scan:   voltCategoryScan,

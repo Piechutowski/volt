@@ -17,7 +17,7 @@ var entryDesc = &Desc[entry]{
 	Table:   `"entries"`,
 	Columns: `"id", "title", "body"`,
 	Fields: []FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "title", Wire: "title"},
 		{Column: "body", Wire: "body"},
 	},

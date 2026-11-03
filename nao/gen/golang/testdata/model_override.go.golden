@@ -27,7 +27,7 @@ var voltMenuDesc = &rt.Desc[Menu]{
 	Table:   `"menus"`,
 	Columns: `"id", "title", "price"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "title", Wire: "title"},
 		{Column: "price", Wire: "price"},
 	},

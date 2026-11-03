@@ -9,6 +9,12 @@ CREATE TABLE users (
 );
 CREATE UNIQUE INDEX idx_users_email ON users (email);
 
+CREATE TABLE profiles (
+  user_id INTEGER PRIMARY KEY,
+  bio TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
 CREATE TABLE tags (
   slug TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL

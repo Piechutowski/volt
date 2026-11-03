@@ -181,7 +181,8 @@ func (l *lowerer) alter(op *ast.AlterTable) ([]string, error) {
 // indexes, named for the table as it stands after the rename.
 // The source of a column of a table the migrations created is its
 // from:, else the old column of its name, else its default:, else
-// NULL, which is what a rowid alias the rebuild introduces reads. A
+// NULL, which is what the database-assigned key a rebuild introduces
+// reads, since the rowid alias takes no default:. A
 // table no create table made is of unknown shape, and every column of
 // the body reads the old column of its name, since without a fold the
 // lowering cannot tell which exist.

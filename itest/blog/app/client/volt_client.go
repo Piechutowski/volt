@@ -216,6 +216,34 @@ func (c *Client) RefDeleteTag(ctx context.Context, slug string) error {
 	return c.Do(ctx, "DELETE", volt.URL("/ref/tags/"+volt.Seg(slug)), nil, nil)
 }
 
+func (c *Client) RefProfiles(ctx context.Context) ([]db.Profile, error) {
+	var voltOut []db.Profile
+	voltErr := c.Do(ctx, "GET", volt.URL("/ref/profiles"), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) RefCreateProfile(ctx context.Context, cs db.ProfileChangeset) (db.Profile, error) {
+	var voltOut db.Profile
+	voltErr := c.Do(ctx, "POST", volt.URL("/ref/profiles"), cs.Params(), &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) RefProfile(ctx context.Context, userID int) (db.Profile, error) {
+	var voltOut db.Profile
+	voltErr := c.Do(ctx, "GET", volt.URL("/ref/profiles/"+volt.SegInt(userID)), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) RefUpdateProfile(ctx context.Context, userID int, cs db.ProfileChangeset) (db.Profile, error) {
+	var voltOut db.Profile
+	voltErr := c.Do(ctx, "PATCH", volt.URL("/ref/profiles/"+volt.SegInt(userID)), cs.Params(), &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) RefDeleteProfile(ctx context.Context, userID int) error {
+	return c.Do(ctx, "DELETE", volt.URL("/ref/profiles/"+volt.SegInt(userID)), nil, nil)
+}
+
 func (c *Client) Events(ctx context.Context) <-chan volt.Event {
 	return c.Stream(ctx, volt.URL("/events"))
 }

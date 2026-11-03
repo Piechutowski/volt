@@ -14,6 +14,13 @@ table users {
 select picked for users where id in :ids [order: (id asc)]
 select since for users where created_at > :since [order: (id asc)]
 
+table profiles {
+	user_id int    [pk]
+	bio     string
+}
+
+ref: profiles.user_id > users.id [delete: cascade]
+
 table tags {
 	slug string [pk]
 	name string

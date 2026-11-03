@@ -53,8 +53,9 @@ type PlanMemo struct {
 }
 
 type memoModel struct {
-	tm      *Table
-	imports map[string]bool
+	tm       *Table
+	imports  map[string]bool
+	assigned *check.ColumnDef
 }
 
 // PlanBuildMemo is PlanBuild with a memo of the package's earlier

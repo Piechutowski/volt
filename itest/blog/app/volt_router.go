@@ -421,6 +421,75 @@ func register(mux *http.ServeMux, c Controllers) {
 		})
 	}, errHandlerErrors, voltPerform, volt.Params("slug"))))
 
+	mux.Handle("GET /ref/profiles", pipe0(volt.Handler("GET /ref/profiles", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.ProfileList(), func(voltOut []db.Profile) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("POST /ref/profiles", pipe0(volt.Handler("POST /ref/profiles", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		var volt_params db.ProfileParams
+		if err := volt.Decode(r, &volt_params); err != nil {
+			return volt.Fail(err)
+		}
+		volt_cs := db.ProfileNew().Cast(volt_params, db.ProfileUserID, db.ProfileBio)
+		return volt.Then(db.ProfileCreate(volt_cs), func(voltOut db.Profile) volt.Response {
+			return volt.RenderStatus(201, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("GET /ref/profiles/{userID}", pipe0(volt.Handler("GET /ref/profiles/{userID}", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		voltuserID, ok := volt.ParseInt(r.PathValue("userID"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		return volt.Then(db.ProfileGet(voltuserID), func(voltOut db.Profile) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("userID"))))
+
+	mux.Handle("PATCH /ref/profiles/{userID}", pipe0(volt.Handler("PATCH /ref/profiles/{userID}", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		voltuserID, ok := volt.ParseInt(r.PathValue("userID"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		var volt_params db.ProfileParams
+		if err := volt.Decode(r, &volt_params); err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.ProfileGet(voltuserID), func(volt_row db.Profile) volt.Response {
+			volt_cs := volt_row.Changeset().Cast(volt_params, db.ProfileBio)
+			return volt.Then(db.ProfileUpdate(volt_cs), func(voltOut db.Profile) volt.Response {
+				return volt.RenderStatus(200, voltOut)
+			})
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("userID"))))
+
+	mux.Handle("DELETE /ref/profiles/{userID}", pipe0(volt.Handler("DELETE /ref/profiles/{userID}", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		voltuserID, ok := volt.ParseInt(r.PathValue("userID"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		return volt.Then(db.ProfileDelete(voltuserID), func(int64) volt.Response {
+			return volt.RenderStatus(204, nil)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("userID"))))
+
 	mux.Handle("GET /events", pipe0(volt.EventsHandler(c.Events)))
 }
 

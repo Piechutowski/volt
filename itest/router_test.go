@@ -128,6 +128,9 @@ func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 	if _, err := run.Run(context.Background(), dbh, db.TagCreate(db.TagNew().SlugSet("go").NameSet("Go"))); err != nil {
 		panic(err)
 	}
+	if _, err := run.Run(context.Background(), dbh, db.ProfileCreate(db.ProfileNew().UserIDSet(1).BioSet("one"))); err != nil {
+		panic(err)
+	}
 	broker := &volt.Broker{Heartbeat: 20 * time.Millisecond}
 	return app.NewRouter(app.Controllers{
 		Home: home{}, Users: users{}, Files: files{}, Admin: admin{},
@@ -194,6 +197,8 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathRefUser":         {"GET", app.PathRefUser(1)},
 		"PathRefTags":         {"GET", app.PathRefTags()},
 		"PathRefTag":          {"GET", app.PathRefTag("go")},
+		"PathRefProfiles":     {"GET", app.PathRefProfiles()},
+		"PathRefProfile":      {"GET", app.PathRefProfile(1)},
 		"PathEvents":          {"GET", app.PathEvents()},
 	}
 	queryRoutes := map[string]bool{"PathProfile": true, "PathCard": true}

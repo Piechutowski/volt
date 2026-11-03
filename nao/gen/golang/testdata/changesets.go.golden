@@ -74,7 +74,7 @@ var voltPostDesc = &rt.Desc[Post]{
 	Table:   `"posts"`,
 	Columns: `"id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "slug", Wire: "slug"},
 		{Column: "words", Wire: "words"},
 		{Column: "score", Wire: "score"},
@@ -551,7 +551,7 @@ var voltPingDesc = &rt.Desc[Ping]{
 	Table:   `"pings"`,
 	Columns: `"id"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 	},
 	Scan:   voltPingScan,
 	Values: voltPingValues,

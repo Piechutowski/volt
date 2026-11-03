@@ -28,7 +28,7 @@ var voltUserDesc = &rt.Desc[User]{
 	Table:   `"users"`,
 	Columns: `"id", "email", "created_at"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "email", Wire: "email"},
 		{Column: "created_at", Wire: "created_at"},
 	},
@@ -108,6 +108,99 @@ func voltUserCast(c rt.Changeset[User], p rt.Params[User], i int) (rt.Changeset[
 			return c, voltErr
 		}
 		return UserChangeset{c}.CreatedAtSet(voltV).Changeset, nil
+	}
+	return c, nil
+}
+
+type Profile struct {
+	UserID int    `db:"user_id" json:"user_id"`
+	Bio    string `db:"bio" json:"bio"`
+}
+
+type ProfileColumn = rt.ColumnOf[Profile]
+
+type ProfileParams = rt.Params[Profile]
+
+var (
+	ProfileUserID = rt.Column[Profile, int]{Name: "user_id"}
+	ProfileBio    = rt.Column[Profile, string]{Name: "bio"}
+)
+
+var voltProfileDesc = &rt.Desc[Profile]{
+	Model:   "Profile",
+	Table:   `"profiles"`,
+	Columns: `"user_id", "bio"`,
+	Fields: []rt.FieldDesc{
+		{Column: "user_id", Wire: "user_id", Key: true},
+		{Column: "bio", Wire: "bio"},
+	},
+	Scan:   voltProfileScan,
+	Values: voltProfileValues,
+	Apply:  voltProfileApply,
+	Cast:   voltProfileCast,
+}
+
+type ProfileChangeset struct{ rt.Changeset[Profile] }
+
+func ProfileNew() ProfileChangeset { return ProfileChangeset{rt.NewChangeset(voltProfileDesc)} }
+
+func (r Profile) Changeset() ProfileChangeset {
+	return ProfileChangeset{rt.ChangesetOf(voltProfileDesc, r)}
+}
+
+func (c ProfileChangeset) From(r Profile) ProfileChangeset {
+	return ProfileChangeset{c.Changeset.From(r)}
+}
+
+func (c ProfileChangeset) UserIDSet(v int) ProfileChangeset {
+	return ProfileChangeset{rt.Set(c.Changeset, 0, func(voltR *Profile) { voltR.UserID = v })}
+}
+
+func (c ProfileChangeset) BioSet(v string) ProfileChangeset {
+	return ProfileChangeset{rt.Set(c.Changeset, 1, func(voltR *Profile) { voltR.Bio = v })}
+}
+
+func (c ProfileChangeset) Cast(p ProfileParams, allow ...ProfileColumn) ProfileChangeset {
+	return ProfileChangeset{c.Changeset.Cast(p, allow...)}
+}
+
+func (c ProfileChangeset) ErrorAdd(col ProfileColumn, msg string) ProfileChangeset {
+	return ProfileChangeset{c.Changeset.ErrorAdd(col, msg)}
+}
+
+func voltProfileScan(r rt.Row) (Profile, error) {
+	var voltV Profile
+	voltErr := r.Scan(&voltV.UserID, &voltV.Bio)
+	return voltV, rt.Refused("Profile", voltErr)
+}
+
+func voltProfileValues(voltR Profile) []any { return []any{voltR.UserID, voltR.Bio} }
+
+func voltProfileApply(voltData, voltVals Profile, voltSet []bool) Profile {
+	voltR := voltData
+	if voltSet[0] {
+		voltR.UserID = voltVals.UserID
+	}
+	if voltSet[1] {
+		voltR.Bio = voltVals.Bio
+	}
+	return voltR
+}
+
+func voltProfileCast(c rt.Changeset[Profile], p rt.Params[Profile], i int) (rt.Changeset[Profile], error) {
+	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "user_id", "int", false, func(voltR *Profile) int { return voltR.UserID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return ProfileChangeset{c}.UserIDSet(voltV).Changeset, nil
+	case 1:
+		voltV, voltOK, voltErr := rt.Field(p, "bio", "string", false, func(voltR *Profile) string { return voltR.Bio })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return ProfileChangeset{c}.BioSet(voltV).Changeset, nil
 	}
 	return c, nil
 }
@@ -222,7 +315,7 @@ var voltMsRevenueDesc = &rt.Desc[MsRevenue]{
 	Table:   `"ms_revenue"`,
 	Columns: `"id", "org", "year"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "org", Wire: "org"},
 		{Column: "year", Wire: "year"},
 	},
@@ -331,7 +424,7 @@ var voltMsUsageDesc = &rt.Desc[MsUsage]{
 	Table:   `"ms_usage"`,
 	Columns: `"id", "org", "year"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "org", Wire: "org"},
 		{Column: "year", Wire: "year"},
 	},

@@ -4,12 +4,12 @@ import "slices"
 
 // FieldDesc is one column as a changeset knows it (spec §changesets): its
 // SQL name, its wire name, whether it is part of the key, and whether
-// it is the rowid alias key, which From leaves unmarked.
+// it is the database-assigned key, which From leaves unmarked.
 type FieldDesc struct {
-	Column     string
-	Wire       string
-	Key        bool
-	RowidAlias bool
+	Column   string
+	Wire     string
+	Key      bool
+	Assigned bool
 }
 
 // Desc is what a changeset knows of its model and reflection would
@@ -90,13 +90,13 @@ func Set[M any](c Changeset[M], i int, set func(*M)) Changeset[M] {
 	return c
 }
 
-// From marks every column but the rowid alias key with its value in r
-// (spec §changesets), so a zero row never inserts the key 0.
+// From marks every column but the database-assigned key with its value
+// in r (spec §changesets), so a zero row never inserts the key 0.
 func (c Changeset[M]) From(r M) Changeset[M] {
 	c.vals = r
 	marks := make([]bool, len(c.d().Fields))
 	for i, f := range c.d().Fields {
-		marks[i] = !f.RowidAlias
+		marks[i] = !f.Assigned
 	}
 	c.set = marks
 	return c

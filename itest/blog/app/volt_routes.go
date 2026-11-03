@@ -49,5 +49,10 @@ var Table = []volt.Route{
 	{Method: "GET", Pattern: "/ref/tags/{slug}", Spelled: "/ref/tags/:slug", Query: "db.TagGet", Helper: "PathRefTag", Params: []volt.RouteParam{{Name: "slug", Type: "string"}}},
 	{Method: "PATCH", Pattern: "/ref/tags/{slug}", Spelled: "/ref/tags/:slug", Query: "db.TagUpdate", Params: []volt.RouteParam{{Name: "slug", Type: "string"}}},
 	{Method: "DELETE", Pattern: "/ref/tags/{slug}", Spelled: "/ref/tags/:slug", Query: "db.TagDelete", Params: []volt.RouteParam{{Name: "slug", Type: "string"}}},
+	{Method: "GET", Pattern: "/ref/profiles", Spelled: "/ref/profiles", Query: "db.ProfileList", Helper: "PathRefProfiles"},
+	{Method: "POST", Pattern: "/ref/profiles", Spelled: "/ref/profiles", Query: "db.ProfileCreate"},
+	{Method: "GET", Pattern: "/ref/profiles/{userID}", Spelled: "/ref/profiles/:userID(int)", Query: "db.ProfileGet", Helper: "PathRefProfile", Params: []volt.RouteParam{{Name: "userID", Type: "int"}}},
+	{Method: "PATCH", Pattern: "/ref/profiles/{userID}", Spelled: "/ref/profiles/:userID(int)", Query: "db.ProfileUpdate", Params: []volt.RouteParam{{Name: "userID", Type: "int"}}},
+	{Method: "DELETE", Pattern: "/ref/profiles/{userID}", Spelled: "/ref/profiles/:userID(int)", Query: "db.ProfileDelete", Params: []volt.RouteParam{{Name: "userID", Type: "int"}}},
 	{Method: "GET", Pattern: "/events", Spelled: "/events", Controller: "volt", Action: "Events", Helper: "PathEvents"},
 }

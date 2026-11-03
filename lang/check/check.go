@@ -25,6 +25,7 @@ type Info struct {
 
 	byName    map[string]*TableInfo
 	relations map[string][]*RelationInfo
+	assigned  map[string]*ColumnDef
 }
 
 // Table is the table of that name, or nil (spec §namespaces-and-uniqueness).
@@ -121,6 +122,8 @@ func FileGo(f *ast.File, memo *Memo, goTypes GoTypes) (*Info, []diag.Diagnostic)
 	c.migrationsCheck(f)
 	c.declsCheck(f)
 	c.resolve(f)
+	c.keysAssign()
+	c.keysAssignedCheck(f)
 	c.relationsBuild()
 	if memo != nil {
 		memo.finish()
@@ -391,7 +394,8 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 			c.recordsCoverageCheck(ti, r)
 		}
 	}
-	c.rowidAliasCheck(ti)
+	c.autoincrementCheck(ti)
+	c.rowidAliasDefaultCheck(ti)
 	c.requiredCheck(ti)
 }
 

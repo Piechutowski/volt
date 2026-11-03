@@ -1,5 +1,5 @@
-// spec: §columns, required is an error on the rowid alias, with or without autoincrement, since the database assigns it whenever an insert leaves it unmarked
-// want: the rowid alias of table "posts"
+// spec: §columns, required is an error on the database-assigned key, with or without autoincrement, since the database assigns it whenever an insert leaves it unmarked
+// want: the database-assigned key of table "posts"
 table posts {
   id    int [pk, required]
   title string

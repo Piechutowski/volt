@@ -28,7 +28,7 @@ var voltUserDesc = &rt.Desc[User]{
 	Table:   `"users"`,
 	Columns: `"id", "user_name", "bio"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "user_name", Wire: "userName"},
 		{Column: "bio", Wire: "bio"},
 	},

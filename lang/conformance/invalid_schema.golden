@@ -133,9 +133,9 @@ i229_primary_key_two_words.volt:4:19: error: syntax: expected ',' or ']' in sett
 i230_use_unknown_element.volt:3:1: error: syntax: unknown element type "use" (§program-structure)
 
 ## i231_records_omit_not_null.volt
-i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "title", which is NOT NULL and has no default: only the rowid alias leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
-i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "stamped_by", which is NOT NULL and has no default: only the rowid alias leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
-i231_records_omit_not_null.volt:25:1: error: spec/records-sample-data: records of table "authors" do not list column "name", which is NOT NULL and has no default: only the rowid alias leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
+i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "title", which is NOT NULL and has no default: only the database-assigned key leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
+i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "stamped_by", which is NOT NULL and has no default: only the database-assigned key leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
+i231_records_omit_not_null.volt:25:1: error: spec/records-sample-data: records of table "authors" do not list column "name", which is NOT NULL and has no default: only the database-assigned key leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
 
 ## i232_ref_set_null_not_null.volt
 i232_ref_set_null_not_null.volt:14:34: error: spec/relationships-ref: delete: set_null on foreign-key column "posts.author_id", which does not carry null: the database would write a NULL the column refuses (§relationships-ref)
@@ -410,11 +410,25 @@ i43_bare_ident_default.volt:3:19: error: spec/default-values: default value must
 i448_increment_unknown_setting.volt:4:18: error: spec/columns: unknown setting "increment" (§columns)
 
 ## i449_required_rowid_alias.volt
-i449_required_rowid_alias.volt:4:18: error: spec/columns: required on "id", the rowid alias of table "posts": the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)
-i449_required_rowid_alias.volt:9:32: error: spec/columns: required on "id", the rowid alias of table "events": the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)
+i449_required_rowid_alias.volt:4:18: error: spec/columns: required on "id", the database-assigned key of table "posts": the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)
+i449_required_rowid_alias.volt:9:32: error: spec/columns: required on "id", the database-assigned key of table "events": the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)
 
 ## i452_project_not_an_element.volt
 i452_project_not_an_element.volt:3:1: error: syntax: unknown element type "project" (§program-structure)
+
+## i454_autoincrement_foreign_key.volt
+i454_autoincrement_foreign_key.volt:8:23: error: spec/columns: autoincrement on "user_id", the rowid alias of table "user_profiles" and a foreign key: its values come from the referenced row, so the never-reuse bookkeeping of AUTOINCREMENT has nothing to assign; it is valid on the database-assigned key alone (§columns)
+i454_autoincrement_foreign_key.volt:13:23: error: spec/columns: autoincrement on "user_id", the rowid alias of table "user_settings" and a foreign key: its values come from the referenced row, so the never-reuse bookkeeping of AUTOINCREMENT has nothing to assign; it is valid on the database-assigned key alone (§columns)
+
+## i455_records_omit_foreign_key.volt
+i455_records_omit_foreign_key.volt:11:3: error: spec/records-sample-data: records of table "user_profiles" do not list column "user_id", the rowid alias and a foreign key: its value comes from the referenced row, and only the database-assigned key leaves a column's value to the database; list the column (§records-sample-data, §columns)
+i455_records_omit_foreign_key.volt:21:1: error: spec/records-sample-data: records of table "user_settings" do not list column "user_id", the rowid alias and a foreign key: its value comes from the referenced row, and only the database-assigned key leaves a column's value to the database; list the column (§records-sample-data, §columns)
+
+## i456_default_rowid_alias.volt
+i456_default_rowid_alias.volt:6:15: error: spec/columns: default on "id", the rowid alias of table "users": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
+i456_default_rowid_alias.volt:10:35: error: spec/columns: default on "id", the rowid alias of table "events": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
+i456_default_rowid_alias.volt:15:38: error: spec/columns: default on "user_id", the rowid alias of table "user_profiles": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
+i456_default_rowid_alias.volt:20:21: error: spec/columns: default on "code", the rowid alias of table "tickets": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
 
 ## i61_tag_malformed.volt
 i61_tag_malformed.volt:4:21: error: spec/columns: tag "json=name" is not one key:"value" pair: write e.g. "json:\"name\"" (§columns)

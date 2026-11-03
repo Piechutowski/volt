@@ -128,7 +128,7 @@ var voltRateDesc = &rt.Desc[Rate]{
 	Table:   `"rates"`,
 	Columns: `"id", "currency_code", "rate", "fetched_at", "active", "comment"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "currency_code", Wire: "currency_code"},
 		{Column: "rate", Wire: "rate"},
 		{Column: "fetched_at", Wire: "fetched_at"},

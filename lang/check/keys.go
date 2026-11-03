@@ -26,16 +26,75 @@ func (t *TableInfo) PK() []*ColumnDef {
 	return out
 }
 
-// RowidAlias is the column SQLite aliases to the rowid as Volt treats it
-// (spec §columns): the one column of a single-column primary key of the
-// built-in int, nil for any other key. The database assigns it whenever
-// an insert leaves it unmarked.
+// RowidAlias is the column SQLite aliases to the rowid (spec §columns,
+// §mapping-to-sqlite-ddl): the one column of a single-column primary
+// key stored as int, of the built-in int or of a declared type, which
+// renders INTEGER PRIMARY KEY; nil for any other key. It is the DDL
+// fact alone: whether the database assigns the key is Info.KeyAssigned's
+// to say.
 func (t *TableInfo) RowidAlias() *ColumnDef {
 	pk := t.PK()
 	if len(pk) != 1 {
 		return nil
 	}
-	if cd := pk[0]; cd.Type.Known() && cd.Type.Storage == "int" && cd.Type.Decl == nil {
+	if cd := pk[0]; cd.Type.Known() && cd.Type.Storage == "int" {
+		return cd
+	}
+	return nil
+}
+
+// rowidAliasInt is the table's rowid alias when it is of the built-in
+// int, the one key the database may assign (spec §columns); nil
+// otherwise.
+func rowidAliasInt(t *TableInfo) *ColumnDef {
+	if cd := t.RowidAlias(); cd != nil && cd.Type.Decl == nil {
+		return cd
+	}
+	return nil
+}
+
+// KeyAssigned is the table's database-assigned key (spec §columns): its
+// rowid alias when that is of the built-in int and no foreign key, which
+// the database assigns whenever an insert leaves it unmarked; nil when
+// the table has none. A rowid alias of a declared type, or one that is
+// a foreign key and so takes its value from the referenced row, is an
+// ordinary key.
+func (i *Info) KeyAssigned(t *TableInfo) *ColumnDef {
+	return i.assigned[t.Key]
+}
+
+// keysAssign records every table's database-assigned key once the
+// relationships are resolved (spec §columns, §relationships-ref): the
+// built-in int rowid alias of a table that no relationship takes as a
+// foreign-key column.
+func (c *checker) keysAssign() {
+	foreign := map[string]map[string]bool{}
+	for _, ri := range c.info.Refs {
+		if ri.FK.Table == nil {
+			continue
+		}
+		cols := foreign[ri.FK.Table.Key]
+		if cols == nil {
+			cols = map[string]bool{}
+			foreign[ri.FK.Table.Key] = cols
+		}
+		for _, col := range ri.FK.Columns {
+			cols[col] = true
+		}
+	}
+	c.info.assigned = map[string]*ColumnDef{}
+	for _, ti := range c.info.Tables {
+		if cd := rowidAliasInt(ti); cd != nil && !foreign[ti.Key][cd.Col.Name.Name()] {
+			c.info.assigned[ti.Key] = cd
+		}
+	}
+}
+
+// shapeKeyAssigned is the database-assigned key of a migration shape
+// (spec §migrations, §columns): its built-in int rowid alias unless the
+// column carries ref:, the one foreign key a shape spells.
+func shapeKeyAssigned(ti *TableInfo) *ColumnDef {
+	if cd := rowidAliasInt(ti); cd != nil && cd.Col.Settings.Get("ref") == nil {
 		return cd
 	}
 	return nil

@@ -137,11 +137,12 @@ type Field struct {
 	Declared bool
 	Kinded   bool
 	Required bool
-	// RowidAlias says the field is the table's rowid alias key (spec
-	// §columns): From leaves it unmarked and a generated create does not
-	// cast it, so the database assigns it.
-	RowidAlias bool
-	Unique     bool
+	// Assigned says the field is the table's database-assigned key (spec
+	// §columns), the built-in int rowid alias that is no foreign key:
+	// From leaves it unmarked and a generated create does not cast it,
+	// so the database assigns it.
+	Assigned bool
+	Unique   bool
 }
 
 // SQL is the column as a statement names it: qualified when the
@@ -211,12 +212,12 @@ func (t *Table) IsPK(f *Field) bool {
 }
 
 // CreateCast lists the fields a generated create casts from a request
-// body: every one but the rowid alias key, which the database assigns
-// (spec §changesets, §query-routes).
+// body: every one but the database-assigned key, which the database
+// assigns (spec §changesets, §query-routes).
 func (t *Table) CreateCast() []*Field {
 	var out []*Field
 	for _, f := range t.Fields {
-		if f.RowidAlias {
+		if f.Assigned {
 			continue
 		}
 		out = append(out, f)
@@ -272,14 +273,18 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 		err error
 	}
 	tables := make([]built, len(info.Tables))
+	assigned := make([]*check.ColumnDef, len(info.Tables))
+	for i, ti := range info.Tables {
+		assigned[i] = info.KeyAssigned(ti)
+	}
 	par.For(len(info.Tables), func(i int) {
 		if memo != nil {
-			if e := memo.prev[info.Tables[i]]; e != nil {
+			if e := memo.prev[info.Tables[i]]; e != nil && e.assigned == assigned[i] {
 				tables[i] = built{e.tm, e.imports, nil}
 				return
 			}
 		}
-		tm, imports, err := tableBuild(info.Tables[i])
+		tm, imports, err := tableBuild(info.Tables[i], assigned[i])
 		tables[i] = built{tm, imports, err}
 	})
 	if memo != nil {
@@ -291,7 +296,7 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 					memo.next[ti] = e
 				} else {
 					memo.Misses++
-					memo.next[ti] = &memoModel{tm: b.tm, imports: b.imp}
+					memo.next[ti] = &memoModel{tm: b.tm, imports: b.imp, assigned: assigned[i]}
 				}
 			}
 		}
@@ -317,7 +322,11 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 	return p, nil
 }
 
-func tableBuild(ti *check.TableInfo) (*Table, map[string]bool, error) {
+// tableBuild plans one table's model (spec §mapping-to-go); assigned is
+// its database-assigned key (spec §columns), nil when it has none,
+// since whether the rowid alias is one depends on the relationships of
+// the whole package.
+func tableBuild(ti *check.TableInfo, assigned *check.ColumnDef) (*Table, map[string]bool, error) {
 	model, err := ModelName(ti.Decl)
 	if err != nil {
 		return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.Name(), err)
@@ -341,9 +350,9 @@ func tableBuild(ti *check.TableInfo) (*Table, map[string]bool, error) {
 	for _, f := range tm.Fields {
 		f.Unique = ti.ColumnsUnique([]string{f.ColName})
 	}
-	if alias := ti.RowidAlias(); alias != nil {
-		if f := tm.Field(alias.Col.Name.Name()); f != nil {
-			f.RowidAlias = true
+	if assigned != nil {
+		if f := tm.Field(assigned.Col.Name.Name()); f != nil {
+			f.Assigned = true
 		}
 	}
 	tm.crud = crudMethodsBuild(tm)

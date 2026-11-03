@@ -857,33 +857,46 @@ column setting  = "pk"
    (§generated-query-surface). A primary key is a table constraint, not
    an index: no migration adds it to a table or drops it from one, and
    changing it is a `rebuild table` (§migrations).
-4. **The rowid alias and `autoincrement`.** A table whose primary key
-   is exactly one column of the built-in type `int` makes that column
-   SQLite's rowid alias, `INTEGER PRIMARY KEY` without `NOT NULL`
-   (§mapping-to-sqlite-ddl): the database assigns it whenever an
-   insert leaves it unmarked, and an insert that marks it stores the
-   value given (§changesets). `id int [pk]` is the key most tables
-   want. A key of a declared type stored as `int` (§types) is written
-   the same way, so SQLite aliases it to the rowid too, but Volt treats
-   it as an ordinary key: `From` marks it, a generated create casts it
-   and a records list names it. `required` on the rowid alias is an
-   **error**, since the database may assign it, so its zero value is no
-   missing value (rule 8). A records list may leave the rowid alias
-   out (§records-sample-data).
+4. **The rowid alias, the database-assigned key and `autoincrement`.**
+   The **rowid alias** is the DDL fact: a table whose primary key is
+   exactly one column stored as `int`, of the built-in `int` or of a
+   declared type (§types), makes that column SQLite's rowid alias,
+   `INTEGER PRIMARY KEY` without `NOT NULL` (§mapping-to-sqlite-ddl).
+   An insert that marks it stores the value given, one that leaves it
+   unmarked gets a rowid SQLite picks, and SQLite ignores a `DEFAULT`
+   on it, so `default:` on the rowid alias is an **error**
+   (§default-values): Volt accepts no setting the database would not
+   apply. The **database-assigned key** is the rowid alias of the
+   built-in `int` that is no foreign key, neither carrying `ref:` nor
+   a column of the left endpoint of a `ref` element
+   (§relationships-ref): the database assigns it whenever an insert
+   leaves it unmarked (§changesets), and `id int [pk]` is the key most
+   tables want. Every other rowid alias is an **ordinary key**, whose
+   value the row gives: a key of a declared type stored as `int`, and
+   a key that is also a foreign key, as in the shared-key one-to-one
+   `user_id int [pk, ref: users.id]`, whose value comes from the
+   referenced row. `From` marks an ordinary key, a generated create
+   casts it, a records list names it and `required` may be written on
+   it. `required` on the database-assigned key is an **error**, since
+   the database may assign it, so its zero value is no missing value
+   (rule 8). A records list may leave the database-assigned key out
+   (§records-sample-data).
 
    **`autoincrement`** is SQLite's `AUTOINCREMENT` and does what
-   SQLite says it does: the rowid alias becomes `INTEGER PRIMARY KEY
-   AUTOINCREMENT`, so the database never reuses an id, not even the
-   largest one after its row is deleted, and SQLite keeps the high-water
-   mark in its `sqlite_sequence` table, which a `rebuild table` that
-   keeps `autoincrement` carries over (§migrations). It does nothing else: the key
-   is the rowid alias with or without it. It is valid only on the
-   rowid alias and is an **error** anywhere else: on a column that is
-   not of type `int`, on a column that is not the primary key and on a
-   member of a composite key, where SQLite refuses it, and on a
-   declared type stored as `int`, which SQLite would accept but Volt
-   refuses, since it treats that key as an ordinary key (above) and
-   not as the rowid alias.
+   SQLite says it does: the database-assigned key becomes `INTEGER
+   PRIMARY KEY AUTOINCREMENT`, so the database never reuses an id, not
+   even the largest one after its row is deleted, and SQLite keeps the
+   high-water mark in its `sqlite_sequence` table, which a `rebuild
+   table` that keeps `autoincrement` carries over (§migrations). It
+   does nothing else: the key is the database-assigned key with or
+   without it. It is valid only on the database-assigned key and is
+   an **error** anywhere else: on a column that is not of type `int`,
+   on a column that is not the primary key and on a member of a
+   composite key, where SQLite refuses it; on a declared type stored
+   as `int`, which SQLite would accept but Volt refuses, since it
+   treats that key as an ordinary key (above); and on a rowid alias
+   that is a foreign key, whose values come from another table, so
+   the never-reuse bookkeeping has nothing to assign.
 5. **`ref: table.column`** declares a relationship whose foreign key
    is this column (§relationships-ref). It appears at most once on a
    column (§settings-lists) and carries no referential actions; a
@@ -914,8 +927,8 @@ column setting  = "pk"
    `[]byte` (nil or empty, and no other value), and for a declared type
    the empty value of its storage type. It is an error on a `null`
    column, which has no empty value to refuse since NULL is absence, on
-   a `default:` column, on the rowid alias (rule 4), and on `bool` and
-   `time.Time`, where every value is a value.
+   a `default:` column, on the database-assigned key (rule 4), and on
+   `bool` and `time.Time`, where every value is a value.
 9. **`tag: string`** (repeatable) passes one Go struct tag through to
    the generated field verbatim: every field property lives in the
    schema, and the passthrough serves every encoding and third-party
@@ -975,6 +988,14 @@ such as `state.pending`, is **not** a valid default value.
    that carries `null` and has no `default:` is NULL when a write
    leaves it out, so `default: null` would only say that twice and is
    an error.
+3. **Not on the rowid alias.** A default on the rowid alias (§columns
+   rule 4), the database-assigned key with or without `autoincrement`,
+   a key that is also a foreign key and a declared type stored as `int`
+   alike, is an error citing §columns: SQLite ignores a `DEFAULT` on
+   the rowid alias and assigns a rowid to an insert that leaves the
+   column out, so the default would never be written. The same holds
+   in a migration's `create table` and `rebuild table` shapes
+   (§migrations).
 
 ### Indexes
 
@@ -1114,6 +1135,13 @@ ref action   = "cascade" | "restrict" | "set_null" | "set_default" ;
    `user_id int [unique, ref: users.id]`. The uniqueness is the
    column's, and the DDL and the generated query surface treat it as
    any unique column's (§mapping-to-sqlite-ddl, §generated-query-surface).
+   A **shared-key** one-to-one makes the foreign key the table's whole
+   primary key, as in `user_id int [pk, ref: users.id]` or a `ref`
+   element whose left endpoint is that key: of the built-in `int`, it
+   is the rowid alias in the DDL but no database-assigned key
+   (§columns), since its value is the referenced row's, so `From`
+   marks it, the generated create casts it, a records list names it and
+   `autoincrement` on it is an error.
 6. **Many-to-many.** There is no many-to-many operator: a junction
    table with two foreign keys models it.
 7. **Referential actions.** `delete:` and `update:` correspond to SQL
@@ -1475,11 +1503,13 @@ record value    = string
    after the last is an error.
 6. **Coverage.** A records column list MUST name every column of the
    table, injected columns included (§partial-injection-order), that
-   is NOT NULL, has no `default:` and is not the rowid alias (`int
-   [pk]`, with or without `autoincrement`, §columns), since only the
-   rowid alias leaves a column's value to the database, so every other
-   such column is the row's to give. An omitted list names every column
-   (rule 1).
+   is NOT NULL, has no `default:` and is not the database-assigned key
+   (`int [pk]`, with or without `autoincrement`, that is no foreign
+   key, §columns), since only the database-assigned key leaves a
+   column's value to the database, so every other such column is the
+   row's to give, a shared key that is also a foreign key among them,
+   whose value is the referenced row's. An omitted list names every
+   column (rule 1).
 
 ```volt
 type JobState string
@@ -2444,15 +2474,17 @@ scope /api [pipe: api] {
      binds from the **request body**: the body decodes as
      `<Model>Params` by `Content-Type` (Formats; §changesets, `Params`)
      and is cast into a changeset. `Create` casts into `<Model>New()`
-     allowing every column but the rowid alias key (§columns), which
-     the database assigns, so a client cannot choose an id; `Update` loads
+     allowing every column but the database-assigned key (§columns),
+     which the database assigns, so a client cannot choose an id, while
+     a shared key that is also a foreign key is cast like any column,
+     since its value is the referenced row's; `Update` loads
      the row by the key path parameters with `<Model>Get` (a miss is a
      404), casts into its `Changeset()` allowing every non-key column,
      and the route MUST carry every key column as a path parameter.
      The body is decoded before the row is loaded, so a malformed body
      is a 400 whether or not the row exists. A write route always takes
      a body, `{}` when nothing is set: a table whose only column is the
-     rowid alias key still needs `{}`. An update is partial: nothing
+     database-assigned key still needs `{}`. An update is partial: nothing
      the body leaves out is reset, which is why it is routed with
      `patch` (clause 1);
    - a **list parameter** (§predicates) binds from the **repeated query
@@ -3618,25 +3650,29 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
    and NULL for an unmarked column that carries `null` with no
    default; an expression default, and the default of a declared type
    that implements Scanner and Valuer, are the database's alone and
-   read as the zero value until the row is stored, as the rowid alias
-   key (§columns) does until the database assigns it. An unmarked NOT
+   read as the zero value until the row is stored, as the
+   database-assigned key (§columns) does until the database assigns
+   it. An unmarked NOT
    NULL column without a default reads as its zero value too, but the
    insert names no value for it, so the database writes NULL and
    refuses the row as a `not_null` field error (rule 8), unless
-   `Validate` refused that zero value first. The one exception is a
-   single-column primary key stored as `int`, the rowid alias and a
-   key of a declared type stored as `int` alike: SQLite aliases it to
-   the rowid (§mapping-to-sqlite-ddl), so left unmarked the database
-   assigns it. `u.Changeset()` starts from `u` with nothing set and
+   `Validate` refused that zero value first. The one exception is the
+   rowid alias, a single-column primary key stored as `int`
+   (§columns, §mapping-to-sqlite-ddl): left unmarked, SQLite assigns
+   it a rowid, which is the design for the database-assigned key, and
+   for an ordinary key a value the row never gave, which its foreign
+   key, if it has one, may refuse.
+   `u.Changeset()` starts from `u` with nothing set and
    remembers that it was made from a row. A setter records a value
    for one column and **marks** it; `Changed` reports the mark; a
    column set to the value it already holds is still a change, since
    the changeset records intent, not difference. `Row()` is the data
    with the marked values applied. `From(u)` marks every data column
-   of `u` but the rowid alias key, so a zero row never inserts the id
-   0; the rowid alias key has a setter as every column does, since
-   SQLite stores an explicit rowid, and a changeset that marks it
-   inserts the value given.
+   of `u` but the database-assigned key, so a zero row never inserts
+   the id 0, and marks a shared key that is also a foreign key, whose
+   value is the referenced row's; the database-assigned key has a
+   setter as every column does, since SQLite stores an explicit rowid,
+   and a changeset that marks it inserts the value given.
 3. **Setters.** One per column, named `<Field>Set` after the field's
    Go name (§names), taking the field's Go type: `rt.Null[T]` for a
    nullable column, so `BioSet(rt.Null[string]{})` sets NULL. The
@@ -3656,8 +3692,8 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
    the client cannot widen it. A key of `p` that is no column's wire
    name (rule 5) is a field error with check `unknown_field`, so a typo
    never vanishes; a column renamed by its `json` tag is known by the
-   tag's name alone. The rowid alias key is set like any column when
-   `allow` lists it; the generated create of a query route leaves it
+   tag's name alone. The database-assigned key is set like any column
+   when `allow` lists it; the generated create of a query route leaves it
    out of `allow` (§query-routes), so a body sent there that carries
    it is neither an error nor a change.
 5. **`Params`.** `rt.Params[M]` is a write body as the wire carries
@@ -3756,7 +3792,7 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
     `rt.NullColumn` when nullable); and the unexported desc
     `volt<Model>Desc`, an `rt.Desc[M]` carrying the model's name, its
     quoted table and column list, one `rt.FieldDesc` per column
-    (column, wire name, key, rowid alias), the row of literal defaults (rule 2), and the generated
+    (column, wire name, key, database-assigned key), the row of literal defaults (rule 2), and the generated
     functions `volt<Model>Scan` (a row from `rt.Row`),
     `volt<Model>Values` (a row's bound values in column order),
     `volt<Model>Apply` (a row with the marked values applied) and
@@ -3889,8 +3925,9 @@ migration 0002__users_bio {
    primary key in declaration order, a single-column index is the
    column's `unique` or `index`, its `indexes` block holds composite,
    expression and partial indexes, no two of its indexes share a
-   name, and a single `int` key is the rowid alias, which alone takes
-   `autoincrement`. A partial injection, a `validators` block and a `records`
+   name, and a single `int` key is the rowid alias, which takes no
+   `default:`, and the database-assigned key unless it carries `ref:`,
+   which alone takes `autoincrement` (§columns). A partial injection, a `validators` block and a `records`
    block are not part of a `shape body`.
 4. **Settings whitelist.** In a migration, a column setting is one of
    `pk`, `autoincrement`, `null`, `unique`, `index`, `default:`, `ref:`,
@@ -3993,11 +4030,14 @@ migration 0002__users_bio {
    <table>`; create every index of the body, those of its columns'
    `unique` and `index` first, named for `<table>`. The source of a column
    is, in order: its `from:` expression literal if given; the old
-   column of the same name; its `default:`; `NULL`. A column without
-   `null` whose source is `NULL` is an error, except a rowid alias
-   (`int [pk]`, with or without `autoincrement`) introduced by the
-   rebuild, which takes
-   `NULL` as its source and the database assigns it. The source order
+   column of the same name; its `default:`, which the rowid alias never
+   has (§default-values); `NULL`. A column without `null` whose source
+   is `NULL` is an error, except the database-assigned key (`int
+   [pk]`, with or without `autoincrement`, without `ref:`) introduced
+   by the rebuild, which takes `NULL` as its source and the database
+   assigns it; a rowid alias that carries `ref:` and has no old column
+   of its name needs a `from:`, since `NULL` would let the database
+   assign it ids the referenced table never held. The source order
    is checked here for a table the package's migrations created; a
    table of unknown shape takes the old column of the same name when
    the fold has it and otherwise errors at fold time (§the-fold).
@@ -4675,14 +4715,14 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | Declared | SQLite |
 |---|---|
 | column without `null`, key columns included (SQLite's `PRIMARY KEY` does not imply NOT NULL) | `NOT NULL`, the rowid alias below excepted; a column that carries `null` has no nullability constraint (§columns) |
-| `int` `[pk]`, the one column of the key (§columns) | exactly `INTEGER PRIMARY KEY`, without `NOT NULL`: the rowid alias, which the database assigns whenever an insert leaves it unmarked. A key of a declared type stored as `int` renders the same, so that a migration's `int [pk]` folds equal to it (§the-fold) |
-| `int` `[pk, autoincrement]` | exactly `INTEGER PRIMARY KEY AUTOINCREMENT`: SQLite's keyword with SQLite's meaning, an id is never reused and SQLite keeps `sqlite_sequence`. The SQLite documentation advises it only when ids must never be reused, since it costs CPU, memory, disk space and disk I/O. Any other `autoincrement` placement is a check error (§columns) |
+| `int` `[pk]`, the one column of the key (§columns) | exactly `INTEGER PRIMARY KEY`, without `NOT NULL` and without `DEFAULT`, which SQLite would ignore there, so `default:` on it is a check error (§default-values): the rowid alias, which SQLite assigns whenever an insert leaves it unmarked. It is the database-assigned key unless it is a foreign key; a shared-key one-to-one (`user_id int [pk, ref: users.id]`) renders the same, with its `FOREIGN KEY`, and takes its value from the referenced row (§relationships-ref). A key of a declared type stored as `int` renders the same, so that a migration's `int [pk]` folds equal to it (§the-fold) |
+| `int` `[pk, autoincrement]` | exactly `INTEGER PRIMARY KEY AUTOINCREMENT`: SQLite's keyword with SQLite's meaning, an id is never reused and SQLite keeps `sqlite_sequence`. The SQLite documentation advises it only when ids must never be reused, since it costs CPU, memory, disk space and disk I/O. Any other `autoincrement` placement, a key that is a foreign key among them, is a check error (§columns) |
 | `pk` on one column | `PRIMARY KEY` on the column, `NOT NULL` with it, the rowid alias above excepted |
 | `pk` on several columns (composite key, §columns) | `PRIMARY KEY (a, b)` table constraint listing the `pk` columns in the table's effective column order (§partial-injection-order); members get `NOT NULL` |
 | `unique` or `index` column (§columns) | `CREATE UNIQUE INDEX` or `CREATE INDEX` `idx_<table>_<column> ON <table> (<column>)` after the table, before the indexes of its `indexes` blocks; never an inline `UNIQUE`, which SQLite enforces the same way but which no `drop index` removes, only a `rebuild table` |
 | `indexes` entry | `CREATE INDEX <name> ON <table> (<key>)`, `UNIQUE` for `unique`, `WHERE <expr>` for `where:` (§indexes); the name is `name:` when given, else `idx_<table>_<col>[_<col>...]` from the SQLite table name and the key columns; two indexes of the schema of one name, or an index named as a table, are a check error, since SQLite names indexes per database (§indexes) |
 | relationship (`ref:`, `ref:`) | `FOREIGN KEY (<fk>) REFERENCES <table> (<columns>)` with `ON DELETE` / `ON UPDATE`; the foreign key is the left endpoint of a `ref` and the declaring column of a `ref:` (§relationships-ref) |
-| one-to-one (a unique foreign key, §relationships-ref) | the uniqueness as written, the column's unique index or the composite key or index; the relationship adds nothing |
+| one-to-one (a unique foreign key, §relationships-ref) | the uniqueness as written, the column's unique index or the composite key or index; the relationship adds nothing. A shared int key is `INTEGER PRIMARY KEY` with its `FOREIGN KEY`, the rowid alias but no database-assigned key (§columns) |
 | `int`, `bool` | `INTEGER` (booleans stored 0/1; `true`/`false` in records and defaults become 1/0) |
 | `float64` | `REAL` |
 | `string` | `TEXT` |

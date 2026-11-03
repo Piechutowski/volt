@@ -33,7 +33,7 @@ var voltPageViewDesc = &rt.Desc[PageView]{
 	Table:   `"page_views"`,
 	Columns: `"id", "site", "day", "hits", "score", "note"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "site", Wire: "site"},
 		{Column: "day", Wire: "day"},
 		{Column: "hits", Wire: "hits"},
@@ -188,7 +188,7 @@ var voltLinkClickDesc = &rt.Desc[LinkClick]{
 	Table:   `"link_clicks"`,
 	Columns: `"id", "site", "day", "target"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "site", Wire: "site"},
 		{Column: "day", Wire: "day"},
 		{Column: "target", Wire: "target"},
@@ -311,7 +311,7 @@ var voltHostDesc = &rt.Desc[Host]{
 	Table:   `"hosts"`,
 	Columns: `"id", "name"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "name", Wire: "name"},
 	},
 	Scan:   voltHostScan,
@@ -404,7 +404,7 @@ var voltVisitDesc = &rt.Desc[Visit]{
 	Table:   `"visits"`,
 	Columns: `"id", "host_id", "owner_id", "day"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "host_id", Wire: "host_id"},
 		{Column: "owner_id", Wire: "owner_id"},
 		{Column: "day", Wire: "day"},
@@ -634,7 +634,7 @@ var voltMerchantPeriodDesc = &rt.Desc[MerchantPeriod]{
 	Table:   `"merchant_periods"`,
 	Columns: `"id", "merchant_id", "country_code"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "id", Wire: "id", Key: true, Assigned: true},
 		{Column: "merchant_id", Wire: "merchant_id"},
 		{Column: "country_code", Wire: "country_code"},
 	},
