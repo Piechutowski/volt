@@ -22,7 +22,8 @@ import (
 // last ID it saw without a repeat, a raw stream opened without
 // Last-Event-ID starts at the oldest kept event, one opened with
 // Last-Event-ID replays exactly what came after, and one naming an ID
-// this broker never assigned, as after a restart, replays everything.
+// of another broker, as after a restart, or a bare number, replays
+// everything (spec §event-routes).
 func TestEvents(t *testing.T) {
 	e := envStart(t)
 	ctx, cancel := context.WithTimeout(bg, 30*time.Second)
@@ -40,6 +41,10 @@ func TestEvents(t *testing.T) {
 			if err := ev.Decode(&ch); err != nil {
 				t.Fatalf("event %d: %v", ev.ID, err)
 			}
+			if ch.At.IsZero() || time.Since(ch.At) > time.Minute {
+				t.Errorf("event %d was stamped %v, not by the server's clock now", ev.ID, ch.At)
+			}
+			ch.At = time.Time{}
 			return ev, ch
 		case <-ctx.Done():
 			t.Fatal("no event arrived")
@@ -80,7 +85,7 @@ func TestEvents(t *testing.T) {
 	if r := e.raw("POST", app.PathSignIn(), `{"email": "ada@voltmeter.test"}`); r.StatusCode != 200 {
 		t.Fatalf("sign in = %d %s", r.StatusCode, r.body)
 	}
-	up := runUpload(t, c, app.Upload{Commit: "beef0001", Machine: machine})
+	up := runUpload(t, c, sweep("beef0001", []int{2}, 1))
 	ev, ch = next()
 	if ev.ID != 4 || ch.Handler != "Uploads.Create" || ch.Route != "POST /api/uploads" || ch.Status != 201 || up.Run.ID != 1 {
 		t.Errorf("the upload's event %d %+v; want 4, the sign-in changing no row", ev.ID, ch)
@@ -106,8 +111,9 @@ func TestEvents(t *testing.T) {
 			t.Errorf("stream headers %v", resp.Header)
 		}
 		want := 4
-		if n, _ := strconv.Atoi(lastID); n > 0 && n <= 4 {
-			want -= n
+		if epoch, n, ok := strings.Cut(lastID, "-"); ok && epoch+"-0" == e.broker.WireID(0) {
+			k, _ := strconv.Atoi(n)
+			want -= k
 		}
 		var ids []string
 		sc := bufio.NewScanner(resp.Body)
@@ -118,13 +124,22 @@ func TestEvents(t *testing.T) {
 		}
 		return ids
 	}
-	if got := strings.Join(replayed(""), " "); got != "1 2 3 4" {
+	wire := func(ns ...uint64) string {
+		var ids []string
+		for _, n := range ns {
+			ids = append(ids, e.broker.WireID(n))
+		}
+		return strings.Join(ids, " ")
+	}
+	if got := strings.Join(replayed(""), " "); got != wire(1, 2, 3, 4) {
 		t.Errorf("a new stream replays %q", got)
 	}
-	if got := strings.Join(replayed("2"), " "); got != "3 4" {
+	if got := strings.Join(replayed(e.broker.WireID(2)), " "); got != wire(3, 4) {
 		t.Errorf("Last-Event-ID 2 replays %q", got)
 	}
-	if got := strings.Join(replayed("99"), " "); got != "1 2 3 4" {
-		t.Errorf("Last-Event-ID 99, from a broker before a restart, replays %q", got)
+	for _, foreign := range []string{"2", "99", volt.NewBroker().WireID(2)} {
+		if got := strings.Join(replayed(foreign), " "); got != wire(1, 2, 3, 4) {
+			t.Errorf("Last-Event-ID %q, from a broker before a restart, replays %q", foreign, got)
+		}
 	}
 }

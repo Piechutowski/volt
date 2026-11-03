@@ -2670,10 +2670,15 @@ scope / [pipe: api] {
    application publishes with `Events.Publish(name, data)`. The
    broker fans every event out to every open stream, assigns IDs in
    order, and keeps a replay buffer so a client that reconnects with
-   `Last-Event-ID` resumes where it was. A stream opened without
-   `Last-Event-ID` starts at the oldest event the buffer keeps, and an
-   ID the broker never assigned, one from before the process
-   restarted, replays the whole buffer. Events are
+   `Last-Event-ID` resumes where it was. An ID on the wire names the
+   broker as well as the position (`<epoch>-<n>`, the epoch taken from
+   the clock when the broker starts), so IDs of two processes never
+   coincide. A stream opened without `Last-Event-ID` starts at the
+   oldest event the buffer keeps, and so does one naming an ID of
+   another broker, one from before the process restarted, however far
+   the new broker has counted. The client sends back the ID of the last
+   event it delivered, so after such a replay it resumes on the new
+   broker's IDs. Events are
    `text/event-stream` with a JSON payload; a subscriber that falls
    behind is dropped and reconnects.
 3. The generated client's `Events(ctx) <-chan volt.Event` connects,

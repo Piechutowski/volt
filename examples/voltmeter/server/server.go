@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/examples/voltmeter/app"
@@ -19,13 +20,16 @@ import (
 const EventChanged = "changed"
 
 // Change is the payload of EventChanged: which route wrote, so a client
-// refetches what it shows.
+// refetches what it shows, and when by the server's clock, so a client
+// that receives the stream's replay can tell an old change from a new
+// one.
 type Change struct {
-	Method  string `json:"method"`
-	Route   string `json:"route"`
-	Handler string `json:"handler"`
-	Path    string `json:"path"`
-	Status  int    `json:"status"`
+	Method  string    `json:"method"`
+	Route   string    `json:"route"`
+	Handler string    `json:"handler"`
+	Path    string    `json:"path"`
+	Status  int       `json:"status"`
+	At      time.Time `json:"at"`
 }
 
 // Handler is Voltmeter's whole HTTP surface on d, with b as the event
@@ -66,6 +70,7 @@ func Publish(b *volt.Broker, next http.Handler) http.Handler {
 			Handler: handler,
 			Path:    r.URL.Path,
 			Status:  sw.status,
+			At:      time.Now().UTC().Truncate(time.Millisecond),
 		})
 	})
 }
