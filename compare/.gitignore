@@ -1,0 +1,2 @@
+# volt gen writes these; go generate ./compare/... makes them
+volt_*
