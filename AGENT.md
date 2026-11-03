@@ -45,22 +45,26 @@ green.
 
 Four Go modules under `go.work`: the library at the root (runtime,
 `lang/`, `gen/`, `nao/` with the value runtime `nao/rt` and the runner
-`nao/run`, `itest/`; stdlib only, sqlite3 test-only), the tools
-`lsp/` and `cmd/volt/`, and the example application
-`examples/voltmeter/`, which carry the third-party dependencies;
-`cmd/volt` carries the `mattn/go-sqlite3` driver for the fold and
-`volt migration up`, so the tool is built with cgo (a C
-compiler on the path; without it the driver is a stub and `volt`
-refuses the fold and the migration commands with exit 2), while the
-library and the runtime register none. `examples/voltmeter` is
-Voltmeter, the example application and end-to-end test, built on the
-same driver with cgo; its generated files are committed and
-drift-checked by its own tests. Its desktop client `examples/voltmeter/gui`
-is guigui on Ebitengine, so building that module also needs the X11 and
-OpenGL development headers Ebitengine needs on Linux, and the window
-smoke test in `examples/voltmeter/e2e` runs the client under `xvfb-run`,
-skipping with a message when Xvfb is not on the path. Go floor is the newest stable Go,
-declared in all four `go.mod` files. `grammar/`,
+`nao/run`, `itest/`; stdlib only, sqlite3 test-only), the tools `lsp/`
+and `cmd/volt/`, and the example application `examples/voltmeter/`,
+which carry the third-party dependencies; `cmd/volt` carries the
+`mattn/go-sqlite3` driver for the fold and `volt migration up`, so the
+tool is built with cgo (a C compiler on the path; without it the
+driver is a stub and `volt` refuses the fold and the migration
+commands with exit 2), while the library and the runtime register
+none. `examples/voltmeter` is Voltmeter, the example application and
+end-to-end test, built on the same driver with cgo; its generated
+files are committed and drift-checked by its own tests, its CLI leg
+builds `volt` from the checkout and runs it over the example, and its
+coverage map (`examples/voltmeter/e2e/coverage_test.go`) maps every
+heading of the spec's Parts I and II to the Voltmeter tests that prove
+it or a one-line reason it is excluded, so a new heading needs an
+entry. Its desktop client `examples/voltmeter/gui` is guigui on
+Ebitengine, so building that module also needs the X11 and OpenGL
+development headers Ebitengine needs on Linux, and the window smoke
+test in `examples/voltmeter/e2e` runs the client under `xvfb-run`,
+skipping with a message when Xvfb is not on the path. Go floor is the
+newest stable Go, declared in all four `go.mod` files. `grammar/`,
 `zed-extension/` and `scripts/sync-grammar.sh` are the editor stack.
 `go test ./...` at the root does not cover the tool modules or the
 example.

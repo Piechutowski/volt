@@ -238,26 +238,8 @@ section 8 marked unverified for that step.
 
 ## Step 19. The example applications
 
-In progress: Voltmeter, under `examples/voltmeter`, measures Volt with
-Volt (the profiling sweep, the keystroke benchmark, the thesis line
-counts and its own route latency). Built: the data package `db` (the
-schema, the selects and a migration history that folds to the schema,
-tested on a real SQLite), the routes package `app` with its controllers
-and generated router and client, `server.Handler` and `voltmeter serve`,
-the end-to-end API suite under `e2e` that serves every route, and
-`voltmeter collect` (package `collector`), which stores the sweep, the
-keystroke, the thesis line counts and its own route latency through
-the generated client, run in process by the suite, and the guigui
-desktop client under `gui` (a pure state package driven by intents, a
-command runner over the generated client, and widgets that render the
-state), with its state suite against the live server and a window
-smoke test under Xvfb, and the CLI leg, which builds `volt` from the
-checkout and runs check, vet, gen, routes and every migration command
-over the example. Remaining: the spec-anchor coverage map. The Elm
-example waits
-for step 5. The blog
-fixture under `itest/blog` is the application every step rebuilds, and
-the line counts below are measured on it.
+Deferred with step 5: the Elm example waits for the Elm client;
+Voltmeter, under `examples/voltmeter`, has landed.
 
 ---
 
@@ -281,9 +263,9 @@ Goldens: `go test ./gen/router -update`, `go test ./nao/gen/... -update`,
 
 | Step | Depends on | Lands |
 |---|---|---|
-| 5, 13 to 18 | | deferred |
-| 19 | | in progress (Voltmeter) |
+| 5, 13 to 19 | | deferred |
 
-Measured at each step on the blog fixture and recorded in the commit
+The blog fixture under `itest/blog` is the application every step
+rebuilds. Measured at each step on it and recorded in the commit
 message: Volt lines, hand-written Go lines, generated Go lines. The
 thesis is that the first two fall while the third is paid for once.
