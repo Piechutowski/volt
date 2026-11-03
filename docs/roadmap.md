@@ -52,4 +52,4 @@ that lands it.
 | REPL | iex / rails c | not planned | |
 | Admin dashboard | LiveDashboard / gems | not planned | |
 | Databases other than SQLite | yes | not planned | |
-| Example applications as end-to-end tests | yes | partial (Voltmeter's data layer, routes and server; its collector and guigui client are not built) | |
+| Example applications as end-to-end tests | yes | partial (Voltmeter's data layer, routes, server and collector; its guigui client is not built) | |

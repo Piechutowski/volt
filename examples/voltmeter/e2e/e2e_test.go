@@ -1,6 +1,7 @@
 // Package e2e drives Voltmeter end to end: the production handler of
 // package server on a migrated SQLite file behind an httptest server,
-// through the generated client in GOB and through raw HTTP in JSON.
+// through the generated client in GOB, through raw HTTP in JSON, and
+// through the collector run in process.
 package e2e
 
 import (
