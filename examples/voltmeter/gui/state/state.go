@@ -1087,7 +1087,7 @@ func changed(s State, c Changed) (State, []Command) {
 	var cmds []Command
 	switch {
 	case c.Handler == "Uploads.Create":
-		cmds = append(cmds, runsFetch(s))
+		cmds = append(cmds, TagsFetch{}, runsFetch(s))
 		cmds = append(cmds, budgetsFetch(s)...)
 		cmds = append(cmds, measuredRefetch(s)...)
 		if s.Boards.Loaded {

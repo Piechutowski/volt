@@ -136,7 +136,7 @@ func TestChangesRefetchWhatTheyTouch(t *testing.T) {
 	s.Run.ID = 5
 	runs := state.RunsFetch{Limit: state.RunsLimit}
 	for handler, want := range map[string][]state.Command{
-		"Uploads.Create":    {runs, state.BudgetsFetch{}, state.BudgetFetch{ID: 2}},
+		"Uploads.Create":    {state.TagsFetch{}, runs, state.BudgetsFetch{}, state.BudgetFetch{ID: 2}},
 		"Runs.Annotate":     {runs, state.RunFetch{ID: 5}},
 		"db.TagDelete":      {state.TagsFetch{}, runs, state.RunFetch{ID: 5}},
 		"Budgets.Reset":     {state.BudgetsFetch{}, state.BudgetFetch{ID: 2}},
@@ -275,7 +275,7 @@ func TestMeasurementsChangeRefetchesEveryTrendShown(t *testing.T) {
 	s, _ = state.Update(s, state.BoardsFetched{Boards: []db.DashboardWithWidgets{{ID: 1, Widgets: []db.Widget{{Phase: db.PhaseLoad, Tables: 10}}}}})
 	want := []state.Command{state.SizesFetch{}, state.TrendFetch{Spot: state.Spot{Phase: db.PhaseLoad, Tables: 10}}, state.TrendFetch{Spot: state.Spot{Phase: db.PhaseVet, Tables: 40}}}
 	_, cmds := state.Update(s, state.Changed{Handler: "Uploads.Create"})
-	if !reflect.DeepEqual(cmds, append([]state.Command{state.RunsFetch{Limit: state.RunsLimit}, state.BudgetsFetch{}}, append(want, state.BoardsFetch{})...)) {
+	if !reflect.DeepEqual(cmds, append([]state.Command{state.TagsFetch{}, state.RunsFetch{Limit: state.RunsLimit}, state.BudgetsFetch{}}, append(want, state.BoardsFetch{})...)) {
 		t.Errorf("an upload asked %v", cmds)
 	}
 	_, cmds = state.Update(s, state.Changed{Handler: "Runs.Delete"})
