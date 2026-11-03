@@ -1,8 +1,11 @@
 package volt
 
 import (
+	"bufio"
 	"context"
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -116,4 +119,44 @@ func TestStreamReconnectsAfterServerRestart(t *testing.T) {
 	for range events {
 	}
 	srv.Close()
+}
+
+// TestStreamResumesAcrossABrokerRestart proves a client resuming with an
+// ID from a broker that is gone sees what the new broker published
+// before it reconnected (spec §event-routes): the restarted process
+// counts from 1 again, below the client's Last-Event-ID.
+func TestStreamResumesAcrossABrokerRestart(t *testing.T) {
+	before := NewBroker()
+	for i := range 6 {
+		before.Publish("old", i)
+	}
+	after := NewBroker()
+	after.Publish("created", 1)
+	after.Publish("deleted", 2)
+	srv := httptest.NewServer(EventsHandler(after))
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL, nil)
+	req.Header.Set("Last-Event-ID", "6")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	sc := bufio.NewScanner(resp.Body)
+	var got []string
+	for len(got) < 2 && sc.Scan() {
+		if name, ok := strings.CutPrefix(sc.Text(), "event: "); ok {
+			got = append(got, name)
+		}
+	}
+	if strings.Join(got, " ") != "created deleted" {
+		t.Errorf("resuming at 6 on a restarted broker = %q, want created deleted", got)
+	}
+	ch, stop := after.Subscribe(1)
+	defer stop()
+	if ev := <-ch; ev.ID != 2 {
+		t.Errorf("resuming at 1, an ID this broker assigned, starts at %d, want 2", ev.ID)
+	}
 }

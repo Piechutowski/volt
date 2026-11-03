@@ -179,3 +179,15 @@ func TestZeroChangesetMarksNothing(t *testing.T) {
 		t.Errorf("Set on the zero changeset = %+v, changed %v", set.Row(), set.Changed(entryTitle))
 	}
 }
+
+// TestSetRefusesAColumnTheChangesetLacks proves the zero changeset's
+// leniency stops there: a constructed changeset given an index outside
+// its columns panics rather than dropping the write (spec §changesets).
+func TestSetRefusesAColumnTheChangesetLacks(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("Set with index 99 on a constructed changeset did not panic")
+		}
+	}()
+	Set(NewChangeset(entryDesc), 99, func(r *entry) { r.Title = "hello" })
+}

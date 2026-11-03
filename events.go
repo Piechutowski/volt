@@ -79,11 +79,16 @@ func (b *Broker) Publish(name string, data any) error {
 }
 
 // Subscribe returns a channel of events after the given ID (0 for
-// none), replaying the buffer first, and a cancel to unsubscribe. The
-// channel is closed when the subscriber falls too far behind.
+// none), replaying the buffer first, and a cancel to unsubscribe. An ID
+// this broker never assigned was assigned by an earlier one, before the
+// process restarted, so the whole buffer is replayed. The channel is
+// closed when the subscriber falls too far behind.
 func (b *Broker) Subscribe(after uint64) (<-chan Event, func()) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if after > b.next {
+		after = 0
+	}
 	ch := make(chan Event, b.replay()+64)
 	for _, ev := range b.buffer {
 		if ev.ID > after {

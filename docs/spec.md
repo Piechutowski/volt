@@ -2570,7 +2570,11 @@ for a format suffix.
    `volt.Render`, `volt.RenderStatus`, `volt.Created`, `volt.Reject`
    and `volt.Decode` over the request value's body
    (§requests-and-responses), so a controller route speaks both
-   formats without repeating them.
+   formats without repeating them. A controller route negotiates when
+   it renders, after whatever effects it ran, since its answer may be
+   HTML, a file or a stream that neither format covers; a controller
+   that writes and renders a format calls `volt.Negotiate` before its
+   first effect to keep rule 1's guarantee that a 406 writes nothing.
 5. **Error bodies** are structured: the default error handler writes a
    `volt.Problem` (status, message, and details: check, columns,
    message, when the error itemizes them) in the negotiated format,
@@ -2666,7 +2670,10 @@ scope / [pipe: api] {
    application publishes with `Events.Publish(name, data)`. The
    broker fans every event out to every open stream, assigns IDs in
    order, and keeps a replay buffer so a client that reconnects with
-   `Last-Event-ID` resumes where it was. Events are
+   `Last-Event-ID` resumes where it was. A stream opened without
+   `Last-Event-ID` starts at the oldest event the buffer keeps, and an
+   ID the broker never assigned, one from before the process
+   restarted, replays the whole buffer. Events are
    `text/event-stream` with a JSON payload; a subscriber that falls
    behind is dropped and reconnects.
 3. The generated client's `Events(ctx) <-chan volt.Event` connects,
