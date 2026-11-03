@@ -8,7 +8,8 @@ import (
 
 // TestTimeScans proves a NOT NULL time.Time reads the driver's value, the
 // text SQLite answers for min or max in every layout SQLite or the driver
-// writes, and unix seconds, all in UTC, and refuses NULL, text that is no
+// writes, and unix seconds or milliseconds as the driver tells them, all
+// in UTC, and refuses NULL, text that is no
 // date/time and any other type (spec §go-types).
 func TestTimeScans(t *testing.T) {
 	want := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
@@ -20,6 +21,11 @@ func TestTimeScans(t *testing.T) {
 		if err := (*Time)(&got).Scan(src); err != nil || !got.Equal(want) || got.Location() != time.UTC {
 			t.Errorf("Scan(%v) = %v, %v; want %v in UTC", src, got, err, want)
 		}
+	}
+	ms := want.Add(123 * time.Millisecond)
+	var got time.Time
+	if err := (*Time)(&got).Scan(ms.UnixMilli()); err != nil || !got.Equal(ms) {
+		t.Errorf("Scan(%d) = %v, %v; want unix milliseconds, as the driver reads a column, %v", ms.UnixMilli(), got, err, ms)
 	}
 	for _, src := range []any{nil, "yesterday", "2026-03-01 12:00:00 +0200", 12, 1.5} {
 		var got time.Time
@@ -92,10 +98,10 @@ func TestArgsBoundCanonical(t *testing.T) {
 	if err != nil || v != text {
 		t.Errorf("Some(at).Value() = %v, %v, want %q", v, err, text)
 	}
-	if got := JSONList([]time.Time{at, at.Add(500 * time.Millisecond)}); got != `["2026-03-01 11:00:00","2026-03-01 11:00:00.5"]` {
+	if got := JSONList([]time.Time{at, at.Add(500 * time.Millisecond)}).String(); got != `["2026-03-01 11:00:00","2026-03-01 11:00:00.5"]` {
 		t.Errorf("JSONList(times) = %s", got)
 	}
-	if got := JSONList([]stamp{stamp(at)}); got != `["2026-03-01 11:00:00"]` {
+	if got := JSONList([]stamp{stamp(at)}).String(); got != `["2026-03-01 11:00:00"]` {
 		t.Errorf("JSONList(stamps) = %s", got)
 	}
 }

@@ -12,6 +12,6 @@ table users {
     2, "Bob", null, "inactive", `CURRENT_TIMESTAMP`
     3, "Charlie", null, "pending", "2024-01-15 00:00:00"
     4, "", -5, "pending", "2024-01-15 03:30:00.25"
-    5, "Dora", 15000000000, "active", `uuid_generate_v4()`
+    5, "Dora", 15000000000, "active", `datetime('now', '-1 day')`
   }
 }

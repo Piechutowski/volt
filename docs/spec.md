@@ -982,15 +982,29 @@ such as `state.pending`, is **not** a valid default value.
    `true` or `false` for `bool`; for a declared type (§types), a
    literal of its storage type, so the default of a value set is the
    value as written (`default: "pending"`). An expression literal is accepted on any column and is
-   SQLite's to judge. `[]byte` and `time.Time` columns take only an
-   expression literal. On a `time.Time` column, an expression literal
-   that is one SQL string (`` default: `'2024-01-15 10:30:00'` ``)
-   MUST be the stored form of a `time.Time` (§go-types), as a record
-   value must (§records-sample-data), or it is an error spelling the
-   stored form of the same instant; any other expression is SQLite's
-   to judge, and `CURRENT_TIMESTAMP` and `datetime()` write the stored
-   form. A default that does not fit is an error naming the column
-   and its type.
+   SQLite's to judge, except on a `time.Time` column. `[]byte` and
+   `time.Time` columns take only an expression literal. On a
+   `time.Time` column, a declared type stored as one too, the
+   expression MUST be one SQLite evaluates to the stored form of a
+   `time.Time` (§go-types), so that the row read back binds as the
+   text it holds; parentheses around all of it change nothing, and
+   it is one of:
+   - `CURRENT_TIMESTAMP` or `NULL`, in any case;
+   - one `datetime(...)` call none of whose string arguments is the
+     modifier `'subsec'`, which writes three fractional digits, or
+     `'localtime'` or `'utc'`, which shift the instant by the
+     server's zone (`` `datetime('now', '+1 day')` ``);
+   - one SQL string (`` default: `'2024-01-15 10:30:00'` ``) that is
+     the stored form, as a record value must be
+     (§records-sample-data); other date/time text in it is an error
+     spelling the stored form of the same instant.
+   Any other expression, such as `strftime(...)`, `julianday()`,
+   `unixepoch()`, `date()` or a concatenation, is an error naming the
+   accepted forms: SQLite writes text in another form, a number Volt
+   does not compare as an instant, or a value Volt cannot read. A
+   sub-second instant is set from Go by the write itself, whose
+   binding trims the fraction (§go-types). A default that does not fit is an
+   error naming the column and its type.
 2. **NULL has one spelling.** `null` is not a default value: a column
    that carries `null` and has no `default:` is NULL when a write
    leaves it out, so `default: null` would only say that twice and is
@@ -1511,9 +1525,12 @@ record value    = string
    date alone or a fraction with trailing zeros, is an error whose
    message spells the stored form of the same instant; the checker
    refuses rather than rewrites it, so the source shows the text the
-   database holds. An expression literal that is one SQL string
-   (`` `'2024-01-15 10:30:00'` ``) on such a column is held to the
-   same form; any other expression is SQLite's to judge. A bare identifier other than `true`, `false` and `null`, and
+   database holds. An expression literal on such a column is held to
+   the expressions a `time.Time` default is (§default-values):
+   `CURRENT_TIMESTAMP`, `NULL`, a `datetime(...)` call without the
+   `'subsec'`, `'localtime'` or `'utc'` modifier, or a SQL string
+   (`` `'2024-01-15 10:30:00'` ``) of the same form, parentheses or
+   not; any other expression is an error. A bare identifier other than `true`, `false` and `null`, and
    a dotted name, is **not** a value. A value that does not fit is an
    error naming the column and its type.
 5. **No empty field.** Every field of a row holds a value: NULL is
@@ -4576,8 +4593,12 @@ seconds without their trailing zeros only when the fraction is not
 zero (`2026-11-03 05:18:49`, `2026-11-03 05:18:49.5`). In Go it is
 `t.UTC().Format("2006-01-02 15:04:05.999999999")`, the layout
 `rt.TimeLayout`, written by `rt.TimeText`. It is the text
-`CURRENT_TIMESTAMP` and `datetime()` write, so a default, a value
-written from Go and a value read back and bound again are one text;
+`CURRENT_TIMESTAMP` and `datetime()` write, whole seconds; it is not
+what `datetime(..., 'subsec')` and `strftime('%f')` write, which is
+always three fractional digits (`12:00:00.000`, `12:00:00.120`), so a
+default or record value is held to the expressions that write it
+(§default-values). A default, a value written from Go and a value read
+back and bound again are therefore one text;
 and since every value spells its seconds in the same width and a
 shorter fraction sorts before a longer one, text order is instant
 order. Equality, the ordering comparisons, `in` and list parameters,
@@ -4596,9 +4617,15 @@ valid `rt.Null[time.Time]` binds as that text itself, a declared type
 stored as `time.Time` through its own `Value` and then as that text,
 and every item of a list parameter or an `InList` travels in the JSON
 array as that text (`rt.JSONList`, §predicates). A year outside 0000
-to 9999, past which SQLite's date functions and the text order end,
-is an error: the statement fails without running, and `rt.JSONList`
-panics, as it does when an item's `Value` fails.
+to 9999 in UTC, past which SQLite's date functions and the text order
+end, is an error, the same one on every path: the statement returns
+it without running, an `In` item, a list parameter, an `InList` and
+the parent keys of a `with` alike (`rt.JSONList` returns an
+`rt.List` that carries the error to the statement instead of
+panicking, as it does for an item whose `Value` fails), whether the
+value came from Go or was read back from a row. A query parameter
+outside those years, such as `9999-12-31T23:00:00-05:00`, which is
+year 10000 in UTC, is a 400 naming the parameter (§query-routes).
 
 A value reads back in UTC. A NOT NULL `time.Time` field, of a model or
 of a select's row, scans through `(*rt.Time)(&v.At)`, and
@@ -4607,21 +4634,35 @@ a declared column; for `min` or `max` of one, which carries no
 declared type for the driver to convert by (§selects-over-groups),
 SQLite's text in any layout SQLite or the driver writes (a `T` or a
 space, a trailing `Z` or an offset, with or without seconds, or a
-date alone) and integer unix seconds (`unixepoch()`). NULL in a NOT
+date alone) and an integer as the driver reads one from a declared
+column, unix seconds, or unix milliseconds when its magnitude passes
+10^12, so a column and `min` of it read one row alike. NULL in a NOT
 NULL field, text in no such layout and any other value are errors.
 
-Two limits remain. The sqlite3 driver converts a `TIMESTAMP` column
-itself and reads text it cannot parse as the zero `time.Time`,
-without any other sign, so such text in a declared column reads as
-`0001-01-01 00:00:00`, which is also a value Volt can store, and Volt
-cannot refuse it there; `min` and `max` of the column refuse it. A
-row stored in another form, by older code that bound a `time.Time`
+Two limits remain. The sqlite3 driver converts a column declared
+`TIMESTAMP` itself and reads text it cannot parse as the zero
+`time.Time`, without any other sign, so such text in a declared
+column reads as `0001-01-01 00:00:00`, which is also a value Volt can
+store, and Volt cannot refuse it there; `min` and `max` of the
+column refuse it. The limit is Volt's choice of DDL spelling
+(§mapping-to-sqlite-ddl), not SQLite's: every generated read scans
+through `rt.Time`, which refuses such text, so a spelling the driver
+does not convert would make the refusal reliable, but it would also
+take the `time.Time` away from code that reads the column through
+`database/sql` itself, and only SQL written by hand stores such text.
+A row stored in another form, by older code that bound a `time.Time`
 with its offset (`2026-03-01 14:00:00+02:00`) or by SQL written by
 hand, reads back as its instant in UTC, but SQLite compares only the
 stored text: such a row does not equal its own read-back value, and
 it orders among canonical rows by its text. Volt generates no
-migration for such rows; reading one and writing its value back
-stores the canonical form.
+migration for such rows. In a column that is no key, reading the row
+and writing its value back (`Update` with the field set, or
+`UpdateWhere` with a `Set`) stores the canonical form. A key column,
+and a foreign key that references one, is out of the generated API's
+reach: every key path binds the canonical text, so `Get`, `Update`
+and `Delete` by the read-back key find no row, and only a statement
+written by hand rewrites it (`UPDATE batches SET opened_at =
+datetime(opened_at)` for whole seconds, its children's keys alike).
 
 ### Nullability
 
@@ -4865,7 +4906,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | `int`, `bool` | `INTEGER` (booleans stored 0/1; `true`/`false` in records and defaults become 1/0) |
 | `float64` | `REAL` |
 | `string` | `TEXT` |
-| `time.Time` | `TIMESTAMP`, holding the stored form of §go-types, SQLite's datetime text in UTC (the DDL spelling is what the sqlite3 driver keys its time conversion on) |
+| `time.Time` | `TIMESTAMP`, holding the stored form of §go-types, SQLite's datetime text in UTC (the sqlite3 driver keys its time conversion on this spelling, so code reading the column through `database/sql` itself gets a `time.Time`; Volt's own reads parse through `rt.Time` and need no conversion, and the price, text the driver cannot parse reading as the zero time, is the limit §go-types states) |
 | `[]byte` | `BLOB` |
 | declared `type` (§types) | the column type of its storage type; a value set (§types) carries no `CHECK`, its values are the Go constants |
 | backtick expressions | verbatim; parenthesized in `DEFAULT` as SQLite requires |

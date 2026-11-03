@@ -1,8 +1,11 @@
 package check
 
 import (
+	"database/sql"
 	"testing"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // TestTimeTextCanonicalIsTheStoredForm proves a time.Time default or
@@ -49,6 +52,73 @@ func TestSQLStringOf(t *testing.T) {
 	for _, expr := range []string{"CURRENT_TIMESTAMP", "datetime('now')", "'a' || 'b'", "'", "'a'b'"} {
 		if got, ok := sqlStringOf(expr); ok {
 			t.Errorf("sqlStringOf(%s) = %q, want no string", expr, got)
+		}
+	}
+}
+
+// TestTimeExprStored proves which expression literals a time.Time default
+// or record value may be: those SQLite evaluates to the stored form, and
+// none that writes another form, another zone or another type (spec
+// §default-values). TestTimeExprStoredOnSQLite runs them on SQLite.
+func TestTimeExprStored(t *testing.T) {
+	for _, e := range timeExprsStored {
+		if !timeExprStored(sqlUnparen(e)) {
+			t.Errorf("%s is refused, but SQLite writes the stored form", e)
+		}
+	}
+	for _, e := range timeExprsNotStored {
+		if timeExprStored(sqlUnparen(e)) {
+			t.Errorf("%s is accepted, but SQLite does not write the stored form", e)
+		}
+	}
+}
+
+var timeExprsStored = []string{
+	"CURRENT_TIMESTAMP", "current_timestamp", "(CURRENT_TIMESTAMP)", "datetime('now')", "DATETIME('now', '+1 day')",
+	"datetime ('now', 'start of day')", "datetime(1700000000, 'unixepoch')", "datetime('2024-01-15T12:30:00+02:00')",
+	"((datetime('now', '-' || 7 || ' days')))", "datetime('2026-03-01 12:00:00.120')",
+}
+
+var timeExprsNotStored = []string{
+	"datetime('now', 'subsec')", "datetime('now', ' SUBSEC ')", "datetime('2026-03-01 12:00:00', 'subsec')",
+	"strftime('%Y-%m-%d %H:%M:%f', 'now')", "julianday('now')", "unixepoch()",
+	"datetime('now', 'localtime')", "datetime('2024-01-15 10:00:00', 'utc')", "datetime('now') || ''", "date('now')",
+	"CURRENT_DATE", "time('now')", "datetime", "datetimes('now')", "(datetime('now')) || (datetime('now'))",
+}
+
+// TestTimeExprStoredOnSQLite proves on SQLite that every accepted
+// expression writes the stored form, and that the refused ones whose
+// result does not hang on the clock or the server's zone write another
+// form or another type (spec §default-values).
+func TestTimeExprStoredOnSQLite(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, e := range timeExprsStored {
+		var v any
+		if err := db.QueryRow("SELECT " + e).Scan(&v); err != nil {
+			t.Fatalf("%s: %v", e, err)
+		}
+		s, ok := v.(string)
+		if canon, isTime := timeTextCanonical(s); !ok || !isTime || canon != s {
+			t.Errorf("%s writes %#v, not the stored form", e, v)
+		}
+	}
+	for _, e := range []string{
+		"datetime('2026-03-01 12:00:00.120', 'subsec')", "datetime('2026-03-01 12:00:00', 'subsec')",
+		"strftime('%Y-%m-%d %H:%M:%f', '2026-03-01 12:00:00')", "julianday('2026-03-01')", "unixepoch('2026-03-01')",
+		"date('2026-03-01')",
+	} {
+		var v any
+		if err := db.QueryRow("SELECT " + e).Scan(&v); err != nil {
+			t.Fatalf("%s: %v", e, err)
+		}
+		if s, ok := v.(string); ok {
+			if canon, isTime := timeTextCanonical(s); isTime && canon == s {
+				t.Errorf("%s writes the stored form %q, but the checker refuses it", e, s)
+			}
 		}
 	}
 }

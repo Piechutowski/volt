@@ -34,8 +34,8 @@ func TimeText(t time.Time) (string, error) {
 type Time time.Time
 
 // Scan reads a time.Time, text in a layout SQLite or a driver writes,
-// or integer unix seconds, always in UTC; NULL, any other text and any
-// other type are errors.
+// or an integer as timeOfUnix reads it, always in UTC; NULL, any other
+// text and any other type are errors.
 func (t *Time) Scan(src any) error {
 	var text string
 	switch v := src.(type) {
@@ -43,7 +43,7 @@ func (t *Time) Scan(src any) error {
 		*t = Time(v.UTC())
 		return nil
 	case int64:
-		*t = Time(time.Unix(v, 0).UTC())
+		*t = Time(timeOfUnix(v))
 		return nil
 	case string:
 		text = v
@@ -60,6 +60,17 @@ func (t *Time) Scan(src any) error {
 	}
 	*t = Time(parsed)
 	return nil
+}
+
+// timeOfUnix is an integer time as the sqlite3 driver reads one from a
+// declared TIMESTAMP column, so that min and max of a column read its
+// rows as the column does (spec §go-types): unix seconds, or unix
+// milliseconds when its magnitude passes 10^12, too large for seconds.
+func timeOfUnix(v int64) time.Time {
+	if v > 1e12 || v < -1e12 {
+		return time.Unix(v/1000, v%1000*int64(time.Millisecond)).UTC()
+	}
+	return time.Unix(v, 0).UTC()
 }
 
 func timeOfText(text string) (time.Time, error) {
@@ -112,10 +123,14 @@ func timeBound(v any) (string, bool, error) {
 // time.Time, and every driver.Valuer whose value is one, as its TimeText,
 // so SQLite's min, max, where, order and date functions read the form
 // CURRENT_TIMESTAMP writes (spec §go-types). It copies only when an
-// argument changes, and a time outside TimeText's years is an error.
+// argument changes; a time outside TimeText's years, and a List that
+// could not be encoded, are errors.
 func ArgsBound(args []any) ([]any, error) {
 	var out []any
 	for i, a := range args {
+		if l, ok := a.(List); ok && l.err != nil {
+			return nil, l.err
+		}
 		s, ok, err := timeBound(a)
 		if err != nil {
 			return nil, err

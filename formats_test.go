@@ -169,6 +169,10 @@ func TestQueryBinding(t *testing.T) {
 	if _, err := QueryParam[int](r, "site"); err == nil || !strings.Contains(err.Error(), "site") {
 		t.Errorf("unparseable scalar should be a 400 naming it: %v", err)
 	}
+	far := requestOf(httptest.NewRequest("GET", "/x?at=9999-12-31T23:00:00-05:00", nil))
+	if _, err := QueryParams[time.Time](far, "at"); err == nil || !strings.Contains(err.Error(), "at") {
+		t.Errorf("a time past 9999 in UTC should be a 400 naming it: %v", err)
+	}
 
 	rec := serve(t, func(r Request) Response {
 		_, err := QueryParam[int](r, "n")

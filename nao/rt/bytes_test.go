@@ -243,7 +243,7 @@ func TestDynamicLayerBindsBytes(t *testing.T) {
 	if v, err := driver.DefaultParameterConverter.ConvertValue(args[4]); err != nil || !bytesIs(v, "hi") {
 		t.Errorf("InList item pngBlob(hi) binds %#v, %v", v, err)
 	}
-	if args[5] != "[]" {
+	if v, err := driver.DefaultParameterConverter.ConvertValue(args[5]); err != nil || v != "[]" {
 		t.Errorf("an empty InList binds %#v; want the empty JSON array, which matches no row", args[5])
 	}
 }

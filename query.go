@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // QueryValue is the set of Go types a query-string parameter can carry: the
@@ -15,8 +17,9 @@ type QueryValue interface {
 }
 
 // QueryParam binds one scalar parameter from the query string by name, as a
-// generated query route does (§query-routes). A missing or unparseable value is
-// a 400 naming the parameter.
+// generated query route does (§query-routes). A missing or unparseable value,
+// a time.Time outside the years Volt stores (§go-types) included, is a 400
+// naming the parameter.
 func QueryParam[T QueryValue](r Request, name string) (T, error) {
 	var v T
 	vals, ok := r.Query()[name]
@@ -59,7 +62,9 @@ func parseQuery(s string, dst any) error {
 	case *float64:
 		*d, err = strconv.ParseFloat(s, 64)
 	case *time.Time:
-		*d, err = time.Parse(time.RFC3339, s)
+		if *d, err = time.Parse(time.RFC3339, s); err == nil {
+			_, err = rt.TimeText(*d)
+		}
 	default:
 		return fmt.Errorf("unsupported parameter type %T", dst)
 	}

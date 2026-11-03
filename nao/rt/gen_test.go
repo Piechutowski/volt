@@ -29,7 +29,7 @@ func TestGenConstructorsMatchTypedHandles(t *testing.T) {
 		{"ltcol", id.LtCol(parent), func() (GenPred, error) { return PredColCmp("id", "<", "parent_id") }},
 		{"in", id.In(1, 2), func() (GenPred, error) { return PredIn("id", int64(1), int64(2)), nil }},
 		{"in empty", id.In(), func() (GenPred, error) { return PredIn("id"), nil }},
-		{"inlist", id.InList([]int64{1, 2}), func() (GenPred, error) { return PredInList("id", "[1,2]"), nil }},
+		{"inlist", id.InList([]int64{1, 2}), func() (GenPred, error) { return PredInList("id", JSONList([]int64{1, 2})), nil }},
 		{"like", email.Like("%a"), func() (GenPred, error) { return PredLike("email", "%a"), nil }},
 		{"isnull", bio.IsNull(), func() (GenPred, error) { return PredNull("bio"), nil }},
 		{"isnotnull", bio.IsNotNull(), func() (GenPred, error) { return PredNotNull("bio"), nil }},

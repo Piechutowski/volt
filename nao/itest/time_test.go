@@ -6,6 +6,8 @@ package itest
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -150,8 +152,9 @@ func TestTimeMinMaxAndDateFunctions(t *testing.T) {
 }
 
 // TestTimeReadsOtherForms proves Volt reads a row older code stored with
-// an offset, and unix seconds, as their instants in UTC, but compares
-// only the canonical text (spec §go-types).
+// an offset, and unix seconds or milliseconds, as their instants in UTC,
+// a column and min of it alike, but compares only the canonical text
+// (spec §go-types).
 func TestTimeReadsOtherForms(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -179,6 +182,20 @@ func TestTimeReadsOtherForms(t *testing.T) {
 		if !r.First.Equal(want) {
 			t.Errorf("min of %s = %v, want %v", r.Name, r.First, want)
 		}
+	}
+	if _, err := db.Pool().Exec(`INSERT INTO users (email, name, created_at) VALUES ('c@example.com', 'Cid', 1772366400123)`); err != nil {
+		t.Fatal(err)
+	}
+	cid, err := run.Run(ctx, db, UserGetByEmail("c@example.com"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ms := want.Add(123 * time.Millisecond); !cid.CreatedAt.Equal(ms) {
+		t.Errorf("a column of unix milliseconds reads %v, want %v", cid.CreatedAt, ms)
+	}
+	rows, err = run.Run(ctx, db, UserJoined())
+	if err != nil || len(rows) != 3 || !rows[2].First.Equal(cid.CreatedAt) {
+		t.Errorf("min of unix milliseconds = %+v, %v; want %v, as the column reads it", rows, err, cid.CreatedAt)
 	}
 	if _, err := db.Pool().Exec(`UPDATE users SET created_at = 'yesterday' WHERE name = 'Ann'`); err != nil {
 		t.Fatal(err)
@@ -242,5 +259,66 @@ func TestTimeKeys(t *testing.T) {
 	}
 	if n, err := run.Run(ctx, db, BatchDelete(keys[2])); err != nil || n != 1 {
 		t.Errorf("Delete(last key) = %d, %v", n, err)
+	}
+}
+
+// TestTimeOutsideTheYearsIsAnError proves a time past 9999 in UTC, which
+// RFC 3339 query input such as 9999-12-31T23:00:00-05:00 parses to, fails
+// its statement with an error on every bind path, list parameters, InList
+// and the keys of a with included, and never panics (spec §go-types).
+func TestTimeOutsideTheYearsIsAnError(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	at, err := time.Parse(time.RFC3339, "9999-12-31T23:00:00-05:00")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, q := range map[string]rt.Query[User]{
+		"In":     UserQuery(UserCreatedAt.In(at)),
+		"InList": UserQuery(UserCreatedAt.InList([]time.Time{at})),
+		"list":   UserStamped([]time.Time{at}),
+	} {
+		if _, err := run.Run(ctx, db, q); err == nil || !strings.Contains(err.Error(), "0000 to 9999") {
+			t.Errorf("%s over year 10000 = %v, want the years error", name, err)
+		}
+	}
+	if _, err := db.Pool().Exec(`INSERT INTO batches (opened_at) VALUES (253402300800)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run.Run(ctx, db, BatchTrail()); err == nil || !strings.Contains(err.Error(), "0000 to 9999") {
+		t.Errorf("a with over a stored key of year 10000 = %v, want the years error", err)
+	}
+}
+
+// TestTimeOffsetKeysAreOutOfReach proves the limit §go-types states for
+// rows older code stored with an offset: a non-key column is repaired by
+// writing its read-back value, but the generated key paths bind the
+// canonical text and do not reach a row whose key is in another form.
+func TestTimeOffsetKeysAreOutOfReach(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := db.Pool().Exec(`INSERT INTO batches (opened_at, label) VALUES ('2026-03-01 14:00:00+02:00', 'old')`); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := run.Run(ctx, db, BatchList())
+	if err != nil || len(listed) != 1 {
+		t.Fatalf("BatchList = %+v, %v", listed, err)
+	}
+	if _, err := run.Run(ctx, db, BatchGet(listed[0].OpenedAt)); !errors.Is(err, rt.ErrNotFound) {
+		t.Errorf("Get(read-back offset key) = %v, want no row", err)
+	}
+	if _, err := db.Pool().Exec(`INSERT INTO users (email, name, created_at) VALUES ('a@example.com', 'Ann', '2026-03-01 14:00:00+02:00')`); err != nil {
+		t.Fatal(err)
+	}
+	ann, err := run.Run(ctx, db, UserGetByEmail("a@example.com"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run.Run(ctx, db, UserUpdate(ann.Changeset().CreatedAtSet(ann.CreatedAt))); err != nil {
+		t.Fatal(err)
+	}
+	var stored string
+	if err := db.Pool().QueryRow(`SELECT CAST(created_at AS TEXT) FROM users`).Scan(&stored); err != nil || stored != "2026-03-01 12:00:00" {
+		t.Errorf("a rewritten non-key column holds %q, %v; want the stored form", stored, err)
 	}
 }

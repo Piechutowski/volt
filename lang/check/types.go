@@ -330,8 +330,8 @@ func (c *checker) valueTypeCheck(cd *ColumnDef, v ast.Node, section, what string
 	name := cd.Col.Name.Name()
 	typ := cd.Col.Type.String()
 	if expr, ok := v.(*ast.FuncExpr); ok {
-		if text, isString := sqlStringOf(strings.TrimSpace(expr.Text())); isString && cd.Type.Storage == "time.Time" {
-			c.timeTextCheck(cd, v, text, section, what, " a SQL string of")
+		if cd.Type.Storage == "time.Time" {
+			c.timeExprCheck(cd, v, expr.Text(), section, what)
 		}
 		return
 	}
@@ -384,6 +384,105 @@ func (c *checker) timeTextCheck(cd *ColumnDef, v ast.Node, text, section, what, 
 		return
 	}
 	c.errorf(v.Pos(), section, "%s %q (%s) must be%s SQLite's canonical UTC date/time text, %q, found %q (§%s)", what, name, typ, sqlString, canon, text, section)
+}
+
+// timeExprCheck enforces that an expression literal a time.Time default
+// or record value writes is one SQLite evaluates to the stored form of a
+// time.Time (spec §go-types): a SQL string of that text, CURRENT_TIMESTAMP,
+// or datetime() without a modifier that changes its form or its zone.
+func (c *checker) timeExprCheck(cd *ColumnDef, v ast.Node, expr, section, what string) {
+	e := sqlUnparen(strings.TrimSpace(expr))
+	if text, isString := sqlStringOf(e); isString {
+		c.timeTextCheck(cd, v, text, section, what, " a SQL string of")
+		return
+	}
+	if timeExprStored(e) {
+		return
+	}
+	c.errorf(v.Pos(), section, "%s %q (%s) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `%s` (§%s)", what, cd.Col.Name.Name(), cd.Col.Type.String(), strings.TrimSpace(expr), section)
+}
+
+// timeExprStored reports whether e, unparenthesized, is an expression
+// SQLite evaluates to the stored form of a time.Time or to NULL:
+// CURRENT_TIMESTAMP, NULL, or one datetime() call none of whose string
+// arguments is the 'subsec' modifier, which writes three fractional
+// digits, or 'localtime' or 'utc', which shift the instant by the
+// server's zone (spec §default-values).
+func timeExprStored(e string) bool {
+	switch strings.ToUpper(e) {
+	case "CURRENT_TIMESTAMP", "NULL":
+		return true
+	}
+	const fn = "datetime"
+	if len(e) < len(fn) || !strings.EqualFold(e[:len(fn)], fn) {
+		return false
+	}
+	rest := strings.TrimLeft(e[len(fn):], " \t\n")
+	if rest == "" || rest[0] != '(' || sqlParenEnd(rest) != len(rest)-1 {
+		return false
+	}
+	for _, arg := range sqlStringsIn(rest) {
+		switch strings.ToLower(strings.TrimSpace(arg)) {
+		case "subsec", "localtime", "utc":
+			return false
+		}
+	}
+	return true
+}
+
+// sqlUnparen is e without the parentheses that enclose all of it, which
+// change nothing SQLite evaluates.
+func sqlUnparen(e string) string {
+	for len(e) > 1 && e[0] == '(' && sqlParenEnd(e) == len(e)-1 {
+		e = strings.TrimSpace(e[1 : len(e)-1])
+	}
+	return e
+}
+
+// sqlParenEnd is the index of the parenthesis that closes the one e
+// starts with, skipping SQL strings and quoted identifiers, or -1.
+func sqlParenEnd(e string) int {
+	depth := 0
+	for i := 0; i < len(e); i++ {
+		switch e[i] {
+		case '\'', '"', '`':
+			q := e[i]
+			for i++; i < len(e) && e[i] != q; i++ {
+			}
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// sqlStringsIn is the value of every SQL string literal in e.
+func sqlStringsIn(e string) []string {
+	var out []string
+	for i := 0; i < len(e); i++ {
+		if e[i] != '\'' {
+			continue
+		}
+		var b strings.Builder
+		for i++; i < len(e); i++ {
+			if e[i] == '\'' {
+				if i+1 < len(e) && e[i+1] == '\'' {
+					b.WriteByte('\'')
+					i++
+					continue
+				}
+				break
+			}
+			b.WriteByte(e[i])
+		}
+		out = append(out, b.String())
+	}
+	return out
 }
 
 // timeTextCanonical is the stored form of the instant s names (spec
