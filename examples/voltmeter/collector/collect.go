@@ -10,7 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Piechutowski/volt"
@@ -105,14 +107,39 @@ func RepoFind(dir string) (string, error) {
 // Collect runs one collection: the sweep and the keystroke benchmark
 // on this machine, the upload, the thesis counts of the history, then
 // cfg.Samples timed calls of every read route, stored as the run's
-// samples. log reports progress and may be nil.
+// samples. It first asks the server who cfg.User is, so a wrong server
+// or member fails before the sweep's minutes are spent, and refuses a
+// binary built at another commit than the repository's (BuildCheck).
+// The run records the full sha, the form the thesis commits are stored
+// in. log reports progress and may be nil.
 func Collect(ctx context.Context, cfg Config, log func(format string, args ...any)) (Collected, error) {
 	if log == nil {
 		log = func(string, ...any) {}
 	}
 	var out Collected
+	c := ClientNew(cfg.Server, cfg.User)
+	var who db.User
+	if err := replyExpect(c.APIMeWho(ctx))(http.StatusOK, &who); err != nil {
+		return out, fmt.Errorf("the server does not take member %d's numbers, so nothing was measured: %w", cfg.User, err)
+	}
 	out.Machine = perfsweep.Info(cfg.Repo)
-	log("%s, %d cores, %s, %s, commit %s", out.Machine.CPU, out.Machine.Cores, out.Machine.OS, out.Machine.Go, out.Machine.Commit)
+	if out.Machine.Commit != "unknown" {
+		head, err := git(ctx, cfg.Repo, nil, "rev-parse", "HEAD")
+		if err != nil {
+			return out, err
+		}
+		_, dirty := strings.CutSuffix(out.Machine.Commit, "+dirty")
+		out.Machine.Commit = strings.TrimSpace(string(head))
+		if info, ok := debug.ReadBuildInfo(); ok {
+			if err := BuildCheck(info.Settings, out.Machine.Commit, dirty); err != nil {
+				return out, err
+			}
+		}
+		if dirty {
+			out.Machine.Commit += "+dirty"
+		}
+	}
+	log("%s, %d cores, %s, %s, commit %s, storing as %s", out.Machine.CPU, out.Machine.Cores, out.Machine.OS, out.Machine.Go, out.Machine.Commit, who.Email)
 	dir := cfg.Out
 	if dir == "" {
 		tmp, err := os.MkdirTemp("", "voltmeter-sweep-")
@@ -135,8 +162,7 @@ func Collect(ctx context.Context, cfg Config, log func(format string, args ...an
 	if out.Upload, err = UploadOf(out.Machine, out.Rows, out.Keystrokes, cfg.Tag, cfg.Note, cfg.Baseline); err != nil {
 		return out, err
 	}
-	c := ClientNew(cfg.Server, cfg.User)
-	if err := expect(c.APIUpload(ctx, out.Upload))(http.StatusCreated, &out.Stored); err != nil {
+	if err := replyExpect(c.APIUpload(ctx, out.Upload))(http.StatusCreated, &out.Stored); err != nil {
 		return out, fmt.Errorf("upload: %w", err)
 	}
 	log("stored run %d on machine %d with %d breach(es)", out.Stored.Run.ID, out.Stored.Run.MachineID, len(out.Stored.Breaches))
@@ -146,7 +172,7 @@ func Collect(ctx context.Context, cfg Config, log func(format string, args ...an
 			return out, err
 		}
 		if len(out.Thesis.Commits) > 0 {
-			if err := expect(c.APIThesisRecord(ctx, out.Thesis))(0, &out.ThesisStored); err != nil {
+			if err := replyExpect(c.APIThesisRecord(ctx, out.Thesis))(0, &out.ThesisStored); err != nil {
 				return out, fmt.Errorf("thesis: %w", err)
 			}
 		}
@@ -170,7 +196,7 @@ func Collect(ctx context.Context, cfg Config, log func(format string, args ...an
 		}
 		for _, batch := range SamplesBatched(out.Samples, 1000) {
 			var stored wire.Stored
-			if err := expect(c.APISamplesRecord(ctx, out.Stored.Run.ID, batch))(http.StatusCreated, &stored); err != nil {
+			if err := replyExpect(c.APISamplesRecord(ctx, out.Stored.Run.ID, batch))(http.StatusCreated, &stored); err != nil {
 				return out, fmt.Errorf("samples: %w", err)
 			}
 		}
@@ -179,7 +205,7 @@ func Collect(ctx context.Context, cfg Config, log func(format string, args ...an
 	return out, nil
 }
 
-func expect(resp *http.Response, err error) func(status int, out any) error {
+func replyExpect(resp *http.Response, err error) func(status int, out any) error {
 	return func(status int, out any) error {
 		if err != nil {
 			return err
@@ -209,14 +235,14 @@ func targetsFind(ctx context.Context, c *client.Client, cfg Config, run db.Run) 
 		t.Fixture = cfg.Fixtures[0]
 	}
 	var boards []db.DashboardWithWidgets
-	if err := expect(c.APIMeDashboards(ctx))(http.StatusOK, &boards); err != nil {
+	if err := replyExpect(c.APIMeDashboards(ctx))(http.StatusOK, &boards); err != nil {
 		return t, err
 	}
 	if len(boards) > 0 {
 		t.Board = boards[0].ID
 	}
 	var budgets []db.Budget
-	if err := expect(c.APIBudgets(ctx))(http.StatusOK, &budgets); err != nil {
+	if err := replyExpect(c.APIBudgets(ctx))(http.StatusOK, &budgets); err != nil {
 		return t, err
 	}
 	if len(budgets) > 0 {

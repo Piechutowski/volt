@@ -82,3 +82,40 @@ func MillisMeasured(ms units.Millis) error {
 	}
 	return nil
 }
+
+// TablesCounted refuses a size below one table (spec §validators): the
+// sweep never measures an empty project.
+func TablesCounted(tables int) error {
+	if tables < 1 {
+		return fmt.Errorf("%d tables is not a size the sweep measures", tables)
+	}
+	return nil
+}
+
+// AllocsCounted refuses a negative allocation count (spec §validators).
+func AllocsCounted(allocs int) error {
+	if allocs < 0 {
+		return fmt.Errorf("%d allocations is negative", allocs)
+	}
+	return nil
+}
+
+// KeystrokeSane refuses a negative cost per keystroke (spec §validators).
+func KeystrokeSane(msPerOp, mbPerOp float64, allocsPerOp int) error {
+	if msPerOp < 0 || mbPerOp < 0 || allocsPerOp < 0 {
+		return errors.New("a keystroke's time, bytes and allocations are never negative")
+	}
+	return nil
+}
+
+// SampleSane refuses a timed call no HTTP exchange produces (spec
+// §validators): a status outside 100 to 599 or a negative duration.
+func SampleSane(status int, ms float64) error {
+	if status < 100 || status > 599 {
+		return fmt.Errorf("%d is not an HTTP status", status)
+	}
+	if ms < 0 {
+		return fmt.Errorf("a call cannot take %v ms", ms)
+	}
+	return nil
+}

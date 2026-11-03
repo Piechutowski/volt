@@ -27,6 +27,8 @@ table_partial measured {
 
   validators {
     MillisMeasured(wall_ms)
+    TablesCounted(tables)
+    AllocsCounted(allocs)
   }
 }
 
@@ -121,6 +123,11 @@ table keystrokes [note: "The language server's keystroke benchmark at one size."
   ms_per_op     float64
   mb_per_op     float64
   allocs_per_op int
+
+  validators {
+    TablesCounted(tables)
+    KeystrokeSane(ms_per_op, mb_per_op, allocs_per_op)
+  }
 }
 
 ref: keystrokes.run_id > runs.id [delete: cascade]
@@ -149,13 +156,17 @@ ref: line_counts.sha > commits.sha [delete: cascade, as: commit]
 table samples [note: "One timed call of a Voltmeter route by the collector."] {
   id     int     [pk]
   run_id int
-  route  string
+  route  string  [required]
   status int
   ms     float64
   at     int     [note: "Unix milliseconds when the call started"]
 
   indexes {
     (route, at) [name: "idx_samples_failures", where: `status >= 400`]
+  }
+
+  validators {
+    SampleSane(status, ms)
   }
 }
 

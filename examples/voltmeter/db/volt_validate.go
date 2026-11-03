@@ -44,6 +44,12 @@ func (c MsLoadChangeset) Validate() MsLoadChangeset {
 	if voltErr := MillisMeasured(voltV.WallMs); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "MillisMeasured", Columns: []string{"wall_ms"}, Message: voltErr.Error()})
 	}
+	if voltErr := TablesCounted(voltV.Tables); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "TablesCounted", Columns: []string{"tables"}, Message: voltErr.Error()})
+	}
+	if voltErr := AllocsCounted(voltV.Allocs); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "AllocsCounted", Columns: []string{"allocs"}, Message: voltErr.Error()})
+	}
 	return MsLoadChangeset{c.WithFindings(voltErrs)}
 }
 
@@ -52,6 +58,12 @@ func (c MsCheckChangeset) Validate() MsCheckChangeset {
 	var voltErrs []rt.FieldError
 	if voltErr := MillisMeasured(voltV.WallMs); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "MillisMeasured", Columns: []string{"wall_ms"}, Message: voltErr.Error()})
+	}
+	if voltErr := TablesCounted(voltV.Tables); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "TablesCounted", Columns: []string{"tables"}, Message: voltErr.Error()})
+	}
+	if voltErr := AllocsCounted(voltV.Allocs); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "AllocsCounted", Columns: []string{"allocs"}, Message: voltErr.Error()})
 	}
 	return MsCheckChangeset{c.WithFindings(voltErrs)}
 }
@@ -62,6 +74,12 @@ func (c MsVetChangeset) Validate() MsVetChangeset {
 	if voltErr := MillisMeasured(voltV.WallMs); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "MillisMeasured", Columns: []string{"wall_ms"}, Message: voltErr.Error()})
 	}
+	if voltErr := TablesCounted(voltV.Tables); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "TablesCounted", Columns: []string{"tables"}, Message: voltErr.Error()})
+	}
+	if voltErr := AllocsCounted(voltV.Allocs); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "AllocsCounted", Columns: []string{"allocs"}, Message: voltErr.Error()})
+	}
 	return MsVetChangeset{c.WithFindings(voltErrs)}
 }
 
@@ -71,11 +89,25 @@ func (c MsGenerateChangeset) Validate() MsGenerateChangeset {
 	if voltErr := MillisMeasured(voltV.WallMs); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "MillisMeasured", Columns: []string{"wall_ms"}, Message: voltErr.Error()})
 	}
+	if voltErr := TablesCounted(voltV.Tables); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "TablesCounted", Columns: []string{"tables"}, Message: voltErr.Error()})
+	}
+	if voltErr := AllocsCounted(voltV.Allocs); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "AllocsCounted", Columns: []string{"allocs"}, Message: voltErr.Error()})
+	}
 	return MsGenerateChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c KeystrokeChangeset) Validate() KeystrokeChangeset {
-	return KeystrokeChangeset{c.WithFindings(nil)}
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if voltErr := TablesCounted(voltV.Tables); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "TablesCounted", Columns: []string{"tables"}, Message: voltErr.Error()})
+	}
+	if voltErr := KeystrokeSane(voltV.MsPerOp, voltV.MbPerOp, voltV.AllocsPerOp); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "KeystrokeSane", Columns: []string{"ms_per_op", "mb_per_op", "allocs_per_op"}, Message: voltErr.Error()})
+	}
+	return KeystrokeChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c CommitChangeset) Validate() CommitChangeset {
@@ -87,7 +119,15 @@ func (c LineCountChangeset) Validate() LineCountChangeset {
 }
 
 func (c SampleChangeset) Validate() SampleChangeset {
-	return SampleChangeset{c.WithFindings(nil)}
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if voltV.Route == "" {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"route"}, Message: "route is required"})
+	}
+	if voltErr := SampleSane(voltV.Status, voltV.Ms); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "SampleSane", Columns: []string{"status", "ms"}, Message: voltErr.Error()})
+	}
+	return SampleChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c BudgetChangeset) Validate() BudgetChangeset {

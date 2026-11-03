@@ -38,8 +38,10 @@ func (Dashboards) Create(r volt.Request, user db.User, body db.DashboardChangese
 	if !body.Valid() {
 		return volt.Reject(http.StatusUnprocessableEntity, "check the fields").WithDetails(body.Errors())
 	}
-	return volt.Then(db.DashboardCreate(body.OwnerIDSet(user.ID)), func(d db.Dashboard) volt.Response {
-		return volt.Created(d)
+	return negotiated(r, func() volt.Response {
+		return volt.Then(db.DashboardCreate(body.OwnerIDSet(user.ID)), func(d db.Dashboard) volt.Response {
+			return volt.Created(d)
+		})
 	})
 }
 
@@ -54,8 +56,10 @@ func (Widgets) Create(r volt.Request, user db.User, owned db.Dashboard, board in
 	if !body.Valid() {
 		return volt.Reject(http.StatusUnprocessableEntity, "check the fields").WithDetails(body.Errors())
 	}
-	return volt.Then(db.WidgetCreate(body.DashboardIDSet(owned.ID)), func(w db.Widget) volt.Response {
-		return volt.Created(w)
+	return negotiated(r, func() volt.Response {
+		return volt.Then(db.WidgetCreate(body.DashboardIDSet(owned.ID)), func(w db.Widget) volt.Response {
+			return volt.Created(w)
+		})
 	})
 }
 

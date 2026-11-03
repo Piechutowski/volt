@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +21,34 @@ import (
 	"github.com/Piechutowski/volt/examples/voltmeter/units"
 	"github.com/Piechutowski/volt/internal/perfsweep"
 )
+
+// BuildCheck refuses a collection whose numbers would be filed under
+// the wrong commit: the sweep's phases run the Volt code linked into this
+// binary, while the run records the commit the repository is at, so the
+// binary's vcs.revision must be head (the full sha) and its vcs.modified
+// must match dirty. A binary that carries no revision, a test binary or
+// one from go run, cannot tell and passes.
+func BuildCheck(settings []debug.BuildSetting, head string, dirty bool) error {
+	var revision, modified string
+	for _, s := range settings {
+		switch s.Key {
+		case "vcs.revision":
+			revision = s.Value
+		case "vcs.modified":
+			modified = s.Value
+		}
+	}
+	if revision == "" {
+		return nil
+	}
+	if revision != head {
+		return fmt.Errorf("this binary was built at %s but the repository is at %s; its phases would measure the other commit's code, so rebuild it from the repository", revision, head)
+	}
+	if (modified == "true") != dirty {
+		return fmt.Errorf("this binary was built from a tree whose modified state (%s) differs from the repository's (dirty %v); rebuild it from the repository", modified, dirty)
+	}
+	return nil
+}
 
 // UploadOf is the upload body of one sweep: the commit and the machine
 // perfsweep.Info reported, every row of the sweep and every keystroke.

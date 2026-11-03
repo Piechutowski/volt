@@ -65,6 +65,13 @@ func TestCollectStoresWhatTheSweepMeasured(t *testing.T) {
 	if run.ID == 0 || run.Tag.V != "tiny" || run.Note.V != "collected in process" || string(run.Commit) != got.Upload.Commit {
 		t.Errorf("stored run %+v", run)
 	}
+	headSHA, err := exec.Command("git", "-C", repo, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(run.Commit) != strings.TrimSpace(string(headSHA)) {
+		t.Errorf("the run records commit %q, want the full sha %s the thesis commits are stored under", run.Commit, headSHA)
+	}
 
 	load, err := c.APIPhaseMsLoadRows(bg, run.ID)
 	if err != nil {
@@ -290,4 +297,24 @@ func linesOracle(t *testing.T, repo, sha, fixture string) (app.ThesisCount, bool
 		}
 	}
 	return c, true
+}
+
+// TestCollectAsksTheServerFirst proves a collection pointed at a server
+// that is down, or at a member it does not know, fails before the sweep
+// spends its minutes, with nothing measured.
+func TestCollectAsksTheServerFirst(t *testing.T) {
+	e := start(t)
+	repo, err := collector.RepoFind(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := collector.Config{Server: e.srv.URL, User: 99, Repo: repo, Sizes: []int{2}, Columns: 3, Reps: 1}
+	got, err := collector.Collect(bg, cfg, nil)
+	if err == nil || !strings.Contains(err.Error(), "nothing was measured") || len(got.Rows) != 0 {
+		t.Errorf("collect as an unknown member = %v with %d rows", err, len(got.Rows))
+	}
+	cfg.Server, cfg.User = "http://127.0.0.1:1", 1
+	if got, err := collector.Collect(bg, cfg, nil); err == nil || len(got.Rows) != 0 {
+		t.Errorf("collect against no server = %v with %d rows", err, len(got.Rows))
+	}
 }

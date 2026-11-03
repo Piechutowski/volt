@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -34,9 +35,9 @@ func main() {
 	var err error
 	switch os.Args[1] {
 	case "serve":
-		err = serve(os.Args[2:])
+		err = commandServe(os.Args[2:])
 	case "collect":
-		err = collect(os.Args[2:])
+		err = commandCollect(os.Args[2:])
 	case "help", "-h", "--help":
 		usage()
 		return
@@ -60,7 +61,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "run voltmeter collect -h for every flag")
 }
 
-func serve(args []string) error {
+func commandServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	path := fs.String("db", "voltmeter.db", "the SQLite file, created and migrated when missing")
 	addr := fs.String("addr", "localhost:8737", "the address to listen on")
@@ -69,26 +70,38 @@ func serve(args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	d, err := run.Open("sqlite3", *path)
+	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
+		return err
+	}
+	return serveUntil(ctx, ln, *path)
+}
+
+func serveUntil(ctx context.Context, ln net.Listener, path string) error {
+	d, err := run.Open("sqlite3", path)
+	if err != nil {
+		ln.Close()
 		return err
 	}
 	defer d.Close()
 	applied, err := run.MigrateUp(ctx, d, db.Migrations)
 	if err != nil {
+		ln.Close()
 		return err
 	}
 	for _, name := range applied {
 		slog.Info("migrated", "migration", name)
 	}
+	streams, streamsEnd := context.WithCancel(context.Background())
+	defer streamsEnd()
 	srv := &http.Server{
-		Addr:              *addr,
-		Handler:           volt.Logger(server.Handler(d, volt.NewBroker())),
+		Handler:           volt.Logger(server.StreamsEnded(streams, server.Handler(d, volt.NewBroker()))),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	srv.RegisterOnShutdown(streamsEnd)
 	errc := make(chan error, 1)
-	go func() { errc <- srv.ListenAndServe() }()
-	slog.Info("serving", "addr", *addr, "db", *path)
+	go func() { errc <- srv.Serve(ln) }()
+	slog.Info("serving", "addr", ln.Addr().String(), "db", path)
 	select {
 	case err := <-errc:
 		return err
@@ -104,7 +117,7 @@ func serve(args []string) error {
 	return nil
 }
 
-func collect(args []string) error {
+func commandCollect(args []string) error {
 	fs := flag.NewFlagSet("collect", flag.ContinueOnError)
 	var cfg collector.Config
 	fs.StringVar(&cfg.Server, "server", "http://localhost:8737", "the Voltmeter server to store the numbers on")

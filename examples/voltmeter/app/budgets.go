@@ -41,8 +41,10 @@ func (Budgets) Create(r volt.Request) volt.Response {
 	if !cs.Valid() {
 		return volt.Reject(http.StatusUnprocessableEntity, "check the fields").WithDetails(cs.Errors())
 	}
-	return volt.Then(db.BudgetCreate(cs), func(b db.Budget) volt.Response {
-		return volt.Created(b)
+	return negotiated(r, func() volt.Response {
+		return volt.Then(db.BudgetCreate(cs), func(b db.Budget) volt.Response {
+			return volt.Created(b)
+		})
 	})
 }
 
@@ -54,19 +56,28 @@ func (Budgets) Show(r volt.Request, id int) volt.Response {
 }
 
 // Update sets a budget's ceiling from a changeset body narrowed to
-// max_ms (spec §request-bodies); a new ceiling starts healthy.
+// max_ms (spec §request-bodies); a new ceiling starts healthy. A body
+// that sets no ceiling changes nothing and is a 422, so a breach is
+// never cleared without one.
 func (Budgets) Update(r volt.Request, id int, body db.BudgetChangeset) volt.Response {
+	if !body.Changed(db.BudgetMaxMs) {
+		body = body.ErrorAdd(db.BudgetMaxMs, "a new ceiling is required")
+	}
 	if !body.Valid() {
 		return volt.Reject(http.StatusUnprocessableEntity, "check the ceiling").WithDetails(body.Errors())
 	}
-	return volt.Then(db.BudgetUpdate(body.StateSet(db.HealthOK)), func(b db.Budget) volt.Response {
-		return volt.Render(b)
+	return negotiated(r, func() volt.Response {
+		return volt.Then(db.BudgetUpdate(body.StateSet(db.HealthOK)), func(b db.Budget) volt.Response {
+			return volt.Render(b)
+		})
 	})
 }
 
 // Reset returns every breached budget to ok in one statement.
 func (Budgets) Reset(r volt.Request) volt.Response {
-	return volt.Then(db.BudgetUpdateWhere(db.BudgetSet(db.BudgetState.Set(db.HealthOK)), db.BudgetState.Eq(db.HealthBreached)), func(n int64) volt.Response {
-		return volt.Render(wire.Reset{Reset: n})
+	return negotiated(r, func() volt.Response {
+		return volt.Then(db.BudgetUpdateWhere(db.BudgetSet(db.BudgetState.Set(db.HealthOK)), db.BudgetState.Eq(db.HealthBreached)), func(n int64) volt.Response {
+			return volt.Render(wire.Reset{Reset: n})
+		})
 	})
 }

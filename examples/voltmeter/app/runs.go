@@ -21,6 +21,8 @@ type Runs struct{}
 // Index is one page of runs, newest first: limit sizes it (20 unless
 // given), after continues past a run id from the previous page's Next,
 // offset skips rows instead, and tag keeps the runs carrying that tag.
+// It reads one run past the page, so Next is set only when a run
+// follows and a full last page offers no empty one.
 func (Runs) Index(r volt.Request) volt.Response {
 	q := r.Query()
 	limit := 20
@@ -38,7 +40,7 @@ func (Runs) Index(r volt.Request) volt.Response {
 	if tag := q.Get("tag"); tag != "" {
 		preds = append(preds, db.RunTag.Eq(tag))
 	}
-	opts := []rt.Opt[db.Run]{db.RunOrderBy(db.RunID.Desc()), db.RunLimit(limit)}
+	opts := []rt.Opt[db.Run]{db.RunOrderBy(db.RunID.Desc()), db.RunLimit(limit + 1)}
 	for _, p := range preds {
 		opts = append(opts, p)
 	}
@@ -60,8 +62,9 @@ func (Runs) Index(r volt.Request) volt.Response {
 	}
 	return volt.Then(rt.All(db.RunQuery(opts...), db.RunCount(preds...)), func(res []any) volt.Response {
 		page := wire.RunPage{Runs: res[0].([]db.Run), Total: res[1].(int64)}
-		if len(page.Runs) == limit {
-			page.Next = page.Runs[len(page.Runs)-1].ID
+		if len(page.Runs) > limit {
+			page.Runs = page.Runs[:limit]
+			page.Next = page.Runs[limit-1].ID
 		}
 		return volt.Render(page).WithHeader("X-Total", strconv.FormatInt(page.Total, 10))
 	})
@@ -111,24 +114,35 @@ func (Runs) Annotate(r volt.Request, id int, body db.RunChangeset) volt.Response
 	if !body.Valid() {
 		return volt.Reject(http.StatusUnprocessableEntity, "check the fields").WithDetails(body.Errors())
 	}
-	return volt.Then(db.RunUpdate(body), func(run db.Run) volt.Response {
-		return volt.Render(run)
+	return negotiated(r, func() volt.Response {
+		return volt.Then(db.RunUpdate(body), func(run db.Run) volt.Response {
+			return volt.Render(run)
+		})
 	})
 }
 
 // Samples stores the collector's timed calls.
 type Samples struct{}
 
-// Create stores every sample of the batch in one transaction.
+// Create stores every sample of the batch in one transaction; a sample
+// the validators refuse refuses the batch before anything is written.
 func (Samples) Create(r volt.Request, id int, body SampleBatch) volt.Response {
 	if len(body.Samples) == 0 {
 		return volt.Reject(http.StatusUnprocessableEntity, "the batch holds no sample")
 	}
 	steps := make([]rt.AnyEffect, 0, len(body.Samples))
+	var errs []rt.FieldError
 	for _, s := range body.Samples {
-		steps = append(steps, db.SampleCreate(db.SampleNew().RunIDSet(id).RouteSet(s.Route).StatusSet(s.Status).MsSet(s.MS).AtSet(s.At)))
+		cs := db.SampleNew().RunIDSet(id).RouteSet(s.Route).StatusSet(s.Status).MsSet(s.MS).AtSet(s.At).Validate()
+		errs = append(errs, cs.Errors()...)
+		steps = append(steps, db.SampleCreate(cs))
 	}
-	return volt.Then(rt.Tx(steps...), func([]any) volt.Response {
-		return volt.Created(wire.Stored{Written: len(steps)})
+	if len(errs) > 0 {
+		return volt.Reject(http.StatusUnprocessableEntity, "check the samples").WithDetails(errs)
+	}
+	return negotiated(r, func() volt.Response {
+		return volt.Then(rt.Tx(steps...), func([]any) volt.Response {
+			return volt.Created(wire.Stored{Written: len(steps)})
+		})
 	})
 }

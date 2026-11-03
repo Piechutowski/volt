@@ -403,8 +403,19 @@ func TestBudgetsBreachesAndTransactions(t *testing.T) {
 	if p := r.problem(t); len(p.Details) != 1 || p.Details[0].Check != "BudgetSane" || !slices.Equal(p.Details[0].Columns, []string{"tables", "max_ms"}) {
 		t.Errorf("a negative ceiling = %+v", p)
 	}
+	for _, body := range []string{`{}`, `{"state": "ok", "phase": "vet"}`} {
+		r := e.raw("PATCH", app.PathAPIBudgetCeiling(check.ID), body)
+		if p := r.problem(t); r.StatusCode != 422 || len(p.Details) != 1 || !slices.Equal(p.Details[0].Columns, []string{"max_ms"}) {
+			t.Errorf("a ceiling PATCH %s that sets no ceiling = %d %s", body, r.StatusCode, r.body)
+		}
+	}
+	resp, err = c.APIBudget(bg, check.ID)
+	read(t, resp, err, 200, &detail)
+	if detail.Budget.State != db.HealthBreached {
+		t.Errorf("a PATCH with no ceiling cleared the breach: %+v", detail.Budget)
+	}
 	var same db.Budget
-	if r := e.rawJSON("PATCH", app.PathAPIBudgetCeiling(check.ID), `{"phase": "vet"}`, &same); r.StatusCode != 200 || same.Phase != db.PhaseCheck || same.MaxMs != 5 {
+	if r := e.rawJSON("PATCH", app.PathAPIBudgetCeiling(check.ID), `{"phase": "vet", "max_ms": 7}`, &same); r.StatusCode != 200 || same.Phase != db.PhaseCheck || same.MaxMs != 7 {
 		t.Errorf("a column only: leaves out is not cast = %d %s", r.StatusCode, r.body)
 	}
 	resp, err = c.APIBudgetCeiling(bg, check.ID, db.BudgetNew().MaxMsSet(100))
@@ -507,6 +518,15 @@ func TestKeysetPaging(t *testing.T) {
 	}
 	if !slices.Equal(tagged, []int{22, 19, 16, 13, 10, 7, 4, 1}) {
 		t.Errorf("tagged runs %v", tagged)
+	}
+	if p := page(volt.Query("limit", "23")); len(p.Runs) != 23 || p.Next != 0 {
+		t.Errorf("a page holding every run offers Next %d over %d runs; a full last page has no next", p.Next, len(p.Runs))
+	}
+	if p := page(volt.Query("limit", "4"), volt.Query("tag", "third"), volt.Query("after", "13")); len(p.Runs) != 4 || p.Next != 0 {
+		t.Errorf("the full last tagged page offers Next %d over %+v", p.Next, p.Runs)
+	}
+	if p := page(volt.Query("limit", "22")); len(p.Runs) != 22 || p.Next != want[21] {
+		t.Errorf("a page one run short of the total offers Next %d, want %d", p.Next, want[21])
 	}
 	for _, q := range []string{"?limit=0", "?limit=x", "?after=x", "?after=1&offset=1"} {
 		if r := e.raw("GET", "/api/runs"+q, ""); r.StatusCode != 400 {

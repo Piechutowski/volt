@@ -17,10 +17,12 @@ import (
 
 // TestEvents proves the event route end to end (spec §event-routes):
 // the server publishes one event per successful write and none for a
-// read or a refused write, the generated client receives them in order,
-// reconnects after the server drops it and resumes after the last ID it
-// saw without a repeat, and a raw stream opened with Last-Event-ID
-// replays exactly what came after.
+// read, a refused write or a sign-in, the generated client receives them
+// in order, reconnects after the server drops it and resumes after the
+// last ID it saw without a repeat, a raw stream opened without
+// Last-Event-ID starts at the oldest kept event, one opened with
+// Last-Event-ID replays exactly what came after, and one naming an ID
+// this broker never assigned, as after a restart, replays everything.
 func TestEvents(t *testing.T) {
 	e := start(t)
 	ctx, cancel := context.WithTimeout(bg, 30*time.Second)
@@ -75,10 +77,13 @@ func TestEvents(t *testing.T) {
 	if ev.ID != 3 || ch.Handler != "db.TagDelete" || ch.Status != 204 {
 		t.Errorf("after the drop the client resumed at %d %+v; want 3, the delete, and no repeat", ev.ID, ch)
 	}
+	if r := e.raw("POST", app.PathSignIn(), `{"email": "ada@voltmeter.test"}`); r.StatusCode != 200 {
+		t.Fatalf("sign in = %d %s", r.StatusCode, r.body)
+	}
 	up := upload(t, c, app.Upload{Commit: "beef0001", Machine: machine})
 	ev, ch = next()
 	if ev.ID != 4 || ch.Handler != "Uploads.Create" || ch.Route != "POST /api/uploads" || ch.Status != 201 || up.Run.ID != 1 {
-		t.Errorf("the upload's event %d %+v", ev.ID, ch)
+		t.Errorf("the upload's event %d %+v; want 4, the sign-in changing no row", ev.ID, ch)
 	}
 
 	replayed := func(lastID string) []string {
@@ -101,8 +106,7 @@ func TestEvents(t *testing.T) {
 			t.Errorf("stream headers %v", resp.Header)
 		}
 		want := 4
-		if lastID != "" {
-			n, _ := strconv.Atoi(lastID)
+		if n, _ := strconv.Atoi(lastID); n > 0 && n <= 4 {
 			want -= n
 		}
 		var ids []string
@@ -119,5 +123,8 @@ func TestEvents(t *testing.T) {
 	}
 	if got := strings.Join(replayed("2"), " "); got != "3 4" {
 		t.Errorf("Last-Event-ID 2 replays %q", got)
+	}
+	if got := strings.Join(replayed("99"), " "); got != "1 2 3 4" {
+		t.Errorf("Last-Event-ID 99, from a broker before a restart, replays %q", got)
 	}
 }

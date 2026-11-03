@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/Piechutowski/volt"
@@ -17,44 +18,75 @@ type Uploads struct{}
 // adds the run, then writes every measurement, every budget it breaks
 // and the breaches in one transaction. The run's id is the database's,
 // so the run is inserted before the transaction that needs it, and a
-// failed transaction deletes the run again before the error handler
-// answers.
+// failed transaction deletes the run again, and the machine and tag
+// this upload added when no other run took them, before the error
+// handler answers. Two first uploads of one machine or tag race to add
+// it; the one the unique index refuses reads the winner's row.
 func (Uploads) Create(r volt.Request, body Upload) volt.Response {
-	commit, err := units.CommitParse(body.Commit)
-	if err != nil {
-		return volt.Reject(http.StatusUnprocessableEntity, "the upload is not valid").WithDetails(fieldErrors("commit", "commit", err.Error()))
-	}
-	if _, errs := UploadWrites(db.Run{}, body, nil); len(errs) > 0 {
-		return volt.Reject(http.StatusUnprocessableEntity, "the upload is not valid").WithDetails(errs)
-	}
+	return negotiated(r, func() volt.Response {
+		commit, err := units.CommitParse(body.Commit)
+		if err != nil {
+			return volt.Reject(http.StatusUnprocessableEntity, "the upload is not valid").WithDetails(fieldErrors("commit", "commit", err.Error()))
+		}
+		if _, errs := UploadWrites(db.Run{}, body, nil); len(errs) > 0 {
+			return volt.Reject(http.StatusUnprocessableEntity, "the upload is not valid").WithDetails(errs)
+		}
+		return uploadMachined(body, commit)
+	})
+}
+
+type uploaded struct {
+	machine    db.Machine
+	machineNew bool
+	tagNew     bool
+}
+
+func uploadMachined(body Upload, commit units.Commit) volt.Response {
 	m := body.Machine
-	return volt.Then(db.MachineIdentified(m.CPU, m.Cores, m.MemoryGB, m.OS, m.Arch, m.Go), func(found []db.Machine) volt.Response {
+	identified := db.MachineIdentified(m.CPU, m.Cores, m.MemoryGB, m.OS, m.Arch, m.Go)
+	return volt.Then(identified, func(found []db.Machine) volt.Response {
 		if len(found) > 0 {
-			return uploadTagged(body, commit, found[0])
+			return uploadTagged(body, commit, uploaded{machine: found[0]})
 		}
 		add := db.MachineNew().CPUSet(m.CPU).CoresSet(m.Cores).MemoryGbSet(m.MemoryGB).OsSet(m.OS).ArchSet(m.Arch).GoSet(m.Go)
 		return volt.Then(db.MachineCreate(add), func(machine db.Machine) volt.Response {
-			return uploadTagged(body, commit, machine)
+			return uploadTagged(body, commit, uploaded{machine: machine, machineNew: true})
+		}).Rescue(func(err error) volt.Response {
+			if !isDuplicate(err) {
+				return volt.Fail(err)
+			}
+			return volt.Then(identified, func(found []db.Machine) volt.Response {
+				if len(found) == 0 {
+					return volt.Fail(err)
+				}
+				return uploadTagged(body, commit, uploaded{machine: found[0]})
+			})
 		})
 	})
 }
 
-func uploadTagged(body Upload, commit units.Commit, machine db.Machine) volt.Response {
+func uploadTagged(body Upload, commit units.Commit, u uploaded) volt.Response {
 	if body.Tag == "" {
-		return uploadStored(body, commit, machine)
+		return uploadStored(body, commit, u)
 	}
 	return volt.Then(db.TagExists(db.TagSlug.Eq(body.Tag)), func(ok bool) volt.Response {
 		if ok {
-			return uploadStored(body, commit, machine)
+			return uploadStored(body, commit, u)
 		}
 		return volt.Then(db.TagCreate(db.TagNew().SlugSet(body.Tag).NameSet(body.Tag)), func(db.Tag) volt.Response {
-			return uploadStored(body, commit, machine)
+			u.tagNew = true
+			return uploadStored(body, commit, u)
+		}).Rescue(func(err error) volt.Response {
+			if !isDuplicate(err) {
+				return volt.Fail(err)
+			}
+			return uploadStored(body, commit, u)
 		})
 	})
 }
 
-func uploadStored(body Upload, commit units.Commit, machine db.Machine) volt.Response {
-	add := db.RunNew().CommitSet(commit).DirtySet(body.Dirty).MachineIDSet(machine.ID)
+func uploadStored(body Upload, commit units.Commit, u uploaded) volt.Response {
+	add := db.RunNew().CommitSet(commit).DirtySet(body.Dirty).MachineIDSet(u.machine.ID)
 	if body.Tag != "" {
 		add = add.TagSet(rt.Some(body.Tag))
 	}
@@ -77,11 +109,53 @@ func uploadStored(body Upload, commit units.Commit, machine db.Machine) volt.Res
 				return volt.Created(out)
 			}).Rescue(func(err error) volt.Response {
 				return volt.Then(db.RunDelete(run.ID), func(int64) volt.Response {
-					return volt.Fail(err)
+					return uploadUndone(body, u, err)
 				})
 			})
+		}).Rescue(func(err error) volt.Response {
+			return uploadUndone(body, u, err)
 		})
 	})
+}
+
+func uploadUndone(body Upload, u uploaded, err error) volt.Response {
+	if u.machineNew {
+		machine := u.machine.ID
+		u.machineNew = false
+		return volt.Then(db.RunExists(db.RunMachineID.Eq(machine)), func(taken bool) volt.Response {
+			if taken {
+				return uploadUndone(body, u, err)
+			}
+			return volt.Then(db.MachineDelete(machine), func(int64) volt.Response {
+				return uploadUndone(body, u, err)
+			})
+		})
+	}
+	if u.tagNew {
+		u.tagNew = false
+		return volt.Then(db.RunExists(db.RunTag.Eq(body.Tag)), func(taken bool) volt.Response {
+			if taken {
+				return uploadUndone(body, u, err)
+			}
+			return volt.Then(db.TagDelete(body.Tag), func(int64) volt.Response {
+				return uploadUndone(body, u, err)
+			})
+		})
+	}
+	return volt.Fail(err)
+}
+
+func isDuplicate(err error) bool {
+	var inv *rt.Invalid
+	if !errors.As(err, &inv) {
+		return false
+	}
+	for _, f := range inv.Fields {
+		if f.Check == "unique" {
+			return true
+		}
+	}
+	return false
 }
 
 // UploadWrites is every write an upload makes for run once the run is
@@ -145,6 +219,10 @@ type Thesis struct{}
 // Record stores the commits and counts the upload carries that are not
 // stored yet, in one transaction, and counts what it skipped.
 func (Thesis) Record(r volt.Request, body ThesisUpload) volt.Response {
+	return negotiated(r, func() volt.Response { return thesisRecorded(body) })
+}
+
+func thesisRecorded(body ThesisUpload) volt.Response {
 	if len(body.Commits) == 0 {
 		return volt.Reject(http.StatusUnprocessableEntity, "the upload holds no commit")
 	}

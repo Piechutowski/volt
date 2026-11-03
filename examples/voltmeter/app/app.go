@@ -89,6 +89,13 @@ func OwnedBoard(r volt.Request) volt.Load[db.Dashboard] {
 	return volt.LoadWith(db.DashboardGet(id))
 }
 
+func negotiated(r volt.Request, next func() volt.Response) volt.Response {
+	if _, err := volt.Negotiate(r); err != nil {
+		return volt.Fail(err)
+	}
+	return next()
+}
+
 // NewControllers is every controller of the package; the program that
 // serves them sets DB and Events (spec §query-routes, §event-routes).
 func NewControllers() Controllers {

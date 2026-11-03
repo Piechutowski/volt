@@ -5,7 +5,9 @@
 package server
 
 import (
+	"context"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/Piechutowski/volt"
@@ -36,10 +38,14 @@ func Handler(d run.DB, b *volt.Broker) http.Handler {
 	return Publish(b, app.NewRouter(c))
 }
 
+// Unchanging names the handlers that answer a POST without changing a
+// row, the sign-in alone; Publish sends nothing for them.
+var Unchanging = []string{"Session.SignIn"}
+
 // Publish sends EventChanged on b after every POST, PATCH or DELETE that
-// answers 2xx. A handler returns values and cannot publish, and the
-// runtime has no effect that does, so the broker is driven from here,
-// around the router.
+// answers 2xx, except from a handler in Unchanging. A handler returns
+// values and cannot publish, and the runtime has no effect that does, so
+// the broker is driven from here, around the router.
 func Publish(b *volt.Broker, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -50,16 +56,34 @@ func Publish(b *volt.Broker, next http.Handler) http.Handler {
 		}
 		sw := &statusWriter{ResponseWriter: w}
 		next.ServeHTTP(sw, r)
-		if sw.status < 200 || sw.status > 299 {
+		handler := handlerOf(r.Pattern)
+		if sw.status < 200 || sw.status > 299 || slices.Contains(Unchanging, handler) {
 			return
 		}
 		_ = b.Publish(EventChanged, Change{
 			Method:  r.Method,
 			Route:   r.Pattern,
-			Handler: handlerOf(r.Pattern),
+			Handler: handler,
 			Path:    r.URL.Path,
 			Status:  sw.status,
 		})
+	})
+}
+
+// StreamsEnded ends every event stream next serves once ctx is done, so
+// a server shutting down is not held open by its listeners, while every
+// other request keeps its own context and finishes (http.Server.Shutdown
+// waits for streams that never end on their own).
+func StreamsEnded(ctx context.Context, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != app.PathEvents() {
+			next.ServeHTTP(w, r)
+			return
+		}
+		stream, cancel := context.WithCancel(r.Context())
+		defer cancel()
+		defer context.AfterFunc(ctx, cancel)()
+		next.ServeHTTP(w, r.WithContext(stream))
 	})
 }
 

@@ -3,6 +3,7 @@ package collector_test
 import (
 	"fmt"
 	"reflect"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"testing"
@@ -198,5 +199,38 @@ func TestSamples(t *testing.T) {
 	}
 	if collector.SamplesBatched(nil, 2) != nil {
 		t.Error("no sample is no batch")
+	}
+}
+
+// TestBuildCheck proves a binary built at another commit, or from a tree
+// whose modified state differs, is refused, and a binary without
+// version control stamps, as go test and go run build, passes.
+func TestBuildCheck(t *testing.T) {
+	const head = "996b13bda003f8bb30eacfa7f17f7d4a39e74165"
+	stamp := func(rev, modified string) []debug.BuildSetting {
+		return []debug.BuildSetting{{Key: "vcs", Value: "git"}, {Key: "vcs.revision", Value: rev}, {Key: "vcs.modified", Value: modified}}
+	}
+	cases := []struct {
+		name     string
+		settings []debug.BuildSetting
+		dirty    bool
+		refused  string
+	}{
+		{"unstamped", nil, false, ""},
+		{"unstamped dirty", []debug.BuildSetting{{Key: "-compiler", Value: "gc"}}, true, ""},
+		{"same commit", stamp(head, "false"), false, ""},
+		{"same dirty commit", stamp(head, "true"), true, ""},
+		{"stale binary", stamp("d41128b0000000000000000000000000000000000", "false"), false, "built at d41128b"},
+		{"binary of a modified tree", stamp(head, "true"), false, "modified state"},
+		{"clean binary over a dirty tree", stamp(head, "false"), true, "modified state"},
+	}
+	for _, c := range cases {
+		err := collector.BuildCheck(c.settings, head, c.dirty)
+		if c.refused == "" && err != nil {
+			t.Errorf("%s refused: %v", c.name, err)
+		}
+		if c.refused != "" && (err == nil || !strings.Contains(err.Error(), c.refused)) {
+			t.Errorf("%s = %v, want a refusal naming %q", c.name, err, c.refused)
+		}
 	}
 }
