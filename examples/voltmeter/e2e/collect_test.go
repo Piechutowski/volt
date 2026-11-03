@@ -18,6 +18,7 @@ import (
 	"github.com/Piechutowski/volt/examples/voltmeter/collector"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
 	"github.com/Piechutowski/volt/examples/voltmeter/units"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 	"github.com/Piechutowski/volt/internal/perfsweep"
 )
 
@@ -81,7 +82,7 @@ func TestCollectStoresWhatTheSweepMeasured(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stored := app.PhaseRowsOf(load, check, vet, generate)
+	stored := wire.PhaseRowsOf(load, check, vet, generate)
 	if len(stored) != len(got.Rows) {
 		t.Fatalf("%d rows stored, %d measured", len(stored), len(got.Rows))
 	}
@@ -91,7 +92,7 @@ func TestCollectStoresWhatTheSweepMeasured(t *testing.T) {
 			t.Errorf("stored %s at %d was never measured", s.Phase, s.Tables)
 			continue
 		}
-		want := app.PhaseRow{Phase: s.Phase, Tables: r.Tables, WallMS: units.Millis(r.WallMS), AllocMB: r.AllocMB, HeapMB: r.HeapMB, Allocs: int(r.Allocs), OutputMB: r.OutputMB, SourceKB: r.SourceKB}
+		want := wire.PhaseRow{Phase: s.Phase, Tables: r.Tables, WallMS: units.Millis(r.WallMS), AllocMB: r.AllocMB, HeapMB: r.HeapMB, Allocs: int(r.Allocs), OutputMB: r.OutputMB, SourceKB: r.SourceKB}
 		if s != want || r.WallMS <= 0 || r.Allocs == 0 || r.SourceKB <= 0 {
 			t.Errorf("stored %+v, the sweep measured %+v", s, *r)
 		}
@@ -104,7 +105,7 @@ func TestCollectStoresWhatTheSweepMeasured(t *testing.T) {
 		t.Errorf("breaches %+v", got.Stored.Breaches)
 	}
 	resp, err = c.APIBudget(bg, budget.ID)
-	var detail app.BudgetDetail
+	var detail wire.BudgetDetail
 	read(t, resp, err, http.StatusOK, &detail)
 	if detail.Budget.State != db.HealthBreached || len(detail.Breaches) != 1 {
 		t.Errorf("budget after the upload %+v", detail)

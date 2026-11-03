@@ -21,6 +21,7 @@ import (
 	"github.com/Piechutowski/volt/examples/voltmeter/app/client"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
 	"github.com/Piechutowski/volt/examples/voltmeter/gui/state"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -89,11 +90,11 @@ func (r *Remote) Perform(ctx context.Context, cmd state.Command) state.Intent {
 		if cmd.Tag != "" {
 			q = append(q, volt.Query("tag", cmd.Tag))
 		}
-		var page app.RunPage
+		var page wire.RunPage
 		err := c.Do(ctx, "GET", app.PathAPIRuns(q...), nil, &page)
 		return state.RunsFetched{Query: cmd, Page: page, Err: err}
 	case state.RunFetch:
-		var d app.RunDetail
+		var d wire.RunDetail
 		err := c.Do(ctx, "GET", app.PathAPIRun(cmd.ID), nil, &d)
 		return state.RunFetched{ID: cmd.ID, Detail: d, Err: err}
 	case state.RunPatch:
@@ -126,7 +127,7 @@ func (r *Remote) Perform(ctx context.Context, cmd state.Command) state.Intent {
 		err := c.Do(ctx, "GET", app.PathAPIBudgets(), nil, &bs)
 		return state.BudgetsFetched{Budgets: bs, Err: err}
 	case state.BudgetFetch:
-		var d app.BudgetDetail
+		var d wire.BudgetDetail
 		err := c.Do(ctx, "GET", app.PathAPIBudget(cmd.ID), nil, &d)
 		return state.BudgetFetched{ID: cmd.ID, Detail: d, Err: err}
 	case state.BudgetPatch:
@@ -139,7 +140,7 @@ func (r *Remote) Perform(ctx context.Context, cmd state.Command) state.Intent {
 		err := c.Do(ctx, "POST", app.PathAPIBudgets(), cs.Params(), &b)
 		return state.BudgetPosted{Budget: b, Err: err}
 	case state.BudgetsResetPost:
-		var n app.Reset
+		var n wire.Reset
 		err := c.Do(ctx, "POST", app.PathAPIBudgetsReset(), nil, &n)
 		return state.BudgetsResetPosted{Reset: n, Err: err}
 	case state.BoardsFetch:

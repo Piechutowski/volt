@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/Piechutowski/volt"
-	"github.com/Piechutowski/volt/examples/voltmeter/app"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
 	"github.com/Piechutowski/volt/examples/voltmeter/gui/state"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 )
 
 func member() state.State {
@@ -28,7 +28,7 @@ func TestUpdateLeavesItsInputAlone(t *testing.T) {
 		t.Errorf("an edit changed the state it was given: %q, then %q", s.Fields[state.FieldTagSlug], next.Fields[state.FieldTagSlug])
 	}
 
-	s.Runs.Page = app.RunPage{Next: 30}
+	s.Runs.Page = wire.RunPage{Next: 30}
 	s.Runs.Back = make([]int, 1, 8)
 	a, _ := state.Update(s, state.RunsNext{})
 	s.Runs.Page.Next = 40
@@ -45,11 +45,11 @@ func TestUpdateLeavesItsInputAlone(t *testing.T) {
 func TestStaleAnswersAreDropped(t *testing.T) {
 	s := member()
 	s, _ = state.Update(s, state.RunsFilter{Tag: "nightly"})
-	old := state.RunsFetched{Query: state.RunsFetch{Limit: state.RunsLimit}, Page: app.RunPage{Total: 99}}
+	old := state.RunsFetched{Query: state.RunsFetch{Limit: state.RunsLimit}, Page: wire.RunPage{Total: 99}}
 	if got, _ := state.Update(s, old); got.Runs.Loaded || got.Runs.Page.Total == 99 {
 		t.Errorf("the unfiltered page answered after the filter was applied: %+v", got.Runs)
 	}
-	fresh := state.RunsFetched{Query: state.RunsFetch{Tag: "nightly", Limit: state.RunsLimit}, Page: app.RunPage{Total: 1}}
+	fresh := state.RunsFetched{Query: state.RunsFetch{Tag: "nightly", Limit: state.RunsLimit}, Page: wire.RunPage{Total: 1}}
 	if got, _ := state.Update(s, fresh); !got.Runs.Loaded || got.Runs.Page.Total != 1 {
 		t.Errorf("the filtered page = %+v", got.Runs)
 	}
@@ -58,7 +58,7 @@ func TestStaleAnswersAreDropped(t *testing.T) {
 	if !slices.Contains(cmds, state.Command(state.RunFetch{ID: 7})) || s.Screen != state.ScreenRun {
 		t.Errorf("opening run 7 asked %v", cmds)
 	}
-	if got, _ := state.Update(s, state.RunFetched{ID: 6, Detail: app.RunDetail{Run: db.Run{ID: 6}}}); got.Run.Loaded {
+	if got, _ := state.Update(s, state.RunFetched{ID: 6, Detail: wire.RunDetail{Run: db.Run{ID: 6}}}); got.Run.Loaded {
 		t.Errorf("run 6 answered for run 7: %+v", got.Run)
 	}
 	s, _ = state.Update(s, state.ThesisPick{Fixture: "examples/voltmeter"})

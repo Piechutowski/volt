@@ -12,6 +12,7 @@ import (
 	"github.com/Piechutowski/volt/examples/voltmeter/app"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
 	"github.com/Piechutowski/volt/examples/voltmeter/units"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -108,7 +109,7 @@ func TestHandlersRefuseBeforeAnyEffect(t *testing.T) {
 		got, want volt.Response
 	}{
 		{"root redirects into the app", app.Home{}.Index(request("GET", "/", "GET /{$}")), volt.Redirect("/assets/voltmeter.html")},
-		{"ping answers the method and the shim's clock", app.Home{}.Ping(request("DELETE", "/ping", "/ping")), volt.Render(app.Pong{Method: "DELETE", At: clock})},
+		{"ping answers the method and the shim's clock", app.Home{}.Ping(request("DELETE", "/ping", "/ping")), volt.Render(wire.Pong{Method: "DELETE", At: clock})},
 		{"options names the methods", app.Runs{}.Options(request("OPTIONS", "/api/runs", "OPTIONS /api/runs")), volt.NoContent().WithHeader("Allow", "GET, HEAD, OPTIONS")},
 		{"a zero limit", runs("?limit=0"), volt.Reject(400, "limit runs from 1 to 100")},
 		{"a limit over the cap", runs("?limit=101"), volt.Reject(400, "limit runs from 1 to 100")},
@@ -210,7 +211,7 @@ func TestThesisWrites(t *testing.T) {
 // page escapes what it is handed, and the CSV export is exact.
 func TestReportRendering(t *testing.T) {
 	run := db.Run{ID: 9, Commit: "abcdef1234567890", Dirty: true, MachineID: 2, Tag: rt.Some("release"), Note: rt.Some("<b>fast</b>"), CreatedAt: clock}
-	rows := app.PhaseRowsOf(
+	rows := wire.PhaseRowsOf(
 		[]db.MsLoad{{RunID: 9, Tables: 2, WallMs: 1.5}, {RunID: 9, Tables: 4, WallMs: 2.5}},
 		[]db.MsCheck{{RunID: 9, Tables: 2, WallMs: 3}},
 		[]db.MsVet{{RunID: 9, Tables: 2, WallMs: 4}},

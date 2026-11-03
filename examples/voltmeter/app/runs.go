@@ -6,6 +6,7 @@ import (
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -58,7 +59,7 @@ func (Runs) Index(r volt.Request) volt.Response {
 		opts = append(opts, db.RunOffset(offset))
 	}
 	return volt.Then(rt.All(db.RunQuery(opts...), db.RunCount(preds...)), func(res []any) volt.Response {
-		page := RunPage{Runs: res[0].([]db.Run), Total: res[1].(int64)}
+		page := wire.RunPage{Runs: res[0].([]db.Run), Total: res[1].(int64)}
 		if len(page.Runs) == limit {
 			page.Next = page.Runs[len(page.Runs)-1].ID
 		}
@@ -78,9 +79,9 @@ func (Runs) Show(r volt.Request, id int) volt.Response {
 		db.KeystrokeQuery(db.KeystrokeRunID.Eq(id), db.KeystrokeOrderBy(db.KeystrokeTables.Asc())),
 		db.SampleLatency(id),
 	), func(res []any) volt.Response {
-		return volt.Render(RunDetail{
+		return volt.Render(wire.RunDetail{
 			Run:        res[0].(db.Run),
-			Phases:     PhaseRowsOf(res[1].([]db.MsLoad), res[2].([]db.MsCheck), res[3].([]db.MsVet), res[4].([]db.MsGenerate)),
+			Phases:     wire.PhaseRowsOf(res[1].([]db.MsLoad), res[2].([]db.MsCheck), res[3].([]db.MsVet), res[4].([]db.MsGenerate)),
 			Keystrokes: res[5].([]db.Keystroke),
 			Latency:    res[6].(db.Latency),
 		})
@@ -128,29 +129,6 @@ func (Samples) Create(r volt.Request, id int, body SampleBatch) volt.Response {
 		steps = append(steps, db.SampleCreate(db.SampleNew().RunIDSet(id).RouteSet(s.Route).StatusSet(s.Status).MsSet(s.MS).AtSet(s.At)))
 	}
 	return volt.Then(rt.Tx(steps...), func([]any) volt.Response {
-		return volt.Created(Stored{Written: len(steps)})
+		return volt.Created(wire.Stored{Written: len(steps)})
 	})
-}
-
-// PhaseRowsOf is the rows of the four phase tables as one list, phase by
-// phase in the order the sweep runs them.
-func PhaseRowsOf(load []db.MsLoad, check []db.MsCheck, vet []db.MsVet, generate []db.MsGenerate) []PhaseRow {
-	out := make([]PhaseRow, 0, len(load)+len(check)+len(vet)+len(generate))
-	for _, m := range load {
-		out = append(out, phaseRowOf(db.PhaseLoad, m))
-	}
-	for _, m := range check {
-		out = append(out, phaseRowOf(db.PhaseCheck, db.MsLoad(m)))
-	}
-	for _, m := range vet {
-		out = append(out, phaseRowOf(db.PhaseVet, db.MsLoad(m)))
-	}
-	for _, m := range generate {
-		out = append(out, phaseRowOf(db.PhaseGenerate, db.MsLoad(m)))
-	}
-	return out
-}
-
-func phaseRowOf(p db.Phase, m db.MsLoad) PhaseRow {
-	return PhaseRow{Phase: p, Tables: m.Tables, WallMS: m.WallMs, AllocMB: m.AllocMb, HeapMB: m.HeapMb, Allocs: m.Allocs, OutputMB: m.OutputMb, SourceKB: m.SourceKb}
 }

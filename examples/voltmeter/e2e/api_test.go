@@ -14,6 +14,7 @@ import (
 	"github.com/Piechutowski/volt/examples/voltmeter/app"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
 	"github.com/Piechutowski/volt/examples/voltmeter/units"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -47,7 +48,7 @@ func TestPagesAndPlugs(t *testing.T) {
 	}
 
 	for _, method := range []string{"GET", "POST", "PATCH", "DELETE", "PUT"} {
-		var pong app.Pong
+		var pong wire.Pong
 		r := e.rawJSON(method, app.PathPing(), "", &pong)
 		if r.StatusCode != 200 || pong.Method != method || pong.At.IsZero() {
 			t.Errorf("%s /ping = %d %+v", method, r.StatusCode, pong)
@@ -170,7 +171,7 @@ func TestUploadsAndRuns(t *testing.T) {
 	}
 
 	resp, err := c.APIRun(bg, 2)
-	var detail app.RunDetail
+	var detail wire.RunDetail
 	read(t, resp, err, 200, &detail)
 	if detail.Run.ID != 2 || len(detail.Phases) != 8 || len(detail.Keystrokes) != 2 || detail.Latency.N != 0 {
 		t.Fatalf("detail = %+v", detail)
@@ -260,7 +261,7 @@ func TestUploadsAndRuns(t *testing.T) {
 		{Route: "GET /api/runs", Status: 200, MS: 2.5, At: 1001},
 		{Route: "GET /api/runs/{id}", Status: 404, MS: 0.5, At: 1002},
 	}})
-	var stored app.Stored
+	var stored wire.Stored
 	read(t, resp, err, http.StatusCreated, &stored)
 	if stored.Written != 3 {
 		t.Errorf("samples stored = %+v", stored)
@@ -358,7 +359,7 @@ func TestBudgetsBreachesAndTransactions(t *testing.T) {
 		t.Fatalf("check@2 at 16 ms over a 5 ms budget: breaches %+v", over.Breaches)
 	}
 	resp, err := c.APIBudget(bg, check.ID)
-	var detail app.BudgetDetail
+	var detail wire.BudgetDetail
 	read(t, resp, err, 200, &detail)
 	if detail.Budget.State != db.HealthBreached || len(detail.Breaches) != 1 {
 		t.Errorf("budget after the breach = %+v", detail)
@@ -379,7 +380,7 @@ func TestBudgetsBreachesAndTransactions(t *testing.T) {
 		t.Errorf("a duplicated phase row = %+v", p)
 	}
 	resp, err = c.APIRuns(bg)
-	var page app.RunPage
+	var page wire.RunPage
 	read(t, resp, err, 200, &page)
 	if page.Total != 2 {
 		t.Errorf("runs after the failed upload = %d, want 2: the run is deleted again", page.Total)
@@ -420,13 +421,13 @@ func TestBudgetsBreachesAndTransactions(t *testing.T) {
 	read(t, resp, err, 200, nil)
 	upload(t, c, sweep("aaaa0005", []int{2}, 4))
 	resp, err = c.APIBudgetsReset(bg)
-	var reset app.Reset
+	var reset wire.Reset
 	read(t, resp, err, 200, &reset)
 	if reset.Reset != 1 {
 		t.Errorf("reset = %+v", reset)
 	}
 	resp, err = c.APIBudgetsReset(bg)
-	var none app.Reset
+	var none wire.Reset
 	read(t, resp, err, 200, &none)
 	if none.Reset != 0 {
 		t.Errorf("a second reset = %+v", none)
@@ -451,10 +452,10 @@ func TestKeysetPaging(t *testing.T) {
 		}
 		want = append([]int{upload(t, c, u).Run.ID}, want...)
 	}
-	page := func(opts ...volt.URLOption) app.RunPage {
+	page := func(opts ...volt.URLOption) wire.RunPage {
 		t.Helper()
 		resp, err := c.Raw(bg, "GET", app.PathAPIRuns(opts...), nil)
-		var p app.RunPage
+		var p wire.RunPage
 		r := read(t, resp, err, 200, &p)
 		if r.Header.Get("X-Total") != strconv.FormatInt(p.Total, 10) {
 			t.Errorf("X-Total %q, body %d", r.Header.Get("X-Total"), p.Total)
@@ -574,13 +575,13 @@ func TestThesis(t *testing.T) {
 		{SHA: "2222", Subject: "Add Voltmeter", Author: "Grace", At: at.Add(time.Hour), Counts: []app.ThesisCount{{Fixture: "itest/blog", VoltLines: 82, HandLines: 118, GenLines: 3050}, {Fixture: "examples/voltmeter", VoltLines: 400, HandLines: 900, GenLines: 12000}}},
 	}}
 	resp, err := c.APIThesisRecord(bg, body)
-	var stored app.Stored
+	var stored wire.Stored
 	read(t, resp, err, http.StatusCreated, &stored)
 	if stored.Written != 5 || stored.Skipped != 0 {
 		t.Errorf("first record = %+v", stored)
 	}
 	resp, err = c.APIThesisRecord(bg, body)
-	var again app.Stored
+	var again wire.Stored
 	read(t, resp, err, http.StatusOK, &again)
 	if again.Written != 0 || again.Skipped != 5 {
 		t.Errorf("second record = %+v", again)
@@ -686,7 +687,7 @@ func TestLimits(t *testing.T) {
 	e := start(t)
 	c := e.gob(0)
 	resp, err := c.Raw(bg, "GET", app.PathAPIProbe(volt.Query("steps", "1000")), nil)
-	var counted app.Counted
+	var counted wire.Counted
 	read(t, resp, err, 200, &counted)
 	if counted.Steps != 1000 || counted.Rows != 3 {
 		t.Errorf("probe = %+v; the three seeded members", counted)

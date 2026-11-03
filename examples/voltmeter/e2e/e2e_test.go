@@ -26,6 +26,7 @@ import (
 	"github.com/Piechutowski/volt/examples/voltmeter/app/client"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
 	"github.com/Piechutowski/volt/examples/voltmeter/server"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 	"github.com/Piechutowski/volt/nao/run"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -226,10 +227,10 @@ func sweep(commit string, sizes []int, scale float64) app.Upload {
 	return u
 }
 
-func upload(t *testing.T, c *client.Client, u app.Upload) app.UploadResult {
+func upload(t *testing.T, c *client.Client, u app.Upload) wire.UploadResult {
 	t.Helper()
 	resp, err := c.APIUpload(context.Background(), u)
-	var out app.UploadResult
+	var out wire.UploadResult
 	read(t, resp, err, http.StatusCreated, &out)
 	return out
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -33,13 +34,13 @@ func (Reports) Probe(r volt.Request, id int) volt.Response {
 
 // Show is the run's report page.
 func (Reports) Show(r volt.Request, id int, run db.Run, loading []db.MsLoad, checking []db.MsCheck, vetting []db.MsVet, generating []db.MsGenerate) volt.Response {
-	return volt.HTML(ReportHTML(run, PhaseRowsOf(loading, checking, vetting, generating)))
+	return volt.HTML(ReportHTML(run, wire.PhaseRowsOf(loading, checking, vetting, generating)))
 }
 
 // Export is the run's phase rows as CSV, written by a stream, the one
 // response that is not a value.
 func (Reports) Export(r volt.Request, id int, run db.Run, loading []db.MsLoad, checking []db.MsCheck, vetting []db.MsVet, generating []db.MsGenerate) volt.Response {
-	rows := PhaseRowsOf(loading, checking, vetting, generating)
+	rows := wire.PhaseRowsOf(loading, checking, vetting, generating)
 	return volt.Stream(func(w io.Writer) error {
 		return ReportCSV(w, rows)
 	}).WithHeader("Content-Type", "text/csv; charset=utf-8").
@@ -50,7 +51,7 @@ func (Reports) Export(r volt.Request, id int, run db.Run, loading []db.MsLoad, c
 var ReportCSVHeader = []string{"phase", "tables", "wall_ms", "alloc_mb", "heap_mb", "allocs", "output_mb", "source_kb"}
 
 // ReportCSV writes the header and one record per phase row.
-func ReportCSV(w io.Writer, rows []PhaseRow) error {
+func ReportCSV(w io.Writer, rows []wire.PhaseRow) error {
 	cw := csv.NewWriter(w)
 	if err := cw.Write(ReportCSVHeader); err != nil {
 		return err
@@ -144,7 +145,7 @@ body { margin: 0; background: #fcfcfb; }
 // measured on, a chart of wall time against table count per phase, and
 // the table the chart draws. It uses no external resource and the
 // system's sans-serif font.
-func ReportHTML(run db.Run, rows []PhaseRow) []byte {
+func ReportHTML(run db.Run, rows []wire.PhaseRow) []byte {
 	var b strings.Builder
 	esc := html.EscapeString
 	title := fmt.Sprintf("Voltmeter run %d", run.ID)
@@ -187,7 +188,7 @@ func ReportHTML(run db.Run, rows []PhaseRow) []byte {
 	return []byte(b.String())
 }
 
-func reportChart(b *strings.Builder, rows []PhaseRow) {
+func reportChart(b *strings.Builder, rows []wire.PhaseRow) {
 	const w, h, left, right, top, bottom = 720.0, 320.0, 64.0, 96.0, 16.0, 40.0
 	sizeSet := map[int]bool{}
 	peak := 0.0
@@ -227,7 +228,7 @@ func reportChart(b *strings.Builder, rows []PhaseRow) {
 	}
 	fmt.Fprintf(b, "<text class=\"tick\" x=\"%g\" y=\"%g\" text-anchor=\"middle\">tables</text>\n", left+(w-left-right)/2, h-4)
 	for i, ph := range db.Phases {
-		var pts []PhaseRow
+		var pts []wire.PhaseRow
 		for _, p := range rows {
 			if p.Phase == ph {
 				pts = append(pts, p)

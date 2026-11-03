@@ -8,6 +8,7 @@ import (
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/examples/voltmeter/assets"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -22,7 +23,7 @@ func (Home) Index(r volt.Request) volt.Response {
 // Ping answers any verb with the method it was asked and the time the
 // shim captured.
 func (Home) Ping(r volt.Request) volt.Response {
-	return volt.Render(Pong{Method: r.Method(), At: r.Now()})
+	return volt.Render(wire.Pong{Method: r.Method(), At: r.Now()})
 }
 
 // Assets serves the embedded files (spec §requests-and-responses,
@@ -85,6 +86,6 @@ func (Probe) Count(r volt.Request) volt.Response {
 		return volt.Reject(http.StatusBadRequest, "steps must be at least 1")
 	}
 	return volt.Then(db.UserCount(rt.Raw[db.User](probeSQL, steps)), func(n int64) volt.Response {
-		return volt.Render(Counted{Steps: steps, Rows: n})
+		return volt.Render(wire.Counted{Steps: steps, Rows: n})
 	})
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
 	"github.com/Piechutowski/volt/examples/voltmeter/units"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -67,7 +68,7 @@ func uploadStored(body Upload, commit units.Commit, machine db.Machine) volt.Res
 		return volt.Then(db.RunCreate(add), func(run db.Run) volt.Response {
 			steps, _ := UploadWrites(run, body, budgets)
 			return volt.Then(rt.Tx(steps...), func(res []any) volt.Response {
-				out := UploadResult{Run: run, Breaches: []db.Breach{}}
+				out := wire.UploadResult{Run: run, Breaches: []db.Breach{}}
 				for _, v := range res {
 					if b, ok := v.(db.Breach); ok {
 						out.Breaches = append(out.Breaches, b)
@@ -154,10 +155,10 @@ func (Thesis) Record(r volt.Request, body ThesisUpload) volt.Response {
 	return volt.Then(rt.All(db.CommitGetMany(shas), db.LineCountQuery(db.LineCountSha.InList(shas))), func(res []any) volt.Response {
 		steps, skipped := ThesisWrites(body, res[0].([]db.Commit), res[1].([]db.LineCount))
 		if len(steps) == 0 {
-			return volt.RenderStatus(http.StatusOK, Stored{Skipped: skipped})
+			return volt.RenderStatus(http.StatusOK, wire.Stored{Skipped: skipped})
 		}
 		return volt.Then(rt.Tx(steps...), func([]any) volt.Response {
-			return volt.Created(Stored{Written: len(steps), Skipped: skipped})
+			return volt.Created(wire.Stored{Written: len(steps), Skipped: skipped})
 		})
 	})
 }

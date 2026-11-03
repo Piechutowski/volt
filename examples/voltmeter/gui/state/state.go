@@ -16,9 +16,9 @@ import (
 	"strings"
 
 	"github.com/Piechutowski/volt"
-	"github.com/Piechutowski/volt/examples/voltmeter/app"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
 	"github.com/Piechutowski/volt/examples/voltmeter/units"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 )
 
 // RunsLimit is the size of one page of the run list.
@@ -110,14 +110,14 @@ type RunList struct {
 	Tag    string
 	After  int
 	Back   []int
-	Page   app.RunPage
+	Page   wire.RunPage
 	Loaded bool
 }
 
 // RunView is the run the run screen shows and where its CSV went.
 type RunView struct {
 	ID     int
-	Detail app.RunDetail
+	Detail wire.RunDetail
 	Loaded bool
 	Export string
 }
@@ -133,7 +133,7 @@ type ThesisView struct {
 type BudgetView struct {
 	List     []db.Budget
 	Selected int
-	Detail   app.BudgetDetail
+	Detail   wire.BudgetDetail
 	Loaded   bool
 }
 
@@ -363,14 +363,14 @@ type SignedIn struct {
 // RunsFetched answers RunsFetch, naming the page it asked for.
 type RunsFetched struct {
 	Query RunsFetch
-	Page  app.RunPage
+	Page  wire.RunPage
 	Err   error
 }
 
 // RunFetched answers RunFetch.
 type RunFetched struct {
 	ID     int
-	Detail app.RunDetail
+	Detail wire.RunDetail
 	Err    error
 }
 
@@ -429,7 +429,7 @@ type BudgetsFetched struct {
 // BudgetFetched answers BudgetFetch.
 type BudgetFetched struct {
 	ID     int
-	Detail app.BudgetDetail
+	Detail wire.BudgetDetail
 	Err    error
 }
 
@@ -447,7 +447,7 @@ type BudgetPosted struct {
 
 // BudgetsResetPosted answers BudgetsResetPost.
 type BudgetsResetPosted struct {
-	Reset app.Reset
+	Reset wire.Reset
 	Err   error
 }
 

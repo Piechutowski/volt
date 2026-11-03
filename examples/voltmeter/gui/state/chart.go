@@ -5,9 +5,9 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/Piechutowski/volt/examples/voltmeter/app"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
 	"github.com/Piechutowski/volt/examples/voltmeter/units"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 )
 
 // Chart is a line chart as data: named series of points on one x and
@@ -107,7 +107,7 @@ func tickStep(top float64) float64 {
 
 // RunChart is a run's wall time against the table count, one series
 // per phase in the order the sweep runs them.
-func RunChart(d app.RunDetail) Chart {
+func RunChart(d wire.RunDetail) Chart {
 	c := Chart{XLabel: "tables", YLabel: "wall ms"}
 	var sizes []int
 	for _, ph := range db.Phases {

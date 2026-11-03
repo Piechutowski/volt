@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -215,6 +216,51 @@ func TestGeneratedFilesKeepTheLayers(t *testing.T) {
 					t.Errorf("%s/%s imports %s for something other than the declared-type assertions", g.dir, name, p)
 				}
 			}
+		}
+	}
+}
+
+// TestClientsLinkNoServerCode proves the client side keeps to spec
+// §generated-client's "a caller links no server code" where the
+// language allows it: the pure GUI state and the response values link
+// neither the routes package app, nor the runner nao/run, nor the
+// server. The GUI's runner and the collector still link app, for the
+// struct bodies the language keeps there (§request-bodies) and the Path
+// helpers of controller routes whose client methods take no query
+// parameters; the test pins that known gap so its closing is noticed.
+func TestClientsLinkNoServerCode(t *testing.T) {
+	mod := moduleDir(t)
+	const base = "github.com/Piechutowski/volt/examples/voltmeter/"
+	server := []string{base + "app", base + "server", base + "assets", "github.com/Piechutowski/volt/nao/run"}
+	cases := []struct {
+		pkg   string
+		links bool
+	}{
+		{"./gui/state", false},
+		{"./wire", false},
+		{"./app/client", false},
+		{"./gui/remote", true},
+		{"./collector", true},
+	}
+	for _, c := range cases {
+		cmd := exec.Command("go", "list", "-deps", c.pkg)
+		cmd.Dir = mod
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("go list -deps %s: %v", c.pkg, err)
+		}
+		deps := strings.Fields(string(out))
+		var linked []string
+		for _, s := range server {
+			if slices.Contains(deps, s) {
+				linked = append(linked, s)
+			}
+		}
+		if !c.links && len(linked) > 0 {
+			t.Errorf("%s links server code: %v", c.pkg, linked)
+		}
+		if c.links && !slices.Contains(linked, base+"app") {
+			t.Errorf("%s no longer links app; the gap it pins has closed, so move it to the clean side", c.pkg)
 		}
 	}
 }

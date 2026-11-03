@@ -5,6 +5,7 @@ import (
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -48,7 +49,7 @@ func (Budgets) Create(r volt.Request) volt.Response {
 // Show is the budget and every breach against it, newest first.
 func (Budgets) Show(r volt.Request, id int) volt.Response {
 	return volt.Then(rt.All(db.BudgetGet(id), db.BreachQuery(db.BreachBudgetID.Eq(id), db.BreachOrderBy(db.BreachID.Desc()))), func(res []any) volt.Response {
-		return volt.Render(BudgetDetail{Budget: res[0].(db.Budget), Breaches: res[1].([]db.Breach)})
+		return volt.Render(wire.BudgetDetail{Budget: res[0].(db.Budget), Breaches: res[1].([]db.Breach)})
 	})
 }
 
@@ -66,6 +67,6 @@ func (Budgets) Update(r volt.Request, id int, body db.BudgetChangeset) volt.Resp
 // Reset returns every breached budget to ok in one statement.
 func (Budgets) Reset(r volt.Request) volt.Response {
 	return volt.Then(db.BudgetUpdateWhere(db.BudgetSet(db.BudgetState.Set(db.HealthOK)), db.BudgetState.Eq(db.HealthBreached)), func(n int64) volt.Response {
-		return volt.Render(Reset{Reset: n})
+		return volt.Render(wire.Reset{Reset: n})
 	})
 }

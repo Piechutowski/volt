@@ -17,6 +17,7 @@ import (
 	"github.com/Piechutowski/volt/examples/voltmeter/app"
 	"github.com/Piechutowski/volt/examples/voltmeter/app/client"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
+	"github.com/Piechutowski/volt/examples/voltmeter/wire"
 	"github.com/Piechutowski/volt/internal/perfsweep"
 )
 
@@ -52,9 +53,9 @@ type Collected struct {
 	Rows         []perfsweep.Row
 	Keystrokes   []perfsweep.Keystroke
 	Upload       app.Upload
-	Stored       app.UploadResult
+	Stored       wire.UploadResult
 	Thesis       app.ThesisUpload
-	ThesisStored app.Stored
+	ThesisStored wire.Stored
 	Samples      []app.SampleTimed
 	Calls        []Call
 }
@@ -168,7 +169,7 @@ func Collect(ctx context.Context, cfg Config, log func(format string, args ...an
 			}
 		}
 		for _, batch := range SamplesBatched(out.Samples, 1000) {
-			var stored app.Stored
+			var stored wire.Stored
 			if err := expect(c.APISamplesRecord(ctx, out.Stored.Run.ID, batch))(http.StatusCreated, &stored); err != nil {
 				return out, fmt.Errorf("samples: %w", err)
 			}
