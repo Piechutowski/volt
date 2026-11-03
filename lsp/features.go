@@ -118,9 +118,13 @@ func identNames(ids []*ast.Ident) []string {
 	return out
 }
 
-// Definition returns the location of the declaration of the symbol at pos.
+// Definition returns the location of the declaration of the symbol at pos;
+// on the name of a type declaration, the Go type it admits (§types).
 func (d *Document) Definition(pos protocol.Position) *protocol.Location {
 	if loc := d.voltDefinition(pos); loc != nil {
+		return loc
+	}
+	if loc := d.goTypeDefinition(d.FromLSP(pos)); loc != nil {
 		return loc
 	}
 	occ := d.Index.At(d.FromLSP(pos))

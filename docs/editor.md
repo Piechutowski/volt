@@ -236,6 +236,8 @@ layer:
   referential actions are the parser's own list, and a test holds the
   element words, the verbs and the setting names to the parser's
   lists. Resource actions and order directions are not completed.
+- A group hovers as its declaration as written, set terms and all,
+  and the tables it resolves to (§groups).
 - A migration's name hovers as its position among the package's
   migrations in name order ("migration 2 of 3") and whether it runs
   backward (§migrations); the project index answers it, so a
@@ -319,12 +321,13 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
   setting's name and its `:` (`[default` then `: 1` on the next line)
   draw an ERROR node, since a line break there is not whitespace to
   the grammar; the front end accepts them.
-- **LSP: no Go-side navigation.** Handler references (`Home.Index`)
+- **LSP: Go-side navigation is partial.** Handler references (`Home.Index`)
   and `error_handler:` point into Go, which this server does not
   index (roadmap). A query reference (`db.UserGet`, §query-routes) is
   not navigated either; a dataset's select (`dataset db.browse`) is.
-  Definition and hover on a bare declared type stay on its `type`
-  line and do not open the Go type (§types).
+  A declared type's hover stays on its `type` line; go-to-definition
+  on a column's type lands there, and from the name of the `type`
+  line itself on the Go type (Go references, below).
 
 ### Go references
 
@@ -338,9 +341,15 @@ build): go-to-definition lands on the `func`, hover shows its signature
 and doc comment, and an undeclared name hovers as undeclared while the
 checker's diagnostic on the reference names the exact signature to
 write. `volt.*` plugs live in the runtime and
-make no claim. Error handlers and bare types are not navigated
-(section 7), but their existence, and a handler's signature, are
-checked like the rest. Existence and the spelled signature are the
+make no claim. Go-to-definition on the name of a `type` declaration
+(§types), either part of a qualified one, lands on the Go type spec: a
+bare name in the package's own Go files, a qualified one in the
+package its `from` path imports, whose directory the go tool finds
+(`go list -find`, offline), so a package of the project, of a
+workspace module, of the module cache or of the standard library all
+resolve; with no go tool on the path it finds nothing. Error handlers
+are not navigated (section 7), but their existence, and a handler's
+signature, are checked like the rest. Existence and the spelled signature are the
 checker's, so a typo or a wrong parameter type is a diagnostic at the
 reference. The Go side can move without any `.volt` buffer changing —
 a gopls rename, a newly written function — so the server registers a

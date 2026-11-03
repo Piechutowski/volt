@@ -118,7 +118,7 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 			case *ast.Pipeline:
 				ix.define(voltSym{"pipeline", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), pipe: d})
 			case *ast.Group:
-				ix.define(voltSym{"group", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), group: d})
+				ix.define(voltSym{"group", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), group: d, pkg: pkg})
 			case *ast.Pred:
 				ix.define(voltSym{"pred", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), pred: d})
 			}
@@ -467,7 +467,7 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 	case "package":
 		md = "**package** `" + ref.sym.pkg + "`"
 	case "group":
-		md = groupHover(ref.sym, def)
+		md = groupHover(ref.sym, def, d.vindex)
 	case "pred":
 		md = predHover(ref.sym, def, d.vindex)
 	case "select", "gofunc", "migration":
@@ -613,28 +613,29 @@ func (ix *voltIndex) setSym(path, name string, kinds ...string) voltSym {
 	return voltSym{kinds[len(kinds)-1], path, name}
 }
 
-func groupHover(sym voltSym, def voltDef) string {
+func groupHover(sym voltSym, def voltDef, ix *voltIndex) string {
 	g := def.group
 	if g == nil {
 		return ""
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "```volt\ngroup %s\n```\n", sym.name)
-	for _, t := range g.Terms {
-		op := "+"
-		if t.Neg {
-			op = "\\"
-		}
-		names := make([]string, len(t.Names))
-		for i, id := range t.Names {
-			names[i] = id.Name()
-		}
-		term := names[0]
-		if t.Set() {
-			term = "(" + strings.Join(names, ", ") + ")"
-		}
-		fmt.Fprintf(&b, "- %s %s\n", op, term)
+	decl := "group " + sym.name
+	if text := ix.text(def.span.file); g.Pos().Offset() >= 0 && int(g.End().Offset()) <= len(text) && g.Pos().Offset() < g.End().Offset() {
+		decl = strings.TrimSpace(text[g.Pos().Offset():g.End().Offset()])
 	}
+	var b strings.Builder
+	b.WriteString("```volt\n" + decl + "\n```\n")
+	if def.pkg == nil {
+		return b.String()
+	}
+	gi := def.pkg.Groups[sym.name]
+	if gi == nil || len(gi.Members) == 0 {
+		return b.String()
+	}
+	names := make([]string, len(gi.Members))
+	for i, m := range gi.Members {
+		names[i] = "`" + m.Key + "`"
+	}
+	b.WriteString("\nMembers: " + strings.Join(names, ", ") + "\n")
 	return b.String()
 }
 

@@ -44,7 +44,10 @@ func TestGroupTermDefinitionAndHover(t *testing.T) {
 		t.Fatal("no hover for the group term")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"group Metrics", "- + ms_revenue", "- + ms_dict"} {
+	if strings.Contains(md, "\n- ") {
+		t.Errorf("the group hover is a Markdown list, whose + and \\ operators render as nested bullets:\n%s", md)
+	}
+	for _, want := range []string{"```volt\ngroup Metrics {\n\tms_revenue\n\tms_usage\n\tms_dict\n}\n```", "Members: `ms_revenue`, `ms_usage`, `ms_dict`"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("group hover missing %q:\n%s", want, md)
 		}
@@ -60,7 +63,10 @@ func TestGroupTermDefinitionAndHover(t *testing.T) {
 		t.Fatal("no hover for the group")
 	}
 	md = h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"- + Metrics", "- \\ (ms_dict)"} {
+	if strings.Contains(md, "\n- ") {
+		t.Errorf("the group hover is a Markdown list, whose + and \\ operators render as nested bullets:\n%s", md)
+	}
+	for _, want := range []string{"```volt\ngroup series = Metrics \\ (ms_dict)\n```", "Members: `ms_revenue`, `ms_usage`"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("group hover missing %q:\n%s", want, md)
 		}
