@@ -70,6 +70,7 @@
   "scope"
   "resources"
   "dataset"
+  "load"
 ] @keyword
 
 (verb) @keyword
@@ -101,7 +102,10 @@
   "pred"
   "select"
   "for"
+  "join"
+  "with"
   "where"
+  "as"
 ] @keyword
 
 [
