@@ -293,9 +293,11 @@ func TestGUISignInBrowseAndOpen(t *testing.T) {
 
 // TestGUIBudgetsLive proves a refused budget's field error lands under
 // its field and clears when fixed, a value that is no number never
-// reaches the server, and a breach caused by another client reaches a
-// second client's state live through the event stream (spec
-// §event-routes).
+// reaches the server, a breach caused by another client reaches a
+// second client's state live through the event stream, and so do a
+// ceiling and a tag another member changed: the second member's open
+// ceiling field and run form follow them, so a save neither reverts the
+// ceiling nor names a deleted tag (spec §event-routes).
 func TestGUIBudgetsLive(t *testing.T) {
 	e := envStart(t)
 	c := e.gob(0)
@@ -378,6 +380,9 @@ func TestGUIBudgetsLive(t *testing.T) {
 	if len(grace.s.Budgets.List) != 1 || grace.s.Budgets.List[0].MaxMs != 3 || grace.s.Budgets.Selected != grace.s.Budgets.List[0].ID {
 		t.Fatalf("Grace's budgets = %+v", grace.s.Budgets)
 	}
+	if got := grace.s.Fields[state.FieldCeiling]; got != "3" {
+		t.Errorf("Grace's ceiling field reads %q after Ada set 3; saving it would undo Ada's change", got)
+	}
 
 	over := runUpload(t, c, sweep("beef0002", []int{2}, 4))
 	await("Uploads.Create")
@@ -397,5 +402,30 @@ func TestGUIBudgetsLive(t *testing.T) {
 	await("Budgets.Reset")
 	if gb, _ := grace.s.BudgetSelected(); gb.State != db.HealthOK || len(grace.s.Budgets.Detail.Breaches) != 1 {
 		t.Errorf("after the reset Grace sees %+v, breaches %+v", gb, grace.s.Budgets.Detail.Breaches)
+	}
+
+	if r := e.raw("POST", app.PathAPITags(), `{"slug": "sweep", "name": "Sweep"}`); r.StatusCode != http.StatusCreated {
+		t.Fatalf("tag = %d %s", r.StatusCode, r.body)
+	}
+	await("db.TagCreate")
+	if r := e.raw("PATCH", app.PathAPIRunAnnotate(over.Run.ID), `{"tag": "sweep"}`); r.StatusCode != http.StatusOK {
+		t.Fatalf("annotate = %d %s", r.StatusCode, r.body)
+	}
+	await("Runs.Annotate")
+	grace.do(state.RunOpen{ID: over.Run.ID})
+	if got := grace.s.Fields[state.FieldRunTag]; got != "sweep" {
+		t.Fatalf("Grace's open run shows tag %q", got)
+	}
+	if r := e.raw("DELETE", app.PathAPITag("sweep"), ""); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("tag delete = %d %s", r.StatusCode, r.body)
+	}
+	await("db.TagDelete")
+	if got := grace.s.Fields[state.FieldRunTag]; got != "" || grace.s.Run.Detail.Run.Tag.Valid {
+		t.Errorf("after Ada deleted the tag Grace's open run still shows %q (%+v)", got, grace.s.Run.Detail.Run.Tag)
+	}
+	grace.edit(state.FieldRunNote, "seen")
+	grace.do(state.RunAnnotate{})
+	if len(grace.s.Errors) != 0 || grace.s.Run.Detail.Run.Note.V != "seen" {
+		t.Errorf("saving the run after the tag went: errors %v, run %+v", grace.s.Errors, grace.s.Run.Detail.Run)
 	}
 }

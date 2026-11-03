@@ -59,9 +59,9 @@ func (r *runScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) err
 		dirty = " with uncommitted changes"
 	}
 	heading(&r.title, fmt.Sprintf("Run %d at %s%s, %s", d.Run.ID, d.Run.Commit.Short(), dirty, d.Run.CreatedAt.Local().Format("2006-01-02 15:04")), 1.2)
-	r.tag.SetField(state.FieldRunTag, "Tag slug", "none")
+	r.tag.FieldSet(state.FieldRunTag, "Tag slug", "none")
 	r.tag.OnSubmitted(func(context *guigui.Context) { m.dispatch(state.RunAnnotate{}) })
-	r.note.SetField(state.FieldRunNote, "Note", "what this run measured")
+	r.note.FieldSet(state.FieldRunNote, "Note", "what this run measured")
 	r.note.OnSubmitted(func(context *guigui.Context) { m.dispatch(state.RunAnnotate{}) })
 	r.save.SetText("Save")
 	r.save.SetType(basicwidget.ButtonTypePrimary)
@@ -74,7 +74,7 @@ func (r *runScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) err
 	}
 	caption(&r.saved, exported, basicwidgetdraw.TextColor(context.ColorMode(), false))
 
-	r.chart.SetChart(state.RunChart(d), false)
+	r.chart.ChartSet(state.RunChart(d), false)
 
 	cols := []basicwidget.TableColumn{columnOf("Tables", 1, true)}
 	for _, ph := range db.Phases {

@@ -34,6 +34,7 @@ type budgetsScreen struct {
 	rows       []basicwidget.TableRow[int]
 	breachRows []basicwidget.TableRow[int]
 	lay        layouts
+	spots      spots
 }
 
 func (b *budgetsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -70,12 +71,13 @@ func (b *budgetsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder)
 
 	heading(&b.addTitle, "Add a budget", 1)
 	caption(&b.phaseLabel, "Phase", nil)
-	b.phase.SetPhase(db.Phase(s.Fields[state.FieldBudgetPhase]), db.Phases)
+	b.phase.PhaseSet(db.Phase(s.Fields[state.FieldBudgetPhase]), db.Phases)
+	b.phase.NameSet(string(state.FieldBudgetPhase))
 	b.phase.OnPicked(func(context *guigui.Context, phase db.Phase) {
 		m.dispatch(state.FieldEdit{Field: state.FieldBudgetPhase, Value: string(phase)})
 	})
-	b.tables.SetField(state.FieldBudgetTables, "Tables", "160")
-	b.maxMS.SetField(state.FieldBudgetMax, "Ceiling in ms", "40")
+	b.tables.FieldSet(state.FieldBudgetTables, "Tables", "160")
+	b.maxMS.FieldSet(state.FieldBudgetMax, "Ceiling in ms", "40")
 	b.maxMS.OnSubmitted(func(context *guigui.Context) { m.dispatch(state.BudgetAdd{}) })
 	b.add.SetText("Add budget")
 	b.add.SetType(basicwidget.ButtonTypePrimary)
@@ -91,7 +93,7 @@ func (b *budgetsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder)
 		caption(&b.detailState, "Add a budget, then pick it to edit its ceiling.", muted)
 	} else {
 		heading(&b.detailTitle, fmt.Sprintf("Budget %d: %s at %d tables", sel.ID, sel.Phase, sel.Tables), 1)
-		text := "OK: no upload has gone over " + units.Millis(sel.MaxMs).String() + " since this budget was set or reset; earlier runs are not judged"
+		text := "OK: since this budget was set or reset, no upload has gone over " + units.Millis(sel.MaxMs).String() + ". Earlier runs are not judged."
 		var clr = muted
 		if sel.State == db.HealthBreached {
 			text = "Breached: a run went over " + units.Millis(sel.MaxMs).String()
@@ -99,8 +101,11 @@ func (b *budgetsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder)
 		}
 		caption(&b.detailState, text, clr)
 	}
+	b.detailState.SetMultiline(true)
+	b.detailState.SetWrapMode(basicwidget.WrapModeNormal)
+	b.detailState.SetEllipsisString("...")
 	context.SetEnabled(&b.save, ok)
-	b.ceiling.SetField(state.FieldCeiling, "Ceiling in ms", "")
+	b.ceiling.FieldSet(state.FieldCeiling, "Ceiling in ms", "")
 	b.ceiling.OnSubmitted(func(context *guigui.Context) { m.dispatch(state.BudgetCeilingSave{}) })
 	b.save.SetText("Save ceiling")
 	b.save.SetType(basicwidget.ButtonTypePrimary)
@@ -130,9 +135,25 @@ func (b *budgetsScreen) Layout(context *guigui.Context, widgetBounds *guigui.Wid
 	)
 	right := a.column(u/2,
 		fixed(&b.detailTitle, u*3/2),
-		fixed(&b.detailState, u),
+		fixed(&b.detailState, 2*u),
 		a.nested(a.row(u/2, flex(&b.ceiling, 1), a.besideField(&b.save, u, 6*u)), guigui.Size{}),
 		flex(&b.breaches, 1),
 	)
-	padded(a.row(u, a.nested(left, guigui.FlexibleSize(1)), a.nested(right, guigui.FlexibleSize(1))), u/2).LayoutWidgets(context, widgetBounds.Bounds(), layouter)
+	recorded := b.spots.recorded(modelOf(context, b), layouter, func(name func(guigui.Widget, string)) {
+		name(&b.reset, "budgets:reset")
+		name(&b.save, "budgets:save")
+		name(&b.add, "budgets:add")
+	})
+	padded(a.row(u, a.nested(left, guigui.FlexibleSize(1)), a.nested(right, guigui.FlexibleSize(1))), u/2).LayoutWidgets(context, widgetBounds.Bounds(), recorded)
+}
+
+func (b *budgetsScreen) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBounds) error {
+	m := modelOf(context, b)
+	b.spots.placed(m)
+	if m != nil && m.probe != nil {
+		for i, row := range b.rows {
+			m.probe.place(probeRow("budgets", row.Value), b.table.ItemBounds(i))
+		}
+	}
+	return nil
 }

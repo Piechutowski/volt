@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
@@ -135,11 +136,15 @@ type ThesisView struct {
 }
 
 // BudgetView is every budget and the one selected, with its breaches.
+// Edited is set once the member types in the ceiling field, so a
+// refetch after another member's change does not overwrite what is not
+// saved yet, and is cleared when the member picks or saves.
 type BudgetView struct {
 	List     []db.Budget
 	Selected int
 	Detail   wire.BudgetDetail
 	Loaded   bool
+	Edited   bool
 }
 
 // BoardView is the member's dashboards and the one selected.
@@ -171,6 +176,7 @@ type State struct {
 	Errors  map[Field]string
 	Notice  Notice
 	Live    string
+	LiveAt  time.Time
 }
 
 // Intent is something that happened: a member acted, a command
@@ -191,6 +197,9 @@ type Answer struct {
 
 // Started opens the client on the sign-in screen.
 type Started struct{}
+
+// MembersReload asks for the team again after loading it failed.
+type MembersReload struct{}
 
 // FieldEdit is new text in a field.
 type FieldEdit struct {
@@ -272,11 +281,12 @@ type WidgetRemove struct{ ID int }
 // Changed is the server's change event (spec §event-routes): which
 // route wrote, so the client refetches what it shows.
 type Changed struct {
-	Method  string `json:"method"`
-	Route   string `json:"route"`
-	Handler string `json:"handler"`
-	Path    string `json:"path"`
-	Status  int    `json:"status"`
+	Method  string    `json:"method"`
+	Route   string    `json:"route"`
+	Handler string    `json:"handler"`
+	Path    string    `json:"path"`
+	Status  int       `json:"status"`
+	At      time.Time `json:"at"`
 }
 
 // UsersFetch asks for the team.
@@ -505,6 +515,7 @@ func (Answer) intent()             {}
 func (SizesFetched) intent()       {}
 func (Started) intent()            {}
 func (FieldEdit) intent()          {}
+func (MembersReload) intent()      {}
 func (MemberPick) intent()         {}
 func (SignInSubmit) intent()       {}
 func (SignOut) intent()            {}
@@ -609,6 +620,9 @@ func Update(s State, in Intent) (State, []Command) {
 		if in.Field == FieldRunTag || in.Field == FieldRunNote {
 			s.Run.Edited = true
 		}
+		if in.Field == FieldCeiling {
+			s.Budgets.Edited = true
+		}
 		return s, nil
 	case MemberPick:
 		s.Fields = with(s.Fields, FieldEmail, in.Email)
@@ -640,10 +654,17 @@ func signedOut(s State, in Intent) (State, []Command) {
 		if in.Err != nil {
 			return failed(s, "loading the team", in.Err), nil
 		}
+		s = recovered(s, "loading the team")
 		s.Members = in.Users
 		return s, nil
+	case MembersReload:
+		return s, []Command{UsersFetch{}}
 	case SignedIn:
 		if in.Err != nil {
+			var pe *volt.ProblemError
+			if !errors.As(in.Err, &pe) {
+				return failed(s, "signing in", in.Err), nil
+			}
 			s, placed := formFailed(s, in.Err, emailForm)
 			if !placed {
 				s.Errors = with(s.Errors, FieldEmail, problemText(in.Err))
@@ -847,6 +868,9 @@ func member(s State, in Intent) (State, []Command) {
 		}
 		s = recovered(s, "loading budgets")
 		s.Budgets.List, s.Budgets.Loaded = in.Budgets, true
+		if b, ok := s.budget(s.Budgets.Selected); ok && !s.Budgets.Edited {
+			s.Fields = with(s.Fields, FieldCeiling, strconv.FormatFloat(b.MaxMs, 'f', -1, 64))
+		}
 		if s.Budgets.Selected == 0 && len(in.Budgets) > 0 {
 			first := in.Budgets[0].ID
 			if i := slices.IndexFunc(in.Budgets, func(b db.Budget) bool { return b.State == db.HealthBreached }); i >= 0 {
@@ -857,6 +881,7 @@ func member(s State, in Intent) (State, []Command) {
 		return s, nil
 	case BudgetPick:
 		s.Budgets.Selected = in.ID
+		s.Budgets.Edited = false
 		s.Errors = without(s.Errors, FieldCeiling)
 		if b, ok := s.budget(in.ID); ok {
 			s.Fields = with(s.Fields, FieldCeiling, strconv.FormatFloat(b.MaxMs, 'f', -1, 64))
@@ -889,6 +914,10 @@ func member(s State, in Intent) (State, []Command) {
 			return s, nil
 		}
 		s.Notice = Notice{Text: "Budget " + strconv.Itoa(in.Budget.ID) + " now allows " + units.Millis(in.Budget.MaxMs).String()}
+		if in.Budget.ID == s.Budgets.Selected {
+			s.Budgets.Edited = false
+			s.Fields = with(s.Fields, FieldCeiling, strconv.FormatFloat(in.Budget.MaxMs, 'f', -1, 64))
+		}
 		return s, []Command{BudgetsFetch{}, BudgetFetch{ID: in.Budget.ID}}
 	case BudgetAdd:
 		s.Errors = without(s.Errors, FieldBudgetPhase, FieldBudgetTables, FieldBudgetMax)
@@ -912,6 +941,7 @@ func member(s State, in Intent) (State, []Command) {
 		s.Fields = without(s.Fields, FieldBudgetTables, FieldBudgetMax)
 		s.Notice = Notice{Text: "Added budget " + strconv.Itoa(in.Budget.ID)}
 		s.Budgets.Selected = in.Budget.ID
+		s.Budgets.Edited = false
 		s.Fields = with(s.Fields, FieldCeiling, strconv.FormatFloat(in.Budget.MaxMs, 'f', -1, 64))
 		return s, []Command{BudgetsFetch{}, BudgetFetch{ID: in.Budget.ID}}
 	case BudgetsReset:
@@ -1040,8 +1070,11 @@ func screenShow(s State, to Screen) (State, []Command) {
 }
 
 func changed(s State, c Changed) (State, []Command) {
-	s.Live = c.Handler + " " + c.Path
+	s.Live, s.LiveAt = c.Handler+" "+c.Path, c.At
 	if s.User.ID == 0 {
+		if len(s.Members) == 0 {
+			return s, []Command{UsersFetch{}}
+		}
 		return s, nil
 	}
 	var cmds []Command
@@ -1063,6 +1096,9 @@ func changed(s State, c Changed) (State, []Command) {
 		}
 	case strings.HasPrefix(c.Handler, "db.Tag"):
 		cmds = append(cmds, TagsFetch{}, runsFetch(s))
+		if s.Run.ID != 0 {
+			cmds = append(cmds, RunFetch{ID: s.Run.ID})
+		}
 	case strings.HasPrefix(c.Handler, "Budgets."):
 		cmds = append(cmds, budgetsFetch(s)...)
 	case c.Handler == "Dashboards.Create" || strings.HasPrefix(c.Handler, "Widgets."):

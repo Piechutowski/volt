@@ -16,9 +16,12 @@ type signInScreen struct {
 	title    basicwidget.Text
 	subtitle basicwidget.Text
 	members  guigui.WidgetSlice[*basicwidget.Button]
+	notice   basicwidget.Text
+	retry    basicwidget.Button
 	or       basicwidget.Text
 	email    field
 	submit   basicwidget.Button
+	failed   bool
 	lay      layouts
 }
 
@@ -30,6 +33,11 @@ func (s *signInScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 	s.members.SetLen(len(m.s.Members))
 	adder.AddWidget(&s.title)
 	adder.AddWidget(&s.subtitle)
+	s.failed = m.s.Notice.Failed
+	if s.failed {
+		adder.AddWidget(&s.notice)
+		adder.AddWidget(&s.retry)
+	}
 	for _, b := range s.members.All() {
 		adder.AddWidget(b)
 	}
@@ -48,9 +56,15 @@ func (s *signInScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 			m.dispatch(state.MemberPick{Email: u.Email})
 		})
 	}
+	caption(&s.notice, m.s.Notice.Text, basicwidget.DangerTintColor())
+	s.notice.SetMultiline(true)
+	s.notice.SetWrapMode(basicwidget.WrapModeNormal)
+	s.notice.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
+	s.retry.SetText("Try again")
+	s.retry.OnDown(func(context *guigui.Context) { m.dispatch(state.MembersReload{}) })
 	caption(&s.or, "or sign in by email", basicwidgetdraw.TextColor(context.ColorMode(), false))
 	s.or.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
-	s.email.SetField(state.FieldEmail, "Email", "name@voltmeter.test")
+	s.email.FieldSet(state.FieldEmail, "Email", "name@voltmeter.test")
 	s.email.OnSubmitted(func(context *guigui.Context) { m.dispatch(state.SignInSubmit{}) })
 	s.submit.SetText("Sign in")
 	s.submit.SetType(basicwidget.ButtonTypePrimary)
@@ -64,6 +78,9 @@ func (s *signInScreen) Layout(context *guigui.Context, widgetBounds *guigui.Widg
 	b := widgetBounds.Bounds()
 	w := min(b.Dx()-2*u, 18*u)
 	items := a.list(fixed(&s.title, 2*u), fixed(&s.subtitle, u), fixed(nil, u/2))
+	if s.failed {
+		items = append(items, natural(&s.notice), fixed(&s.retry, u*3/2))
+	}
 	for _, btn := range s.members.All() {
 		items = append(items, fixed(btn, u*3/2))
 	}

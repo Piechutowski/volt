@@ -133,7 +133,7 @@ type field struct {
 	lay         layouts
 }
 
-func (f *field) SetField(name state.Field, label, placeholder string) {
+func (f *field) FieldSet(name state.Field, label, placeholder string) {
 	f.name, f.labelText, f.placeholder = name, label, placeholder
 }
 
@@ -217,9 +217,13 @@ type phasePicker struct {
 
 	phase  db.Phase
 	phases []db.Phase
+	name   string
+	bounds image.Rectangle
 }
 
-func (p *phasePicker) SetPhase(phase db.Phase, phases []db.Phase) {
+func (p *phasePicker) NameSet(name string) { p.name = name }
+
+func (p *phasePicker) PhaseSet(phase db.Phase, phases []db.Phase) {
 	p.phase, p.phases = phase, phases
 }
 
@@ -245,7 +249,23 @@ func (p *phasePicker) Build(context *guigui.Context, adder *guigui.ChildAdder) e
 }
 
 func (p *phasePicker) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds, layouter *guigui.ChildLayouter) {
-	layouter.LayoutWidget(&p.control, widgetBounds.Bounds())
+	p.bounds = widgetBounds.Bounds()
+	layouter.LayoutWidget(&p.control, p.bounds)
+}
+
+func (p *phasePicker) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBounds) error {
+	m := modelOf(context, p)
+	if m == nil || m.probe == nil || p.name == "" || len(p.phases) == 0 {
+		return nil
+	}
+	w := p.bounds.Dx() / len(p.phases)
+	for i, ph := range p.phases {
+		r := p.bounds
+		r.Min.X += i * w
+		r.Max.X = r.Min.X + w
+		m.probe.place(p.name+":"+string(ph), r)
+	}
+	return nil
 }
 
 func (p *phasePicker) Measure(context *guigui.Context, constraints guigui.Constraints) image.Point {

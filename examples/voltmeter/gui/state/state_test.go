@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
@@ -136,7 +137,7 @@ func TestChangesRefetchWhatTheyTouch(t *testing.T) {
 	for handler, want := range map[string][]state.Command{
 		"Uploads.Create":    {runs, state.BudgetsFetch{}, state.BudgetFetch{ID: 2}},
 		"Runs.Annotate":     {runs, state.RunFetch{ID: 5}},
-		"db.TagDelete":      {state.TagsFetch{}, runs},
+		"db.TagDelete":      {state.TagsFetch{}, runs, state.RunFetch{ID: 5}},
 		"Budgets.Reset":     {state.BudgetsFetch{}, state.BudgetFetch{ID: 2}},
 		"Widgets.Create":    {state.BoardsFetch{}},
 		"Session.SignIn":    nil,
@@ -148,8 +149,15 @@ func TestChangesRefetchWhatTheyTouch(t *testing.T) {
 			t.Errorf("%s asked %v, want %v (live %q)", handler, cmds, want, got.Live)
 		}
 	}
-	if _, cmds := state.Update(state.State{}, state.Changed{Handler: "Uploads.Create"}); len(cmds) != 0 {
+	at := time.Date(2026, 11, 3, 9, 30, 0, 0, time.UTC)
+	if got, _ := state.Update(s, state.Changed{Handler: "db.TagCreate", Path: "/p", At: at}); !got.LiveAt.Equal(at) {
+		t.Errorf("the live line keeps the change's time %v, want %v", got.LiveAt, at)
+	}
+	if _, cmds := state.Update(state.State{Members: []db.User{{ID: 1}}}, state.Changed{Handler: "Uploads.Create"}); len(cmds) != 0 {
 		t.Errorf("a change reached a client signed out: %v", cmds)
+	}
+	if _, cmds := state.Update(state.State{}, state.Changed{Handler: "Uploads.Create"}); !reflect.DeepEqual(cmds, []state.Command{state.UsersFetch{}}) {
+		t.Errorf("a change reaching a signed-out client with no team asked %v, want the team again", cmds)
 	}
 
 	data, _ := json.Marshal(map[string]any{"method": "POST", "route": "POST /api/uploads", "handler": "Uploads.Create", "path": "/api/uploads", "status": 201})
@@ -319,5 +327,58 @@ func TestAnswersForAnEarlierMemberAreDropped(t *testing.T) {
 	}
 	if got, _ := state.Update(s, state.Answer{Session: s.Session, Result: late}); len(got.Boards.List) != 1 {
 		t.Errorf("an answer of the current session was dropped: %+v", got.Boards)
+	}
+}
+
+// TestSignedOutFailureIsShownAndRetried proves a client that could not
+// load the team says so and asks again when the member retries, that
+// the notice clears once the team loads, and that a sign-in failing
+// for want of a server is a notice, not an error of the email field.
+func TestSignedOutFailureIsShownAndRetried(t *testing.T) {
+	s, _ := state.Update(state.State{}, state.Started{})
+	s, _ = state.Update(s, state.UsersFetched{Err: errors.New("connection refused")})
+	if s.Notice != (state.Notice{Text: "loading the team: connection refused", Failed: true, Of: "loading the team"}) {
+		t.Errorf("a failed team load says %+v", s.Notice)
+	}
+	s, cmds := state.Update(s, state.MembersReload{})
+	if !reflect.DeepEqual(cmds, []state.Command{state.UsersFetch{}}) {
+		t.Errorf("retrying asked %v", cmds)
+	}
+	s, _ = state.Update(s, state.UsersFetched{Users: []db.User{{ID: 1, Name: "Ada"}}})
+	if s.Notice != (state.Notice{}) || len(s.Members) != 1 {
+		t.Errorf("after the team loads: notice %+v, members %v", s.Notice, s.Members)
+	}
+	down, _ := state.Update(s, state.SignedIn{Err: errors.New("dial tcp: connection refused")})
+	if down.Errors[state.FieldEmail] != "" || down.Notice != (state.Notice{Text: "signing in: dial tcp: connection refused", Failed: true, Of: "signing in"}) {
+		t.Errorf("a sign-in that reached no server: errors %v, notice %+v; the address is not at fault", down.Errors, down.Notice)
+	}
+}
+
+// TestCeilingFollowsAnotherMembersChange proves the ceiling field takes
+// a refetched ceiling while the member has not typed in it, and keeps
+// what the member typed otherwise, so saving never silently reverts
+// another member's change.
+func TestCeilingFollowsAnotherMembersChange(t *testing.T) {
+	s := member()
+	list := []db.Budget{{ID: 1, Phase: db.PhaseLoad, Tables: 2, MaxMs: 5}, {ID: 2, Phase: db.PhaseVet, Tables: 2, MaxMs: 50}}
+	s, _ = state.Update(s, state.BudgetsFetched{Budgets: list})
+	s, _ = state.Update(s, state.BudgetPick{ID: 2})
+	if s.Fields[state.FieldCeiling] != "50" {
+		t.Fatalf("picked ceiling %q", s.Fields[state.FieldCeiling])
+	}
+	changed := []db.Budget{list[0], {ID: 2, Phase: db.PhaseVet, Tables: 2, MaxMs: 20}}
+	got, _ := state.Update(s, state.BudgetsFetched{Budgets: changed})
+	if got.Fields[state.FieldCeiling] != "20" {
+		t.Errorf("after another member set 20 the field reads %q", got.Fields[state.FieldCeiling])
+	}
+	typed, _ := state.Update(s, state.FieldEdit{Field: state.FieldCeiling, Value: "35"})
+	typed, _ = state.Update(typed, state.BudgetsFetched{Budgets: changed})
+	if typed.Fields[state.FieldCeiling] != "35" {
+		t.Errorf("a refetch overwrote the typed ceiling: %q", typed.Fields[state.FieldCeiling])
+	}
+	saved, _ := state.Update(typed, state.BudgetPatched{Budget: db.Budget{ID: 2, MaxMs: 35}})
+	saved, _ = state.Update(saved, state.BudgetsFetched{Budgets: []db.Budget{list[0], {ID: 2, MaxMs: 40}}})
+	if saved.Fields[state.FieldCeiling] != "40" {
+		t.Errorf("after saving, a later change by another member reads %q, want 40", saved.Fields[state.FieldCeiling])
 	}
 }

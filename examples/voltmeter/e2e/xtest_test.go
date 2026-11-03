@@ -68,7 +68,7 @@ func (x *xtest) press(name string) {
 	time.Sleep(40 * time.Millisecond)
 }
 
-func (x *xtest) typeText(text string) {
+func (x *xtest) textType(text string) {
 	for _, r := range text {
 		name := string(r)
 		if r == ' ' {

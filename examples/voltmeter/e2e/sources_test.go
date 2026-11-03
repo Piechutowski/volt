@@ -226,12 +226,11 @@ func TestGeneratedFilesKeepTheLayers(t *testing.T) {
 
 // TestClientsLinkNoServerCode proves the client side keeps to spec
 // §generated-client's "a caller links no server code" where the
-// language allows it: the pure GUI state and the response values link
-// neither the routes package app, nor the runner nao/run, nor the
-// server. The GUI's runner and the collector still link app, for the
-// struct bodies the language keeps there (§request-bodies) and the Path
-// helpers of controller routes whose client methods take no query
-// parameters; the test pins that known gap so its closing is noticed.
+// language allows it: the desktop client, its runner, its pure state
+// and the response values link neither the routes package app, nor the
+// runner nao/run, nor the server. The collector still links app, for
+// the struct bodies the language keeps there (§request-bodies); the
+// test pins that known gap so its closing is noticed.
 func TestClientsLinkNoServerCode(t *testing.T) {
 	mod := moduleDir(t)
 	const base = "github.com/Piechutowski/volt/examples/voltmeter/"
@@ -243,7 +242,8 @@ func TestClientsLinkNoServerCode(t *testing.T) {
 		{"./gui/state", false},
 		{"./wire", false},
 		{"./app/client", false},
-		{"./gui/remote", true},
+		{"./gui/remote", false},
+		{"./gui", false},
 		{"./collector", true},
 	}
 	for _, c := range cases {

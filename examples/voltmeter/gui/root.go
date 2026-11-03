@@ -109,7 +109,7 @@ func (r *root) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
 	}
 	live := "Live: waiting for changes"
 	if s.Live != "" {
-		live = "Live: " + s.Live
+		live = "Changed " + s.LiveAt.Local().Format("15:04:05") + ": " + s.Live
 	}
 	caption(&r.live, live, muted)
 	caption(&r.who, s.User.Name+"  "+s.User.Email, nil)

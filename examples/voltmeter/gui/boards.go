@@ -17,7 +17,7 @@ import (
 type boardsScreen struct {
 	guigui.DefaultWidget
 
-	picker      basicwidget.Select[int]
+	picker      basicwidget.List[int]
 	name        field
 	addBoard    basicwidget.Button
 	none        basicwidget.Text
@@ -28,7 +28,9 @@ type boardsScreen struct {
 	phase       phasePicker
 	tables      field
 	addWidget   basicwidget.Button
+	empty       bool
 	lay         layouts
+	spots       spots
 }
 
 func (b *boardsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -41,7 +43,8 @@ func (b *boardsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 	for _, w := range []guigui.Widget{&b.picker, &b.name, &b.addBoard, &b.widgetTitle, &b.phaseLabel, &b.phase, &b.tables, &b.addWidget} {
 		adder.AddWidget(w)
 	}
-	if len(board.Widgets) == 0 {
+	b.empty = len(board.Widgets) == 0
+	if b.empty {
 		adder.AddWidget(&b.none)
 	} else {
 		adder.AddWidget(&b.panel)
@@ -49,9 +52,9 @@ func (b *boardsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 	b.panel.SetContent(&b.grid)
 	b.panel.SetContentConstraints(basicwidget.PanelContentConstraintsFixedWidth)
 
-	items := make([]basicwidget.SelectItem[int], 0, len(s.Boards.List))
+	items := make([]basicwidget.ListItem[int], 0, len(s.Boards.List))
 	for _, x := range s.Boards.List {
-		items = append(items, basicwidget.SelectItem[int]{Text: x.Name, Value: x.ID})
+		items = append(items, basicwidget.ListItem[int]{Text: x.Name, Value: x.ID})
 	}
 	b.picker.SetItems(items)
 	b.picker.SelectItemByValue(s.Boards.Selected)
@@ -60,7 +63,7 @@ func (b *boardsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 			m.dispatch(state.BoardPick{ID: item.Value})
 		}
 	})
-	b.name.SetField(state.FieldBoardName, "New dashboard", "Front end")
+	b.name.FieldSet(state.FieldBoardName, "New dashboard", "Front end")
 	b.name.OnSubmitted(func(context *guigui.Context) { m.dispatch(state.BoardAdd{}) })
 	b.addBoard.SetText("Add dashboard")
 	b.addBoard.OnDown(func(context *guigui.Context) { m.dispatch(state.BoardAdd{}) })
@@ -77,11 +80,12 @@ func (b *boardsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 	if msg := s.Errors[state.FieldWidgetPhase]; msg != "" {
 		caption(&b.phaseLabel, "Phase: "+msg, basicwidget.DangerTintColor())
 	}
-	b.phase.SetPhase(db.Phase(s.Fields[state.FieldWidgetPhase]), db.Phases)
+	b.phase.PhaseSet(db.Phase(s.Fields[state.FieldWidgetPhase]), db.Phases)
+	b.phase.NameSet(string(state.FieldWidgetPhase))
 	b.phase.OnPicked(func(context *guigui.Context, phase db.Phase) {
 		m.dispatch(state.FieldEdit{Field: state.FieldWidgetPhase, Value: string(phase)})
 	})
-	b.tables.SetField(state.FieldWidgetTables, "Tables", "160")
+	b.tables.FieldSet(state.FieldWidgetTables, "Tables", "160")
 	b.tables.OnSubmitted(func(context *guigui.Context) { m.dispatch(state.WidgetAdd{}) })
 	b.addWidget.SetText("Add widget")
 	b.addWidget.SetType(basicwidget.ButtonTypePrimary)
@@ -93,18 +97,33 @@ func (b *boardsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 func (b *boardsScreen) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds, layouter *guigui.ChildLayouter) {
 	a := b.lay.reset()
 	u := basicwidget.UnitSize(context)
-	top := a.row(u/2, a.nested(a.column(u/8, fixed(nil, u*3/4), fixed(&b.picker, u*3/2)), guigui.FixedSize(10*u)), flex(&b.name, 1), a.besideField(&b.addBoard, u, 6*u))
+	left := a.column(u/2, flex(&b.picker, 1), natural(&b.name), fixed(&b.addBoard, u*3/2))
 	shown := guigui.Widget(&b.panel)
-	if b.grid.cards.Len() == 0 {
+	if b.empty {
 		shown = &b.none
 	}
 	add := a.row(u/2, a.nested(a.column(u/8, fixed(&b.phaseLabel, u*3/4), fixed(&b.phase, u*3/2)), guigui.FixedSize(14*u)), flex(&b.tables, 1), a.besideField(&b.addWidget, u, 5*u))
-	padded(a.column(u/2,
-		a.nested(top, guigui.Size{}),
+	recorded := b.spots.recorded(modelOf(context, b), layouter, func(name func(guigui.Widget, string)) {
+		name(&b.none, "boards:none")
+		name(&b.addWidget, "boards:add_widget")
+	})
+	right := a.column(u/2,
 		flex(shown, 1),
 		fixed(&b.widgetTitle, u),
 		a.nested(add, guigui.Size{}),
-	), u/2).LayoutWidgets(context, widgetBounds.Bounds(), layouter)
+	)
+	padded(a.row(u/2, a.nested(left, guigui.FixedSize(12*u)), a.nested(right, guigui.FlexibleSize(1))), u/2).LayoutWidgets(context, widgetBounds.Bounds(), recorded)
+}
+
+func (b *boardsScreen) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBounds) error {
+	m := modelOf(context, b)
+	b.spots.placed(m)
+	if m != nil && m.probe != nil {
+		for i, x := range m.s.Boards.List {
+			m.probe.place(probeRow("boards", x.ID), b.picker.ItemBounds(i))
+		}
+	}
+	return nil
 }
 
 const boardColumns = 3
@@ -128,7 +147,7 @@ func (g *boardGrid) Build(context *guigui.Context, adder *guigui.ChildAdder) err
 	}
 	for i, c := range g.cards.All() {
 		w := board.Widgets[i]
-		c.SetWidget(w, m.s.Trends[state.Spot{Phase: w.Phase, Tables: w.Tables}])
+		c.WidgetSet(w, m.s.Trends[state.Spot{Phase: w.Phase, Tables: w.Tables}])
 		id := w.ID
 		c.OnRemoved(func(context *guigui.Context) { m.dispatch(state.WidgetRemove{ID: id}) })
 	}
@@ -177,9 +196,10 @@ type boardCard struct {
 	widget db.Widget
 	points []state.TrendPoint
 	lay    layouts
+	spots  spots
 }
 
-func (c *boardCard) SetWidget(w db.Widget, points []state.TrendPoint) {
+func (c *boardCard) WidgetSet(w db.Widget, points []state.TrendPoint) {
 	c.widget, c.points = w, points
 }
 
@@ -193,12 +213,13 @@ func (c *boardCard) Build(context *guigui.Context, adder *guigui.ChildAdder) err
 	}
 	spot := state.Spot{Phase: c.widget.Phase, Tables: c.widget.Tables}
 	heading(&c.title, string(spot.Phase)+" at "+strconv.Itoa(spot.Tables)+" tables", 1)
+	c.title.SetEllipsisString("...")
 	latest := "no runs measured this size"
 	if n := len(c.points); n > 0 {
 		latest = "run " + strconv.Itoa(c.points[n-1].RunID) + ": " + units.Millis(c.points[n-1].WallMS).String() + ", " + strconv.Itoa(n) + " runs"
 	}
 	caption(&c.latest, latest, basicwidgetdraw.TextColor(context.ColorMode(), false))
-	c.chart.SetChart(state.TrendChart(spot, c.points), true)
+	c.chart.ChartSet(state.TrendChart(spot, c.points), true)
 	c.remove.SetText("Remove")
 	c.remove.OnDown(func(context *guigui.Context) { guigui.DispatchEvent(c, eventCardRemoved) })
 	return nil
@@ -208,11 +229,19 @@ func (c *boardCard) Layout(context *guigui.Context, widgetBounds *guigui.WidgetB
 	a := c.lay.reset()
 	u := basicwidget.UnitSize(context)
 	b := widgetBounds.Bounds()
+	recorded := c.spots.recorded(modelOf(context, c), layouter, func(name func(guigui.Widget, string)) {
+		name(&c.remove, "card:"+strconv.Itoa(c.widget.ID)+":remove")
+	})
 	padded(a.column(u/4,
 		a.nested(a.row(u/2, flex(&c.title, 1), fixed(&c.remove, 4*u)), guigui.FixedSize(u*3/2)),
 		fixed(&c.latest, u),
 		flex(&c.chart, 1),
-	), u/2).LayoutWidgets(context, b, layouter)
+	), u/2).LayoutWidgets(context, b, recorded)
+}
+
+func (c *boardCard) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBounds) error {
+	c.spots.placed(modelOf(context, c))
+	return nil
 }
 
 func (c *boardCard) Draw(context *guigui.Context, widgetBounds *guigui.WidgetBounds, dst *ebiten.Image) {

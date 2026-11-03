@@ -33,7 +33,7 @@ func (t *trendsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 		return nil
 	}
 	s := m.s
-	t.phase.SetPhase(s.Trend.Phase, db.Phases)
+	t.phase.PhaseSet(s.Trend.Phase, db.Phases)
 	t.phase.OnPicked(func(context *guigui.Context, phase db.Phase) {
 		m.dispatch(state.TrendPick{Spot: state.Spot{Phase: phase, Tables: m.s.Trend.Tables}})
 	})
@@ -51,7 +51,7 @@ func (t *trendsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 		}
 	})
 	points := s.Trends[s.Trend]
-	t.chart.SetChart(state.TrendChart(s.Trend, points), false)
+	t.chart.ChartSet(state.TrendChart(s.Trend, points), false)
 	t.table.SetColumns([]basicwidget.TableColumn{columnOf("Run", 1, true), columnOf("Wall time", 2, true), columnOf("Change on the run before", 3, true)})
 	t.rows = t.rows[:0]
 	for i := len(points) - 1; i >= 0; i-- {
@@ -101,8 +101,9 @@ type thesisScreen struct {
 	chart   chartView
 	table   basicwidget.Table[string]
 
-	rows []basicwidget.TableRow[string]
-	lay  layouts
+	rows     []basicwidget.TableRow[string]
+	subjects guigui.WidgetSlice[*basicwidget.Text]
+	lay      layouts
 }
 
 func (t *thesisScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -125,19 +126,23 @@ func (t *thesisScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 			m.dispatch(state.ThesisPick{Fixture: item.Value})
 		}
 	})
-	t.chart.SetChart(state.ThesisChart(s.Thesis.Rows), false)
+	t.chart.ChartSet(state.ThesisChart(s.Thesis.Rows), false)
 	t.table.SetColumns([]basicwidget.TableColumn{
 		columnOf("Commit", 2, false), columnOf("Subject", 8, false), columnOf("Volt", 2, true), columnOf("Hand Go", 2, true), columnOf("Generated Go", 2, true), columnOf("Generated per Volt line", 3, true),
 	})
 	t.rows = t.rows[:0]
+	t.subjects.SetLen(len(s.Thesis.Rows))
 	for i := len(s.Thesis.Rows) - 1; i >= 0; i-- {
 		r := s.Thesis.Rows[i]
+		subject := t.subjects.At(i)
+		caption(subject, r.CommitSubject, nil)
+		subject.SetEllipsisString("...")
 		ratio := ""
 		if r.VoltLines > 0 {
 			ratio = strconv.FormatFloat(float64(r.GenLines)/float64(r.VoltLines), 'f', 1, 64)
 		}
 		t.rows = append(t.rows, basicwidget.TableRow[string]{Value: r.Sha, Cells: []basicwidget.TableCell{
-			cell(units.Commit(r.Sha).Short()), cell(r.CommitSubject), cellRight(strconv.Itoa(r.VoltLines)), cellRight(strconv.Itoa(r.HandLines)), cellRight(strconv.Itoa(r.GenLines)), cellRight(ratio),
+			cell(units.Commit(r.Sha).Short()), {Content: subject}, cellRight(strconv.Itoa(r.VoltLines)), cellRight(strconv.Itoa(r.HandLines)), cellRight(strconv.Itoa(r.GenLines)), cellRight(ratio),
 		}})
 	}
 	t.table.SetItems(t.rows)

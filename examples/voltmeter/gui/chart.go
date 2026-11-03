@@ -39,7 +39,7 @@ type chartView struct {
 	compact bool
 }
 
-func (c *chartView) SetChart(chart state.Chart, compact bool) {
+func (c *chartView) ChartSet(chart state.Chart, compact bool) {
 	c.chart, c.frame, c.compact = chart, chart.Frame(), compact
 }
 

@@ -111,8 +111,8 @@ func (r *runsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) er
 		names = []string{"none yet"}
 	}
 	caption(&r.tagsText, strings.Join(names, ", "), basicwidgetdraw.TextColor(context.ColorMode(), false))
-	r.slug.SetField(state.FieldTagSlug, "Slug", "nightly")
-	r.name.SetField(state.FieldTagName, "Name", "Nightly")
+	r.slug.FieldSet(state.FieldTagSlug, "Slug", "nightly")
+	r.name.FieldSet(state.FieldTagName, "Name", "Nightly")
 	r.name.OnSubmitted(func(context *guigui.Context) { m.dispatch(state.TagAdd{}) })
 	r.add.SetText("Add tag")
 	r.add.SetType(basicwidget.ButtonTypePrimary)
