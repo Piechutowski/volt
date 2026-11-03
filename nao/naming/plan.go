@@ -277,11 +277,14 @@ func fieldSigsBuild(t *Table) []FieldSig {
 }
 
 func fieldSigOf(fp *Field) FieldSig {
-	return FieldSig{
+	sig := FieldSig{
 		Name: fp.GoField, Col: fp.ColName, Type: fp.GoType,
-		Tag: fp.Tag, Doc: SettingNote(fp.Col.Settings),
-		Nullable: fp.Nullable,
+		Tag: fp.Tag, Nullable: fp.Nullable,
 	}
+	if fp.Col != nil {
+		sig.Doc = SettingNote(fp.Col.Settings)
+	}
+	return sig
 }
 
 // SelectRowType names the row type one instantiation returns (§selects-over-groups)
