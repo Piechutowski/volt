@@ -256,7 +256,7 @@ func TestClientsLinkNoServerCode(t *testing.T) {
 		{"./collector", true},
 	}
 	for _, c := range cases {
-		cmd := exec.Command("go", "list", "-deps", c.pkg)
+		cmd := exec.Command("go", "list", "-buildvcs=false", "-deps", c.pkg)
 		cmd.Dir = mod
 		out, err := cmd.Output()
 		if err != nil {

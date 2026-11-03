@@ -61,8 +61,12 @@ effect is performed by generated code you can read.
 Requires Go 1.27+ and a C compiler; the example module also needs the
 X11 and OpenGL development headers its guigui client builds against.
 
+From the repository root, with `go install`'s directory on the path;
+`volt check` is silent when the packages are clean, and `volt gen`
+over Voltmeter reports every file unchanged:
+
 ```sh
 go install ./cmd/volt
-volt check ./app && volt gen ./app && volt routes ./app
+volt check ./examples/voltmeter/... && volt gen --sql ./examples/voltmeter/... && volt routes ./examples/voltmeter/app
 go test ./... ./lsp/... ./cmd/volt/... ./examples/voltmeter/...
 ```

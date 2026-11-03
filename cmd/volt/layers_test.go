@@ -311,7 +311,7 @@ func TestLayersDataOnlyProgram(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	cmd := exec.Command("go", "build", "./...")
+	cmd := exec.Command("go", "build", "-buildvcs=false", "./...")
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the data-only program does not build:\n%s", out)

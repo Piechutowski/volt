@@ -21,7 +21,7 @@ func TestWorkspaceLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 	binDir := t.TempDir()
-	if out, err := exec.Command("go", "build", "-o", filepath.Join(binDir, "volt"), ".").CombinedOutput(); err != nil {
+	if out, err := exec.Command("go", "build", "-buildvcs=false", "-o", filepath.Join(binDir, "volt"), ".").CombinedOutput(); err != nil {
 		t.Fatalf("building volt: %v\n%s", err, out)
 	}
 
@@ -136,7 +136,7 @@ func TestStressWritesABuildableProject(t *testing.T) {
 	if err := volt("gen", "--sql", dir); err != nil {
 		t.Fatalf("gen: %v", err)
 	}
-	cmd := exec.Command("go", "build", "./...")
+	cmd := exec.Command("go", "build", "-buildvcs=false", "./...")
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("stress project does not build:\n%s", out)

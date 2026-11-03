@@ -28,17 +28,12 @@ import (
 // breached in the upload's transaction, a second collection finds its
 // machine again by the unique index, the thesis counts agree with an
 // independent count of the same trees, and every read route has its
-// samples.
+// samples. The history is a repository the test builds, so the test
+// asks nothing of how the checkout was obtained.
 func TestCollectStoresWhatTheSweepMeasured(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git is not on PATH:", err)
-	}
+	repo := historyBuild(t)
 	e := envStart(t)
 	bg := context.Background()
-	repo, err := collector.RepoFind(".")
-	if err != nil {
-		t.Fatal(err)
-	}
 	var budget db.Budget
 	if r := e.rawJSON("POST", app.PathAPIBudgets(), `{"phase": "load", "tables": 2, "max_ms": 0.001}`, &budget); r.StatusCode != http.StatusCreated {
 		t.Fatalf("budget: %d %s", r.StatusCode, r.body)

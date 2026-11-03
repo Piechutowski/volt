@@ -27,17 +27,11 @@ func TestWindowShowsTheNewestRun(t *testing.T) {
 	if _, err := exec.LookPath("Xvfb"); err != nil {
 		t.Skip("the window smoke test needs Xvfb on PATH:", err)
 	}
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("the collector reads the commit with git, which is not on PATH:", err)
-	}
 	dir := t.TempDir()
 	bin := guiBuild(t)
 
 	e := envStart(t)
-	repo, err := collector.RepoFind(".")
-	if err != nil {
-		t.Fatal(err)
-	}
+	repo := historyBuild(t)
 	got, err := collector.Collect(context.Background(), collector.Config{
 		Server: e.srv.URL, User: 1, Repo: repo,
 		Sizes: []int{2, 4}, Columns: 3, Reps: 1, Rev: "HEAD", Samples: 1, Tag: "window",

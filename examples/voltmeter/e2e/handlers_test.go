@@ -202,7 +202,7 @@ func TestXvfbFilesRemovedOnlyWhenOwned(t *testing.T) {
 func guiBuild(t *testing.T) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "voltmeter-gui")
-	build := exec.Command("go", "build", "-o", bin, "github.com/Piechutowski/volt/examples/voltmeter/gui")
+	build := exec.Command("go", "build", "-buildvcs=false", "-o", bin, "github.com/Piechutowski/volt/examples/voltmeter/gui")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building the client: %v\n%s", err, out)
 	}

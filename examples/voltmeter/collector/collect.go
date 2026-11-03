@@ -107,8 +107,9 @@ func RepoFind(dir string) (string, error) {
 // Collect runs one collection: the sweep and the keystroke benchmark
 // on this machine, the upload, the thesis counts of the history, then
 // cfg.Samples timed calls of every read route, stored as the run's
-// samples. It first asks the server who cfg.User is, so a wrong server
-// or member fails before the sweep's minutes are spent, and refuses a
+// samples. It first asks the server who cfg.User is and git which
+// commit cfg.Repo is at, so a wrong server or member, or a tree git
+// cannot read, fails before the sweep's minutes are spent, and refuses a
 // binary built at another commit than the repository's (BuildCheck).
 // The run records the full sha, the form the thesis commits are stored
 // in. log reports progress and may be nil.
@@ -122,22 +123,24 @@ func Collect(ctx context.Context, cfg Config, log func(format string, args ...an
 	if err := replyExpect(c.APIMeWho(ctx))(http.StatusOK, &who); err != nil {
 		return out, fmt.Errorf("the server does not take member %d's numbers, so nothing was measured: %w", cfg.User, err)
 	}
-	out.Machine = perfsweep.Info(cfg.Repo)
-	if out.Machine.Commit != "unknown" {
-		head, err := git(ctx, cfg.Repo, nil, "rev-parse", "HEAD")
-		if err != nil {
+	head, err := git(ctx, cfg.Repo, nil, "rev-parse", "HEAD")
+	if err != nil {
+		return out, fmt.Errorf("a run is stored under the commit it measured, and git cannot read the commit of %s, so nothing was measured: %w", cfg.Repo, err)
+	}
+	status, err := git(ctx, cfg.Repo, nil, "status", "--porcelain")
+	if err != nil {
+		return out, fmt.Errorf("git cannot tell whether %s has uncommitted changes, so nothing was measured: %w", cfg.Repo, err)
+	}
+	commit, dirty := strings.TrimSpace(string(head)), len(bytes.TrimSpace(status)) > 0
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if err := BuildCheck(info.Settings, commit, dirty); err != nil {
 			return out, err
 		}
-		_, dirty := strings.CutSuffix(out.Machine.Commit, "+dirty")
-		out.Machine.Commit = strings.TrimSpace(string(head))
-		if info, ok := debug.ReadBuildInfo(); ok {
-			if err := BuildCheck(info.Settings, out.Machine.Commit, dirty); err != nil {
-				return out, err
-			}
-		}
-		if dirty {
-			out.Machine.Commit += "+dirty"
-		}
+	}
+	out.Machine = perfsweep.Info(cfg.Repo)
+	out.Machine.Commit = commit
+	if dirty {
+		out.Machine.Commit += "+dirty"
 	}
 	log("%s, %d cores, %s, %s, commit %s, storing as %s", out.Machine.CPU, out.Machine.Cores, out.Machine.OS, out.Machine.Go, out.Machine.Commit, who.Email)
 	dir := cfg.Out
@@ -149,7 +152,6 @@ func Collect(ctx context.Context, cfg Config, log func(format string, args ...an
 		defer os.RemoveAll(tmp)
 		dir = tmp
 	}
-	var err error
 	spec := perfsweep.Spec{Sizes: cfg.Sizes, Columns: cfg.Columns, Reps: cfg.Reps, Profile: cfg.Profile}
 	if out.Rows, err = perfsweep.Run(dir, spec, log); err != nil {
 		return out, err

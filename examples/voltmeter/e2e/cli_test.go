@@ -42,7 +42,7 @@ func voltBin(t *testing.T) string {
 		t.Fatal(err)
 	}
 	bin := filepath.Join(t.TempDir(), "volt")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/volt")
+	build := exec.Command("go", "build", "-buildvcs=false", "-o", bin, "./cmd/volt")
 	build.Dir = repo
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building volt from the checkout: %v\n%s", err, out)
