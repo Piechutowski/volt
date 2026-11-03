@@ -1,3 +1,7 @@
+/*
+  Voltmeter's routes: the API the collector and the desktop client
+  speak, the printable reports, and the change stream.
+*/
 package app
 
 import (
@@ -21,6 +25,7 @@ scope / [pipe: api, error_handler: Errors] {
   get  /events          volt.Events
 
   scope /api [name: api] {
+    // The collector's writes: one sweep, the thesis counts, latency samples.
     post /uploads Uploads.Create [name: upload, body: Upload, timeout: 30]
     post /thesis  Thesis.Record  [name: thesis_record, body: ThesisUpload]
     get  /thesis  db.LineCountThesis
@@ -60,6 +65,7 @@ scope / [pipe: api, error_handler: Errors] {
       dataset db.density [strip: "ms_", except: (ms_generate)]
     }
 
+    // A member's own things; the scope load answers 401 for no one.
     scope /me [pipe: member, name: me] {
       load user CurrentUser
 

@@ -9,6 +9,8 @@ table_partial stamped {
   created_at time.Time [default: `CURRENT_TIMESTAMP`, note: "When the row was stored, by the database clock"]
 }
 
+// One row per phase per size; the four phase tables share this shape,
+// which is what lets a select and a dataset span them as a group.
 table_partial measured {
   run_id    int          [pk]
   tables    int          [pk, note: "Tables in the generated stress project"]
@@ -60,7 +62,7 @@ table machines [note: "The machine a run measured on, as perfsweep.Info reports 
   }
 }
 
-table tags [note: "A label a run can carry, such as a release or an experiment."] {
+table tags [note: "A label a run can carry, such as \"v0.3\" or an experiment."] {
   slug string [pk]
   name string [required]
 

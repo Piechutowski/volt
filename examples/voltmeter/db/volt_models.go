@@ -340,7 +340,7 @@ func voltMachineCast(c rt.Changeset[Machine], p rt.Params[Machine], i int) (rt.C
 	return c, nil
 }
 
-// A label a run can carry, such as a release or an experiment.
+// A label a run can carry, such as "v0.3" or an experiment.
 type Tag struct {
 	Slug string `db:"slug" json:"slug"`
 	Name string `db:"name" json:"name"`

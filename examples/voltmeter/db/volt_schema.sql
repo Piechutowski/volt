@@ -31,7 +31,7 @@ CREATE TABLE machines (
 );
 CREATE UNIQUE INDEX idx_machines_cpu_cores_memory_gb_os_arch_go ON machines (cpu, cores, memory_gb, os, arch, go);
 
--- A label a run can carry, such as a release or an experiment.
+-- A label a run can carry, such as "v0.3" or an experiment.
 CREATE TABLE tags (
   slug TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL
