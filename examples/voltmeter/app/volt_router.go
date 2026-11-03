@@ -484,6 +484,101 @@ func register(mux *http.ServeMux, c Controllers) {
 		})
 	}, errHandlerErrors, voltPerform)))
 
+	mux.Handle("GET /api/runs/{run}/sized/load", pipe0(volt.Handler("GET /api/runs/{run}/sized/load", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		voltrun, ok := volt.ParseInt(r.PathValue("run"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		voltsizes, err := volt.QueryParams[int](r, "sizes")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.MsLoadSized(voltrun, voltsizes), func(voltOut []db.MsLoad) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("run"))))
+
+	mux.Handle("GET /api/runs/{run}/sized/generate", pipe0(volt.Handler("GET /api/runs/{run}/sized/generate", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		voltrun, ok := volt.ParseInt(r.PathValue("run"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		voltsizes, err := volt.QueryParams[int](r, "sizes")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.MsGenerateSized(voltrun, voltsizes), func(voltOut []db.MsGenerate) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("run"))))
+
+	mux.Handle("GET /api/per_size/load", pipe0(volt.Handler("GET /api/per_size/load", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		voltsizes, err := volt.QueryParams[int](r, "sizes")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.MsLoadPerSize(voltsizes), func(voltOut []db.PerSize) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("GET /api/per_size/check", pipe0(volt.Handler("GET /api/per_size/check", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		voltsizes, err := volt.QueryParams[int](r, "sizes")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.MsCheckPerSize(voltsizes), func(voltOut []db.PerSize) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("GET /api/per_size/vet", pipe0(volt.Handler("GET /api/per_size/vet", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		voltsizes, err := volt.QueryParams[int](r, "sizes")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.MsVetPerSize(voltsizes), func(voltOut []db.PerSize) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("GET /api/per_size/generate", pipe0(volt.Handler("GET /api/per_size/generate", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		voltsizes, err := volt.QueryParams[int](r, "sizes")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.MsGeneratePerSize(voltsizes), func(voltOut []db.PerSize) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("GET /api/sizes", pipe0(volt.Handler("GET /api/sizes", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.MsLoadSizes(), func(voltOut []db.Sizes) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
+
 	mux.Handle("GET /api/me", pipe1(volt.Handler("GET /api/me", func(r volt.Request) volt.Response {
 		return volt.Continue(CurrentUser(r), func(user db.User) volt.Response {
 			return c.Me.Show(r, user)

@@ -233,6 +233,23 @@ func MsGeneratePerSize(sizes []int) rt.Query[PerSize] {
 	return rt.Query[PerSize]{SQL: voltMsGeneratePerSizeSQL, Args: []any{rt.JSONList(sizes)}, Scan: voltPerSizeScan}
 }
 
+type Sizes struct {
+	Tables int `db:"tables" json:"tables"`
+	Runs   int `db:"runs" json:"runs"`
+}
+
+func voltSizesScan(r rt.Row) (Sizes, error) {
+	var voltV Sizes
+	voltErr := r.Scan(&voltV.Tables, &voltV.Runs)
+	return voltV, voltErr
+}
+
+const voltMsLoadSizesSQL = `SELECT "tables", count(*) AS "runs" FROM "ms_load" GROUP BY "tables" ORDER BY "tables" ASC`
+
+func MsLoadSizes() rt.Query[Sizes] {
+	return rt.Query[Sizes]{SQL: voltMsLoadSizesSQL, Args: nil, Scan: voltSizesScan}
+}
+
 type Density struct {
 	RunID          int     `db:"run_id" json:"run_id"`
 	Tables         int     `db:"tables" json:"tables"`

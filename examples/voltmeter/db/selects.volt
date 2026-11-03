@@ -19,6 +19,7 @@ select trend  for phases where tables = :tables [order: (run_id asc)]
 select brief  (run_id, tables, wall_ms) for phases where of_run [order: (tables asc)]
 select lean   (* \ (output_mb, source_kb)) for front where of_run and not heavy [order: (tables asc)]
 select per_size (tables, count() as n, avg(alloc_mb) as mean_alloc, min(alloc_mb) as least_alloc, max(heap_mb) as peak_heap, sum(allocs) as total_allocs) for phases where at_size [group: (tables), order: (tables asc)]
+select sizes (tables, count() as runs) for ms_load [group: (tables), order: (tables asc)]
 select density (run_id, tables, allocs / tables as allocs_per_table, alloc_mb * 1024 / source_kb as alloc_per_source) for phases where of_run [order: (tables asc)]
 
 select listed (id, commit, dirty, note, created_at, machine.cpu, machine.os, tag.name) for runs join machine join tag [order: (id desc)]

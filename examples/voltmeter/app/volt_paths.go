@@ -174,6 +174,34 @@ func PathAPIDensityMsVetDensity(opts ...volt.URLOption) string {
 	return volt.URL("/api/density/vet", opts...)
 }
 
+func PathAPISizedMsLoadSized(run int, opts ...volt.URLOption) string {
+	return volt.URL("/api/runs/"+volt.SegInt(run)+"/sized/load", opts...)
+}
+
+func PathAPISizedMsGenerateSized(run int, opts ...volt.URLOption) string {
+	return volt.URL("/api/runs/"+volt.SegInt(run)+"/sized/generate", opts...)
+}
+
+func PathAPIPerSizeMsLoadPerSize(opts ...volt.URLOption) string {
+	return volt.URL("/api/per_size/load", opts...)
+}
+
+func PathAPIPerSizeMsCheckPerSize(opts ...volt.URLOption) string {
+	return volt.URL("/api/per_size/check", opts...)
+}
+
+func PathAPIPerSizeMsVetPerSize(opts ...volt.URLOption) string {
+	return volt.URL("/api/per_size/vet", opts...)
+}
+
+func PathAPIPerSizeMsGeneratePerSize(opts ...volt.URLOption) string {
+	return volt.URL("/api/per_size/generate", opts...)
+}
+
+func PathAPISizes(opts ...volt.URLOption) string {
+	return volt.URL("/api/sizes", opts...)
+}
+
 func PathAPIMeWho(opts ...volt.URLOption) string {
 	return volt.URL("/api/me", opts...)
 }

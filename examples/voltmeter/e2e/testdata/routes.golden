@@ -46,6 +46,13 @@ package app
   GET     /api/density/load                db.MsLoadDensity PathAPIDensityMsLoadDensity
   GET     /api/density/check               db.MsCheckDensity PathAPIDensityMsCheckDensity
   GET     /api/density/vet                 db.MsVetDensity PathAPIDensityMsVetDensity
+  GET     /api/runs/:run(int)/sized/load   db.MsLoadSized PathAPISizedMsLoadSized
+  GET     /api/runs/:run(int)/sized/generate db.MsGenerateSized PathAPISizedMsGenerateSized
+  GET     /api/per_size/load               db.MsLoadPerSize PathAPIPerSizeMsLoadPerSize
+  GET     /api/per_size/check              db.MsCheckPerSize PathAPIPerSizeMsCheckPerSize
+  GET     /api/per_size/vet                db.MsVetPerSize PathAPIPerSizeMsVetPerSize
+  GET     /api/per_size/generate           db.MsGeneratePerSize PathAPIPerSizeMsGeneratePerSize
+  GET     /api/sizes                       db.MsLoadSizes PathAPISizes
   GET     /api/me                          Me.Show PathAPIMeWho
   GET     /api/me/dashboards               Dashboards.Index PathAPIMeDashboards
   GET     /api/me/dashboards/:board(int)   Dashboards.Show PathAPIMeDashboard

@@ -65,6 +65,17 @@ scope / [pipe: api, error_handler: Errors] {
       dataset db.density [strip: "ms_", except: (ms_generate)]
     }
 
+    // The run binds from the prefix, the sizes from repeated keys.
+    scope /runs/:run(int)/sized [name: sized] {
+      dataset db.sized [strip: "ms_", only: (ms_load, ms_generate)]
+    }
+
+    scope /per_size [name: per_size] {
+      dataset db.per_size [strip: "ms_"]
+    }
+
+    get /sizes db.MsLoadSizes [name: sizes]
+
     // A member's own things; the scope load answers 401 for no one.
     scope /me [pipe: member, name: me] {
       load user CurrentUser

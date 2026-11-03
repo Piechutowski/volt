@@ -265,6 +265,72 @@ func (c *Client) APIDensityMsVetDensity(ctx context.Context, run int) ([]db.Dens
 	return voltOut, voltErr
 }
 
+func (c *Client) APISizedMsLoadSized(ctx context.Context, run int, sizes []int) ([]db.MsLoad, error) {
+	voltQ := []volt.URLOption{}
+	for _, voltV := range sizes {
+		voltQ = append(voltQ, volt.Query("sizes", volt.FormatQuery(voltV)))
+	}
+	var voltOut []db.MsLoad
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/runs/"+volt.SegInt(run)+"/sized/load", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) APISizedMsGenerateSized(ctx context.Context, run int, sizes []int) ([]db.MsGenerate, error) {
+	voltQ := []volt.URLOption{}
+	for _, voltV := range sizes {
+		voltQ = append(voltQ, volt.Query("sizes", volt.FormatQuery(voltV)))
+	}
+	var voltOut []db.MsGenerate
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/runs/"+volt.SegInt(run)+"/sized/generate", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) APIPerSizeMsLoadPerSize(ctx context.Context, sizes []int) ([]db.PerSize, error) {
+	voltQ := []volt.URLOption{}
+	for _, voltV := range sizes {
+		voltQ = append(voltQ, volt.Query("sizes", volt.FormatQuery(voltV)))
+	}
+	var voltOut []db.PerSize
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/per_size/load", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) APIPerSizeMsCheckPerSize(ctx context.Context, sizes []int) ([]db.PerSize, error) {
+	voltQ := []volt.URLOption{}
+	for _, voltV := range sizes {
+		voltQ = append(voltQ, volt.Query("sizes", volt.FormatQuery(voltV)))
+	}
+	var voltOut []db.PerSize
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/per_size/check", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) APIPerSizeMsVetPerSize(ctx context.Context, sizes []int) ([]db.PerSize, error) {
+	voltQ := []volt.URLOption{}
+	for _, voltV := range sizes {
+		voltQ = append(voltQ, volt.Query("sizes", volt.FormatQuery(voltV)))
+	}
+	var voltOut []db.PerSize
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/per_size/vet", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) APIPerSizeMsGeneratePerSize(ctx context.Context, sizes []int) ([]db.PerSize, error) {
+	voltQ := []volt.URLOption{}
+	for _, voltV := range sizes {
+		voltQ = append(voltQ, volt.Query("sizes", volt.FormatQuery(voltV)))
+	}
+	var voltOut []db.PerSize
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/per_size/generate", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) APISizes(ctx context.Context) ([]db.Sizes, error) {
+	var voltOut []db.Sizes
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/sizes"), nil, &voltOut)
+	return voltOut, voltErr
+}
+
 func (c *Client) APIMeWho(ctx context.Context) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/api/me"), nil)
 }
