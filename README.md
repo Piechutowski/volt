@@ -53,7 +53,7 @@ effect is performed by generated code you can read.
 | `lsp/` | the language server |
 | `grammar/`, `zed-extension/` | the editor stack |
 | `itest/` | the fixture application served over `httptest`, drift-checked against the generator |
-| `examples/voltmeter` | Voltmeter, the example application and end-to-end test that measures Volt with Volt; its own module: data layer, routes, server, collector, guigui desktop client, the `volt` CLI leg and a map from every heading of the spec's Parts I and II to the tests that prove it, or a one-line reason it is excluded, with the rules of it Voltmeter does not exercise |
+| `examples/voltmeter` | Voltmeter, the example application and end-to-end test that measures Volt with Volt; its own module: data layer, routes, server, collector, guigui desktop client, the `volt` CLI leg and a map from every heading of the spec's Parts I and II and its appendices to the tests that prove it, or a one-line reason it is excluded, with the rules of it Voltmeter does not exercise |
 | `docs/` | `spec.md`, `lint.md`, `editor.md`, `roadmap.md`, `plan.md` |
 
 ## Crib sheet

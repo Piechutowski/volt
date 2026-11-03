@@ -57,13 +57,16 @@ end-to-end test, built on the same driver with cgo; its generated
 files are committed and drift-checked by its own tests, its CLI leg
 builds `volt` from the checkout and runs it over the example, and its
 coverage map (`examples/voltmeter/e2e/coverage_test.go`) maps every
-heading of the spec's Parts I and II to the Voltmeter tests that prove
-it, with the rules of it they leave unexercised, or a one-line reason
-it is excluded, so a new heading needs an entry. Its desktop client `examples/voltmeter/gui` is guigui on
-Ebitengine, so building that module also needs the X11 and OpenGL
-development headers Ebitengine needs on Linux, and the window tests
-in `examples/voltmeter/e2e` run the client on a virtual X server, the
-smoke test under `xvfb-run` and the handler test under `Xvfb` with
+heading of the spec's Parts I and II and its appendices to the
+Voltmeter tests that prove it, with the rules of it they leave
+unexercised, or a one-line reason it is excluded, so a new heading
+needs an entry; the map is a reviewed claim, since the test checks
+that the named tests exist, not what they exercise. Its desktop
+client `examples/voltmeter/gui` is guigui on Ebitengine, so building
+that module also needs the X11 and OpenGL development headers
+Ebitengine needs on Linux, and the window tests in
+`examples/voltmeter/e2e` run the client on a virtual X server, the
+smoke test under `xvfb-run` and the handler tests under `Xvfb` with
 clicks and key presses sent through `libXtst`, each skipping with a
 message when what it needs is missing. Go floor is the
 newest stable Go, declared in all four `go.mod` files. `grammar/`,

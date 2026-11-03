@@ -69,3 +69,30 @@ func TestListAndPrefixParameters(t *testing.T) {
 		t.Errorf("sizes = %+v, %v", sizes, err)
 	}
 }
+
+// TestRemovedActionsAreRefused proves the actions only:, except: and api
+// leave out of a resources declaration are not routed (spec
+// §the-action-table, §settings): a method the path serves for another
+// action is a 405 naming the methods it allows, and a member path of a
+// resource routed only as a collection is a 404.
+func TestRemovedActionsAreRefused(t *testing.T) {
+	e := envStart(t)
+	for _, c := range []struct {
+		method, path string
+		status       int
+		allow        string
+	}{
+		{"POST", "/api/machines", 405, "GET, HEAD"},
+		{"PATCH", "/api/machines/1", 405, "GET, HEAD"},
+		{"DELETE", "/api/budgets/1", 405, "GET, HEAD, PATCH"},
+		{"POST", "/api/runs", 405, "GET, HEAD, OPTIONS"},
+		{"PUT", "/api/runs/1", 405, "DELETE, GET, HEAD, PATCH"},
+		{"GET", "/api/users/1", 404, ""},
+		{"POST", "/api/users", 405, "GET, HEAD"},
+	} {
+		r := e.raw(c.method, c.path, "", "X-User", "1")
+		if r.StatusCode != c.status || r.Header.Get("Allow") != c.allow {
+			t.Errorf("%s %s = %d, Allow %q; want %d, Allow %q", c.method, c.path, r.StatusCode, r.Header.Get("Allow"), c.status, c.allow)
+		}
+	}
+}

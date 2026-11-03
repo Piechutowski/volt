@@ -641,7 +641,7 @@ comment, `;`, `#` and `'` among them, is a lexical error. Their roles:
 |---------|-------------------------------------------------------------|
 | `{ }`   | element bodies and the blocks inside them                   |
 | `[ ]`   | settings lists, and the `[]` of the type `[]byte`           |
-| `( )`   | composite column lists (index keys, `table.(a, b)` endpoints), records column lists, group sets (§groups), select projections and their exclusion sets (§selects-over-groups), import blocks (§imports), a path parameter's type (§route-paths), validator arguments (§validators), the lists of `only:`, `except:` and `order:` (§settings-whitelists), predicate grouping and `in` lists (§predicates) |
+| `( )`   | composite column lists (index keys, `table.(a, b)` endpoints), records column lists, group sets (§groups), select projections and their exclusion sets (§selects-over-groups), import blocks (§imports), a path parameter's type (§route-paths), validator arguments (§validators), the lists of `only:`, `except:`, `group:` and `order:` (§settings-whitelists), predicate grouping and `in` lists (§predicates) |
 | `:`     | a setting value, the body of `ref:`, a route parameter (§route-paths), a query parameter (§predicates) |
 | `,`     | separator inside `[ ]`, `( )` and record rows               |
 | `.`     | qualification: `table.column`, `pkg.Name` (§types), `pkg.name` (§imports), `Controller.Action` (§handler-references); three contiguous `.` end a wildcard, `:name...` (§route-paths) |
@@ -3007,14 +3007,17 @@ an element is an error on that element):
 | route | `name`, `timeout`, `body`, `only` |
 | resources | `api`, `only`, `except`, `param`, `singular`, `default` |
 | dataset | `strip`, `only`, `except` |
-| Select | `order` |
+| Select | `order`, `group` |
 | `migration` | `irreversible`, `no_transaction` |
 
 The identifier-list value form `(a, b, c)` (production in Collected
-grammar (Part II)) is valid only as the value of `only:` and `except:`:
-an action list on resources, a table list on a dataset, a column list
-on a route (§request-bodies). The query-call value form `pkg.Query(a)`
-is valid only as the value of a route's `body:`.
+grammar (Part II)) is valid only as the value of `only:`, `except:` and
+a select's `group:`: an action list on resources, a table list on a
+dataset, a column list on a route (§request-bodies), the grouping
+columns of a select (§selects-over-groups, rule 10). A select's
+`order:` takes its order list (§selects-over-groups). The query-call
+value form `pkg.Query(a)` is valid only as the value of a route's
+`body:`.
 
 ## Generation contract (informative)
 

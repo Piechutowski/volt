@@ -17,7 +17,7 @@ import (
 // TestGeneratedFilesCurrent regenerates the package from its .volt files
 // through the path volt gen takes and proves the committed files are
 // byte-identical, that no generated file is left over, and that the
-// package checks and vets clean (spec §conformance-and-the-proof-chain).
+// package checks and vets clean (spec §generation-contract-informative).
 // On failure: go generate ./examples/voltmeter/db
 func TestGeneratedFilesCurrent(t *testing.T) {
 	root, err := lang.FindRoot(disk.Source{}, ".")
