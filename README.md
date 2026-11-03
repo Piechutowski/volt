@@ -53,15 +53,16 @@ effect is performed by generated code you can read.
 | `lsp/` | the language server |
 | `grammar/`, `zed-extension/` | the editor stack |
 | `itest/` | the fixture application served over `httptest`, drift-checked against the generator |
-| `examples/voltmeter` | Voltmeter, the example application and end-to-end test that measures Volt with Volt; its own module: data layer, routes, server, collector, guigui desktop client, the `volt` CLI leg and a map from every heading of the spec's Parts I and II to the tests that prove it |
+| `examples/voltmeter` | Voltmeter, the example application and end-to-end test that measures Volt with Volt; its own module: data layer, routes, server, collector, guigui desktop client, the `volt` CLI leg and a map from every heading of the spec's Parts I and II to the tests that prove it, or a one-line reason it is excluded, with the rules of it Voltmeter does not exercise |
 | `docs/` | `spec.md`, `lint.md`, `editor.md`, `roadmap.md`, `plan.md` |
 
 ## Crib sheet
 
-Requires Go 1.27+ and a C compiler.
+Requires Go 1.27+ and a C compiler; the example module also needs the
+X11 and OpenGL development headers its guigui client builds against.
 
 ```sh
 go install ./cmd/volt
 volt check ./app && volt gen ./app && volt routes ./app
-go test ./... ./lsp/... ./cmd/volt/...
+go test ./... ./lsp/... ./cmd/volt/... ./examples/voltmeter/...
 ```

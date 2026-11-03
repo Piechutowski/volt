@@ -58,8 +58,8 @@ files are committed and drift-checked by its own tests, its CLI leg
 builds `volt` from the checkout and runs it over the example, and its
 coverage map (`examples/voltmeter/e2e/coverage_test.go`) maps every
 heading of the spec's Parts I and II to the Voltmeter tests that prove
-it or a one-line reason it is excluded, so a new heading needs an
-entry. Its desktop client `examples/voltmeter/gui` is guigui on
+it, with the rules of it they leave unexercised, or a one-line reason
+it is excluded, so a new heading needs an entry. Its desktop client `examples/voltmeter/gui` is guigui on
 Ebitengine, so building that module also needs the X11 and OpenGL
 development headers Ebitengine needs on Linux, and the window tests
 in `examples/voltmeter/e2e` run the client on a virtual X server, the

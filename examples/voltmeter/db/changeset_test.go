@@ -36,7 +36,7 @@ func status(t *testing.T, err error) int {
 // cast and unknown_field errors (spec §changesets).
 func TestCastAllowsOnlyTheListedColumns(t *testing.T) {
 	ctx := context.Background()
-	d := open(t)
+	d := dbOpen(t)
 
 	p := params[db.Budget](t, `{"id": 77, "phase": "vet", "tables": 16, "max_ms": 250.5, "state": "breached"}`)
 	cs := db.BudgetNew().Cast(p, db.BudgetPhase, db.BudgetTables, db.BudgetMaxMs)
@@ -78,8 +78,8 @@ func TestCastAllowsOnlyTheListedColumns(t *testing.T) {
 // validator in order, collecting every failure (spec §changesets,
 // §validators).
 func TestFromAndValidate(t *testing.T) {
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 
 	copied := db.MachineNew().From(w.machine).CoresSet(16)
 	if copied.Changed(db.MachineID) || !copied.Changed(db.MachineCPU) || !copied.Changed(db.MachineCreatedAt) {
@@ -121,8 +121,8 @@ func TestFromAndValidate(t *testing.T) {
 // §changesets, §validators, §formats).
 func TestRefusedWritesMapToStatuses(t *testing.T) {
 	ctx := context.Background()
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 
 	cases := []struct {
 		name   string
@@ -182,8 +182,8 @@ func TestRefusedWritesMapToStatuses(t *testing.T) {
 // §generated-query-surface).
 func TestUpdateAndDeleteByKey(t *testing.T) {
 	ctx := context.Background()
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 	r := w.runs[2]
 
 	noted := do(t, d, db.RunUpdate(r.Changeset().NoteSet(rt.Some("rerun on a quiet machine")).CommitSet("CCCC3333")))
@@ -218,5 +218,29 @@ func TestUpdateAndDeleteByKey(t *testing.T) {
 	}
 	if got := do(t, d, db.UserGetByEmail("grace@voltmeter.test")); got.ID != 2 || got.Name != "Grace" {
 		t.Errorf("UserGetByEmail of a user the migration seeded = %+v", got)
+	}
+}
+
+// TestChangesetsLeaveTheirReceiver proves a changeset is a value (spec
+// §values-and-effects, rule 1; §changesets): a setter, Cast, Validate
+// and ErrorAdd return a new changeset and the one they were called on
+// marks and holds what it did before.
+func TestChangesetsLeaveTheirReceiver(t *testing.T) {
+	base := db.BudgetNew().PhaseSet(db.PhaseLoad)
+	set := base.MaxMsSet(3).TablesSet(0)
+	if base.Changed(db.BudgetMaxMs) || base.Row().MaxMs != 0 || !set.Changed(db.BudgetMaxMs) {
+		t.Errorf("a setter changed its receiver: %+v", base.Row())
+	}
+	invalid := set.Validate()
+	if !set.Valid() || invalid.Valid() {
+		t.Errorf("Validate changed its receiver: %v, %v", set.Errors(), invalid.Errors())
+	}
+	flagged := set.ErrorAdd(db.BudgetTables, "too few")
+	if len(set.Errors()) != 0 || len(flagged.Errors()) != 1 {
+		t.Errorf("ErrorAdd changed its receiver: %v", set.Errors())
+	}
+	cast := base.Cast(db.BudgetNew().TablesSet(4).Params(), db.BudgetTables)
+	if base.Changed(db.BudgetTables) || !cast.Changed(db.BudgetTables) || cast.Row().Tables != 4 {
+		t.Errorf("Cast changed its receiver: %+v, %+v", base.Row(), cast.Row())
 	}
 }

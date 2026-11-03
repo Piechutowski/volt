@@ -42,3 +42,16 @@ select over for budgets where phase = :phase and tables = :tables and max_ms < :
 
 select boards for dashboards with widgets where owner_id = :owner [order: (name asc)]
 select board  for dashboards with widgets where id = :id
+
+// The phases past the checker, small runs of them, and the forms of a
+// predicate the selects above do not use.
+group after_check = (ms_vet) + ms_generate
+
+pred up_to     { tables <= :most }
+pred run_up_to { of_run and up_to }
+
+select smallest      for after_check where run_up_to [order: (tables asc)]
+select slow          for samples where of_run and (status >= 400 or ms > :ms) [order: (id asc)]
+select server_errors for samples where of_run and status in (500, 502, 503, 504) [order: (id asc)]
+select others        for runs where machine_id = :machine and id != :id [order: (id desc)]
+select annotated     for runs where note is not null [order: (id asc)]

@@ -35,7 +35,7 @@ type script struct {
 	err      error
 }
 
-func signIn(email string) step {
+func memberSignIn(email string) step {
 	return step{
 		name: "sign in",
 		intent: func(s state.State) (state.Intent, error) {
@@ -79,14 +79,14 @@ func screenOpen(sc state.Screen, ready func(state.State) bool) step {
 func scriptSmoke(email, path string) []step {
 	open := newestOpen()
 	open.shot = path
-	return []step{membersLoaded(), signIn(email), open}
+	return []step{membersLoaded(), memberSignIn(email), open}
 }
 
 func scriptTour(email, dir string) []step {
 	at := func(name string) string { return filepath.Join(dir, name+".png") }
 	members := membersLoaded()
 	members.shot = at("signin")
-	in := signIn(email)
+	in := memberSignIn(email)
 	in.shot = at("runs")
 	open := newestOpen()
 	open.shot = at("run")

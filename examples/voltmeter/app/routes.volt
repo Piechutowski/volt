@@ -43,7 +43,15 @@ scope / [pipe: api, error_handler: Errors] {
     get     /runs/:run(int)/routes    db.SamplePerRoute
     get     /runs/:run(int)/failures  db.SampleFailures
 
-    resources db.machines [default, only: (index, show), singular: host]
+    // The run binds from the path, the baseline and sizes from the query.
+    get /runs/:id(int)/compare Runs.Compare [name: run_compare] {
+      run     db.RunGet(id)
+      against db.RunGet(baseline)
+      mine    db.MsLoadSized(id, sizes)
+      theirs  db.MsLoadSized(baseline, sizes)
+    }
+
+    resources db.machines [default, except: (create, update, delete), singular: host]
     get /fleet db.MachineFleet
 
     resources db.tags [default]
@@ -81,6 +89,7 @@ scope / [pipe: api, error_handler: Errors] {
       load user CurrentUser
 
       get  /           Me.Show           [name: who]
+      get  /boards     db.DashboardBoards [name: boards_of]
       resources db.dashboards [only: (index, show), param: board]
       post /dashboards Dashboards.Create [name: dashboard_add, body: db.DashboardCreate, only: (name)]
 

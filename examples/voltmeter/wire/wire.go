@@ -101,3 +101,38 @@ func PhaseRowsOf(load []db.MsLoad, check []db.MsCheck, vet []db.MsVet, generate 
 func phaseRowOf(p db.Phase, m db.MsLoad) PhaseRow {
 	return PhaseRow{Phase: p, Tables: m.Tables, WallMS: m.WallMs, AllocMB: m.AllocMb, HeapMB: m.HeapMb, Allocs: m.Allocs, OutputMB: m.OutputMb, SourceKB: m.SourceKb}
 }
+
+// Comparison is a run's load phase beside its baseline's, size by size.
+type Comparison struct {
+	Run     db.Run  `json:"run"`
+	Against db.Run  `json:"against"`
+	Sizes   []Delta `json:"sizes"`
+}
+
+// Delta is one size of a comparison: both wall times and the change in
+// percent, 0 when the baseline measured nothing to compare with.
+type Delta struct {
+	Tables int          `json:"tables"`
+	Mine   units.Millis `json:"mine"`
+	Theirs units.Millis `json:"theirs"`
+	Change float64      `json:"change"`
+}
+
+// ComparisonOf pairs the rows of run and against by size, in mine's
+// order; a size against did not measure is left out.
+func ComparisonOf(run, against db.Run, mine, theirs []db.MsLoad) Comparison {
+	out := Comparison{Run: run, Against: against, Sizes: []Delta{}}
+	for _, m := range mine {
+		for _, o := range theirs {
+			if o.Tables != m.Tables {
+				continue
+			}
+			d := Delta{Tables: m.Tables, Mine: m.WallMs, Theirs: o.WallMs}
+			if o.WallMs > 0 {
+				d.Change = 100 * (float64(m.WallMs)/float64(o.WallMs) - 1)
+			}
+			out.Sizes = append(out.Sizes, d)
+		}
+	}
+	return out
+}

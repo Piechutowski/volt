@@ -120,6 +120,10 @@ func (c *Client) APISampleFailures(ctx context.Context, run int) ([]db.Sample, e
 	return voltOut, voltErr
 }
 
+func (c *Client) APIRunCompare(ctx context.Context, id int) (*http.Response, error) {
+	return c.Raw(ctx, "GET", volt.URL("/api/runs/"+volt.SegInt(id)+"/compare"), nil)
+}
+
 func (c *Client) APIMachines(ctx context.Context) ([]db.Machine, error) {
 	var voltOut []db.Machine
 	voltErr := c.Do(ctx, "GET", volt.URL("/api/machines"), nil, &voltOut)
@@ -333,6 +337,13 @@ func (c *Client) APISizes(ctx context.Context) ([]db.Sizes, error) {
 
 func (c *Client) APIMeWho(ctx context.Context) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/api/me"), nil)
+}
+
+func (c *Client) APIMeBoardsOf(ctx context.Context, owner int) ([]db.DashboardWithWidgets, error) {
+	voltQ := []volt.URLOption{volt.Query("owner", volt.FormatQuery(owner))}
+	var voltOut []db.DashboardWithWidgets
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/me/boards", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
 }
 
 func (c *Client) APIMeDashboards(ctx context.Context) (*http.Response, error) {

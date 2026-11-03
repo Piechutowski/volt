@@ -487,3 +487,39 @@ func DashboardBoard(id int) rt.With[Dashboard, Widget, int, DashboardWithWidgets
 }
 
 const voltDashboardBoardChildrenSQL = `SELECT "id", "dashboard_id", "position", "phase", "tables" FROM "widgets" WHERE "dashboard_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+
+const voltMsVetSmallestSQL = `SELECT "run_id", "tables", "wall_ms", "alloc_mb", "heap_mb", "allocs", "output_mb", "source_kb" FROM "ms_vet" WHERE ("run_id" = ? AND "tables" <= ?) ORDER BY "tables" ASC`
+
+func MsVetSmallest(run int, most int) rt.Query[MsVet] {
+	return rt.Query[MsVet]{SQL: voltMsVetSmallestSQL, Args: []any{run, most}, Scan: voltMsVetScan}
+}
+
+const voltMsGenerateSmallestSQL = `SELECT "run_id", "tables", "wall_ms", "alloc_mb", "heap_mb", "allocs", "output_mb", "source_kb" FROM "ms_generate" WHERE ("run_id" = ? AND "tables" <= ?) ORDER BY "tables" ASC`
+
+func MsGenerateSmallest(run int, most int) rt.Query[MsGenerate] {
+	return rt.Query[MsGenerate]{SQL: voltMsGenerateSmallestSQL, Args: []any{run, most}, Scan: voltMsGenerateScan}
+}
+
+const voltSampleSlowSQL = `SELECT "id", "run_id", "route", "status", "ms", "at" FROM "samples" WHERE ("run_id" = ? AND ("status" >= ? OR "ms" > ?)) ORDER BY "id" ASC`
+
+func SampleSlow(run int, ms float64) rt.Query[Sample] {
+	return rt.Query[Sample]{SQL: voltSampleSlowSQL, Args: []any{run, 400, ms}, Scan: voltSampleScan}
+}
+
+const voltSampleServerErrorsSQL = `SELECT "id", "run_id", "route", "status", "ms", "at" FROM "samples" WHERE ("run_id" = ? AND "status" IN (?, ?, ?, ?)) ORDER BY "id" ASC`
+
+func SampleServerErrors(run int) rt.Query[Sample] {
+	return rt.Query[Sample]{SQL: voltSampleServerErrorsSQL, Args: []any{run, 500, 502, 503, 504}, Scan: voltSampleScan}
+}
+
+const voltRunOthersSQL = `SELECT "id", "commit", "dirty", "machine_id", "tag", "baseline_id", "note", "created_at" FROM "runs" WHERE ("machine_id" = ? AND "id" != ?) ORDER BY "id" DESC`
+
+func RunOthers(machine int, id int) rt.Query[Run] {
+	return rt.Query[Run]{SQL: voltRunOthersSQL, Args: []any{machine, id}, Scan: voltRunScan}
+}
+
+const voltRunAnnotatedSQL = `SELECT "id", "commit", "dirty", "machine_id", "tag", "baseline_id", "note", "created_at" FROM "runs" WHERE "note" IS NOT NULL ORDER BY "id" ASC`
+
+func RunAnnotated() rt.Query[Run] {
+	return rt.Query[Run]{SQL: voltRunAnnotatedSQL, Args: nil, Scan: voltRunScan}
+}

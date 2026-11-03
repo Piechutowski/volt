@@ -25,7 +25,7 @@ var bg = context.Background()
 // and the plugs of the api pipeline run before those of the member
 // pipeline a nested scope appends (spec §pipelines, §scopes).
 func TestPagesAndPlugs(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	r := e.raw("GET", "/", "")
 	if r.StatusCode != http.StatusSeeOther || r.Header.Get("Location") != app.PathAsset("voltmeter.html") {
 		t.Fatalf("GET / = %d to %q", r.StatusCode, r.Header.Get("Location"))
@@ -34,13 +34,9 @@ func TestPagesAndPlugs(t *testing.T) {
 	if page.StatusCode != 200 || !strings.HasPrefix(page.Header.Get("Content-Type"), "text/html") || !strings.Contains(string(page.body), "<h1>Voltmeter</h1>") {
 		t.Errorf("landing page = %d %q", page.StatusCode, page.Header.Get("Content-Type"))
 	}
-	if css := e.raw("GET", app.PathAsset("voltmeter.css"), ""); css.StatusCode != 200 || !strings.HasPrefix(css.Header.Get("Content-Type"), "text/css") {
-		t.Errorf("stylesheet = %d %q", css.StatusCode, css.Header.Get("Content-Type"))
-	}
-	for _, asset := range []string{"voltmeter.html", "voltmeter.css"} {
-		b := e.raw("GET", app.PathAsset(asset), "").body
-		if strings.Contains(string(b), "http://") || strings.Contains(string(b), "https://") {
-			t.Errorf("%s names an external URL", asset)
+	for _, external := range []string{"http://", "https://", "<link", " src=", "@import", "url("} {
+		if strings.Contains(string(page.body), external) {
+			t.Errorf("the landing page loads something beside itself: it holds %q", external)
 		}
 	}
 	if missing := e.raw("GET", app.PathAsset("nothing.txt"), ""); missing.StatusCode != http.StatusNotFound {
@@ -55,7 +51,7 @@ func TestPagesAndPlugs(t *testing.T) {
 		}
 	}
 	resp, err := e.gob(0).Ping(bg)
-	read(t, resp, err, 200, nil)
+	replyRead(t, resp, err, 200, nil)
 
 	api := e.raw("GET", app.PathAPIRuns(), "", "X-Request-ID", "req-7")
 	if got := api.Header.Values("X-Pipeline"); !slices.Equal(got, []string{"api"}) || api.Header.Get("X-Request-Id") != "req-7" || api.Header.Get("Server") != "voltmeter" {
@@ -77,10 +73,10 @@ func TestPagesAndPlugs(t *testing.T) {
 // statuses of a body that does not decode (spec §request-bodies,
 // §scope-loads, §formats).
 func TestSignInAndScopeLoads(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	resp, err := e.gob(0).SignIn(bg, app.SignIn{Email: "grace@voltmeter.test"})
 	var grace db.User
-	r := read(t, resp, err, 200, &grace)
+	r := replyRead(t, resp, err, 200, &grace)
 	if grace.ID != 2 || grace.Name != "Grace" {
 		t.Fatalf("signed in as %+v", grace)
 	}
@@ -141,15 +137,15 @@ func TestSignInAndScopeLoads(t *testing.T) {
 // the query routes over joins, self joins and the datasets of the phase
 // group, and a run's annotation, report, export and deletion.
 func TestUploadsAndRuns(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
-	first := upload(t, c, sweep("ABCDEF12", []int{2, 4}, 1))
+	first := runUpload(t, c, sweep("ABCDEF12", []int{2, 4}, 1))
 	if first.Run.ID != 1 || first.Run.Commit != "abcdef12" || first.Run.Tag.Valid || len(first.Breaches) != 0 {
 		t.Fatalf("first upload = %+v", first)
 	}
 	u := sweep("0123abcd", []int{2, 4}, 1.5)
 	u.Tag, u.Note, u.Baseline, u.Dirty = "nightly", "after the fold", first.Run.ID, true
-	second := upload(t, c, u)
+	second := runUpload(t, c, u)
 	if second.Run.ID != 2 || second.Run.Tag != rt.Some("nightly") || second.Run.BaselineID != rt.Some(1) || !second.Run.Dirty {
 		t.Fatalf("second upload = %+v", second.Run)
 	}
@@ -172,7 +168,7 @@ func TestUploadsAndRuns(t *testing.T) {
 
 	resp, err := c.APIRun(bg, 2)
 	var detail wire.RunDetail
-	read(t, resp, err, 200, &detail)
+	replyRead(t, resp, err, 200, &detail)
 	if detail.Run.ID != 2 || len(detail.Phases) != 8 || len(detail.Keystrokes) != 2 || detail.Latency.N != 0 {
 		t.Fatalf("detail = %+v", detail)
 	}
@@ -237,7 +233,7 @@ func TestUploadsAndRuns(t *testing.T) {
 
 	resp, err = c.APIRunAnnotate(bg, 1, db.RunNew().NoteSet(rt.Some("first light")).TagSet(rt.Some("baseline")))
 	var annotated db.Run
-	read(t, resp, err, 200, &annotated)
+	replyRead(t, resp, err, 200, &annotated)
 	if annotated.Note != rt.Some("first light") || annotated.Tag != rt.Some("baseline") || annotated.Commit != "abcdef12" {
 		t.Errorf("annotated = %+v", annotated)
 	}
@@ -262,7 +258,7 @@ func TestUploadsAndRuns(t *testing.T) {
 		{Route: "GET /api/runs/{id}", Status: 404, MS: 0.5, At: 1002},
 	}})
 	var stored wire.Stored
-	read(t, resp, err, http.StatusCreated, &stored)
+	replyRead(t, resp, err, http.StatusCreated, &stored)
 	if stored.Written != 3 {
 		t.Errorf("samples stored = %+v", stored)
 	}
@@ -294,34 +290,34 @@ func TestUploadsAndRuns(t *testing.T) {
 // root's (spec §scopes), the HTML report and the HEAD probe beside it,
 // and the CSV export written by volt.Stream.
 func TestReports(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
-	up := upload(t, c, sweep("feed5eed", []int{2, 4, 8}, 1))
+	up := runUpload(t, c, sweep("feed5eed", []int{2, 4, 8}, 1))
 	resp, err := c.ReportShow(bg, up.Run.ID)
-	r := read(t, resp, err, 200, nil)
+	r := replyRead(t, resp, err, 200, nil)
 	if !strings.HasPrefix(r.Header.Get("Content-Type"), "text/html") || !strings.Contains(string(r.body), "Voltmeter run 1") || strings.Count(string(r.body), "<polyline") != 4 {
 		t.Errorf("report = %q, %d lines", r.Header.Get("Content-Type"), strings.Count(string(r.body), "<polyline"))
 	}
 	resp, err = c.ReportShow(bg, 99)
-	r = read(t, resp, err, 404, nil)
+	r = replyRead(t, resp, err, 404, nil)
 	if r.Header.Get("X-Error-Handler") != "report" || !strings.HasPrefix(r.Header.Get("Content-Type"), "text/html") || !strings.Contains(string(r.body), "404 Not Found") {
 		t.Errorf("a missing report = %q via %q: %s", r.Header.Get("Content-Type"), r.Header.Get("X-Error-Handler"), r.body)
 	}
 	resp, err = c.ReportProbe(bg, up.Run.ID)
-	read(t, resp, err, 200, nil)
+	replyRead(t, resp, err, 200, nil)
 	resp, err = c.ReportProbe(bg, 99)
-	r = read(t, resp, err, 404, nil)
+	r = replyRead(t, resp, err, 404, nil)
 	if r.Header.Get("X-Error-Handler") != "report" || len(r.body) != 0 {
 		t.Errorf("HEAD of a missing report via %q with %d bytes", r.Header.Get("X-Error-Handler"), len(r.body))
 	}
 	resp, err = c.ReportExport(bg, up.Run.ID)
-	r = read(t, resp, err, 200, nil)
+	r = replyRead(t, resp, err, 200, nil)
 	lines := strings.Split(strings.TrimSpace(string(r.body)), "\n")
 	if r.Header.Get("Content-Type") != "text/csv; charset=utf-8" || r.Header.Get("Content-Disposition") != `attachment; filename="voltmeter-run-1.csv"` || len(lines) != 13 || lines[0] != strings.Join(app.ReportCSVHeader, ",") || lines[1] != "load,2,2,1,1,200,0,3" {
 		t.Errorf("export %q %q:\n%s", r.Header.Get("Content-Type"), r.Header.Get("Content-Disposition"), r.body)
 	}
 	resp, err = c.ReportExport(bg, 99)
-	if r := read(t, resp, err, 404, nil); r.Header.Get("X-Error-Handler") != "report" {
+	if r := replyRead(t, resp, err, 404, nil); r.Header.Get("X-Error-Handler") != "report" {
 		t.Errorf("a missing export via %q", r.Header.Get("X-Error-Handler"))
 	}
 }
@@ -332,7 +328,7 @@ func TestReports(t *testing.T) {
 // no measurement, no breach, no budget change and no run, whose id is
 // still never reused (spec §changesets, §request-bodies).
 func TestBudgetsBreachesAndTransactions(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
 	var check db.Budget
 	if r := e.rawJSON("POST", app.PathAPIBudgets(), `{"phase": "check", "tables": 2, "max_ms": 5}`, &check); r.StatusCode != http.StatusCreated || check.State != db.HealthOK {
@@ -350,17 +346,17 @@ func TestBudgetsBreachesAndTransactions(t *testing.T) {
 		t.Errorf("a budget whose tables do not cast = %d %s", r.StatusCode, r.body)
 	}
 
-	under := upload(t, c, sweep("aaaa0001", []int{2}, 1))
+	under := runUpload(t, c, sweep("aaaa0001", []int{2}, 1))
 	if len(under.Breaches) != 0 {
 		t.Errorf("check@2 at 2 ms breached a 5 ms budget: %+v", under.Breaches)
 	}
-	over := upload(t, c, sweep("aaaa0002", []int{2}, 4))
+	over := runUpload(t, c, sweep("aaaa0002", []int{2}, 4))
 	if len(over.Breaches) != 1 || over.Breaches[0].BudgetID != check.ID || over.Breaches[0].WallMs != 16 || over.Breaches[0].RunID != over.Run.ID {
 		t.Fatalf("check@2 at 16 ms over a 5 ms budget: breaches %+v", over.Breaches)
 	}
 	resp, err := c.APIBudget(bg, check.ID)
 	var detail wire.BudgetDetail
-	read(t, resp, err, 200, &detail)
+	replyRead(t, resp, err, 200, &detail)
 	if detail.Budget.State != db.HealthBreached || len(detail.Breaches) != 1 {
 		t.Errorf("budget after the breach = %+v", detail)
 	}
@@ -375,31 +371,31 @@ func TestBudgetsBreachesAndTransactions(t *testing.T) {
 	broken := sweep("aaaa0003", []int{2}, 4)
 	broken.Phases = append(broken.Phases, broken.Phases[1])
 	resp, err = c.APIUpload(bg, broken)
-	r := read(t, resp, err, http.StatusConflict, nil)
+	r := replyRead(t, resp, err, http.StatusConflict, nil)
 	if p := r.problem(t); p.Details[0].Check != "unique" {
 		t.Errorf("a duplicated phase row = %+v", p)
 	}
 	resp, err = c.APIRuns(bg)
 	var page wire.RunPage
-	read(t, resp, err, 200, &page)
+	replyRead(t, resp, err, 200, &page)
 	if page.Total != 2 {
 		t.Errorf("runs after the failed upload = %d, want 2: the run is deleted again", page.Total)
 	}
 	resp, err = c.APIBudget(bg, check.ID)
-	read(t, resp, err, 200, &detail)
+	replyRead(t, resp, err, 200, &detail)
 	if len(detail.Breaches) != 1 {
 		t.Errorf("breaches after the failed upload = %d, want 1: the transaction rolled back", len(detail.Breaches))
 	}
 	if rows, err := c.APIPhaseMsLoadRows(bg, 3); err != nil || len(rows) != 0 {
 		t.Errorf("rows of the failed run = %d, %v", len(rows), err)
 	}
-	next := upload(t, c, sweep("aaaa0004", []int{2}, 1))
+	next := runUpload(t, c, sweep("aaaa0004", []int{2}, 1))
 	if next.Run.ID != 4 {
 		t.Errorf("the run after the failed one has id %d, want 4: ids are never reused", next.Run.ID)
 	}
 
 	resp, err = c.APIBudgetCeiling(bg, check.ID, db.BudgetNew().MaxMsSet(-1))
-	r = read(t, resp, err, 422, nil)
+	r = replyRead(t, resp, err, 422, nil)
 	if p := r.problem(t); len(p.Details) != 1 || p.Details[0].Check != "BudgetSane" || !slices.Equal(p.Details[0].Columns, []string{"tables", "max_ms"}) {
 		t.Errorf("a negative ceiling = %+v", p)
 	}
@@ -410,7 +406,7 @@ func TestBudgetsBreachesAndTransactions(t *testing.T) {
 		}
 	}
 	resp, err = c.APIBudget(bg, check.ID)
-	read(t, resp, err, 200, &detail)
+	replyRead(t, resp, err, 200, &detail)
 	if detail.Budget.State != db.HealthBreached {
 		t.Errorf("a PATCH with no ceiling cleared the breach: %+v", detail.Budget)
 	}
@@ -420,7 +416,7 @@ func TestBudgetsBreachesAndTransactions(t *testing.T) {
 	}
 	resp, err = c.APIBudgetCeiling(bg, check.ID, db.BudgetNew().MaxMsSet(100))
 	var raised db.Budget
-	read(t, resp, err, 200, &raised)
+	replyRead(t, resp, err, 200, &raised)
 	if raised.MaxMs != 100 || raised.State != db.HealthOK || raised.Phase != db.PhaseCheck {
 		t.Errorf("raised = %+v", raised)
 	}
@@ -429,17 +425,17 @@ func TestBudgetsBreachesAndTransactions(t *testing.T) {
 	}
 
 	resp, err = c.APIBudgetCeiling(bg, check.ID, db.BudgetNew().MaxMsSet(1))
-	read(t, resp, err, 200, nil)
-	upload(t, c, sweep("aaaa0005", []int{2}, 4))
+	replyRead(t, resp, err, 200, nil)
+	runUpload(t, c, sweep("aaaa0005", []int{2}, 4))
 	resp, err = c.APIBudgetsReset(bg)
 	var reset wire.Reset
-	read(t, resp, err, 200, &reset)
+	replyRead(t, resp, err, 200, &reset)
 	if reset.Reset != 1 {
 		t.Errorf("reset = %+v", reset)
 	}
 	resp, err = c.APIBudgetsReset(bg)
 	var none wire.Reset
-	read(t, resp, err, 200, &none)
+	replyRead(t, resp, err, 200, &none)
 	if none.Reset != 0 {
 		t.Errorf("a second reset = %+v", none)
 	}
@@ -453,7 +449,7 @@ func TestBudgetsBreachesAndTransactions(t *testing.T) {
 // list never repeats or skips a run, filters by tag, agrees with offset
 // paging, and refuses a malformed page (spec §predicates, After).
 func TestKeysetPaging(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
 	var want []int
 	for i := range 23 {
@@ -461,13 +457,13 @@ func TestKeysetPaging(t *testing.T) {
 		if i%3 == 0 {
 			u.Tag = "third"
 		}
-		want = append([]int{upload(t, c, u).Run.ID}, want...)
+		want = append([]int{runUpload(t, c, u).Run.ID}, want...)
 	}
 	page := func(opts ...volt.URLOption) wire.RunPage {
 		t.Helper()
 		resp, err := c.Raw(bg, "GET", app.PathAPIRuns(opts...), nil)
 		var p wire.RunPage
-		r := read(t, resp, err, 200, &p)
+		r := replyRead(t, resp, err, 200, &p)
 		if r.Header.Get("X-Total") != strconv.FormatInt(p.Total, 10) {
 			t.Errorf("X-Total %q, body %d", r.Header.Get("X-Total"), p.Total)
 		}
@@ -539,7 +535,7 @@ func TestKeysetPaging(t *testing.T) {
 // generated query route over the table's CRUD, its statuses and its
 // changeset body (spec §default-handlers).
 func TestTagsByDefaultHandlers(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
 	created, err := c.APICreateTag(bg, db.TagNew().SlugSet("release").NameSet("Release"))
 	if err != nil || created.Slug != "release" {
@@ -587,7 +583,7 @@ func TestTagsByDefaultHandlers(t *testing.T) {
 // in one transaction and the query routes read it back joined and
 // matched.
 func TestThesis(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
 	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 	body := app.ThesisUpload{Commits: []app.ThesisCommit{
@@ -596,18 +592,18 @@ func TestThesis(t *testing.T) {
 	}}
 	resp, err := c.APIThesisRecord(bg, body)
 	var stored wire.Stored
-	read(t, resp, err, http.StatusCreated, &stored)
+	replyRead(t, resp, err, http.StatusCreated, &stored)
 	if stored.Written != 5 || stored.Skipped != 0 {
 		t.Errorf("first record = %+v", stored)
 	}
 	resp, err = c.APIThesisRecord(bg, body)
 	var again wire.Stored
-	read(t, resp, err, http.StatusOK, &again)
+	replyRead(t, resp, err, http.StatusOK, &again)
 	if again.Written != 0 || again.Skipped != 5 {
 		t.Errorf("second record = %+v", again)
 	}
 	if resp, err := c.APIThesisRecord(bg, app.ThesisUpload{}); err == nil {
-		read(t, resp, err, 422, nil)
+		replyRead(t, resp, err, 422, nil)
 	}
 	rows, err := c.APILineCountThesis(bg, "itest/blog")
 	if err != nil || len(rows) != 2 || rows[0].Sha != "1111" || rows[1].CommitSubject != "Add Voltmeter" || rows[1].GenLines != 3050 {
@@ -623,45 +619,45 @@ func TestThesis(t *testing.T) {
 // changeset bodies narrowed by only:, and that one member cannot reach
 // another's board.
 func TestDashboardsUnderNestedLoads(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	ada, grace := e.json(1), e.gob(2)
 	resp, err := ada.APIMeDashboardAdd(bg, db.DashboardNew().NameSet("Check trend"))
 	var board db.Dashboard
-	read(t, resp, err, http.StatusCreated, &board)
+	replyRead(t, resp, err, http.StatusCreated, &board)
 	if board.OwnerID != 1 || board.Name != "Check trend" {
 		t.Fatalf("board = %+v", board)
 	}
 	resp, err = ada.APIMeDashboardAdd(bg, db.DashboardNew().NameSet("Check trend"))
-	if r := read(t, resp, err, http.StatusConflict, nil); r.problem(t).Details[0].Check != "unique" {
+	if r := replyRead(t, resp, err, http.StatusConflict, nil); r.problem(t).Details[0].Check != "unique" {
 		t.Errorf("a second board of one name: %s", r.body)
 	}
 	resp, err = ada.APIMeDashboardAdd(bg, db.DashboardNew())
-	if r := read(t, resp, err, 422, nil); r.problem(t).Details[0].Check != "required" {
+	if r := replyRead(t, resp, err, 422, nil); r.problem(t).Details[0].Check != "required" {
 		t.Errorf("a board without a name: %s", r.body)
 	}
 	resp, err = ada.APIMeDashboardAdd(bg, db.DashboardNew().NameSet("Mine").OwnerIDSet(2))
 	var mine db.Dashboard
-	read(t, resp, err, http.StatusCreated, &mine)
+	replyRead(t, resp, err, http.StatusCreated, &mine)
 	if mine.OwnerID != 1 {
 		t.Errorf("only: (name) leaves the owner to the member's load, got owner %d", mine.OwnerID)
 	}
 
 	resp, err = ada.APIMeBoardWidgetAdd(bg, board.ID, db.WidgetNew().PositionSet(1).PhaseSet(db.PhaseCheck).TablesSet(4))
 	var widget db.Widget
-	read(t, resp, err, http.StatusCreated, &widget)
+	replyRead(t, resp, err, http.StatusCreated, &widget)
 	if widget.DashboardID != board.ID {
 		t.Errorf("widget = %+v", widget)
 	}
 	resp, err = ada.APIMeBoardWidgetAdd(bg, board.ID, db.WidgetNew().PositionSet(2).PhaseSet("link").TablesSet(4))
-	if r := read(t, resp, err, 422, nil); r.problem(t).Details[0].Check != "PhaseKnown" {
+	if r := replyRead(t, resp, err, 422, nil); r.problem(t).Details[0].Check != "PhaseKnown" {
 		t.Errorf("a widget of no phase: %s", r.body)
 	}
 	resp, err = grace.APIMeBoardWidgetAdd(bg, board.ID, db.WidgetNew().PositionSet(2).PhaseSet(db.PhaseVet).TablesSet(2))
-	if r := read(t, resp, err, 404, nil); r.problem(t).Message != "no such dashboard" {
+	if r := replyRead(t, resp, err, 404, nil); r.problem(t).Message != "no such dashboard" {
 		t.Errorf("a widget on another member's board: %s", r.body)
 	}
 	resp, err = ada.APIMeBoardWidgetAdd(bg, 99, db.WidgetNew().PositionSet(2).PhaseSet(db.PhaseVet).TablesSet(2))
-	if r := read(t, resp, err, 404, nil); r.Header.Get("X-Error-Handler") != "api" {
+	if r := replyRead(t, resp, err, 404, nil); r.Header.Get("X-Error-Handler") != "api" {
 		t.Errorf("a board no row has: the nested load's 404 through the spine, got %q", r.Header.Get("X-Error-Handler"))
 	}
 	if r := e.raw("POST", app.PathAPIMeBoardWidgetAdd(board.ID), `{"position": 1, "phase": "vet", "tables": 2}`); r.StatusCode != http.StatusUnauthorized {
@@ -670,31 +666,31 @@ func TestDashboardsUnderNestedLoads(t *testing.T) {
 
 	resp, err = ada.APIMeDashboards(bg)
 	var boards []db.DashboardWithWidgets
-	read(t, resp, err, 200, &boards)
+	replyRead(t, resp, err, 200, &boards)
 	if len(boards) != 2 || boards[0].Name != "Check trend" || len(boards[0].Widgets) != 1 || len(boards[1].Widgets) != 0 {
 		t.Errorf("ada's boards = %+v", boards)
 	}
 	resp, err = grace.APIMeDashboards(bg)
 	boards = nil
-	read(t, resp, err, 200, &boards)
+	replyRead(t, resp, err, 200, &boards)
 	if len(boards) != 0 {
 		t.Errorf("grace's boards = %+v", boards)
 	}
 	resp, err = ada.APIMeDashboard(bg, board.ID)
 	var shown db.DashboardWithWidgets
-	read(t, resp, err, 200, &shown)
+	replyRead(t, resp, err, 200, &shown)
 	if shown.ID != board.ID || len(shown.Widgets) != 1 {
 		t.Errorf("shown = %+v", shown)
 	}
 	resp, err = grace.APIMeDashboard(bg, board.ID)
-	read(t, resp, err, 404, nil)
+	replyRead(t, resp, err, 404, nil)
 
 	resp, err = grace.APIMeBoardWidgetRemove(bg, board.ID, widget.ID)
-	read(t, resp, err, 404, nil)
+	replyRead(t, resp, err, 404, nil)
 	resp, err = ada.APIMeBoardWidgetRemove(bg, board.ID, widget.ID)
-	read(t, resp, err, http.StatusNoContent, nil)
+	replyRead(t, resp, err, http.StatusNoContent, nil)
 	resp, err = ada.APIMeBoardWidgetRemove(bg, board.ID, widget.ID)
-	if r := read(t, resp, err, 404, nil); r.problem(t).Message != "no such widget" {
+	if r := replyRead(t, resp, err, 404, nil); r.problem(t).Message != "no such widget" {
 		t.Errorf("removing a removed widget: %s", r.body)
 	}
 }
@@ -704,11 +700,11 @@ func TestDashboardsUnderNestedLoads(t *testing.T) {
 // MaxBodyBytes is a 413 before the handler runs (spec §route-loads,
 // §formats).
 func TestLimits(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
 	resp, err := c.Raw(bg, "GET", app.PathAPIProbe(volt.Query("steps", "1000")), nil)
 	var counted wire.Counted
-	read(t, resp, err, 200, &counted)
+	replyRead(t, resp, err, 200, &counted)
 	if counted.Steps != 1000 || counted.Rows != 3 {
 		t.Errorf("probe = %+v; the three seeded members", counted)
 	}

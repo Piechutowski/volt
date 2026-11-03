@@ -33,7 +33,7 @@ func TestCollectStoresWhatTheSweepMeasured(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not on PATH:", err)
 	}
-	e := start(t)
+	e := envStart(t)
 	bg := context.Background()
 	repo, err := collector.RepoFind(".")
 	if err != nil {
@@ -46,7 +46,7 @@ func TestCollectStoresWhatTheSweepMeasured(t *testing.T) {
 	c := e.gob(1)
 	resp, err := c.APIMeDashboardAdd(bg, db.DashboardNew().NameSet("sweep"))
 	var board db.Dashboard
-	read(t, resp, err, http.StatusCreated, &board)
+	replyRead(t, resp, err, http.StatusCreated, &board)
 
 	cfg := collector.Config{
 		Server: e.srv.URL, User: 1, Repo: repo,
@@ -113,7 +113,7 @@ func TestCollectStoresWhatTheSweepMeasured(t *testing.T) {
 	}
 	resp, err = c.APIBudget(bg, budget.ID)
 	var detail wire.BudgetDetail
-	read(t, resp, err, http.StatusOK, &detail)
+	replyRead(t, resp, err, http.StatusOK, &detail)
 	if detail.Budget.State != db.HealthBreached || len(detail.Breaches) != 1 {
 		t.Errorf("budget after the upload %+v", detail)
 	}
@@ -303,7 +303,7 @@ func linesOracle(t *testing.T, repo, sha, fixture string) (app.ThesisCount, bool
 // that is down, or at a member it does not know, fails before the sweep
 // spends its minutes, with nothing measured.
 func TestCollectAsksTheServerFirst(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	repo, err := collector.RepoFind(".")
 	if err != nil {
 		t.Fatal(err)

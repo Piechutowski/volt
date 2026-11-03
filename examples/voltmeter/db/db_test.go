@@ -18,7 +18,7 @@ import (
 
 var sizes = []int{2, 4, 8}
 
-func open(t *testing.T) run.DB {
+func dbOpen(t *testing.T) run.DB {
 	t.Helper()
 	d, err := run.Open("sqlite3", filepath.Join(t.TempDir(), "voltmeter.db"))
 	if err != nil {
@@ -69,7 +69,7 @@ func wall(phase, run, tables int) units.Millis {
 	return units.Millis(float64(phase*10+tables) + float64(run)/10)
 }
 
-func seed(t *testing.T, d run.DB) world {
+func worldSeed(t *testing.T, d run.DB) world {
 	t.Helper()
 	var w world
 	w.machine = do(t, d, db.MachineCreate(db.MachineNew().CPUSet("Test CPU 3000").CoresSet(8).MemoryGbSet(16).OsSet("linux").ArchSet("amd64").GoSet("go1.27.0")))

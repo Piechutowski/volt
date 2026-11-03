@@ -24,7 +24,7 @@ import (
 // Last-Event-ID replays exactly what came after, and one naming an ID
 // this broker never assigned, as after a restart, replays everything.
 func TestEvents(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	ctx, cancel := context.WithTimeout(bg, 30*time.Second)
 	defer cancel()
 	c := e.gob(0)
@@ -80,7 +80,7 @@ func TestEvents(t *testing.T) {
 	if r := e.raw("POST", app.PathSignIn(), `{"email": "ada@voltmeter.test"}`); r.StatusCode != 200 {
 		t.Fatalf("sign in = %d %s", r.StatusCode, r.body)
 	}
-	up := upload(t, c, app.Upload{Commit: "beef0001", Machine: machine})
+	up := runUpload(t, c, app.Upload{Commit: "beef0001", Machine: machine})
 	ev, ch = next()
 	if ev.ID != 4 || ch.Handler != "Uploads.Create" || ch.Route != "POST /api/uploads" || ch.Status != 201 || up.Run.ID != 1 {
 		t.Errorf("the upload's event %d %+v; want 4, the sign-in changing no row", ev.ID, ch)

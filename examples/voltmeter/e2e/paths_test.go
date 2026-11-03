@@ -22,7 +22,7 @@ import (
 // tag slug holding "/", ".", ".." or a space reaches its own row, and a
 // wildcard drops its empty elements.
 func TestReverseURLsRoundTrip(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	h := server.Handler(e.db, e.broker)
 	q := volt.Query
 	built := map[string]struct{ method, url string }{
@@ -76,6 +76,8 @@ func TestReverseURLsRoundTrip(t *testing.T) {
 		"PathAPIPerSizeMsGeneratePerSize": {"GET", app.PathAPIPerSizeMsGeneratePerSize()},
 		"PathAPISizes":                    {"GET", app.PathAPISizes()},
 		"PathAPIMeWho":                    {"GET", app.PathAPIMeWho()},
+		"PathAPIMeBoardsOf":               {"GET", app.PathAPIMeBoardsOf(q("owner", "1"))},
+		"PathAPIRunCompare":               {"GET", app.PathAPIRunCompare(1, q("baseline", "1"))},
 		"PathAPIMeDashboards":             {"GET", app.PathAPIMeDashboards()},
 		"PathAPIMeDashboard":              {"GET", app.PathAPIMeDashboard(1)},
 		"PathAPIMeDashboardAdd":           {"POST", app.PathAPIMeDashboardAdd()},

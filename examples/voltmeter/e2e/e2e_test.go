@@ -69,7 +69,7 @@ type env struct {
 	broker *volt.Broker
 }
 
-func start(t *testing.T) *env {
+func envStart(t *testing.T) *env {
 	t.Helper()
 	d, err := run.Open("sqlite3", filepath.Join(t.TempDir(), "voltmeter.db"))
 	if err != nil {
@@ -182,7 +182,7 @@ func (e *env) rawJSON(method, path, body string, out any, header ...string) repl
 	return r
 }
 
-func read(t *testing.T, resp *http.Response, err error, want int, out any) reply {
+func replyRead(t *testing.T, resp *http.Response, err error, want int, out any) reply {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
@@ -227,10 +227,10 @@ func sweep(commit string, sizes []int, scale float64) app.Upload {
 	return u
 }
 
-func upload(t *testing.T, c *client.Client, u app.Upload) wire.UploadResult {
+func runUpload(t *testing.T, c *client.Client, u app.Upload) wire.UploadResult {
 	t.Helper()
 	resp, err := c.APIUpload(context.Background(), u)
 	var out wire.UploadResult
-	read(t, resp, err, http.StatusCreated, &out)
+	replyRead(t, resp, err, http.StatusCreated, &out)
 	return out
 }

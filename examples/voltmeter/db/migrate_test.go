@@ -102,8 +102,8 @@ func TestMigrationsBuildTheSchema(t *testing.T) {
 // §migrations reversibility).
 func TestMigrateDownStopsAtTheIrreversibleRebuild(t *testing.T) {
 	ctx := context.Background()
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 
 	reversible := names(db.Migrations[6:])
 	slices.Reverse(reversible)

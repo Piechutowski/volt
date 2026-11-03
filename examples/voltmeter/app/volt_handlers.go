@@ -53,6 +53,7 @@ type RunsController interface {
 	Delete(r volt.Request, id int) volt.Response
 	Options(r volt.Request) volt.Response
 	Annotate(r volt.Request, id int, body db.RunChangeset) volt.Response
+	Compare(r volt.Request, id int, run db.Run, against db.Run, mine []db.MsLoad, theirs []db.MsLoad) volt.Response
 }
 
 type SamplesController interface {
@@ -164,6 +165,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	}
 	if !volt.Same(c.Runs.Annotate(r, 0, db.RunChangeset{}), c.Runs.Annotate(r, 0, db.RunChangeset{})) {
 		voltOut = append(voltOut, "Runs.Annotate")
+	}
+	if !volt.Same(c.Runs.Compare(r, 0, db.Run{}, db.Run{}, nil, nil), c.Runs.Compare(r, 0, db.Run{}, db.Run{}, nil, nil)) {
+		voltOut = append(voltOut, "Runs.Compare")
 	}
 	if !volt.Same(c.Samples.Create(r, 0, SampleBatch{}), c.Samples.Create(r, 0, SampleBatch{})) {
 		voltOut = append(voltOut, "Samples.Create")

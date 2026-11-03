@@ -115,10 +115,10 @@ func TestWindowHandlersDriveTheState(t *testing.T) {
 	display := xvfbStart(t)
 	x := xtestOpen(t, display)
 	bin := guiBuild(t)
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
-	upload(t, c, sweep("ac000001", []int{2, 4}, 1))
-	newest := upload(t, c, sweep("ac000002", []int{2, 4}, 2)).Run.ID
+	runUpload(t, c, sweep("ac000001", []int{2, 4}, 1))
+	newest := runUpload(t, c, sweep("ac000002", []int{2, 4}, 2)).Run.ID
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -171,7 +171,7 @@ func TestWindowHandlersDriveTheState(t *testing.T) {
 	x.typeText("seen live")
 	w.until("the typed note in State", func(l probeLine) bool { return l.Fields["run_note"] == "seen live" })
 	resp, err := c.APISamplesRecord(bg, newest, app.SampleBatch{Samples: []app.SampleTimed{{Route: "GET /ping", Status: 200, MS: 0.2, At: 1}}})
-	read(t, resp, err, http.StatusCreated, nil)
+	replyRead(t, resp, err, http.StatusCreated, nil)
 	l := w.until("the live refetch of the run", func(l probeLine) bool { return l.Latency == 1 })
 	if l.Fields["run_note"] != "seen live" {
 		t.Errorf("after the live refetch the note holds %q, want what was typed", l.Fields["run_note"])

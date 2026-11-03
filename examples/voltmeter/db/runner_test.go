@@ -20,8 +20,8 @@ import (
 // budget's state and its breach are written together or not at all.
 func TestTxIsAllOrNothing(t *testing.T) {
 	ctx := context.Background()
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 	b := w.budgets[0]
 
 	breach := func(runID int) rt.Transaction {
@@ -61,8 +61,8 @@ func TestTxIsAllOrNothing(t *testing.T) {
 // own position, whatever order the steps finish in, and returns the first
 // error alone (spec §values-and-effects).
 func TestAllKeepsResultOrder(t *testing.T) {
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 	for range 20 {
 		out := do(t, d, rt.All(
 			db.RunGet(w.runs[2].ID),
@@ -87,8 +87,8 @@ func TestAllKeepsResultOrder(t *testing.T) {
 // WithLogger gets one debug line per statement with its text and
 // duration (spec §generated-query-surface, the runner).
 func TestStatementCacheAndLogging(t *testing.T) {
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 
 	var buf bytes.Buffer
 	logged := d.WithLogger(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))

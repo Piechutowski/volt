@@ -249,8 +249,9 @@ func ThesisOf(commits []app.ThesisCommit, fixtures []string, files [][]File) (ap
 }
 
 // Targets are the rows a timed call reads: the stored run and its
-// machine, a tag, a fixture, a table count, one of the member's boards
-// and a budget. A zero id names no row and its call answers 404.
+// machine, a tag, a fixture, a table count, one of the member's boards,
+// a budget and the owner whose boards a member reads. A zero id names
+// no row and its call answers 404.
 type Targets struct {
 	Run     int
 	Machine int
@@ -259,6 +260,7 @@ type Targets struct {
 	Tables  int
 	Board   int
 	Budget  int
+	Owner   int
 }
 
 // Call is one read route to time: the method, the route as the router
@@ -298,6 +300,7 @@ func ReadCalls(t Targets) []Call {
 		get("/api/runs/{run}/latency", app.PathAPISampleLatency(t.Run)),
 		get("/api/runs/{run}/routes", app.PathAPISamplePerRoute(t.Run)),
 		get("/api/runs/{run}/failures", app.PathAPISampleFailures(t.Run)),
+		get("/api/runs/{id}/compare", app.PathAPIRunCompare(t.Run, q("baseline", t.Run), q("sizes", t.Tables))),
 		get("/api/machines", app.PathAPIMachines()),
 		get("/api/machines/{id}", app.PathAPIHost(t.Machine)),
 		get("/api/fleet", app.PathAPIMachineFleet()),
@@ -325,6 +328,7 @@ func ReadCalls(t Targets) []Call {
 		get("/api/per_size/generate", app.PathAPIPerSizeMsGeneratePerSize(q("sizes", t.Tables))),
 		get("/api/sizes", app.PathAPISizes()),
 		get("/api/me", app.PathAPIMeWho()),
+		get("/api/me/boards", app.PathAPIMeBoardsOf(q("owner", t.Owner))),
 		get("/api/me/dashboards", app.PathAPIMeDashboards()),
 		get("/api/me/dashboards/{board}", app.PathAPIMeDashboard(t.Board)),
 		{Method: "HEAD", Route: "HEAD /reports/runs/{id}", Path: app.PathReportProbe(t.Run)},

@@ -64,7 +64,7 @@ func main() {
 		w.script = &script{steps: scriptTour(*email, *shots)}
 	case *probed:
 		m.probe = &probe{out: os.Stdout}
-		w.script = &script{steps: []step{membersLoaded(), signIn(*email)}, stay: true}
+		w.script = &script{steps: []step{membersLoaded(), memberSignIn(*email)}, stay: true}
 	}
 	if w.script != nil {
 		w.script.deadline = int(timeout.Seconds() * float64(ebiten.DefaultTPS))

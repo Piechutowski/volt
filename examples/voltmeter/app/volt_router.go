@@ -209,6 +209,38 @@ func register(mux *http.ServeMux, c Controllers) {
 		})
 	}, errHandlerErrors, voltPerform, volt.Params("run"))))
 
+	mux.Handle("GET /api/runs/{id}/compare", pipe0(volt.Handler("GET /api/runs/{id}/compare", func(r volt.Request) volt.Response {
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		volt_against_baseline, err := volt.QueryParam[int](r, "baseline")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		volt_mine_sizes, err := volt.QueryParams[int](r, "sizes")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		volt_theirs_baseline, err := volt.QueryParam[int](r, "baseline")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		volt_theirs_sizes, err := volt.QueryParams[int](r, "sizes")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.RunGet(voltid), func(run db.Run) volt.Response {
+			return volt.Then(db.RunGet(volt_against_baseline), func(against db.Run) volt.Response {
+				return volt.Then(db.MsLoadSized(voltid, volt_mine_sizes), func(mine []db.MsLoad) volt.Response {
+					return volt.Then(db.MsLoadSized(volt_theirs_baseline, volt_theirs_sizes), func(theirs []db.MsLoad) volt.Response {
+						return c.Runs.Compare(r, voltid, run, against, mine, theirs)
+					})
+				})
+			})
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
+
 	mux.Handle("GET /api/machines", pipe0(volt.Handler("GET /api/machines", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
 			return volt.Fail(err)
@@ -582,6 +614,21 @@ func register(mux *http.ServeMux, c Controllers) {
 	mux.Handle("GET /api/me", pipe1(volt.Handler("GET /api/me", func(r volt.Request) volt.Response {
 		return volt.Continue(CurrentUser(r), func(user db.User) volt.Response {
 			return c.Me.Show(r, user)
+		})
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("GET /api/me/boards", pipe1(volt.Handler("GET /api/me/boards", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Continue(CurrentUser(r), func(user db.User) volt.Response {
+			voltowner, err := volt.QueryParam[int](r, "owner")
+			if err != nil {
+				return volt.Fail(err)
+			}
+			return volt.Then(db.DashboardBoards(voltowner), func(voltOut []db.DashboardWithWidgets) volt.Response {
+				return volt.RenderStatus(200, voltOut)
+			})
 		})
 	}, errHandlerErrors, voltPerform)))
 

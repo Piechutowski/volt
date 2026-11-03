@@ -33,7 +33,7 @@ func TestWindowShowsTheNewestRun(t *testing.T) {
 	dir := t.TempDir()
 	bin := guiBuild(t)
 
-	e := start(t)
+	e := envStart(t)
 	repo, err := collector.RepoFind(".")
 	if err != nil {
 		t.Fatal(err)

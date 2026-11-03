@@ -51,7 +51,8 @@ var commentRE = regexp.MustCompile(`(?s)//[^\n]*|/\*.*?\*/`)
 // lexicon: no lexical error; line and block comments that leave nothing
 // but whitespace between tokens; identifiers, numbers, expression literals,
 // single-line strings with an escape and a multi-line string whose
-// indentation is stripped; the literal words false and null; the longest match of >=;
+// indentation is stripped; the literal words false and null; >=, <= and
+// != each one token by the longest match, never < or > followed by =;
 // and every element starting in the first column, the package clause
 // first (spec §lexical-structure, §program-structure).
 func TestSourcesSpeakTheLexicon(t *testing.T) {
@@ -64,6 +65,8 @@ func TestSourcesSpeakTheLexicon(t *testing.T) {
 			t.Errorf("%s: %v", name, e)
 		}
 		end, first := 0, true
+		var prev vtoken.Kind
+		prevEnd := -1
 		for _, tk := range toks {
 			gap := src[end:tk.Pos.Offset()]
 			for _, c := range commentRE.FindAllString(gap, -1) {
@@ -108,11 +111,12 @@ func TestSourcesSpeakTheLexicon(t *testing.T) {
 						t.Errorf("%s: the escape in %s is not interpreted: %q", name, tk.Text(), tk.Val)
 					}
 				}
-			case vtoken.GE:
-				if tk.Text() != ">=" {
-					t.Errorf("%s: >= scanned as %q", name, tk.Text())
+			case vtoken.EQ:
+				if prevEnd == tk.Pos.Offset() && (prev == vtoken.GT || prev == vtoken.LT) {
+					t.Errorf("%s: %v scanned a comparison as two tokens, not by the longest match", name, tk.Pos)
 				}
 			}
+			prev, prevEnd = tk.Kind, end
 		}
 	}
 	if lineComments == 0 || blockComments == 0 {
@@ -130,7 +134,7 @@ func TestSourcesSpeakTheLexicon(t *testing.T) {
 		vtoken.IDENT, vtoken.STRING, vtoken.NUMBER, vtoken.FUNCEXPR,
 		vtoken.LBRACE, vtoken.RBRACE, vtoken.LBRACKET, vtoken.RBRACKET, vtoken.LPAREN, vtoken.RPAREN,
 		vtoken.COMMA, vtoken.COLON, vtoken.DOT, vtoken.TILDE, vtoken.STAR, vtoken.SLASH,
-		vtoken.LT, vtoken.GT, vtoken.BACKSLASH, vtoken.EQ, vtoken.GE,
+		vtoken.LT, vtoken.GT, vtoken.BACKSLASH, vtoken.EQ, vtoken.GE, vtoken.LE, vtoken.NEQ, vtoken.PLUS,
 	} {
 		if kinds[k] == 0 {
 			t.Errorf("no %s token in the sources", k)

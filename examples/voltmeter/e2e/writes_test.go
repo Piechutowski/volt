@@ -19,9 +19,9 @@ import (
 // budget, an annotation, a sample batch and a dashboard asked for in a
 // format the server does not speak store nothing.
 func TestWritesNegotiateFirst(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
-	run := upload(t, c, sweep("feed0001", []int{2}, 1)).Run
+	run := runUpload(t, c, sweep("feed0001", []int{2}, 1)).Run
 	csv := []string{"Accept", "text/csv"}
 	writes := []struct{ method, path, body string }{
 		{"POST", app.PathAPIUpload(), `{"commit": "abcd1234", "machine": {"cpu": "another"}}`},
@@ -71,7 +71,7 @@ func (e *env) count(t *testing.T, counts ...rt.Lookup[int64]) int64 {
 // index refuses reads the row the other added, so no sweep is lost to a
 // 409 and each machine and tag is stored once.
 func TestFirstUploadsRace(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
 	const rounds, together = 6, 8
 	for round := range rounds {
@@ -118,25 +118,25 @@ func TestFirstUploadsRace(t *testing.T) {
 // itself was refused (a baseline no run has), while a machine and a tag
 // that runs already use stay.
 func TestRefusedUploadLeavesNothing(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
 	kept := sweep("cafe0001", []int{2}, 1)
 	kept.Tag = "kept"
-	upload(t, c, kept)
+	runUpload(t, c, kept)
 
 	broken := sweep("cafe0002", []int{2}, 1)
 	broken.Machine.CPU = "Orphan CPU"
 	broken.Tag = "orphan"
 	broken.Phases = append(broken.Phases, broken.Phases[0])
 	resp, err := c.APIUpload(bg, broken)
-	read(t, resp, err, http.StatusConflict, nil)
+	replyRead(t, resp, err, http.StatusConflict, nil)
 
 	unborn := sweep("cafe0003", []int{2}, 1)
 	unborn.Machine.CPU = "Unborn CPU"
 	unborn.Tag = "unborn"
 	unborn.Baseline = 99
 	resp, err = c.APIUpload(bg, unborn)
-	if r := read(t, resp, err, http.StatusUnprocessableEntity, nil); r.problem(t).Details[0].Check != "foreign_key" {
+	if r := replyRead(t, resp, err, http.StatusUnprocessableEntity, nil); r.problem(t).Details[0].Check != "foreign_key" {
 		t.Errorf("an upload naming a missing baseline = %s", r.body)
 	}
 
@@ -144,7 +144,7 @@ func TestRefusedUploadLeavesNothing(t *testing.T) {
 	again.Tag = "kept"
 	again.Phases = append(again.Phases, again.Phases[0])
 	resp, err = c.APIUpload(bg, again)
-	read(t, resp, err, http.StatusConflict, nil)
+	replyRead(t, resp, err, http.StatusConflict, nil)
 
 	ms, err := c.APIMachines(bg)
 	if err != nil || len(ms) != 1 || ms[0].CPU != machine.CPU {
@@ -169,9 +169,9 @@ func TestRefusedUploadLeavesNothing(t *testing.T) {
 // counts and costs, an empty route, a status outside HTTP's and a
 // negative duration.
 func TestMeasurementsValidated(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
-	run := upload(t, c, sweep("dead0001", []int{2}, 1)).Run
+	run := runUpload(t, c, sweep("dead0001", []int{2}, 1)).Run
 
 	bad := sweep("dead0002", []int{2}, 1)
 	bad.Phases[0].Tables = -4
@@ -179,7 +179,7 @@ func TestMeasurementsValidated(t *testing.T) {
 	bad.Keystrokes[0].MSPerOp = -1
 	bad.Keystrokes[0].Tables = 0
 	resp, err := c.APIUpload(bg, bad)
-	r := read(t, resp, err, http.StatusUnprocessableEntity, nil)
+	r := replyRead(t, resp, err, http.StatusUnprocessableEntity, nil)
 	var checks []string
 	for _, d := range r.problem(t).Details {
 		checks = append(checks, d.Check+"("+strings.Join(d.Columns, ",")+")")
@@ -194,7 +194,7 @@ func TestMeasurementsValidated(t *testing.T) {
 		{Route: "", Status: -5, MS: -3, At: 2},
 	}}
 	resp, err = c.APISamplesRecord(bg, run.ID, samples)
-	r = read(t, resp, err, http.StatusUnprocessableEntity, nil)
+	r = replyRead(t, resp, err, http.StatusUnprocessableEntity, nil)
 	checks = checks[:0]
 	for _, d := range r.problem(t).Details {
 		checks = append(checks, d.Check+"("+strings.Join(d.Columns, ",")+")")

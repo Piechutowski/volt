@@ -57,8 +57,8 @@ func page(t *testing.T, d run.DB, n int, desc bool, preds ...rt.Pred[db.Sample])
 // ordered query (spec §predicates, the keyset position, and
 // §generated-query-surface).
 func TestKeysetPagingNeverRepeatsOrSkips(t *testing.T) {
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 	manySamples(t, d, w.runs[1].ID, 1000)
 
 	for _, tc := range []struct {
@@ -103,8 +103,8 @@ func TestKeysetPagingNeverRepeatsOrSkips(t *testing.T) {
 // §generated-query-surface, §changesets bulk paths).
 func TestDynamicVerbs(t *testing.T) {
 	ctx := context.Background()
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 	r := w.runs[2].ID
 	manySamples(t, d, r, 100)
 	ofRun := db.SampleRunID.Eq(r)

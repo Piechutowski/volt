@@ -69,10 +69,10 @@ func (g *screen) signIn(email string) {
 // chart, annotated and exported, the trend, the thesis, and a dashboard
 // with nested widgets (spec §generated-client, §event-routes).
 func TestGUISignInBrowseAndOpen(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
 	for i := range 20 {
-		upload(t, c, sweep("cafe"+strings.Repeat("0", 3)+string(rune('a'+i%6))+string(rune('0'+i/6)), []int{2, 4}, float64(i+1)))
+		runUpload(t, c, sweep("cafe"+strings.Repeat("0", 3)+string(rune('a'+i%6))+string(rune('0'+i/6)), []int{2, 4}, float64(i+1)))
 	}
 
 	g := e.screen(t)
@@ -166,7 +166,7 @@ func TestGUISignInBrowseAndOpen(t *testing.T) {
 	g.edit(state.FieldRunTag, "nightly")
 	g.edit(state.FieldRunNote, "seen from the client")
 	resp, err := c.APISamplesRecord(bg, 20, app.SampleBatch{Samples: []app.SampleTimed{{Route: "GET /ping", Status: 200, MS: 0.3, At: 1}}})
-	read(t, resp, err, http.StatusCreated, nil)
+	replyRead(t, resp, err, http.StatusCreated, nil)
 	g.do(state.Changed{Method: "POST", Handler: "Samples.Create", Path: app.PathAPISamplesRecord(20), Status: 201})
 	if g.s.Fields[state.FieldRunNote] != "seen from the client" || g.s.Run.Detail.Latency.N != 1 {
 		t.Errorf("a live refetch of the run while its note was edited left note %q, latency %+v", g.s.Fields[state.FieldRunNote], g.s.Run.Detail.Latency)
@@ -188,7 +188,7 @@ func TestGUISignInBrowseAndOpen(t *testing.T) {
 		t.Fatalf("the export: %v (notice %+v)", err, g.s.Notice)
 	}
 	resp, err = c.ReportExport(bg, 20)
-	served := read(t, resp, err, http.StatusOK, nil)
+	served := replyRead(t, resp, err, http.StatusOK, nil)
 	if string(saved) != string(served.body) || !strings.HasPrefix(g.s.Run.Export, g.export) {
 		t.Errorf("the saved CSV at %s differs from the served one:\n%s\n%s", g.s.Run.Export, saved, served.body)
 	}
@@ -208,7 +208,7 @@ func TestGUISignInBrowseAndOpen(t *testing.T) {
 		{SHA: "1111aaaa", Subject: "Fold the migrations", Author: "Ada", At: at, Counts: []app.ThesisCount{{Fixture: "itest/blog", VoltLines: 80, HandLines: 120, GenLines: 3000}}},
 		{SHA: "2222bbbb", Subject: "Add Voltmeter", Author: "Grace", At: at.Add(time.Hour), Counts: []app.ThesisCount{{Fixture: "itest/blog", VoltLines: 82, HandLines: 118, GenLines: 3050}}},
 	}})
-	read(t, resp, err, http.StatusCreated, nil)
+	replyRead(t, resp, err, http.StatusCreated, nil)
 	if !slices.Equal(state.Fixtures, collector.FixturesDefault) {
 		t.Errorf("the thesis screen offers %v, the collector counts %v", state.Fixtures, collector.FixturesDefault)
 	}
@@ -297,9 +297,9 @@ func TestGUISignInBrowseAndOpen(t *testing.T) {
 // second client's state live through the event stream (spec
 // §event-routes).
 func TestGUIBudgetsLive(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
-	upload(t, c, sweep("beef0001", []int{2}, 1))
+	runUpload(t, c, sweep("beef0001", []int{2}, 1))
 
 	ada := e.screen(t)
 	ada.signIn("ada@voltmeter.test")
@@ -379,7 +379,7 @@ func TestGUIBudgetsLive(t *testing.T) {
 		t.Fatalf("Grace's budgets = %+v", grace.s.Budgets)
 	}
 
-	over := upload(t, c, sweep("beef0002", []int{2}, 4))
+	over := runUpload(t, c, sweep("beef0002", []int{2}, 4))
 	await("Uploads.Create")
 	gb, _ := grace.s.BudgetSelected()
 	breaches := grace.s.Budgets.Detail.Breaches

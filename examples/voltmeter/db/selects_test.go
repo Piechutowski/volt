@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
@@ -12,8 +13,8 @@ import (
 // §groups, §selects-over-groups), and that the set term of front leaves
 // ms_generate out.
 func TestSelectsOverThePhaseGroup(t *testing.T) {
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 	r1, r2 := w.runs[0], w.runs[1]
 
 	load := do(t, d, db.MsLoadRows(r2.ID))
@@ -44,8 +45,8 @@ func TestSelectsOverThePhaseGroup(t *testing.T) {
 // §selects-over-groups), and that the predicate's negation and its float
 // parameter bind.
 func TestProjections(t *testing.T) {
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 	r := w.runs[0]
 
 	var briefs []db.Brief = do(t, d, db.MsLoadBrief(r.ID))
@@ -75,8 +76,8 @@ func TestProjections(t *testing.T) {
 // group: is a one-row Lookup whose nullable aggregates read NULL over no
 // rows.
 func TestAggregates(t *testing.T) {
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 
 	per := do(t, d, db.MsLoadPerSize([]int{2, 4}))
 	want := []db.PerSize{
@@ -112,8 +113,8 @@ func TestAggregates(t *testing.T) {
 // and that a renamed reverse relation joins a table to itself (spec
 // §selects-over-groups, §relationships-ref).
 func TestJoins(t *testing.T) {
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 	r1, r2, r3 := w.runs[0], w.runs[1], w.runs[2]
 
 	listed := do(t, d, db.RunListed())
@@ -149,8 +150,8 @@ func TestJoins(t *testing.T) {
 // a declared type that binds through its Valuer, and a multi-column
 // equality (spec §predicates, §types).
 func TestPredicateForms(t *testing.T) {
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 
 	adds := do(t, d, db.CommitMatching("Add%"))
 	if len(adds) != 2 || adds[0].Sha != "cccc3333" || adds[1].Sha != "aaaa1111" {
@@ -189,8 +190,8 @@ func TestPredicateForms(t *testing.T) {
 // in key order, an empty slice for a parent without any, and one parent
 // for a key lookup (spec §selects-over-groups).
 func TestWithNestsChildren(t *testing.T) {
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 
 	boards := do(t, d, db.DashboardBoards(1))
 	if len(boards) != 2 || boards[0].Name != "Empty" || boards[1].Name != "Overview" {
@@ -207,4 +208,40 @@ func TestWithNestsChildren(t *testing.T) {
 	if got := do(t, d, db.DashboardBoards(3)); len(got) != 0 {
 		t.Errorf("DashboardBoards of an owner without boards = %+v", got)
 	}
+}
+
+// TestPredicateAlgebra proves the predicate forms the other selects do
+// not use (spec §predicates, §groups): or under parentheses, !=, <=, an
+// in over a literal list, is not null, a pred built from preds, and a
+// select over a group written as a union.
+func TestPredicateAlgebra(t *testing.T) {
+	d := dbOpen(t)
+	w := worldSeed(t, d)
+	r1, r2, r3 := w.runs[0].ID, w.runs[1].ID, w.runs[2].ID
+
+	vet := do(t, d, db.MsVetSmallest(r1, 4))
+	gen := do(t, d, db.MsGenerateSmallest(r1, 4))
+	equal(t, "MsVetSmallest(r1, 4) tables", ids(vet, func(m db.MsVet) int { return m.Tables }), []int{2, 4})
+	equal(t, "MsGenerateSmallest(r1, 4) tables", ids(gen, func(m db.MsGenerate) int { return m.Tables }), []int{2, 4})
+	if gen[1].WallMs != wall(3, r1, 4) || vet[0].RunID != r1 {
+		t.Errorf("smallest rows = %+v, %+v", vet, gen)
+	}
+
+	slow := do(t, d, db.SampleSlow(r1, 2.5))
+	if got := ids(slow, func(s db.Sample) int { return int(s.Ms * 10) }); !slices.Equal(got, []int{30, 40, 5}) {
+		t.Errorf("SampleSlow(r1, 2.5) took %v tenths, want 3 ms, 4 ms and the 404", got)
+	}
+	if rows := do(t, d, db.SampleServerErrors(r1)); len(rows) != 0 {
+		t.Errorf("server errors before any = %+v", rows)
+	}
+	do(t, d, db.SampleCreate(db.SampleNew().RunIDSet(r1).RouteSet("/runs").StatusSet(503).MsSet(9).AtSet(1)))
+	do(t, d, db.SampleCreate(db.SampleNew().RunIDSet(r1).RouteSet("/runs").StatusSet(501).MsSet(9).AtSet(2)))
+	if rows := do(t, d, db.SampleServerErrors(r1)); len(rows) != 1 || rows[0].Status != 503 {
+		t.Errorf("SampleServerErrors keeps 500, 502, 503 and 504 only: %+v", rows)
+	}
+
+	others := do(t, d, db.RunOthers(w.machine.ID, r1))
+	equal(t, "RunOthers(machine, r1)", ids(others, func(r db.Run) int { return r.ID }), []int{r3, r2})
+	annotated := do(t, d, db.RunAnnotated())
+	equal(t, "RunAnnotated", ids(annotated, func(r db.Run) int { return r.ID }), []int{r2})
 }

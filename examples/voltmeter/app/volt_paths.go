@@ -90,6 +90,10 @@ func PathAPISampleFailures(run int, opts ...volt.URLOption) string {
 	return volt.URL("/api/runs/"+volt.SegInt(run)+"/failures", opts...)
 }
 
+func PathAPIRunCompare(id int, opts ...volt.URLOption) string {
+	return volt.URL("/api/runs/"+volt.SegInt(id)+"/compare", opts...)
+}
+
 func PathAPIMachines(opts ...volt.URLOption) string {
 	return volt.URL("/api/machines", opts...)
 }
@@ -204,6 +208,10 @@ func PathAPISizes(opts ...volt.URLOption) string {
 
 func PathAPIMeWho(opts ...volt.URLOption) string {
 	return volt.URL("/api/me", opts...)
+}
+
+func PathAPIMeBoardsOf(opts ...volt.URLOption) string {
+	return volt.URL("/api/me/boards", opts...)
 }
 
 func PathAPIMeDashboards(opts ...volt.URLOption) string {

@@ -16,10 +16,10 @@ import (
 // that does not parse as its type refused with a 400, through the
 // generated client and through raw HTTP alike.
 func TestListAndPrefixParameters(t *testing.T) {
-	e := start(t)
+	e := envStart(t)
 	c := e.gob(0)
-	run := upload(t, c, sweep("ab010001", []int{2, 4, 8}, 1)).Run
-	upload(t, c, sweep("ab010002", []int{4}, 2))
+	run := runUpload(t, c, sweep("ab010001", []int{2, 4, 8}, 1)).Run
+	runUpload(t, c, sweep("ab010002", []int{4}, 2))
 
 	tablesOf := func(rows []db.MsLoad) []int {
 		var out []int

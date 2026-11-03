@@ -17,8 +17,8 @@ import (
 // references a run.
 func TestRefActions(t *testing.T) {
 	ctx := context.Background()
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 	r1, r2, r3 := w.runs[0], w.runs[1], w.runs[2]
 
 	tag := do(t, d, db.TagGet("release"))
@@ -67,8 +67,8 @@ func TestRefActions(t *testing.T) {
 // plain database-assigned key is SQLite's rowid, takes the largest id
 // again once its row is gone (spec §columns, §mapping-to-sqlite-ddl).
 func TestAutoincrementNeverReusesARunID(t *testing.T) {
-	d := open(t)
-	w := seed(t, d)
+	d := dbOpen(t)
+	w := worldSeed(t, d)
 	newRun := func() db.Run {
 		t.Helper()
 		return do(t, d, db.RunCreate(db.RunNew().CommitSet("eeee5555").MachineIDSet(w.idle.ID)))

@@ -244,3 +244,20 @@ func TestReportRendering(t *testing.T) {
 		t.Errorf("csv:\n%s\nwant:\n%s", b.String(), want)
 	}
 }
+
+// TestResponsesLeaveTheirReceiver proves a response is a value (spec
+// §values-and-effects, rule 1; §requests-and-responses, rule 4):
+// WithHeader, WithCookie and WithStatus return a new response and leave
+// the one they were called on as it was.
+func TestResponsesLeaveTheirReceiver(t *testing.T) {
+	base := volt.Render(wire.Pong{Method: "GET"})
+	headed := base.WithHeader("X-Probe", "1")
+	cookied := base.WithCookie(http.Cookie{Name: app.UserCookie, Value: "1"})
+	statused := base.WithStatus(http.StatusAccepted)
+	if !volt.Same(base, volt.Render(wire.Pong{Method: "GET"})) {
+		t.Error("WithHeader, WithCookie or WithStatus changed the response they were called on")
+	}
+	if volt.Same(base, headed) || volt.Same(base, cookied) || volt.Same(base, statused) || statused.Status() != http.StatusAccepted || base.Status() != http.StatusOK {
+		t.Errorf("the derived responses do not differ from their receiver: %d, %d", base.Status(), statused.Status())
+	}
+}
