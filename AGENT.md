@@ -46,47 +46,40 @@ green.
 Four Go modules under `go.work`: the library at the root (runtime,
 `lang/`, `gen/`, `nao/` with the value runtime `nao/rt` and the runner
 `nao/run`, `itest/`; stdlib only, sqlite3 test-only), the tools `lsp/`
-and `cmd/volt/`, and the example application `examples/voltmeter/`,
-which carry the third-party dependencies; `cmd/volt` carries the
+and `cmd/volt/`, and the examples `examples/`, which carry the
+third-party dependencies; `cmd/volt` carries the
 `mattn/go-sqlite3` driver for the fold and `volt migration up`, so the
 tool is built with cgo (a C compiler on the path; without it the
 driver is a stub and `volt` refuses the fold and the migration
 commands with exit 2), while the library and the runtime register
-none. `examples/voltmeter` is Voltmeter, the example application and
-end-to-end test, built on the same driver with cgo; its generated
-files are committed and drift-checked by its own tests, its CLI leg
-builds `volt` from the checkout and runs it over the example, and its
-coverage map (`examples/voltmeter/e2e/coverage_test.go`) maps every
-heading of the spec's Parts I and II and its appendices to the
-Voltmeter tests that prove it, with the rules of it they leave
-unexercised, or a one-line reason it is excluded, so a new heading
-needs an entry; the map is a reviewed claim, since the test checks
-that the named tests exist, not what they exercise. Its desktop
-client `examples/voltmeter/gui` is guigui on Ebitengine, so building
-that module also needs the X11 and OpenGL development headers
-Ebitengine needs on Linux, and the window tests in
-`examples/voltmeter/e2e` run the client on a virtual X server, the
-smoke test under `xvfb-run` and the handler tests under `Xvfb` with
-clicks and key presses sent through `libXtst`, each skipping with a
-message when what it needs is missing. Go floor is the
+none. `examples/` holds one tiny program per feature (`tables`,
+`migrations`, `scopes`, `pipelines`, `validation`), each its `.volt`
+files, their committed generated code, a server started in process and
+a guigui window that calls it through the generated client;
+`go run ./examples/run NAME` runs `volt gen` on one and then runs it.
+Each has a test over its server, and `examples/run` regenerates all of
+them with the checkout's `volt` and proves the committed files current.
+The windows are guigui on Ebitengine, so building the module needs the
+X11 and OpenGL development headers Ebitengine needs on Linux; no test
+opens a window. Go floor is the
 newest stable Go, declared in all four `go.mod` files. `grammar/`,
 `zed-extension/` and `scripts/sync-grammar.sh` are the editor stack.
 `go test ./...` at the root does not cover the tool modules or the
-example.
+examples.
 
 ## Verification bar, all of it, before claiming done
 
 ```sh
-go build ./... ./lsp/... ./cmd/volt/... ./examples/voltmeter/...
-go vet   ./... ./lsp/... ./cmd/volt/... ./examples/voltmeter/...
-go test  ./... ./lsp/... ./cmd/volt/... ./examples/voltmeter/...
+go build ./... ./lsp/... ./cmd/volt/... ./examples/...
+go vet   ./... ./lsp/... ./cmd/volt/... ./examples/...
+go test  ./... ./lsp/... ./cmd/volt/... ./examples/...
 go test  -race ./lang/... ./lsp/...
 gofmt -l . | grep -v zed-extension        # must be empty
 ```
 
-Golden refresh is `go test ./gen/router -update`, `go test
-./nao/gen/... -update` and, for Voltmeter's route table, `go test
-./examples/voltmeter/e2e -run TestCLI -update`; read the diff, goldens
+Golden refresh is `go test ./gen/router -update` and `go test
+./nao/gen/... -update`, and an example regenerates with `go run
+./examples/run NAME`; read the diff, goldens
 exist to surface unintended output changes. Grammar changes also need
 `tree-sitter generate`, `tree-sitter test`, the checklist in
 `editor.md` section 8 and `./scripts/sync-grammar.sh`. Anything

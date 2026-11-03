@@ -238,8 +238,9 @@ section 8 marked unverified for that step.
 
 ## Step 19. The example applications
 
-Deferred with step 5: the Elm example waits for the Elm client;
-Voltmeter, under `examples/voltmeter`, has landed.
+Deferred with step 5: the Elm example waits for the Elm client. Five
+tiny feature examples with guigui clients, under `examples/`, have
+landed; more follow one feature at a time.
 
 ---
 
@@ -248,15 +249,15 @@ Voltmeter, under `examples/voltmeter`, has landed.
 Before claiming any step done:
 
 ```sh
-go build ./... ./lsp/... ./cmd/volt/... ./examples/voltmeter/...
-go vet   ./... ./lsp/... ./cmd/volt/... ./examples/voltmeter/...
-go test  ./... ./lsp/... ./cmd/volt/... ./examples/voltmeter/...
+go build ./... ./lsp/... ./cmd/volt/... ./examples/...
+go vet   ./... ./lsp/... ./cmd/volt/... ./examples/...
+go test  ./... ./lsp/... ./cmd/volt/... ./examples/...
 go test  -race ./lang/... ./lsp/...
 gofmt -l . | grep -v zed-extension      # empty
 ```
 
 Goldens: `go test ./gen/router -update`, `go test ./nao/gen/... -update`,
-`go test ./examples/voltmeter/e2e -run TestCLI -update`, read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
+read the diff; an example regenerates with `go run ./examples/run NAME`. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 `editor.md` checklist, `./scripts/sync-grammar.sh`.
 
 ## Order

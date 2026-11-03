@@ -53,20 +53,27 @@ effect is performed by generated code you can read.
 | `lsp/` | the language server |
 | `grammar/`, `zed-extension/` | the editor stack |
 | `itest/` | the fixture application served over `httptest`, drift-checked against the generator |
-| `examples/voltmeter` | Voltmeter, the example application and end-to-end test that measures Volt with Volt; its own module: data layer, routes, server, collector, guigui desktop client, the `volt` CLI leg and a map from every heading of the spec's Parts I and II and its appendices to the tests that prove it, or a one-line reason it is excluded, with the rules of it Voltmeter does not exercise |
+| `examples/` | one tiny program per feature (`tables`, `migrations`, `scopes`, `pipelines`, `validation`): its `.volt` files, the code `volt gen` writes from them, a server in process and a guigui window that calls it through the generated client |
 | `docs/` | `spec.md`, `lint.md`, `editor.md`, `roadmap.md`, `plan.md` |
 
 ## Crib sheet
 
-Requires Go 1.27+ and a C compiler; the example module also needs the
-X11 and OpenGL development headers its guigui client builds against.
+Requires Go 1.27+ and a C compiler; the examples also need the X11 and
+OpenGL development headers their guigui windows build against.
 
-From the repository root, with `go install`'s directory on the path;
-`volt check` is silent when the packages are clean, and `volt gen`
-over Voltmeter reports every file unchanged:
+From the repository root. An example regenerates its code from its
+`.volt` files and opens its window, so the generated files can be read
+beside the running program:
+
+```sh
+go run ./examples/run tables
+```
+
+The tool and the tests, with `go install`'s directory on the path;
+`volt check` is silent when the packages are clean:
 
 ```sh
 go install ./cmd/volt
-volt check ./examples/voltmeter/... && volt gen --sql ./examples/voltmeter/... && volt routes ./examples/voltmeter/app
-go test ./... ./lsp/... ./cmd/volt/... ./examples/voltmeter/...
+volt check ./examples/... && volt routes ./examples/scopes/app
+go test ./... ./lsp/... ./cmd/volt/... ./examples/...
 ```

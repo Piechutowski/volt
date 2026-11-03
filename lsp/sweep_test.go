@@ -68,7 +68,7 @@ func TestSweepAnswersEveryIdentifier(t *testing.T) {
 	}
 	clean := map[string]bool{}
 	var files []string
-	for _, dir := range []string{"../examples/voltmeter", "../itest/blog", "../nao/itest"} {
+	for _, dir := range []string{"../examples", "../itest/blog", "../nao/itest"} {
 		found := voltFiles(t, dir)
 		for _, f := range found {
 			clean[f] = true
