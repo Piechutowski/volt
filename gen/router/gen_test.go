@@ -610,3 +610,38 @@ func snippetCompiles(t *testing.T, name string) {
 		t.Fatalf("%s does not compile:\n%s", name, out)
 	}
 }
+
+// TestClientImportsTimeForTimeParamsAlone proves the client imports time
+// only for a query parameter of that type: a route's timeout: is the
+// router's business (spec §route-loads, §generated-client), and a client
+// importing time for it alone does not compile.
+func TestClientImportsTimeForTimeParamsAlone(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "go.mod"), []byte("module timeouts\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(src, "app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	routes := "package app\n\ntable metrics {\n\tid int [pk]\n}\n\nscope / {\n\tget /metrics MetricList [timeout: 5]\n\tget /slow Metrics.Slow [timeout: 2]\n}\n"
+	if err := os.WriteFile(filepath.Join(src, "app", "r.volt"), []byte(routes), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pr, err := lang.Load(disk.Source{}, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags := lang.Check(pr); diag.HasErrors(diags) {
+		t.Fatalf("fixture has errors: %v", diags)
+	}
+	files, err := Generate(pr.Packages["app"], Options{Source: "package app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(files["volt_router.go"]), "\t\"time\"\n") {
+		t.Errorf("volt_router.go does not import time for its timeouts:\n%s", files["volt_router.go"])
+	}
+	if strings.Contains(string(files[filepath.Join("client", "volt_client.go")]), "\t\"time\"\n") {
+		t.Errorf("volt_client.go imports time with no time parameter to use it:\n%s", files[filepath.Join("client", "volt_client.go")])
+	}
+}

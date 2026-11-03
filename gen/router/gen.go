@@ -305,6 +305,12 @@ func (g *generator) timeParams() bool {
 		if r.Timeout > 0 {
 			return true
 		}
+	}
+	return g.queryTimeParams()
+}
+
+func (g *generator) queryTimeParams() bool {
+	for _, r := range g.pkg.Routes {
 		if r.Query == nil {
 			continue
 		}
@@ -664,7 +670,7 @@ func (g *generator) clientEmit() error {
 	if rawMethod {
 		imports = append(imports, "net/http")
 	}
-	if g.timeParams() {
+	if g.queryTimeParams() {
 		imports = append(imports, "time")
 	}
 	imports = append(imports, "", voltImport)

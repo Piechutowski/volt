@@ -2,6 +2,7 @@ package vet
 
 import (
 	goast "go/ast"
+	"strings"
 
 	"github.com/Piechutowski/volt/lang/diag"
 )
@@ -38,13 +39,22 @@ func (r *loadSpelledLongRule) Go(f *GoFile) []diag.Diagnostic {
 				continue
 			}
 			query, ok := call.Args[0].(*goast.CallExpr)
-			if !ok || !routeBound(query.Args, params) {
+			if !ok || writeSpelled(spelled(query.Fun)) || !routeBound(query.Args, params) {
 				continue
 			}
 			out = append(out, r.warnf(f.Pos(query), "%s runs on the route's parameters alone; a load of the route hands the handler its result and spells it once (§route-loads)", spelled(query.Fun)))
 		}
 	}
 	return out
+}
+
+func writeSpelled(name string) bool {
+	for _, verb := range []string{"Create", "Update", "Delete"} {
+		if strings.HasSuffix(name, verb) {
+			return true
+		}
+	}
+	return false
 }
 
 func routeBound(args []goast.Expr, params map[string]bool) bool {

@@ -408,6 +408,8 @@ each use keeps the count visible, so it stays the exception.
 
 **What it does.** Reports a handler that returns `volt.Then` over a
 query whose every argument is a parameter of the handler or a literal.
+A write, a call whose name ends in `Create`, `Update` or `Delete`, is
+never reported, since a load is a read (spec §route-loads).
 
 **Why.** A route load (spec §route-loads) spells that lookup once, in
 the route, and hands the handler the row: the handler never sees a
@@ -418,7 +420,12 @@ request's body, its headers or a computed value.
 **Examples.** [testdata/loadspelledlong.go](../lang/vet/testdata/loadspelledlong.go):
 `Show` looks a metric up by its path parameter and warns; `Peers`
 computes an argument from the query string and `Recent` builds a
-dynamic query, so both pass.
+dynamic query, so both pass; `Save` writes its changeset body and `Drop`
+deletes by its path parameter, writes no load could spell, so both pass.
+
+**Limitations.** Without type information a write is told by its name,
+so a select whose function name ends in one of the three verbs is
+skipped too.
 
 ---
 
