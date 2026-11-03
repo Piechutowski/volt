@@ -55,7 +55,11 @@ refuses the fold and the migration commands with exit 2), while the
 library and the runtime register none. `examples/voltmeter` is
 Voltmeter, the example application and end-to-end test, built on the
 same driver with cgo; its generated files are committed and
-drift-checked by its own tests. Go floor is the newest stable Go,
+drift-checked by its own tests. Its desktop client `examples/voltmeter/gui`
+is guigui on Ebitengine, so building that module also needs the X11 and
+OpenGL development headers Ebitengine needs on Linux, and the window
+smoke test in `examples/voltmeter/e2e` runs the client under `xvfb-run`,
+skipping with a message when Xvfb is not on the path. Go floor is the newest stable Go,
 declared in all four `go.mod` files. `grammar/`,
 `zed-extension/` and `scripts/sync-grammar.sh` are the editor stack.
 `go test ./...` at the root does not cover the tool modules or the

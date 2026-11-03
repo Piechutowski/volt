@@ -119,7 +119,7 @@ func collect(args []string) error {
 	fs.IntVar(&cfg.Count, "count", 3, "keystroke benchmark repetitions per size")
 	fs.StringVar(&cfg.Rev, "rev", "HEAD", "the revision the thesis history is read from")
 	fs.IntVar(&cfg.Commits, "commits", 10, "commits touching the fixtures to count lines of, newest first; 0 skips the thesis")
-	fixtures := fs.String("fixtures", "itest/blog,examples/voltmeter", "fixture directories whose lines are counted")
+	fixtures := fs.String("fixtures", strings.Join(collector.FixturesDefault, ","), "fixture directories whose lines are counted")
 	fs.IntVar(&cfg.Samples, "samples", 5, "timed calls per read route; 0 skips the latency samples")
 	fs.StringVar(&cfg.Tag, "tag", "", "the tag of the run, added on first use")
 	fs.StringVar(&cfg.Note, "note", "", "a note on the run")

@@ -247,9 +247,12 @@ and generated router and client, `server.Handler` and `voltmeter serve`,
 the end-to-end API suite under `e2e` that serves every route, and
 `voltmeter collect` (package `collector`), which stores the sweep, the
 keystroke, the thesis line counts and its own route latency through
-the generated client, run in process by the suite. Remaining, in
-order: the guigui client with its state suite and window smoke test,
-the CLI leg and the spec-anchor coverage map. The Elm example waits
+the generated client, run in process by the suite, and the guigui
+desktop client under `gui` (a pure state package driven by intents, a
+command runner over the generated client, and widgets that render the
+state), with its state suite against the live server and a window
+smoke test under Xvfb. Remaining, in order: the CLI leg and the
+spec-anchor coverage map. The Elm example waits
 for step 5. The blog
 fixture under `itest/blog` is the application every step rebuilds, and
 the line counts below are measured on it.

@@ -41,6 +41,10 @@ type Config struct {
 	Baseline  int
 }
 
+// FixturesDefault are the fixtures a collection counts the lines of
+// unless told otherwise: the blog Volt tests itself with, and Voltmeter.
+var FixturesDefault = []string{"itest/blog", "examples/voltmeter"}
+
 // Collected is everything one collection measured and what the server
 // answered when it was stored.
 type Collected struct {
