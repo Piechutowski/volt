@@ -29,20 +29,51 @@ func spacer() guigui.LinearLayoutItem {
 	return guigui.LinearLayoutItem{Size: guigui.FlexibleSize(1)}
 }
 
-func nested(l guigui.LinearLayout, size guigui.Size) guigui.LinearLayoutItem {
-	return guigui.LinearLayoutItem{Layout: l, Size: size}
+type layouts struct {
+	items [][]guigui.LinearLayoutItem
+	boxes []*guigui.LinearLayout
+	n, m  int
 }
 
-func column(gap int, items ...guigui.LinearLayoutItem) guigui.LinearLayout {
-	return guigui.LinearLayout{Direction: guigui.LayoutDirectionVertical, Gap: gap, Items: items}
+func (a *layouts) reset() *layouts {
+	a.n, a.m = 0, 0
+	return a
 }
 
-func row(gap int, items ...guigui.LinearLayoutItem) guigui.LinearLayout {
-	return guigui.LinearLayout{Direction: guigui.LayoutDirectionHorizontal, Gap: gap, Items: items}
+func (a *layouts) list(items ...guigui.LinearLayoutItem) []guigui.LinearLayoutItem {
+	if a.n == len(a.items) {
+		a.items = append(a.items, nil)
+	}
+	a.items[a.n] = append(a.items[a.n][:0], items...)
+	a.n++
+	return a.items[a.n-1]
 }
 
-func besideField(w guigui.Widget, u, width int) guigui.LinearLayoutItem {
-	return nested(column(u/8, fixed(nil, u*3/4), natural(w)), guigui.FixedSize(width))
+func (a *layouts) keep(items []guigui.LinearLayoutItem) []guigui.LinearLayoutItem {
+	a.items[a.n-1] = items
+	return items
+}
+
+func (a *layouts) nested(l guigui.LinearLayout, size guigui.Size) guigui.LinearLayoutItem {
+	if a.m == len(a.boxes) {
+		a.boxes = append(a.boxes, new(guigui.LinearLayout))
+	}
+	box := a.boxes[a.m]
+	a.m++
+	*box = l
+	return guigui.LinearLayoutItem{Layout: box, Size: size}
+}
+
+func (a *layouts) column(gap int, items ...guigui.LinearLayoutItem) guigui.LinearLayout {
+	return guigui.LinearLayout{Direction: guigui.LayoutDirectionVertical, Gap: gap, Items: a.list(items...)}
+}
+
+func (a *layouts) row(gap int, items ...guigui.LinearLayoutItem) guigui.LinearLayout {
+	return guigui.LinearLayout{Direction: guigui.LayoutDirectionHorizontal, Gap: gap, Items: a.list(items...)}
+}
+
+func (a *layouts) besideField(w guigui.Widget, u, width int) guigui.LinearLayoutItem {
+	return a.nested(a.column(u/8, fixed(nil, u*3/4), natural(w)), guigui.FixedSize(width))
 }
 
 func padded(l guigui.LinearLayout, p int) guigui.LinearLayout {
@@ -97,6 +128,9 @@ type field struct {
 	name        state.Field
 	labelText   string
 	placeholder string
+	shown       string
+	pushed      bool
+	lay         layouts
 }
 
 func (f *field) SetField(name state.Field, label, placeholder string) {
@@ -105,7 +139,10 @@ func (f *field) SetField(name state.Field, label, placeholder string) {
 
 // OnSubmitted is called when Enter is pressed in the field. A commit
 // alone does not submit, since setting the value from State commits it
-// too.
+// too. The input shows what the member types; State's value is pushed
+// into it, focused or not, only when State changed it, such as a form
+// cleared after a save, so the input never shows one value while State
+// holds another.
 func (f *field) OnSubmitted(fn func(context *guigui.Context)) {
 	guigui.SetEventHandler(f, eventFieldSubmitted, fn)
 }
@@ -119,12 +156,16 @@ func (f *field) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
 	}
 	caption(&f.label, f.labelText, nil)
 	f.input.SetPlaceholder(f.placeholder)
-	f.input.SetValue(m.s.Fields[f.name])
+	if want := m.s.Fields[f.name]; !f.pushed || want != f.shown {
+		f.input.ForceSetValue(want)
+		f.shown, f.pushed = want, true
+	}
 	msg := m.s.Errors[f.name]
 	f.input.SetError(msg != "")
 	f.input.SetSupportText(msg)
 	name := f.name
 	f.input.OnValueChanged(func(context *guigui.Context, text string, committed bool) {
+		f.shown = text
 		if m.s.Fields[name] != text {
 			m.dispatch(state.FieldEdit{Field: name, Value: text})
 		}
@@ -132,6 +173,7 @@ func (f *field) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
 	f.input.OnHandleButtonInput(func(context *guigui.Context, widgetBounds *guigui.WidgetBounds) guigui.HandleInputResult {
 		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
 			if text := f.input.Value(); m.s.Fields[name] != text {
+				f.shown = text
 				m.dispatch(state.FieldEdit{Field: name, Value: text})
 			}
 			guigui.DispatchEvent(f, eventFieldSubmitted)
@@ -142,9 +184,20 @@ func (f *field) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
 	return nil
 }
 
+func (f *field) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBounds) error {
+	if m := modelOf(context, f); m != nil && m.probe != nil {
+		u := basicwidget.UnitSize(context)
+		b := widgetBounds.Bounds()
+		b.Min.Y += u*3/4 + u/8
+		m.probe.place("field:"+string(f.name), b)
+	}
+	return nil
+}
+
 func (f *field) layout(context *guigui.Context) guigui.LinearLayout {
+	a := f.lay.reset()
 	u := basicwidget.UnitSize(context)
-	return column(u/8, fixed(&f.label, u*3/4), natural(&f.input))
+	return a.column(u/8, fixed(&f.label, u*3/4), natural(&f.input))
 }
 
 func (f *field) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds, layouter *guigui.ChildLayouter) {

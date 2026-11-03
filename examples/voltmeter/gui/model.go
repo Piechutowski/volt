@@ -19,6 +19,7 @@ type model struct {
 	events   chan state.Intent
 	inflight int
 	rev      int
+	probe    *probe
 }
 
 func modelNew(ctx context.Context, r *remote.Remote) *model {
@@ -29,9 +30,10 @@ func (m *model) dispatch(in state.Intent) {
 	next, cmds := state.Update(m.s, in)
 	m.s = next
 	m.rev++
+	session := next.Session
 	for _, c := range cmds {
 		m.inflight++
-		go func() { m.results <- m.r.Perform(m.ctx, c) }()
+		go func() { m.results <- state.Answer{Session: session, Result: m.r.Perform(m.ctx, c)} }()
 	}
 }
 
@@ -40,9 +42,7 @@ func (m *model) drain() {
 		select {
 		case in := <-m.results:
 			m.inflight--
-			if in != nil {
-				m.dispatch(in)
-			}
+			m.dispatch(in)
 		case in := <-m.events:
 			m.dispatch(in)
 		default:

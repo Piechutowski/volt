@@ -33,6 +33,7 @@ type budgetsScreen struct {
 
 	rows       []basicwidget.TableRow[int]
 	breachRows []basicwidget.TableRow[int]
+	lay        layouts
 }
 
 func (b *budgetsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -90,7 +91,7 @@ func (b *budgetsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder)
 		caption(&b.detailState, "Add a budget, then pick it to edit its ceiling.", muted)
 	} else {
 		heading(&b.detailTitle, fmt.Sprintf("Budget %d: %s at %d tables", sel.ID, sel.Phase, sel.Tables), 1)
-		text := "Holding: no run over " + units.Millis(sel.MaxMs).String() + " since the last reset"
+		text := "OK: no upload has gone over " + units.Millis(sel.MaxMs).String() + " since this budget was set or reset; earlier runs are not judged"
 		var clr = muted
 		if sel.State == db.HealthBreached {
 			text = "Breached: a run went over " + units.Millis(sel.MaxMs).String()
@@ -118,19 +119,20 @@ func (b *budgetsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder)
 }
 
 func (b *budgetsScreen) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds, layouter *guigui.ChildLayouter) {
+	a := b.lay.reset()
 	u := basicwidget.UnitSize(context)
-	left := column(u/2,
-		nested(row(u/2, flex(&b.listTitle, 1), fixed(&b.reset, 6*u)), guigui.FixedSize(u*3/2)),
+	left := a.column(u/2,
+		a.nested(a.row(u/2, flex(&b.listTitle, 1), fixed(&b.reset, 6*u)), guigui.FixedSize(u*3/2)),
 		flex(&b.table, 1),
 		fixed(&b.addTitle, u),
-		nested(column(u/8, fixed(&b.phaseLabel, u*3/4), fixed(&b.phase, u*3/2)), guigui.Size{}),
-		nested(row(u/2, flex(&b.tables, 1), flex(&b.maxMS, 1), besideField(&b.add, u, 5*u)), guigui.Size{}),
+		a.nested(a.column(u/8, fixed(&b.phaseLabel, u*3/4), fixed(&b.phase, u*3/2)), guigui.Size{}),
+		a.nested(a.row(u/2, flex(&b.tables, 1), flex(&b.maxMS, 1), a.besideField(&b.add, u, 5*u)), guigui.Size{}),
 	)
-	right := column(u/2,
+	right := a.column(u/2,
 		fixed(&b.detailTitle, u*3/2),
 		fixed(&b.detailState, u),
-		nested(row(u/2, flex(&b.ceiling, 1), besideField(&b.save, u, 6*u)), guigui.Size{}),
+		a.nested(a.row(u/2, flex(&b.ceiling, 1), a.besideField(&b.save, u, 6*u)), guigui.Size{}),
 		flex(&b.breaches, 1),
 	)
-	padded(row(u, nested(left, guigui.FlexibleSize(1)), nested(right, guigui.FlexibleSize(1))), u/2).LayoutWidgets(context, widgetBounds.Bounds(), layouter)
+	padded(a.row(u, a.nested(left, guigui.FlexibleSize(1)), a.nested(right, guigui.FlexibleSize(1))), u/2).LayoutWidgets(context, widgetBounds.Bounds(), layouter)
 }

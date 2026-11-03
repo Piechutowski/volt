@@ -11,6 +11,7 @@ import (
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
 	"github.com/Piechutowski/volt/examples/voltmeter/gui/state"
 	"github.com/Piechutowski/volt/examples/voltmeter/wire"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 func member() state.State {
@@ -122,7 +123,7 @@ func TestProblemDetailsLandUnderTheirFields(t *testing.T) {
 	if got, _ := state.Update(s, state.RunPatched{Err: fk}); got.Errors[state.FieldRunTag] != "references a row that does not exist" {
 		t.Errorf("a refused foreign key shows %v", got.Errors)
 	}
-	if got, _ := state.Update(s, state.TagsFetched{Err: errors.New("connection refused")}); got.Notice != (state.Notice{Text: "loading tags: connection refused", Failed: true}) {
+	if got, _ := state.Update(s, state.TagsFetched{Err: errors.New("connection refused")}); got.Notice != (state.Notice{Text: "loading tags: connection refused", Failed: true, Of: "loading tags"}) {
 		t.Errorf("a failed load says %+v", got.Notice)
 	}
 }
@@ -199,5 +200,124 @@ func TestChartFrame(t *testing.T) {
 	}
 	if !slices.Equal(at, []float64{0, 2, 4, 7}) {
 		t.Errorf("eight commits are labelled at %v", at)
+	}
+}
+
+// TestEditedRunFieldsSurviveALiveRefetch proves a change event that
+// refetches the open run while the member edits its note keeps the
+// edit, so the save stores what the member typed, and a refetch after
+// the save shows the server's values again.
+func TestEditedRunFieldsSurviveALiveRefetch(t *testing.T) {
+	s := member()
+	s, _ = state.Update(s, state.RunOpen{ID: 5})
+	run := db.Run{ID: 5, Note: rt.Some("old note")}
+	s, _ = state.Update(s, state.RunFetched{ID: 5, Detail: wire.RunDetail{Run: run}})
+	if s.Fields[state.FieldRunNote] != "old note" {
+		t.Fatalf("the first load filled the note with %q", s.Fields[state.FieldRunNote])
+	}
+	s, _ = state.Update(s, state.FieldEdit{Field: state.FieldRunNote, Value: "old note xyz"})
+	s, cmds := state.Update(s, state.Changed{Handler: "Samples.Create", Path: "/api/runs/5/samples"})
+	if !slices.Contains(cmds, state.Command(state.RunFetch{ID: 5})) {
+		t.Fatalf("a sample batch asked %v", cmds)
+	}
+	s, _ = state.Update(s, state.RunFetched{ID: 5, Detail: wire.RunDetail{Run: run}})
+	if s.Fields[state.FieldRunNote] != "old note xyz" {
+		t.Errorf("the refetch replaced the edited note with %q", s.Fields[state.FieldRunNote])
+	}
+	s, cmds = state.Update(s, state.RunAnnotate{})
+	if !reflect.DeepEqual(cmds, []state.Command{state.RunPatch{ID: 5, Note: "old note xyz"}}) {
+		t.Errorf("the save asked %v", cmds)
+	}
+	s, _ = state.Update(s, state.RunPatched{Run: db.Run{ID: 5, Note: rt.Some("old note xyz")}})
+	s, _ = state.Update(s, state.RunFetched{ID: 5, Detail: wire.RunDetail{Run: db.Run{ID: 5, Note: rt.Some("from Grace")}}})
+	if s.Fields[state.FieldRunNote] != "from Grace" {
+		t.Errorf("after the save a refetch left the note at %q", s.Fields[state.FieldRunNote])
+	}
+}
+
+// TestMeasurementsChangeRefetchesEveryTrendShown proves an upload or a
+// deleted run refetches the trend of every spot the client holds, the
+// dashboard cards' included, and the sizes it knows.
+func TestMeasurementsChangeRefetchesEveryTrendShown(t *testing.T) {
+	s := member()
+	s, _ = state.Update(s, state.TrendFetched{Spot: state.Spot{Phase: db.PhaseVet, Tables: 40}, Points: []state.TrendPoint{{RunID: 1, WallMS: 2}}})
+	s, _ = state.Update(s, state.TrendFetched{Spot: state.Spot{Phase: db.PhaseLoad, Tables: 10}, Points: []state.TrendPoint{{RunID: 1, WallMS: 1}}})
+	s, _ = state.Update(s, state.SizesFetched{Sizes: []int{10, 40}})
+	s, _ = state.Update(s, state.BoardsFetched{Boards: []db.DashboardWithWidgets{{ID: 1, Widgets: []db.Widget{{Phase: db.PhaseLoad, Tables: 10}}}}})
+	want := []state.Command{state.SizesFetch{}, state.TrendFetch{Spot: state.Spot{Phase: db.PhaseLoad, Tables: 10}}, state.TrendFetch{Spot: state.Spot{Phase: db.PhaseVet, Tables: 40}}}
+	_, cmds := state.Update(s, state.Changed{Handler: "Uploads.Create"})
+	if !reflect.DeepEqual(cmds, append([]state.Command{state.RunsFetch{Limit: state.RunsLimit}, state.BudgetsFetch{}}, append(want, state.BoardsFetch{})...)) {
+		t.Errorf("an upload asked %v", cmds)
+	}
+	_, cmds = state.Update(s, state.Changed{Handler: "Runs.Delete"})
+	if !reflect.DeepEqual(cmds, append([]state.Command{state.RunsFetch{Limit: state.RunsLimit}}, want...)) {
+		t.Errorf("a deleted run asked %v", cmds)
+	}
+}
+
+// TestTrendSizesComeFromTheServer proves the trend screen offers every
+// size the server measured, not only the open run's, and moves off the
+// default size when the server measured none of it.
+func TestTrendSizesComeFromTheServer(t *testing.T) {
+	s := member()
+	s, cmds := state.Update(s, state.ScreenShow{Screen: state.ScreenTrends})
+	if !reflect.DeepEqual(cmds, []state.Command{state.SizesFetch{}, state.TrendFetch{Spot: state.Spot{Phase: db.PhaseLoad, Tables: state.TablesDefault}}}) {
+		t.Fatalf("the trend screen asked %v", cmds)
+	}
+	s, cmds = state.Update(s, state.SizesFetched{Sizes: []int{2, 4}})
+	if s.Trend.Tables != 2 || !reflect.DeepEqual(cmds, []state.Command{state.TrendFetch{Spot: state.Spot{Phase: db.PhaseLoad, Tables: 2}}}) || !slices.Equal(s.Sizes(), []int{2, 4}) {
+		t.Errorf("sizes 2 and 4 on a server without 10: trend %+v, asked %v, offered %v", s.Trend, cmds, s.Sizes())
+	}
+	s.Run.Detail.Phases = []wire.PhaseRow{{Tables: 160}}
+	if !slices.Equal(s.Sizes(), []int{2, 4, 160}) {
+		t.Errorf("with a run of 160 open, offered %v", s.Sizes())
+	}
+}
+
+// TestNoticesAndDeletedRuns proves a failed load's notice clears when
+// the same load succeeds or the member moves to another screen, and a
+// run deleted while open closes rather than staying on screen.
+func TestNoticesAndDeletedRuns(t *testing.T) {
+	s := member()
+	s, _ = state.Update(s, state.TagsFetched{Err: errors.New("connection refused")})
+	if got, _ := state.Update(s, state.BudgetsFetched{}); !got.Notice.Failed {
+		t.Errorf("another load's success cleared %+v", s.Notice)
+	}
+	if got, _ := state.Update(s, state.TagsFetched{}); got.Notice != (state.Notice{}) {
+		t.Errorf("the tags loading again left %+v", got.Notice)
+	}
+	if got, _ := state.Update(s, state.ScreenShow{Screen: state.ScreenThesis}); got.Notice != (state.Notice{}) {
+		t.Errorf("a new screen kept %+v", got.Notice)
+	}
+
+	s, _ = state.Update(s, state.RunOpen{ID: 5})
+	s, _ = state.Update(s, state.RunFetched{ID: 5, Detail: wire.RunDetail{Run: db.Run{ID: 5, Note: rt.Some("n")}}})
+	gone := &volt.ProblemError{Problem: volt.Problem{Status: 404, Message: "not found"}}
+	s, _ = state.Update(s, state.RunFetched{ID: 5, Err: gone})
+	if s.Run.ID != 0 || s.Run.Loaded || s.Fields[state.FieldRunNote] != "" || s.Notice.Failed {
+		t.Errorf("a run deleted while open stays: %+v, note %q, notice %+v", s.Run, s.Fields[state.FieldRunNote], s.Notice)
+	}
+	if _, cmds := state.Update(s, state.RunAnnotate{}); len(cmds) != 0 {
+		t.Errorf("annotating the deleted run asked %v", cmds)
+	}
+}
+
+// TestAnswersForAnEarlierMemberAreDropped proves an answer to a command
+// issued before a sign-out lands in no later member's state.
+func TestAnswersForAnEarlierMemberAreDropped(t *testing.T) {
+	s := member()
+	s, cmds := state.Update(s, state.ScreenShow{Screen: state.ScreenDashboards})
+	if !slices.Contains(cmds, state.Command(state.BoardsFetch{})) {
+		t.Fatalf("dashboards asked %v", cmds)
+	}
+	ada := s.Session
+	s, _ = state.Update(s, state.SignOut{})
+	s, _ = state.Update(s, state.Answer{Session: s.Session, Result: state.SignedIn{User: db.User{ID: 2, Name: "Grace"}}})
+	late := state.BoardsFetched{Boards: []db.DashboardWithWidgets{{ID: 9, OwnerID: 1, Name: "Ada's board"}}}
+	if got, _ := state.Update(s, state.Answer{Session: ada, Result: late}); len(got.Boards.List) != 0 || got.User.ID != 2 {
+		t.Errorf("Grace sees %+v", got.Boards.List)
+	}
+	if got, _ := state.Update(s, state.Answer{Session: s.Session, Result: late}); len(got.Boards.List) != 1 {
+		t.Errorf("an answer of the current session was dropped: %+v", got.Boards)
 	}
 }

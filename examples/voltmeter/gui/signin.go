@@ -19,6 +19,7 @@ type signInScreen struct {
 	or       basicwidget.Text
 	email    field
 	submit   basicwidget.Button
+	lay      layouts
 }
 
 func (s *signInScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -58,15 +59,16 @@ func (s *signInScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 }
 
 func (s *signInScreen) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds, layouter *guigui.ChildLayouter) {
+	a := s.lay.reset()
 	u := basicwidget.UnitSize(context)
 	b := widgetBounds.Bounds()
 	w := min(b.Dx()-2*u, 18*u)
-	items := []guigui.LinearLayoutItem{fixed(&s.title, 2*u), fixed(&s.subtitle, u), fixed(nil, u/2)}
+	items := a.list(fixed(&s.title, 2*u), fixed(&s.subtitle, u), fixed(nil, u/2))
 	for _, btn := range s.members.All() {
 		items = append(items, fixed(btn, u*3/2))
 	}
-	items = append(items, fixed(&s.or, u), natural(&s.email), fixed(&s.submit, u*3/2))
-	l := column(u/2, items...)
+	items = a.keep(append(items, fixed(&s.or, u), natural(&s.email), fixed(&s.submit, u*3/2)))
+	l := guigui.LinearLayout{Direction: guigui.LayoutDirectionVertical, Gap: u / 2, Items: items}
 	h := l.Measure(context, guigui.FixedWidthConstraints(w)).Y
 	x := b.Min.X + (b.Dx()-w)/2
 	y := b.Min.Y + max(u, (b.Dy()-h)/3)

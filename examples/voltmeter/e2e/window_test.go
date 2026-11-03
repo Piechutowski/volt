@@ -17,7 +17,8 @@ import (
 // a virtual X server against a served Voltmeter the collector filled
 // with a real sweep at tiny sizes: scripted by -shot, the window signs
 // in, opens the newest run, waits for its data and saves itself, and
-// the saved picture is a drawn screen, not one flat color.
+// the saved picture holds the four phase lines of the run's chart, each
+// in its palette color.
 func TestWindowShowsTheNewestRun(t *testing.T) {
 	xvfb, err := exec.LookPath("xvfb-run")
 	if err != nil {
@@ -30,11 +31,7 @@ func TestWindowShowsTheNewestRun(t *testing.T) {
 		t.Skip("the collector reads the commit with git, which is not on PATH:", err)
 	}
 	dir := t.TempDir()
-	bin := filepath.Join(dir, "voltmeter-gui")
-	build := exec.Command("go", "build", "-o", bin, "github.com/Piechutowski/volt/examples/voltmeter/gui")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("building the client: %v\n%s", err, out)
-	}
+	bin := guiBuild(t)
 
 	e := start(t)
 	repo, err := collector.RepoFind(".")
@@ -74,6 +71,34 @@ func TestWindowShowsTheNewestRun(t *testing.T) {
 	if n := colorsCount(img, 3); n < 3 {
 		t.Errorf("the screenshot of run %d holds %d colors, not a drawn screen", got.Stored.Run.ID, n)
 	}
+	light := [][3]uint8{{0x2a, 0x78, 0xd6}, {0xeb, 0x68, 0x34}, {0x1b, 0xaf, 0x7a}, {0xed, 0xa1, 0x00}}
+	dark := [][3]uint8{{0x39, 0x87, 0xe5}, {0xd9, 0x59, 0x26}, {0x19, 0x9e, 0x70}, {0xc9, 0x85, 0x00}}
+	lit, dim := seriesDrawn(img, light), seriesDrawn(img, dark)
+	if lit < 4 && dim < 4 {
+		t.Errorf("the run screen draws %d of the four phase lines in the light palette and %d in the dark; the chart of run %d is missing", lit, dim, got.Stored.Run.ID)
+	}
+}
+
+func seriesDrawn(img image.Image, palette [][3]uint8) int {
+	counts := make([]int, len(palette))
+	b := img.Bounds()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			r, g, bl, _ := img.At(x, y).RGBA()
+			for i, c := range palette {
+				if uint8(r>>8) == c[0] && uint8(g>>8) == c[1] && uint8(bl>>8) == c[2] {
+					counts[i]++
+				}
+			}
+		}
+	}
+	drawn := 0
+	for _, n := range counts {
+		if n >= 40 {
+			drawn++
+		}
+	}
+	return drawn
 }
 
 func colorsCount(img image.Image, enough int) int {

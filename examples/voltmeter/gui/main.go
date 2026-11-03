@@ -13,7 +13,9 @@
 // With -shot or -shots it runs a script instead of waiting for a
 // person: it signs in, opens the newest run, saves the window as PNG
 // and exits, which is how the window smoke test and the screenshots
-// are made.
+// are made. With -probe it signs in and stays open, writing its state
+// and where its rows, fields and sidebar entries are drawn to stdout,
+// so a test can drive the widgets with real pointer and key input.
 package main
 
 import (
@@ -38,6 +40,7 @@ func main() {
 	shots := flag.String("shots", "", "scripted: save every screen as a PNG into this directory and exit")
 	email := flag.String("email", "", "scripted: the member to sign in as; the first the server lists by default")
 	timeout := flag.Duration("timeout", time.Minute, "scripted: give up after this long")
+	probed := flag.Bool("probe", false, "scripted: sign in, then stay open for synthetic input, writing the state and where its targets are drawn to stdout as JSON lines")
 	flag.Parse()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -59,6 +62,9 @@ func main() {
 		w.script = &script{steps: scriptSmoke(*email, *shot)}
 	case *shots != "":
 		w.script = &script{steps: scriptTour(*email, *shots)}
+	case *probed:
+		m.probe = &probe{out: os.Stdout}
+		w.script = &script{steps: []step{membersLoaded(), signIn(*email)}, stay: true}
 	}
 	if w.script != nil {
 		w.script.deadline = int(timeout.Seconds() * float64(ebiten.DefaultTPS))

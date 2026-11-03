@@ -40,9 +40,7 @@ func (g *screen) do(in state.Intent) {
 		g.s, queue = next, queue[1:]
 		for _, c := range cmds {
 			g.issued = append(g.issued, c)
-			if res := g.r.Perform(context.Background(), c); res != nil {
-				queue = append(queue, res)
-			}
+			queue = append(queue, state.Answer{Session: next.Session, Result: g.r.Perform(context.Background(), c)})
 		}
 	}
 }
@@ -167,6 +165,12 @@ func TestGUISignInBrowseAndOpen(t *testing.T) {
 	}
 	g.edit(state.FieldRunTag, "nightly")
 	g.edit(state.FieldRunNote, "seen from the client")
+	resp, err := c.APISamplesRecord(bg, 20, app.SampleBatch{Samples: []app.SampleTimed{{Route: "GET /ping", Status: 200, MS: 0.3, At: 1}}})
+	read(t, resp, err, http.StatusCreated, nil)
+	g.do(state.Changed{Method: "POST", Handler: "Samples.Create", Path: app.PathAPISamplesRecord(20), Status: 201})
+	if g.s.Fields[state.FieldRunNote] != "seen from the client" || g.s.Run.Detail.Latency.N != 1 {
+		t.Errorf("a live refetch of the run while its note was edited left note %q, latency %+v", g.s.Fields[state.FieldRunNote], g.s.Run.Detail.Latency)
+	}
 	g.do(state.RunAnnotate{})
 	if r := g.s.Run.Detail.Run; r.Tag.V != "nightly" || r.Note.V != "seen from the client" || len(g.s.Errors) != 0 {
 		t.Errorf("annotated run = %+v, errors %v", r, g.s.Errors)
@@ -183,7 +187,7 @@ func TestGUISignInBrowseAndOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the export: %v (notice %+v)", err, g.s.Notice)
 	}
-	resp, err := c.ReportExport(bg, 20)
+	resp, err = c.ReportExport(bg, 20)
 	served := read(t, resp, err, http.StatusOK, nil)
 	if string(saved) != string(served.body) || !strings.HasPrefix(g.s.Run.Export, g.export) {
 		t.Errorf("the saved CSV at %s differs from the served one:\n%s\n%s", g.s.Run.Export, saved, served.body)

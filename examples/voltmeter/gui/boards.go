@@ -21,12 +21,14 @@ type boardsScreen struct {
 	name        field
 	addBoard    basicwidget.Button
 	none        basicwidget.Text
-	cards       guigui.WidgetSlice[*boardCard]
+	panel       basicwidget.Panel
+	grid        boardGrid
 	widgetTitle basicwidget.Text
 	phaseLabel  basicwidget.Text
 	phase       phasePicker
 	tables      field
 	addWidget   basicwidget.Button
+	lay         layouts
 }
 
 func (b *boardsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -36,16 +38,16 @@ func (b *boardsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 	}
 	s := m.s
 	board, ok := s.BoardSelected()
-	b.cards.SetLen(len(board.Widgets))
 	for _, w := range []guigui.Widget{&b.picker, &b.name, &b.addBoard, &b.widgetTitle, &b.phaseLabel, &b.phase, &b.tables, &b.addWidget} {
 		adder.AddWidget(w)
 	}
 	if len(board.Widgets) == 0 {
 		adder.AddWidget(&b.none)
+	} else {
+		adder.AddWidget(&b.panel)
 	}
-	for _, c := range b.cards.All() {
-		adder.AddWidget(c)
-	}
+	b.panel.SetContent(&b.grid)
+	b.panel.SetContentConstraints(basicwidget.PanelContentConstraintsFixedWidth)
 
 	items := make([]basicwidget.SelectItem[int], 0, len(s.Boards.List))
 	for _, x := range s.Boards.List {
@@ -69,13 +71,6 @@ func (b *boardsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 	}
 	caption(&b.none, msg, basicwidgetdraw.TextColor(context.ColorMode(), false))
 	b.none.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
-	for i, c := range b.cards.All() {
-		w := board.Widgets[i]
-		spot := state.Spot{Phase: w.Phase, Tables: w.Tables}
-		c.SetWidget(w, s.Trends[spot])
-		id := w.ID
-		c.OnRemoved(func(context *guigui.Context) { m.dispatch(state.WidgetRemove{ID: id}) })
-	}
 
 	heading(&b.widgetTitle, "Add a widget", 1)
 	caption(&b.phaseLabel, "Phase", nil)
@@ -96,34 +91,77 @@ func (b *boardsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 }
 
 func (b *boardsScreen) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds, layouter *guigui.ChildLayouter) {
+	a := b.lay.reset()
 	u := basicwidget.UnitSize(context)
-	top := row(u/2, nested(column(u/8, fixed(nil, u*3/4), fixed(&b.picker, u*3/2)), guigui.FixedSize(10*u)), flex(&b.name, 1), besideField(&b.addBoard, u, 6*u))
-	var grid guigui.LinearLayout
-	if b.cards.Len() == 0 {
-		grid = column(0, flex(&b.none, 1))
-	} else {
-		const perRow = 3
-		var rows []guigui.LinearLayoutItem
-		for i := 0; i < b.cards.Len(); i += perRow {
-			var cells []guigui.LinearLayoutItem
-			for j := i; j < i+perRow; j++ {
-				if j < b.cards.Len() {
-					cells = append(cells, flex(b.cards.At(j), 1))
-				} else {
-					cells = append(cells, spacer())
-				}
-			}
-			rows = append(rows, nested(row(u/2, cells...), guigui.FlexibleSize(1)))
-		}
-		grid = column(u/2, rows...)
+	top := a.row(u/2, a.nested(a.column(u/8, fixed(nil, u*3/4), fixed(&b.picker, u*3/2)), guigui.FixedSize(10*u)), flex(&b.name, 1), a.besideField(&b.addBoard, u, 6*u))
+	shown := guigui.Widget(&b.panel)
+	if b.grid.cards.Len() == 0 {
+		shown = &b.none
 	}
-	add := row(u/2, nested(column(u/8, fixed(&b.phaseLabel, u*3/4), fixed(&b.phase, u*3/2)), guigui.FixedSize(14*u)), flex(&b.tables, 1), besideField(&b.addWidget, u, 5*u))
-	padded(column(u/2,
-		nested(top, guigui.Size{}),
-		nested(grid, guigui.FlexibleSize(1)),
+	add := a.row(u/2, a.nested(a.column(u/8, fixed(&b.phaseLabel, u*3/4), fixed(&b.phase, u*3/2)), guigui.FixedSize(14*u)), flex(&b.tables, 1), a.besideField(&b.addWidget, u, 5*u))
+	padded(a.column(u/2,
+		a.nested(top, guigui.Size{}),
+		flex(shown, 1),
 		fixed(&b.widgetTitle, u),
-		nested(add, guigui.Size{}),
+		a.nested(add, guigui.Size{}),
 	), u/2).LayoutWidgets(context, widgetBounds.Bounds(), layouter)
+}
+
+const boardColumns = 3
+
+type boardGrid struct {
+	guigui.DefaultWidget
+
+	cards guigui.WidgetSlice[*boardCard]
+	lay   layouts
+}
+
+func (g *boardGrid) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
+	m := modelOf(context, g)
+	if m == nil {
+		return nil
+	}
+	board, _ := m.s.BoardSelected()
+	g.cards.SetLen(len(board.Widgets))
+	for _, c := range g.cards.All() {
+		adder.AddWidget(c)
+	}
+	for i, c := range g.cards.All() {
+		w := board.Widgets[i]
+		c.SetWidget(w, m.s.Trends[state.Spot{Phase: w.Phase, Tables: w.Tables}])
+		id := w.ID
+		c.OnRemoved(func(context *guigui.Context) { m.dispatch(state.WidgetRemove{ID: id}) })
+	}
+	return nil
+}
+
+func (g *boardGrid) layout(context *guigui.Context) guigui.LinearLayout {
+	a := g.lay.reset()
+	u := basicwidget.UnitSize(context)
+	rows := a.list()
+	for i := 0; i < g.cards.Len(); i += boardColumns {
+		cells := a.list()
+		for j := i; j < i+boardColumns; j++ {
+			if j < g.cards.Len() {
+				cells = append(cells, flex(g.cards.At(j), 1))
+			} else {
+				cells = append(cells, spacer())
+			}
+		}
+		cells = a.keep(cells)
+		height := g.cards.At(i).Measure(context, guigui.Constraints{}).Y
+		rows = append(rows, a.nested(guigui.LinearLayout{Direction: guigui.LayoutDirectionHorizontal, Gap: u / 2, Items: cells}, guigui.FixedSize(height)))
+	}
+	a.items[0] = rows
+	return guigui.LinearLayout{Direction: guigui.LayoutDirectionVertical, Gap: u / 2, Items: rows}
+}
+
+func (g *boardGrid) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds, layouter *guigui.ChildLayouter) {
+	g.layout(context).LayoutWidgets(context, widgetBounds.Bounds(), layouter)
+}
+
+func (g *boardGrid) Measure(context *guigui.Context, constraints guigui.Constraints) image.Point {
+	return g.layout(context).Measure(context, constraints)
 }
 
 var eventCardRemoved = guigui.GenerateEventKey()
@@ -138,6 +176,7 @@ type boardCard struct {
 
 	widget db.Widget
 	points []state.TrendPoint
+	lay    layouts
 }
 
 func (c *boardCard) SetWidget(w db.Widget, points []state.TrendPoint) {
@@ -166,10 +205,11 @@ func (c *boardCard) Build(context *guigui.Context, adder *guigui.ChildAdder) err
 }
 
 func (c *boardCard) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds, layouter *guigui.ChildLayouter) {
+	a := c.lay.reset()
 	u := basicwidget.UnitSize(context)
 	b := widgetBounds.Bounds()
-	padded(column(u/4,
-		nested(row(u/2, flex(&c.title, 1), fixed(&c.remove, 4*u)), guigui.FixedSize(u*3/2)),
+	padded(a.column(u/4,
+		a.nested(a.row(u/2, flex(&c.title, 1), fixed(&c.remove, 4*u)), guigui.FixedSize(u*3/2)),
 		fixed(&c.latest, u),
 		flex(&c.chart, 1),
 	), u/2).LayoutWidgets(context, b, layouter)

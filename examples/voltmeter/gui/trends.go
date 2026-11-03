@@ -21,6 +21,7 @@ type trendsScreen struct {
 	table      basicwidget.Table[int]
 
 	rows []basicwidget.TableRow[int]
+	lay  layouts
 }
 
 func (t *trendsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -64,6 +65,7 @@ func (t *trendsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 		}})
 	}
 	t.table.SetItems(t.rows)
+	t.table.SelectItemByIndex(-1)
 	t.table.OnItemSelected(func(context *guigui.Context, index int) {
 		if row, ok := t.table.ItemByIndex(index); ok {
 			m.dispatch(state.RunOpen{ID: row.Value})
@@ -72,11 +74,21 @@ func (t *trendsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 	return nil
 }
 
+func (t *trendsScreen) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBounds) error {
+	if m := modelOf(context, t); m != nil && m.probe != nil {
+		for i, row := range t.rows {
+			m.probe.place(probeRow("trends", row.Value), t.table.ItemBounds(i))
+		}
+	}
+	return nil
+}
+
 func (t *trendsScreen) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds, layouter *guigui.ChildLayouter) {
+	a := t.lay.reset()
 	u := basicwidget.UnitSize(context)
-	bar := row(u/2, fixed(&t.phase, 14*u), spacer(), fixed(&t.sizesLabel, 3*u), natural(&t.sizes))
-	padded(column(u/2,
-		nested(bar, guigui.FixedSize(u*3/2)),
+	bar := a.row(u/2, fixed(&t.phase, 14*u), spacer(), fixed(&t.sizesLabel, 3*u), natural(&t.sizes))
+	padded(a.column(u/2,
+		a.nested(bar, guigui.FixedSize(u*3/2)),
 		flex(&t.chart, 3),
 		flex(&t.table, 2),
 	), u/2).LayoutWidgets(context, widgetBounds.Bounds(), layouter)
@@ -90,6 +102,7 @@ type thesisScreen struct {
 	table   basicwidget.Table[string]
 
 	rows []basicwidget.TableRow[string]
+	lay  layouts
 }
 
 func (t *thesisScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -132,9 +145,10 @@ func (t *thesisScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 }
 
 func (t *thesisScreen) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds, layouter *guigui.ChildLayouter) {
+	a := t.lay.reset()
 	u := basicwidget.UnitSize(context)
-	padded(column(u/2,
-		nested(row(u/2, fixed(&t.fixture, 14*u), spacer()), guigui.FixedSize(u*3/2)),
+	padded(a.column(u/2,
+		a.nested(a.row(u/2, fixed(&t.fixture, 14*u), spacer()), guigui.FixedSize(u*3/2)),
 		flex(&t.chart, 3),
 		flex(&t.table, 2),
 	), u/2).LayoutWidgets(context, widgetBounds.Bounds(), layouter)

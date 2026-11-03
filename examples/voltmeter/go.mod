@@ -4,6 +4,7 @@ go 1.27
 
 require (
 	github.com/Piechutowski/volt v0.0.0
+	github.com/ebitengine/purego v0.11.0
 	github.com/guigui-gui/guigui v0.1.0
 	github.com/hajimehoshi/ebiten/v2 v2.10.4
 	github.com/mattn/go-sqlite3 v1.14.47
@@ -12,7 +13,6 @@ require (
 require (
 	github.com/ebitengine/gomobile v0.0.0-20260820040257-d11f821a26a6 // indirect
 	github.com/ebitengine/hideconsole v1.0.0 // indirect
-	github.com/ebitengine/purego v0.11.0 // indirect
 	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/hajimehoshi/iro v0.4.0 // indirect
 	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade // indirect

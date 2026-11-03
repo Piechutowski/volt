@@ -116,6 +116,13 @@ func (r *Remote) Perform(ctx context.Context, cmd state.Command) state.Intent {
 		return state.TagSaved{Tag: tag, Err: err}
 	case state.TagDelete:
 		return state.TagDeleted{Slug: cmd.Slug, Err: c.APIDeleteTag(ctx, cmd.Slug)}
+	case state.SizesFetch:
+		rows, err := c.APISizes(ctx)
+		sizes := make([]int, 0, len(rows))
+		for _, r := range rows {
+			sizes = append(sizes, r.Tables)
+		}
+		return state.SizesFetched{Sizes: sizes, Err: err}
 	case state.TrendFetch:
 		points, err := r.trend(ctx, cmd.Spot)
 		return state.TrendFetched{Spot: cmd.Spot, Points: points, Err: err}

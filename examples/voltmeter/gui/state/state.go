@@ -98,10 +98,12 @@ type TrendPoint struct {
 	WallMS units.Millis
 }
 
-// Notice is the last outcome the client reports in its header.
+// Notice is the last outcome the client reports in its header; Of
+// names what failed, so the notice clears when that succeeds.
 type Notice struct {
 	Text   string
 	Failed bool
+	Of     string
 }
 
 // RunList is the keyset-paged run list: After is the cursor the shown
@@ -115,10 +117,13 @@ type RunList struct {
 }
 
 // RunView is the run the run screen shows and where its CSV went.
+// Edited is set once the member types in the tag or note field, so a
+// refetch does not overwrite what is not saved yet.
 type RunView struct {
 	ID     int
 	Detail wire.RunDetail
 	Loaded bool
+	Edited bool
 	Export string
 }
 
@@ -145,8 +150,11 @@ type BoardView struct {
 }
 
 // State is everything the client shows. Update returns a new State and
-// never changes the slices or maps of the one it is given.
+// never changes the slices or maps of the one it is given. Session
+// counts sign-ins and sign-outs, so an Answer to a command issued for
+// an earlier member is dropped.
 type State struct {
+	Session int
 	Screen  Screen
 	Members []db.User
 	User    db.User
@@ -155,6 +163,7 @@ type State struct {
 	Run     RunView
 	Trend   Spot
 	Trends  map[Spot][]TrendPoint
+	Known   []int
 	Thesis  ThesisView
 	Budgets BudgetView
 	Boards  BoardView
@@ -171,6 +180,14 @@ type Intent interface{ intent() }
 // Command is a request the client makes of the server, performed by
 // the runner, which answers it with one result intent.
 type Command interface{ command() }
+
+// Answer is a command's result intent with the session the command was
+// issued in; the runner wraps every result so, and Update drops the
+// result when a member signed in or out since.
+type Answer struct {
+	Session int
+	Result  Intent
+}
 
 // Started opens the client on the sign-in screen.
 type Started struct{}
@@ -303,6 +320,9 @@ type TagPatch struct{ Slug, Name string }
 // TagDelete deletes a tag.
 type TagDelete struct{ Slug string }
 
+// SizesFetch asks for the sizes the server holds measurements of.
+type SizesFetch struct{}
+
 // TrendFetch asks for a spot's wall time across runs.
 type TrendFetch struct{ Spot Spot }
 
@@ -406,6 +426,12 @@ type TagDeleted struct {
 	Err  error
 }
 
+// SizesFetched answers SizesFetch, ascending.
+type SizesFetched struct {
+	Sizes []int
+	Err   error
+}
+
 // TrendFetched answers TrendFetch.
 type TrendFetched struct {
 	Spot   Spot
@@ -475,6 +501,8 @@ type WidgetDeleted struct {
 	Err error
 }
 
+func (Answer) intent()             {}
+func (SizesFetched) intent()       {}
 func (Started) intent()            {}
 func (FieldEdit) intent()          {}
 func (MemberPick) intent()         {}
@@ -522,6 +550,7 @@ func (BoardPosted) intent()        {}
 func (WidgetPosted) intent()       {}
 func (WidgetDeleted) intent()      {}
 
+func (SizesFetch) command()       {}
 func (UsersFetch) command()       {}
 func (SignInPost) command()       {}
 func (CookiesDrop) command()      {}
@@ -568,10 +597,18 @@ var (
 // commands it asks the runner to perform.
 func Update(s State, in Intent) (State, []Command) {
 	switch in := in.(type) {
+	case Answer:
+		if in.Session != s.Session || in.Result == nil {
+			return s, nil
+		}
+		return Update(s, in.Result)
 	case Started:
-		return State{Screen: ScreenSignIn, Members: s.Members}, []Command{UsersFetch{}}
+		return State{Session: s.Session + 1, Screen: ScreenSignIn, Members: s.Members}, []Command{UsersFetch{}}
 	case FieldEdit:
 		s.Fields = with(s.Fields, in.Field, in.Value)
+		if in.Field == FieldRunTag || in.Field == FieldRunNote {
+			s.Run.Edited = true
+		}
 		return s, nil
 	case MemberPick:
 		s.Fields = with(s.Fields, FieldEmail, in.Email)
@@ -585,7 +622,7 @@ func Update(s State, in Intent) (State, []Command) {
 		}
 		return s, []Command{SignInPost{Email: email}}
 	case SignOut:
-		return State{Screen: ScreenSignIn, Members: s.Members}, []Command{CookiesDrop{}}
+		return State{Session: s.Session + 1, Screen: ScreenSignIn, Members: s.Members}, []Command{CookiesDrop{}}
 	case ScreenShow:
 		return screenShow(s, in.Screen)
 	case Changed:
@@ -614,6 +651,7 @@ func signedOut(s State, in Intent) (State, []Command) {
 			return s, nil
 		}
 		s.User = in.User
+		s.Session++
 		s.Notice = Notice{Text: "Signed in as " + in.User.Name}
 		return screenShow(s, ScreenRuns)
 	}
@@ -630,6 +668,19 @@ func member(s State, in Intent) (State, []Command) {
 	case UsersFetched:
 		if in.Err == nil {
 			s.Members = in.Users
+		}
+		return s, nil
+	case SizesFetched:
+		if in.Err != nil {
+			return failed(s, "loading sizes", in.Err), nil
+		}
+		s = recovered(s, "loading sizes")
+		s.Known = in.Sizes
+		if len(in.Sizes) > 0 && !slices.Contains(in.Sizes, s.Trend.Tables) && len(s.Trends[s.Trend]) == 0 {
+			s.Trend.Tables = in.Sizes[0]
+			if s.Screen == ScreenTrends {
+				return s, []Command{TrendFetch{Spot: s.Trend}}
+			}
 		}
 		return s, nil
 	case RunsFilter:
@@ -656,6 +707,7 @@ func member(s State, in Intent) (State, []Command) {
 		if in.Err != nil {
 			return failed(s, "loading runs", in.Err), nil
 		}
+		s = recovered(s, "loading runs")
 		s.Runs.Page, s.Runs.Loaded = in.Page, true
 		return s, nil
 	case RunOpen:
@@ -668,12 +720,22 @@ func member(s State, in Intent) (State, []Command) {
 		if in.ID != s.Run.ID {
 			return s, nil
 		}
+		if errors.Is(in.Err, volt.ErrNotFound) {
+			s.Run = RunView{}
+			s.Fields = without(s.Fields, FieldRunTag, FieldRunNote)
+			s.Errors = without(s.Errors, FieldRunTag, FieldRunNote)
+			s.Notice = Notice{Text: "Run " + strconv.Itoa(in.ID) + " was deleted"}
+			return s, nil
+		}
 		if in.Err != nil {
 			return failed(s, "loading run "+strconv.Itoa(in.ID), in.Err), nil
 		}
+		s = recovered(s, "loading run "+strconv.Itoa(in.ID))
 		s.Run.Detail, s.Run.Loaded = in.Detail, true
-		s.Fields = with(s.Fields, FieldRunTag, in.Detail.Run.Tag.V)
-		s.Fields = with(s.Fields, FieldRunNote, in.Detail.Run.Note.V)
+		if !s.Run.Edited {
+			s.Fields = with(s.Fields, FieldRunTag, in.Detail.Run.Tag.V)
+			s.Fields = with(s.Fields, FieldRunNote, in.Detail.Run.Note.V)
+		}
 		if s.Trend.Tables == 0 && len(in.Detail.Phases) > 0 {
 			s.Trend = Spot{Phase: db.PhaseLoad, Tables: in.Detail.Phases[0].Tables}
 		}
@@ -691,6 +753,9 @@ func member(s State, in Intent) (State, []Command) {
 		}
 		if in.Run.ID == s.Run.ID {
 			s.Run.Detail.Run = in.Run
+			s.Run.Edited = false
+			s.Fields = with(s.Fields, FieldRunTag, in.Run.Tag.V)
+			s.Fields = with(s.Fields, FieldRunNote, in.Run.Note.V)
 		}
 		s.Notice = Notice{Text: "Saved run " + strconv.Itoa(in.Run.ID)}
 		return s, []Command{runsFetch(s)}
@@ -712,6 +777,7 @@ func member(s State, in Intent) (State, []Command) {
 		if in.Err != nil {
 			return failed(s, "loading tags", in.Err), nil
 		}
+		s = recovered(s, "loading tags")
 		s.Tags = in.Tags
 		return s, nil
 	case TagAdd:
@@ -759,6 +825,7 @@ func member(s State, in Intent) (State, []Command) {
 		if in.Err != nil {
 			return failed(s, "loading the "+string(in.Spot.Phase)+" trend", in.Err), nil
 		}
+		s = recovered(s, "loading the "+string(in.Spot.Phase)+" trend")
 		s.Trends = with(s.Trends, in.Spot, in.Points)
 		return s, nil
 	case ThesisPick:
@@ -771,12 +838,14 @@ func member(s State, in Intent) (State, []Command) {
 		if in.Err != nil {
 			return failed(s, "loading the thesis", in.Err), nil
 		}
+		s = recovered(s, "loading the thesis")
 		s.Thesis.Rows, s.Thesis.Loaded = in.Rows, true
 		return s, nil
 	case BudgetsFetched:
 		if in.Err != nil {
 			return failed(s, "loading budgets", in.Err), nil
 		}
+		s = recovered(s, "loading budgets")
 		s.Budgets.List, s.Budgets.Loaded = in.Budgets, true
 		if s.Budgets.Selected == 0 && len(in.Budgets) > 0 {
 			first := in.Budgets[0].ID
@@ -800,6 +869,7 @@ func member(s State, in Intent) (State, []Command) {
 		if in.Err != nil {
 			return failed(s, "loading budget "+strconv.Itoa(in.ID), in.Err), nil
 		}
+		s = recovered(s, "loading budget "+strconv.Itoa(in.ID))
 		s.Budgets.Detail = in.Detail
 		return s, nil
 	case BudgetCeilingSave:
@@ -856,6 +926,7 @@ func member(s State, in Intent) (State, []Command) {
 		if in.Err != nil {
 			return failed(s, "loading dashboards", in.Err), nil
 		}
+		s = recovered(s, "loading dashboards")
 		s.Boards.List, s.Boards.Loaded = in.Boards, true
 		if _, ok := s.board(s.Boards.Selected); !ok {
 			s.Boards.Selected = 0
@@ -933,6 +1004,9 @@ func screenShow(s State, to Screen) (State, []Command) {
 		return s, []Command{UsersFetch{}}
 	}
 	s.Screen = to
+	if s.Notice.Failed {
+		s.Notice = Notice{}
+	}
 	switch to {
 	case ScreenRuns:
 		return s, []Command{runsFetch(s), TagsFetch{}}
@@ -945,7 +1019,7 @@ func screenShow(s State, to Screen) (State, []Command) {
 		if s.Trend.Tables == 0 {
 			s.Trend = Spot{Phase: db.PhaseLoad, Tables: TablesDefault}
 		}
-		return s, []Command{TrendFetch{Spot: s.Trend}}
+		return s, []Command{SizesFetch{}, TrendFetch{Spot: s.Trend}}
 	case ScreenThesis:
 		if s.Thesis.Fixture == "" {
 			s.Thesis.Fixture = Fixtures[0]
@@ -975,9 +1049,7 @@ func changed(s State, c Changed) (State, []Command) {
 	case c.Handler == "Uploads.Create":
 		cmds = append(cmds, runsFetch(s))
 		cmds = append(cmds, budgetsFetch(s)...)
-		if s.Screen == ScreenTrends {
-			cmds = append(cmds, TrendFetch{Spot: s.Trend})
-		}
+		cmds = append(cmds, measuredRefetch(s)...)
 		if s.Boards.Loaded {
 			cmds = append(cmds, BoardsFetch{})
 		}
@@ -985,6 +1057,9 @@ func changed(s State, c Changed) (State, []Command) {
 		cmds = append(cmds, runsFetch(s))
 		if s.Run.ID != 0 {
 			cmds = append(cmds, RunFetch{ID: s.Run.ID})
+		}
+		if c.Handler == "Runs.Delete" {
+			cmds = append(cmds, measuredRefetch(s)...)
 		}
 	case strings.HasPrefix(c.Handler, "db.Tag"):
 		cmds = append(cmds, TagsFetch{}, runsFetch(s))
@@ -1011,6 +1086,27 @@ func ChangedOf(ev volt.Event) (Intent, bool) {
 		return nil, false
 	}
 	return c, true
+}
+
+func measuredRefetch(s State) []Command {
+	var cmds []Command
+	if s.Known != nil || s.Screen == ScreenTrends {
+		cmds = append(cmds, SizesFetch{})
+	}
+	spots := slices.Collect(maps.Keys(s.Trends))
+	if s.Screen == ScreenTrends && !slices.Contains(spots, s.Trend) {
+		spots = append(spots, s.Trend)
+	}
+	slices.SortFunc(spots, func(a, b Spot) int {
+		if c := strings.Compare(string(a.Phase), string(b.Phase)); c != 0 {
+			return c
+		}
+		return a.Tables - b.Tables
+	})
+	for _, sp := range spots {
+		cmds = append(cmds, TrendFetch{Spot: sp})
+	}
+	return cmds
 }
 
 func runsFetch(s State) RunsFetch {
@@ -1047,10 +1143,11 @@ func (s State) BoardSelected() (db.DashboardWithWidgets, bool) { return s.board(
 // BudgetSelected is the budget the budgets screen edits.
 func (s State) BudgetSelected() (db.Budget, bool) { return s.budget(s.Budgets.Selected) }
 
-// Sizes are the table counts the open run measured, ascending, or the
-// default size when no run is open.
+// Sizes are the table counts the trend screen offers, ascending: every
+// size the server holds measurements of, those the open run measured,
+// and the size shown, or the default size when none is known.
 func (s State) Sizes() []int {
-	var out []int
+	out := slices.Clone(s.Known)
 	for _, p := range s.Run.Detail.Phases {
 		if !slices.Contains(out, p.Tables) {
 			out = append(out, p.Tables)
@@ -1067,7 +1164,14 @@ func (s State) Sizes() []int {
 }
 
 func failed(s State, doing string, err error) State {
-	s.Notice = Notice{Text: doing + ": " + problemText(err), Failed: true}
+	s.Notice = Notice{Text: doing + ": " + problemText(err), Failed: true, Of: doing}
+	return s
+}
+
+func recovered(s State, doing string) State {
+	if s.Notice.Failed && s.Notice.Of == doing {
+		s.Notice = Notice{}
+	}
 	return s
 }
 

@@ -61,9 +61,11 @@ heading of the spec's Parts I and II to the Voltmeter tests that prove
 it or a one-line reason it is excluded, so a new heading needs an
 entry. Its desktop client `examples/voltmeter/gui` is guigui on
 Ebitengine, so building that module also needs the X11 and OpenGL
-development headers Ebitengine needs on Linux, and the window smoke
-test in `examples/voltmeter/e2e` runs the client under `xvfb-run`,
-skipping with a message when Xvfb is not on the path. Go floor is the
+development headers Ebitengine needs on Linux, and the window tests
+in `examples/voltmeter/e2e` run the client on a virtual X server, the
+smoke test under `xvfb-run` and the handler test under `Xvfb` with
+clicks and key presses sent through `libXtst`, each skipping with a
+message when what it needs is missing. Go floor is the
 newest stable Go, declared in all four `go.mod` files. `grammar/`,
 `zed-extension/` and `scripts/sync-grammar.sh` are the editor stack.
 `go test ./...` at the root does not cover the tool modules or the

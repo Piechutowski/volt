@@ -31,6 +31,7 @@ type runScreen struct {
 	latency basicwidget.Text
 
 	rows []basicwidget.TableRow[int]
+	lay  layouts
 }
 
 func (r *runScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -125,6 +126,7 @@ func (r *runScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) err
 }
 
 func (r *runScreen) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds, layouter *guigui.ChildLayouter) {
+	a := r.lay.reset()
 	u := basicwidget.UnitSize(context)
 	b := widgetBounds.Bounds()
 	m := modelOf(context, r)
@@ -132,11 +134,11 @@ func (r *runScreen) Layout(context *guigui.Context, widgetBounds *guigui.WidgetB
 		layouter.LayoutWidget(&r.none, b)
 		return
 	}
-	form := row(u/2, flex(&r.tag, 2), flex(&r.note, 5), besideField(&r.save, u, 4*u), besideField(&r.export, u, 5*u))
+	form := a.row(u/2, flex(&r.tag, 2), flex(&r.note, 5), a.besideField(&r.save, u, 4*u), a.besideField(&r.export, u, 5*u))
 	tableHeight := u * (len(r.rows) + 2)
-	padded(column(u/2,
+	padded(a.column(u/2,
 		fixed(&r.title, u*3/2),
-		nested(form, guigui.Size{}),
+		a.nested(form, guigui.Size{}),
 		fixed(&r.saved, u),
 		flex(&r.chart, 1),
 		fixed(&r.table, tableHeight),

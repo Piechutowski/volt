@@ -30,6 +30,7 @@ type runsScreen struct {
 	remove      basicwidget.Button
 
 	rows []basicwidget.TableRow[int]
+	lay  layouts
 }
 
 func (r *runsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -98,6 +99,7 @@ func (r *runsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) er
 		}})
 	}
 	r.table.SetItems(r.rows)
+	r.table.SelectItemByIndex(-1)
 	r.table.OnItemSelected(func(context *guigui.Context, index int) {
 		if row, ok := r.table.ItemByIndex(index); ok {
 			m.dispatch(state.RunOpen{ID: row.Value})
@@ -122,6 +124,15 @@ func (r *runsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) er
 	return nil
 }
 
+func (r *runsScreen) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBounds) error {
+	if m := modelOf(context, r); m != nil && m.probe != nil {
+		for i, row := range r.rows {
+			m.probe.place(probeRow("runs", row.Value), r.table.ItemBounds(i))
+		}
+	}
+	return nil
+}
+
 func tagName(s state.State, slug string) string {
 	for _, t := range s.Tags {
 		if t.Slug == slug {
@@ -132,14 +143,15 @@ func tagName(s state.State, slug string) string {
 }
 
 func (r *runsScreen) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds, layouter *guigui.ChildLayouter) {
+	a := r.lay.reset()
 	u := basicwidget.UnitSize(context)
-	bar := row(u/2, fixed(&r.filterLabel, 2*u), fixed(&r.filter, 8*u), flex(&r.pageText, 1), fixed(&r.prev, 4*u), fixed(&r.next, 4*u))
-	tagForm := row(u/2, flex(&r.slug, 2), flex(&r.name, 3),
-		besideField(&r.add, u, 4*u), besideField(&r.rename, u, 4*u), besideField(&r.remove, u, 4*u))
-	padded(column(u/2,
-		nested(bar, guigui.FixedSize(u*3/2)),
+	bar := a.row(u/2, fixed(&r.filterLabel, 2*u), fixed(&r.filter, 8*u), flex(&r.pageText, 1), fixed(&r.prev, 4*u), fixed(&r.next, 4*u))
+	tagForm := a.row(u/2, flex(&r.slug, 2), flex(&r.name, 3),
+		a.besideField(&r.add, u, 4*u), a.besideField(&r.rename, u, 4*u), a.besideField(&r.remove, u, 4*u))
+	padded(a.column(u/2,
+		a.nested(bar, guigui.FixedSize(u*3/2)),
 		flex(&r.table, 1),
-		nested(row(u/2, fixed(&r.tagsTitle, 3*u), flex(&r.tagsText, 1)), guigui.FixedSize(u)),
-		nested(tagForm, guigui.Size{}),
+		a.nested(a.row(u/2, fixed(&r.tagsTitle, 3*u), flex(&r.tagsText, 1)), guigui.FixedSize(u)),
+		a.nested(tagForm, guigui.Size{}),
 	), u/2).LayoutWidgets(context, widgetBounds.Bounds(), layouter)
 }

@@ -30,6 +30,7 @@ type script struct {
 	ticks    int
 	deadline int
 	capture  string
+	stay     bool
 	over     bool
 	err      error
 }
@@ -105,7 +106,7 @@ func (sc *script) tick(m *model) error {
 	if sc.over || sc.capture != "" {
 		return nil
 	}
-	if sc.ticks > sc.deadline {
+	if sc.ticks > sc.deadline && !(sc.stay && sc.i == len(sc.steps)) {
 		name := "the end"
 		if sc.i < len(sc.steps) {
 			name = sc.steps[sc.i].name
@@ -114,7 +115,7 @@ func (sc *script) tick(m *model) error {
 		return nil
 	}
 	if sc.i == len(sc.steps) {
-		sc.over = true
+		sc.over = !sc.stay
 		return nil
 	}
 	st := sc.steps[sc.i]

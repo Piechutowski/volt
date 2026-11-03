@@ -29,6 +29,7 @@ type root struct {
 
 	m      *model
 	script *script
+	lay    layouts
 }
 
 func (r *root) Env(context *guigui.Context, key guigui.EnvKey, source *guigui.EnvSource) (any, bool) {
@@ -44,6 +45,12 @@ func (r *root) WriteStateKey(context *guigui.Context, w *guigui.StateKeyWriter) 
 
 func (r *root) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBounds) error {
 	r.m.drain()
+	if r.m.probe != nil && r.m.s.User.ID != 0 {
+		for i, sc := range state.Screens {
+			r.m.probe.place("screen:"+sc.String(), r.sidebar.ItemBounds(i))
+		}
+	}
+	r.m.probe.emit(r.m)
 	if r.script != nil {
 		return r.script.tick(r.m)
 	}
@@ -106,6 +113,9 @@ func (r *root) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
 	}
 	caption(&r.live, live, muted)
 	caption(&r.who, s.User.Name+"  "+s.User.Email, nil)
+	for _, t := range []*basicwidget.Text{&r.notice, &r.live, &r.who, &r.title} {
+		t.SetEllipsisString("...")
+	}
 	r.who.SetHorizontalAlign(basicwidget.HorizontalAlignRight)
 	r.signOut.SetText("Sign out")
 	r.signOut.OnDown(func(context *guigui.Context) { r.m.dispatch(state.SignOut{}) })
@@ -113,6 +123,7 @@ func (r *root) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
 }
 
 func (r *root) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds, layouter *guigui.ChildLayouter) {
+	a := r.lay.reset()
 	b := widgetBounds.Bounds()
 	layouter.LayoutWidget(&r.background, b)
 	if r.m.s.User.ID == 0 {
@@ -120,13 +131,13 @@ func (r *root) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds
 		return
 	}
 	u := basicwidget.UnitSize(context)
-	header := padded(row(u/2,
-		nested(column(0, fixed(&r.title, u*3/2), fixed(&r.notice, u)), guigui.FlexibleSize(3)),
-		nested(column(0, fixed(&r.who, u*3/2), fixed(&r.live, u)), guigui.FlexibleSize(2)),
-		nested(column(0, fixed(&r.signOut, u*3/2)), guigui.FixedSize(5*u)),
+	header := padded(a.row(u/2,
+		a.nested(a.column(0, fixed(&r.title, u*3/2), fixed(&r.notice, u)), guigui.FlexibleSize(3)),
+		a.nested(a.column(0, fixed(&r.who, u*3/2), fixed(&r.live, u)), guigui.FlexibleSize(2)),
+		a.nested(a.column(0, fixed(&r.signOut, u*3/2)), guigui.FixedSize(5*u)),
 	), u/2)
-	row(0,
+	a.row(0,
 		fixed(&r.sidebar, 8*u),
-		nested(column(0, nested(header, guigui.FixedSize(3*u+u/2)), flex(r.screen(), 1)), guigui.FlexibleSize(1)),
+		a.nested(a.column(0, a.nested(header, guigui.FixedSize(3*u+u/2)), flex(r.screen(), 1)), guigui.FlexibleSize(1)),
 	).LayoutWidgets(context, b, layouter)
 }
