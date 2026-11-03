@@ -1,0 +1,43 @@
+package db
+
+group phases {
+  ms_load
+  ms_check
+  ms_vet
+  ms_generate
+}
+
+group front = phases \ (ms_generate)
+
+pred of_run  { run_id = :run }
+pred at_size { tables in :sizes }
+pred heavy   { alloc_mb > :mb }
+
+select rows   for phases where of_run [order: (tables asc)]
+select sized  for phases where of_run and at_size [order: (tables asc)]
+select trend  for phases where tables = :tables [order: (run_id asc)]
+select brief  (run_id, tables, wall_ms) for phases where of_run [order: (tables asc)]
+select lean   (* \ (output_mb, source_kb)) for front where of_run and not heavy [order: (tables asc)]
+select per_size (tables, count() as n, avg(alloc_mb) as mean_alloc, min(alloc_mb) as least_alloc, max(heap_mb) as peak_heap, sum(allocs) as total_allocs) for phases where at_size [group: (tables), order: (tables asc)]
+select density (run_id, tables, allocs / tables as allocs_per_table, alloc_mb * 1024 / source_kb as alloc_per_source) for phases where of_run [order: (tables asc)]
+
+select listed (id, commit, dirty, note, created_at, machine.cpu, machine.os, tag.name) for runs join machine join tag [order: (id desc)]
+select untagged for runs where tag is null [order: (id asc)]
+select of_commit for runs where commit = :commit [order: (id asc)]
+select successors (id, commit, followers.id, followers.commit) for runs join followers where id = :id [order: (followers.id asc)]
+
+select fleet (id, cpu, count(runs.id) as run_count) for machines join runs [group: (id, cpu), order: (id asc)]
+select identified for machines where cpu = :cpu and cores = :cores and memory_gb = :memory and os = :os and arch = :arch and go = :toolchain
+
+select latency (count() as n, avg(ms) as mean, min(ms) as best, max(ms) as worst) for samples where run_id = :run
+select per_route (route, count() as n, avg(ms) as mean, max(ms) as worst) for samples where of_run [group: (route), order: (route asc)]
+select failures for samples where of_run and status >= 400 [order: (id asc)]
+
+select thesis (sha, fixture, volt_lines, hand_lines, gen_lines, commit.subject, commit.at) for line_counts join commit where fixture = :fixture [order: (commit.at asc)]
+select matching for commits where subject like :pattern [order: (at desc)]
+
+select by_state for budgets where state in :states [order: (id asc)]
+select over for budgets where phase = :phase and tables = :tables and max_ms < :ms
+
+select boards for dashboards with widgets where owner_id = :owner [order: (name asc)]
+select board  for dashboards with widgets where id = :id

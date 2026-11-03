@@ -54,7 +54,8 @@ compiler on the path; without it the driver is a stub and `volt`
 refuses the fold and the migration commands with exit 2), while the
 library and the runtime register none. `examples/voltmeter` is
 Voltmeter, the example application and end-to-end test, built on the
-same driver with cgo. Go floor is the newest stable Go,
+same driver with cgo; its generated files are committed and
+drift-checked by its own tests. Go floor is the newest stable Go,
 declared in all four `go.mod` files. `grammar/`,
 `zed-extension/` and `scripts/sync-grammar.sh` are the editor stack.
 `go test ./...` at the root does not cover the tool modules or the

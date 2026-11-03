@@ -238,9 +238,15 @@ section 8 marked unverified for that step.
 
 ## Step 19. The example applications
 
-Deferred: the language first, then non-core features and tooling. The
-blog fixture under `itest/blog` is the application every step rebuilds
-until then, and the line counts below are measured on it.
+In progress: Voltmeter, under `examples/voltmeter`, measures Volt with
+Volt (the profiling sweep, the keystroke benchmark, the thesis line
+counts and its own route latency). Its data package `db` is built: the
+schema, the selects and a migration history that folds to the schema,
+tested on a real SQLite. Remaining, in order: the routes and their
+controllers, the collector, the guigui client, and the end-to-end
+suites over all of them. The Elm example waits for step 5. The blog
+fixture under `itest/blog` is the application every step rebuilds, and
+the line counts below are measured on it.
 
 ---
 
@@ -264,7 +270,8 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 
 | Step | Depends on | Lands |
 |---|---|---|
-| 5, 13 to 19 | | deferred |
+| 5, 13 to 18 | | deferred |
+| 19 | | in progress (Voltmeter) |
 
 Measured at each step on the blog fixture and recorded in the commit
 message: Volt lines, hand-written Go lines, generated Go lines. The
