@@ -76,7 +76,7 @@ func Handler(route string, h HandlerFunc, eh ErrorHandler, perform Performer, op
 		} else {
 			resp = h(req)
 		}
-		resp = resolve(ctx, req, resp, eh, perform)
+		resp = encoded(ctx, req, resolve(ctx, req, resp, eh, perform), eh, perform)
 		if err := resp.write(w, hr, req); err != nil {
 			slog.Error("volt: writing the response", "route", route, "err", err)
 		}

@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"reflect"
+	"strconv"
 
 	"github.com/Piechutowski/volt/nao/rt"
 )
@@ -35,10 +37,14 @@ type (
 		fsys fs.FS
 		path string
 	}
-	htmlBody   struct{ b []byte }
-	streamBody struct{ fn func(io.Writer) error }
-	emptyBody  struct{}
-	failBody   struct{ err error }
+	htmlBody    struct{ b []byte }
+	streamBody  struct{ fn func(io.Writer) error }
+	emptyBody   struct{}
+	failBody    struct{ err error }
+	encodedBody struct {
+		format Format
+		b      []byte
+	}
 )
 
 func (renderBody) body()   {}
@@ -49,6 +55,7 @@ func (htmlBody) body()     {}
 func (streamBody) body()   {}
 func (emptyBody) body()    {}
 func (failBody) body()     {}
+func (encodedBody) body()  {}
 
 type step struct {
 	effect rt.AnyEffect
@@ -56,8 +63,9 @@ type step struct {
 	on     func(error) Response
 }
 
-// Render is v in the negotiated format with status 200 (spec §formats).
-func Render(v any) Response { return Response{status: http.StatusOK, body: renderBody{v}} }
+// Render is v in the negotiated format with status 200 (spec §formats);
+// a nil v writes the status and no body, as RenderStatus does.
+func Render(v any) Response { return RenderStatus(http.StatusOK, v) }
 
 // RenderStatus is Render with an explicit status; a nil v writes the
 // status and no body.
@@ -245,20 +253,52 @@ func resolve(ctx context.Context, req Request, resp Response, eh ErrorHandler, p
 	return Reject(http.StatusInternalServerError, "internal server error")
 }
 
-func (r Response) write(w http.ResponseWriter, hr *http.Request, req Request) error {
-	var encoded bytes.Buffer
-	var format Format
-	if b, ok := r.body.(renderBody); ok {
-		f, err := Negotiate(req)
-		if err != nil {
-			return DefaultErrorHandler(req, err).write(w, hr, req)
+// encoded is resp with a rendered value encoded in the negotiated format
+// before anything is written (spec §formats): a 406, and a value the
+// format cannot carry, an encoder's panic included, go to eh like every
+// other failure (spec §scopes). When eh's own answer fails the same way,
+// the default handler answers for the last failure.
+func encoded(ctx context.Context, req Request, resp Response, eh ErrorHandler, perform Performer) Response {
+	var err error
+	for range 2 {
+		b, ok := resp.body.(renderBody)
+		if !ok {
+			return resp
 		}
-		if err := Encode(&encoded, f, b.v); err != nil {
-			slog.Error("volt: encoding the response", "route", req.Route(), "err", err)
-			return Reject(http.StatusInternalServerError, "internal server error").write(w, hr, req)
+		var f Format
+		f, err = Negotiate(req)
+		if err == nil {
+			var enc []byte
+			if enc, err = renderEncode(f, b.v); err == nil {
+				resp.body = encodedBody{format: f, b: enc}
+				return resp
+			}
 		}
-		format = f
+		resp = resolve(ctx, req, eh(req, err), eh, perform)
 	}
+	return DefaultErrorHandler(req, err)
+}
+
+// renderEncode is v in the format, or an error for a value the format
+// cannot carry: a nil pointer, which GOB cannot encode, in either format
+// so that both agree, and any encoder panic (spec §formats).
+func renderEncode(f Format, v any) (enc []byte, err error) {
+	if rv := reflect.ValueOf(v); rv.Kind() == reflect.Pointer && rv.IsNil() {
+		return nil, fmt.Errorf("volt: rendering a nil %T, which no format carries", v)
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			enc, err = nil, fmt.Errorf("volt: encoding a %T as %s panicked: %v", v, f.MIME(), p)
+		}
+	}()
+	var buf bytes.Buffer
+	if err := Encode(&buf, f, v); err != nil {
+		return nil, fmt.Errorf("volt: encoding a %T as %s: %w", v, f.MIME(), err)
+	}
+	return buf.Bytes(), nil
+}
+
+func (r Response) write(w http.ResponseWriter, hr *http.Request, req Request) error {
 	for k, vs := range r.header {
 		w.Header()[k] = vs
 	}
@@ -270,17 +310,16 @@ func (r Response) write(w http.ResponseWriter, hr *http.Request, req Request) er
 		status = http.StatusOK
 	}
 	switch b := r.body.(type) {
-	case renderBody:
-		w.Header().Set("Content-Type", format.MIME())
-		w.WriteHeader(status)
-		_, err := w.Write(encoded.Bytes())
-		return err
+	case encodedBody:
+		return bodyWrite(w, status, b.format.MIME(), b.b)
 	case problemBody:
 		f, _ := Negotiate(req)
-		w.Header().Set("Content-Type", f.MIME())
+		enc, err := renderEncode(f, b.p)
+		if err != nil {
+			return err
+		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.WriteHeader(status)
-		return Encode(w, f, b.p)
+		return bodyWrite(w, status, f.MIME(), enc)
 	case redirectBody:
 		http.Redirect(w, hr, b.url, status)
 		return nil
@@ -288,10 +327,7 @@ func (r Response) write(w http.ResponseWriter, hr *http.Request, req Request) er
 		http.ServeFileFS(w, hr, b.fsys, b.path)
 		return nil
 	case htmlBody:
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(status)
-		_, err := w.Write(b.b)
-		return err
+		return bodyWrite(w, status, "text/html; charset=utf-8", b.b)
 	case streamBody:
 		w.WriteHeader(status)
 		return b.fn(w)
@@ -299,6 +335,14 @@ func (r Response) write(w http.ResponseWriter, hr *http.Request, req Request) er
 		w.WriteHeader(status)
 		return nil
 	}
+}
+
+func bodyWrite(w http.ResponseWriter, status int, mime string, b []byte) error {
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("Content-Length", strconv.Itoa(len(b)))
+	w.WriteHeader(status)
+	_, err := w.Write(b)
+	return err
 }
 
 // Load is what a scope load decides for a request (spec §scope-loads):

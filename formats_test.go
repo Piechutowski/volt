@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -334,5 +335,81 @@ func TestRenderThatDoesNotEncodeIs500(t *testing.T) {
 	}
 	if rec.Header().Get("X-Kept") != "" {
 		t.Errorf("the failed render kept its header %q", rec.Header().Get("X-Kept"))
+	}
+}
+
+type panicky struct{}
+
+func (panicky) MarshalJSON() ([]byte, error) { panic("no JSON for this") }
+
+func (panicky) GobEncode() ([]byte, error) { panic("no GOB for this") }
+
+// TestRenderFailuresAre500ProblemsInEveryFormat proves a nil pointer and
+// a value whose encoder panics are a 500 problem in the negotiated
+// format, JSON and GOB alike, that the connection is not cut, and that a
+// nil v is a status without a body in both (spec §formats).
+func TestRenderFailuresAre500ProblemsInEveryFormat(t *testing.T) {
+	for _, accept := range []string{MIMEJSON, MIMEGOB} {
+		for name, v := range map[string]any{"nil pointer": (*row)(nil), "panicking encoder": panicky{}} {
+			req := httptest.NewRequest("GET", "/x", nil)
+			req.Header.Set("Accept", accept)
+			rec := serve(t, func(Request) Response { return Render(v) }, req)
+			f, _ := FormatOf(rec.Header().Get("Content-Type"))
+			var p Problem
+			err := DecodeBody(f, rec.Body, &p)
+			if rec.Code != http.StatusInternalServerError || rec.Header().Get("Content-Type") != accept || err != nil || p.Status != 500 {
+				t.Errorf("%s as %s = %d %q (%v), want a 500 problem in it", name, accept, rec.Code, rec.Header().Get("Content-Type"), err)
+			}
+		}
+		req := httptest.NewRequest("GET", "/x", nil)
+		req.Header.Set("Accept", accept)
+		rec := serve(t, func(Request) Response { return Render(nil) }, req)
+		if rec.Code != 200 || rec.Body.Len() != 0 {
+			t.Errorf("Render(nil) as %s = %d %q, want 200 and no body", accept, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+// TestRenderFailuresReachTheRouteErrorHandler proves a 406 and a value
+// that does not encode go to the route's error handler, as every other
+// failure does, and that the default handler answers when the error
+// handler's own response does not encode either (spec §scopes, §formats).
+func TestRenderFailuresReachTheRouteErrorHandler(t *testing.T) {
+	var seen []error
+	eh := func(r Request, err error) Response {
+		seen = append(seen, err)
+		return DefaultErrorHandler(r, err).WithHeader("X-Route-Handler", "yes")
+	}
+	req := httptest.NewRequest("GET", "/x", nil)
+	req.Header.Set("Accept", "text/html")
+	rec := serveWith(func(Request) Response { return Render(row{ID: 1}) }, eh, nil, req)
+	if rec.Code != http.StatusNotAcceptable || rec.Header().Get("X-Route-Handler") != "yes" || len(seen) != 1 {
+		t.Errorf("406 = %d, handler header %q, %d failures seen; want the route's handler to answer", rec.Code, rec.Header().Get("X-Route-Handler"), len(seen))
+	}
+	seen = nil
+	rec = serveWith(func(Request) Response { return Render(math.Inf(1)) }, eh, nil, httptest.NewRequest("GET", "/x", nil))
+	if rec.Code != http.StatusInternalServerError || rec.Header().Get("X-Route-Handler") != "yes" || len(seen) != 1 || !strings.Contains(seen[0].Error(), "float64") {
+		t.Errorf("encode failure = %d, handler header %q, failures %v; want the route's handler to answer", rec.Code, rec.Header().Get("X-Route-Handler"), seen)
+	}
+	stubborn := func(Request, error) Response { return Render(math.Inf(1)) }
+	rec = serveWith(func(Request) Response { return Render(math.Inf(1)) }, stubborn, nil, httptest.NewRequest("GET", "/x", nil))
+	var p Problem
+	if err := json.Unmarshal(rec.Body.Bytes(), &p); rec.Code != http.StatusInternalServerError || err != nil || p.Status != 500 {
+		t.Errorf("an error handler that renders the unencodable = %d %q, want the default 500 problem", rec.Code, rec.Body.String())
+	}
+}
+
+// TestResponsesCarryContentLength proves a rendered value, a problem and
+// HTML carry the length of the body they write.
+func TestResponsesCarryContentLength(t *testing.T) {
+	for name, h := range map[string]HandlerFunc{
+		"render":  func(Request) Response { return Render([]row{{ID: 1, Name: "a"}}) },
+		"problem": func(Request) Response { return Reject(http.StatusConflict, "taken") },
+		"html":    func(Request) Response { return HTML([]byte("<p>hi</p>")) },
+	} {
+		rec := serve(t, h, httptest.NewRequest("GET", "/x", nil))
+		if got := rec.Header().Get("Content-Length"); got == "" || got != strconv.Itoa(rec.Body.Len()) {
+			t.Errorf("%s: Content-Length %q for a body of %d bytes", name, got, rec.Body.Len())
+		}
 	}
 }

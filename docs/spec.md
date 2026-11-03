@@ -2221,7 +2221,8 @@ func (r Response) Rescue(on func(error) Response) Response
    nothing. `Reject` is a Problem body of the handler's own, with
    `WithDetails` for the field errors of a changeset it judged.
 4. **Bodies.** `Render` and `RenderStatus` write a value in the
-   negotiated format; `File` serves a file of an `fs.FS` as `net/http`
+   negotiated format, and a nil `v` writes the status and no body
+   (§formats); `File` serves a file of an `fs.FS` as `net/http`
    does; `HTML` writes bytes as `text/html`; `Redirect` writes a
    `Location`; `Stream` hands the body to a function, the one response
    that is not a value, which the lint annex counts (`lint.md`,
@@ -2607,10 +2608,21 @@ for a format suffix.
    write, the data runtime's `*rt.Invalid` (§changesets), is 409 when a
    `unique` field error is among its fields and 422 otherwise; a query's
    row miss is 404; any other error has none and is the default
-   handler's 500. A rendered value the negotiated format cannot carry,
-   such as an infinite float in JSON, is encoded before anything is
-   written, so it is a 500 problem without the response's headers and
-   cookies, never a 200 with a cut body. A generated client decodes the body into a
+   handler's 500. A rendered value is encoded before anything is
+   written, and the response carries its `Content-Length`. A 406, and
+   a value the negotiated format cannot carry, such as an infinite
+   float in JSON, or whose encoder panics, are failures like any
+   other: they go to the route's error handler (§scopes), whose answer
+   replaces the response with its headers and cookies, so the default
+   handler's answer is a 500 problem (the 406's own problem for a 406),
+   never a 200 with a cut body or a connection closed without one; when
+   the error handler's own answer fails the same way, the default
+   handler answers for that failure. What renders agrees across the
+   formats: a nil `v` is the status without a body in both; a nil
+   pointer, which GOB cannot encode and JSON would write as `null`, is
+   an encoding failure in both; a nil slice or map is JSON `null` and
+   an empty GOB value, which the generated client decodes as an empty
+   slice or map. A generated client decodes the body into a
    `*volt.ProblemError`, so a caller reads `errors.As(err, &pe)` and
    marks the fields `pe.Details` name.
 
