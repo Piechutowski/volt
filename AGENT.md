@@ -43,11 +43,11 @@ green.
 
 ## Repository
 
-Four Go modules under `go.work`: the library at the root (runtime,
+Five Go modules under `go.work`: the library at the root (runtime,
 `lang/`, `gen/`, `nao/` with the value runtime `nao/rt` and the runner
 `nao/run`, `itest/`; stdlib only, sqlite3 test-only), the tools `lsp/`
-and `cmd/volt/`, and the examples `examples/`, which carry the
-third-party dependencies; `cmd/volt` carries the
+and `cmd/volt/`, the examples `examples/` and the stack comparison
+`compare/`, which carry the third-party dependencies; `cmd/volt` carries the
 `mattn/go-sqlite3` driver for the fold and `volt migration up`, so the
 tool is built with cgo (a C compiler on the path; without it the
 driver is a stub and `volt` refuses the fold and the migration
@@ -64,22 +64,27 @@ generator testdata and the `itest/` and `nao/itest/` fixtures. Each
 example has a test over its server. `examples/byhand` is the `tables`
 server and client written by hand on the standard library, the measure
 of what `volt gen` saves; its parity test sends both servers the same
-requests and requires the same replies.
+requests and requires the same replies. `compare/` is the same blog
+with real rules built five ways, Volt and four popular stacks (Gin and
+GORM, chi with sqlc and goose, Echo with sqlx, oapi-codegen with Ent):
+`compare/suite` is the contract every one passes unchanged, each
+stack's generated code comes from `go generate`, and `go run
+./compare/measure` counts them all by one rule.
 The windows are guigui on Ebitengine, so building the module needs the
 X11 and OpenGL development headers Ebitengine needs on Linux; no test
 opens a window. Go floor is the
-newest stable Go, declared in all four `go.mod` files. `grammar/`,
+newest stable Go, declared in all five `go.mod` files. `grammar/`,
 `zed-extension/` and `scripts/sync-grammar.sh` are the editor stack.
-`go test ./...` at the root does not cover the tool modules or the
-examples.
+`go test ./...` at the root does not cover the tool modules, the
+examples or the comparison.
 
 ## Verification bar, all of it, before claiming done
 
 ```sh
-go generate ./examples/...
-go build ./... ./lsp/... ./cmd/volt/... ./examples/...
-go vet   ./... ./lsp/... ./cmd/volt/... ./examples/...
-go test  ./... ./lsp/... ./cmd/volt/... ./examples/...
+go generate ./examples/... ./compare/...
+go build ./... ./lsp/... ./cmd/volt/... ./examples/... ./compare/...
+go vet   ./... ./lsp/... ./cmd/volt/... ./examples/... ./compare/...
+go test  ./... ./lsp/... ./cmd/volt/... ./examples/... ./compare/...
 go test  -race ./lang/... ./lsp/...
 gofmt -l . | grep -v zed-extension        # must be empty
 ```

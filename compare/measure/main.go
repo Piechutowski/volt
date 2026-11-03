@@ -36,8 +36,8 @@ var stacks = []stack{
 
 type count struct {
 	handGo, client, contract, generated int
-	files                       int
-	modules                     []string
+	files                               int
+	modules                             []string
 }
 
 func main() {
