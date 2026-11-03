@@ -393,8 +393,8 @@ func TestBudgetsBreachesAndTransactions(t *testing.T) {
 	resp, err = c.APIRun(bg, over.Run.ID)
 	var shown wire.RunDetail
 	replyRead(t, resp, err, 200, &shown)
-	if len(shown.Breaches) != 1 || shown.Breaches[0].BudgetID != check.ID || shown.Failed != 0 {
-		t.Errorf("the breaching run shows breaches %+v and %d failed calls", shown.Breaches, shown.Failed)
+	if len(shown.Breaches) != 1 || shown.Breaches[0].BudgetID != check.ID || shown.Failed != 0 || len(shown.Over) != 1 || shown.Over[0].ID != check.ID {
+		t.Errorf("the breaching run shows breaches %+v over %+v and %d failed calls", shown.Breaches, shown.Over, shown.Failed)
 	}
 	resp, err = c.APIBudget(bg, check.ID)
 	replyRead(t, resp, err, 200, &detail)

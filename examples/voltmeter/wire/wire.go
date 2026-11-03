@@ -36,8 +36,8 @@ type RunPage struct {
 }
 
 // RunDetail is everything one run measured: Latency summarizes every
-// timed call, Failed counts those answered 400 or above, and Breaches are
-// the budgets the run went over.
+// timed call, Failed counts those answered 400 or above, Breaches are
+// the run's breaches and Over the budgets they name.
 type RunDetail struct {
 	Run        db.Run         `json:"run"`
 	Phases     []PhaseRow     `json:"phases"`
@@ -45,6 +45,7 @@ type RunDetail struct {
 	Latency    db.Latency     `json:"latency"`
 	Failed     int64          `json:"failed"`
 	Breaches   []db.Breach    `json:"breaches"`
+	Over       []db.Budget    `json:"over"`
 }
 
 // PhaseRow is one row of a phase table with the phase it came from; the

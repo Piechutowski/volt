@@ -453,13 +453,13 @@ func TestBudgetStateTextAgreesWithItsBreaches(t *testing.T) {
 // over, so a breaching run never looks like any other.
 func TestRunJudgedTextNamesBaselineAndBreaches(t *testing.T) {
 	plain := wire.RunDetail{Run: db.Run{ID: 2}}
-	if text, over := state.RunJudgedText(plain, nil); over || text != "No baseline. Within every budget set when it was uploaded." {
+	if text, over := state.RunJudgedText(plain); over || text != "No baseline. Within every budget set when it was uploaded." {
 		t.Errorf("a plain run says %q (over %v)", text, over)
 	}
-	broke := wire.RunDetail{Run: db.Run{ID: 3, BaselineID: rt.Some(1)}, Breaches: []db.Breach{{BudgetID: 1, RunID: 3, WallMs: 33.7}, {BudgetID: 9, RunID: 3, WallMs: 5}}}
-	budgets := []db.Budget{{ID: 1, Phase: db.PhaseGenerate, Tables: 160}}
+	broke := wire.RunDetail{Run: db.Run{ID: 3, BaselineID: rt.Some(1)}, Breaches: []db.Breach{{BudgetID: 1, RunID: 3, WallMs: 33.7}, {BudgetID: 9, RunID: 3, WallMs: 5}},
+		Over: []db.Budget{{ID: 1, Phase: db.PhaseGenerate, Tables: 160}}}
 	want := "Baseline: run 1. Over budget: generate at 160 tables, took 33.7 ms; budget 9, took 5.0 ms."
-	if text, over := state.RunJudgedText(broke, budgets); !over || text != want {
+	if text, over := state.RunJudgedText(broke); !over || text != want {
 		t.Errorf("a breaching run says %q (over %v), want %q", text, over, want)
 	}
 }

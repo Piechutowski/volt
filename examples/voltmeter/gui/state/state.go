@@ -1153,8 +1153,8 @@ func BudgetStateText(b db.Budget, breaches []db.Breach) (string, bool) {
 
 // RunJudgedText is what a run was measured against: the baseline it
 // names, if any, and the budgets it went over, by phase and size when
-// the budget list holds them; true when it went over one.
-func RunJudgedText(d wire.RunDetail, budgets []db.Budget) (string, bool) {
+// the detail holds them; true when it went over one.
+func RunJudgedText(d wire.RunDetail) (string, bool) {
 	text := "No baseline"
 	if id, ok := d.Run.BaselineID.Get(); ok {
 		text = "Baseline: run " + strconv.Itoa(id)
@@ -1165,7 +1165,7 @@ func RunJudgedText(d wire.RunDetail, budgets []db.Budget) (string, bool) {
 	var over []string
 	for _, b := range d.Breaches {
 		name := "budget " + strconv.Itoa(b.BudgetID)
-		for _, x := range budgets {
+		for _, x := range d.Over {
 			if x.ID == b.BudgetID {
 				name = string(x.Phase) + " at " + strconv.Itoa(x.Tables) + " tables"
 			}

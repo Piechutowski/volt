@@ -86,8 +86,8 @@ func (Runs) Index(r volt.Request) volt.Response {
 	})
 }
 
-// Show is everything the run measured, read in parallel by rt.All; a
-// missing run is the 404 of its lookup.
+// Show is everything the run measured, read in parallel by rt.All, then
+// the budgets its breaches name; a missing run is the 404 of its lookup.
 func (Runs) Show(r volt.Request, id int) volt.Response {
 	return volt.Then(rt.All(
 		db.RunGet(id),
@@ -100,13 +100,21 @@ func (Runs) Show(r volt.Request, id int) volt.Response {
 		db.SampleCount(db.SampleRunID.Eq(id), db.SampleStatus.Ge(400)),
 		db.BreachQuery(db.BreachRunID.Eq(id), db.BreachOrderBy(db.BreachID.Asc())),
 	), func(res []any) volt.Response {
-		return volt.Render(wire.RunDetail{
-			Run:        res[0].(db.Run),
-			Phases:     wire.PhaseRowsOf(res[1].([]db.MsLoad), res[2].([]db.MsCheck), res[3].([]db.MsVet), res[4].([]db.MsGenerate)),
-			Keystrokes: res[5].([]db.Keystroke),
-			Latency:    res[6].(db.Latency),
-			Failed:     res[7].(int64),
-			Breaches:   res[8].([]db.Breach),
+		breaches := res[8].([]db.Breach)
+		ids := make([]int, len(breaches))
+		for i, b := range breaches {
+			ids[i] = b.BudgetID
+		}
+		return volt.Then(db.BudgetQuery(db.BudgetID.InList(ids), db.BudgetOrderBy(db.BudgetID.Asc())), func(over []db.Budget) volt.Response {
+			return volt.Render(wire.RunDetail{
+				Run:        res[0].(db.Run),
+				Phases:     wire.PhaseRowsOf(res[1].([]db.MsLoad), res[2].([]db.MsCheck), res[3].([]db.MsVet), res[4].([]db.MsGenerate)),
+				Keystrokes: res[5].([]db.Keystroke),
+				Latency:    res[6].(db.Latency),
+				Failed:     res[7].(int64),
+				Breaches:   breaches,
+				Over:       over,
+			})
 		})
 	})
 }

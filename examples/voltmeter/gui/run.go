@@ -61,7 +61,7 @@ func (r *runScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) err
 		dirty = " with uncommitted changes"
 	}
 	heading(&r.title, fmt.Sprintf("Run %d at %s%s, %s", d.Run.ID, d.Run.Commit.Short(), dirty, d.Run.CreatedAt.Local().Format("2006-01-02 15:04")), 1.2)
-	judged, over := state.RunJudgedText(d, s.Budgets.List)
+	judged, over := state.RunJudgedText(d)
 	if over {
 		caption(&r.judged, judged, basicwidget.DangerTintColor())
 	} else {
