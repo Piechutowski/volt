@@ -31,6 +31,10 @@ type probeLine struct {
 	Widgets int               `json:"widgets"`
 	Budget  int               `json:"budget"`
 	Breach  int               `json:"breached"`
+	Trend   string            `json:"trend"`
+	Points  int               `json:"points"`
+	Fixture string            `json:"fixture"`
+	Counts  int               `json:"counts"`
 	Busy    bool              `json:"busy"`
 	Window  [2]int            `json:"window"`
 	Targets map[string][4]int `json:"targets"`
@@ -60,6 +64,10 @@ func (p *probe) emit(m *model) {
 		Notice:  s.Notice.Text,
 		Board:   s.Boards.Selected,
 		Budget:  s.Budgets.Selected,
+		Trend:   string(s.Trend.Phase) + "@" + strconv.Itoa(s.Trend.Tables),
+		Points:  len(s.Trends[s.Trend]),
+		Fixture: s.Thesis.Fixture,
+		Counts:  len(s.Thesis.Rows),
 		Busy:    m.inflight > 0 || len(m.results) > 0 || len(m.events) > 0,
 		Targets: maps.Clone(p.targets),
 	}
@@ -122,5 +130,19 @@ func (s *spots) placed(m *model) {
 	}
 	for name, r := range s.at {
 		m.probe.place(name, r)
+	}
+}
+
+func (s *spots) segmentsPlaced(m *model, name string, labels []string) {
+	r, ok := s.at[name]
+	if m == nil || m.probe == nil || !ok || len(labels) == 0 {
+		return
+	}
+	w := r.Dx() / len(labels)
+	for i, l := range labels {
+		seg := r
+		seg.Min.X += i * w
+		seg.Max.X = seg.Min.X + w
+		m.probe.place(name+":"+l, seg)
 	}
 }

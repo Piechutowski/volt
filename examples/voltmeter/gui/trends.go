@@ -20,8 +20,9 @@ type trendsScreen struct {
 	chart      chartView
 	table      basicwidget.Table[int]
 
-	rows []basicwidget.TableRow[int]
-	lay  layouts
+	rows  []basicwidget.TableRow[int]
+	lay   layouts
+	spots spots
 }
 
 func (t *trendsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -34,6 +35,7 @@ func (t *trendsScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) 
 	}
 	s := m.s
 	t.phase.PhaseSet(s.Trend.Phase, db.Phases)
+	t.phase.NameSet("trend_phase")
 	t.phase.OnPicked(func(context *guigui.Context, phase db.Phase) {
 		m.dispatch(state.TrendPick{Spot: state.Spot{Phase: phase, Tables: m.s.Trend.Tables}})
 	})
@@ -79,6 +81,11 @@ func (t *trendsScreen) Tick(context *guigui.Context, widgetBounds *guigui.Widget
 		for i, row := range t.rows {
 			m.probe.place(probeRow("trends", row.Value), t.table.ItemBounds(i))
 		}
+		var sizes []string
+		for _, n := range m.s.Sizes() {
+			sizes = append(sizes, strconv.Itoa(n))
+		}
+		t.spots.segmentsPlaced(m, "trend_sizes", sizes)
 	}
 	return nil
 }
@@ -87,11 +94,14 @@ func (t *trendsScreen) Layout(context *guigui.Context, widgetBounds *guigui.Widg
 	a := t.lay.reset()
 	u := basicwidget.UnitSize(context)
 	bar := a.row(u/2, fixed(&t.phase, 14*u), spacer(), fixed(&t.sizesLabel, 3*u), natural(&t.sizes))
+	recorded := t.spots.recorded(modelOf(context, t), layouter, func(name func(guigui.Widget, string)) {
+		name(&t.sizes, "trend_sizes")
+	})
 	padded(a.column(u/2,
 		a.nested(bar, guigui.FixedSize(u*3/2)),
 		flex(&t.chart, 3),
 		flex(&t.table, 2),
-	), u/2).LayoutWidgets(context, widgetBounds.Bounds(), layouter)
+	), u/2).LayoutWidgets(context, widgetBounds.Bounds(), recorded)
 }
 
 type thesisScreen struct {
@@ -104,6 +114,7 @@ type thesisScreen struct {
 	rows     []basicwidget.TableRow[string]
 	subjects guigui.WidgetSlice[*basicwidget.Text]
 	lay      layouts
+	spots    spots
 }
 
 func (t *thesisScreen) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
@@ -156,5 +167,12 @@ func (t *thesisScreen) Layout(context *guigui.Context, widgetBounds *guigui.Widg
 		a.nested(a.row(u/2, fixed(&t.fixture, 14*u), spacer()), guigui.FixedSize(u*3/2)),
 		flex(&t.chart, 3),
 		flex(&t.table, 2),
-	), u/2).LayoutWidgets(context, widgetBounds.Bounds(), layouter)
+	), u/2).LayoutWidgets(context, widgetBounds.Bounds(), t.spots.recorded(modelOf(context, t), layouter, func(name func(guigui.Widget, string)) {
+		name(&t.fixture, "thesis_fixture")
+	}))
+}
+
+func (t *thesisScreen) Tick(context *guigui.Context, widgetBounds *guigui.WidgetBounds) error {
+	t.spots.segmentsPlaced(modelOf(context, t), "thesis_fixture", state.Fixtures)
+	return nil
 }

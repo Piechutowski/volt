@@ -20,6 +20,10 @@ import (
 )
 
 type probeLine struct {
+	Trend   string            `json:"trend"`
+	Points  int               `json:"points"`
+	Fixture string            `json:"fixture"`
+	Counts  int               `json:"counts"`
 	Screen  string            `json:"screen"`
 	Run     int               `json:"run"`
 	Loaded  bool              `json:"loaded"`
@@ -352,3 +356,42 @@ func TestWindowHandlersDriveBoardsAndBudgets(t *testing.T) {
 }
 
 func budgetRow(id int) string { return "budgets:" + strconv.Itoa(id) }
+
+// TestWindowHandlersDriveTrendsAndThesis drives the trend and thesis
+// screens by pointer: the phase picker and the size control pick the
+// spot the trend follows, a trend row opens its run, and the fixture
+// control picks the fixture whose counts the thesis shows.
+func TestWindowHandlersDriveTrendsAndThesis(t *testing.T) {
+	e := envStart(t)
+	c := e.gob(0)
+	first := runUpload(t, c, sweep("ae000001", []int{2, 4}, 1)).Run.ID
+	runUpload(t, c, sweep("ae000002", []int{2, 4}, 2))
+	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	resp, err := c.APIThesisRecord(bg, app.ThesisUpload{Commits: []app.ThesisCommit{
+		{SHA: "1111aaaa", Subject: "Fold the migrations", Author: "Ada", At: at, Counts: []app.ThesisCount{{Fixture: "itest/blog", VoltLines: 80, HandLines: 120, GenLines: 3000}}},
+		{SHA: "2222bbbb", Subject: "Add Voltmeter", Author: "Grace", At: at.Add(time.Hour), Counts: []app.ThesisCount{{Fixture: "itest/blog", VoltLines: 82, HandLines: 118, GenLines: 3050}, {Fixture: "examples/voltmeter", VoltLines: 400, HandLines: 900, GenLines: 12000}}},
+	}})
+	replyRead(t, resp, err, http.StatusCreated, nil)
+	w := windowOpen(t, e, "ada@voltmeter.test")
+
+	w.until("the runs list", func(l probeLine) bool { return l.Screen == "Runs" && has("screen:Trends")(l) })
+	w.click("screen:Trends")
+	w.until("the trend controls", func(l probeLine) bool {
+		return l.Screen == "Trends" && has("trend_phase:vet")(l) && has("trend_sizes:4")(l)
+	})
+	w.click("trend_phase:vet")
+	w.until("the vet trend", func(l probeLine) bool { return strings.HasPrefix(l.Trend, "vet@") && l.Points == 2 })
+	w.click("trend_sizes:4")
+	w.until("the vet trend at 4 tables, both runs", func(l probeLine) bool {
+		return l.Trend == "vet@4" && l.Points == 2 && has(fmt.Sprintf("trends:%d", first))(l)
+	})
+	w.click(fmt.Sprintf("trends:%d", first))
+	w.until("the first run opened from its trend row", func(l probeLine) bool { return l.Screen == "Run" && l.Run == first && l.Loaded })
+
+	w.click("screen:Thesis")
+	w.until("the blog fixture's counts", func(l probeLine) bool {
+		return l.Screen == "Thesis" && l.Fixture == "itest/blog" && l.Counts == 2 && has("thesis_fixture:examples/voltmeter")(l)
+	})
+	w.click("thesis_fixture:examples/voltmeter")
+	w.until("the voltmeter fixture's counts", func(l probeLine) bool { return l.Fixture == "examples/voltmeter" && l.Counts == 1 })
+}
