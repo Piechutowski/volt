@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voltmeter</title>
+<link rel="stylesheet" href="voltmeter.css">
+</head>
+<body>
+<header>
+<h1>Voltmeter</h1>
+<p>Volt measured by Volt: the profiling sweep, the keystroke benchmark, the thesis line counts and the latency of these very routes.</p>
+</header>
+<main>
+<section>
+<h2>Runs</h2>
+<table id="runs">
+<thead><tr><th>Run</th><th>Commit</th><th>Machine</th><th>Tag</th><th>Stored</th><th>Report</th></tr></thead>
+<tbody><tr><td colspan="6">Loading the runs.</td></tr></tbody>
+</table>
+</section>
+<section>
+<h2>Routes</h2>
+<p>The JSON API lives under <code>/api</code>; every route also speaks GOB to the generated Go client. Each run has a printable report under <code>/reports/runs/ID</code> and a CSV export beside it.</p>
+</section>
+</main>
+<script>
+"use strict";
+(function () {
+  var body = document.querySelector("#runs tbody");
+  function cell(row, text) {
+    var td = document.createElement("td");
+    td.textContent = text;
+    row.appendChild(td);
+    return td;
+  }
+  fetch("/api/runs/listed", {headers: {"Accept": "application/json"}})
+    .then(function (r) { return r.json(); })
+    .then(function (runs) {
+      body.textContent = "";
+      if (!runs || runs.length === 0) {
+        var tr = document.createElement("tr");
+        cell(tr, "No run has been collected yet.").colSpan = 6;
+        body.appendChild(tr);
+        return;
+      }
+      runs.forEach(function (run) {
+        var tr = document.createElement("tr");
+        cell(tr, String(run.id));
+        cell(tr, run.commit.slice(0, 12) + (run.dirty ? "+dirty" : ""));
+        cell(tr, run.machine_cpu + ", " + run.machine_os);
+        cell(tr, run.tag_name === null ? "" : run.tag_name);
+        cell(tr, run.created_at);
+        var a = document.createElement("a");
+        a.href = "/reports/runs/" + run.id;
+        a.textContent = "report";
+        cell(tr, "").appendChild(a);
+        body.appendChild(tr);
+      });
+    })
+    .catch(function (err) {
+      body.textContent = "";
+      var tr = document.createElement("tr");
+      cell(tr, "The runs did not load: " + err).colSpan = 6;
+      body.appendChild(tr);
+    });
+})();
+</script>
+</body>
+</html>
