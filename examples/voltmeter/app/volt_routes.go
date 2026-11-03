@@ -37,6 +37,7 @@ var Table = []volt.Route{
 	{Method: "GET", Pattern: "/api/tags/{slug}", Spelled: "/api/tags/:slug", Query: "db.TagGet", Helper: "PathAPITag", Params: []volt.RouteParam{{Name: "slug", Type: "string"}}},
 	{Method: "PATCH", Pattern: "/api/tags/{slug}", Spelled: "/api/tags/:slug", Query: "db.TagUpdate", Params: []volt.RouteParam{{Name: "slug", Type: "string"}}},
 	{Method: "DELETE", Pattern: "/api/tags/{slug}", Spelled: "/api/tags/:slug", Query: "db.TagDelete", Params: []volt.RouteParam{{Name: "slug", Type: "string"}}},
+	{Method: "GET", Pattern: "/api/users", Spelled: "/api/users", Query: "db.UserList", Helper: "PathAPIUsers"},
 	{Method: "GET", Pattern: "/api/budgets", Spelled: "/api/budgets", Controller: "Budgets", Action: "Index", Helper: "PathAPIBudgets"},
 	{Method: "POST", Pattern: "/api/budgets", Spelled: "/api/budgets", Controller: "Budgets", Action: "Create"},
 	{Method: "GET", Pattern: "/api/budgets/{id}", Spelled: "/api/budgets/:id(int)", Controller: "Budgets", Action: "Show", Helper: "PathAPIBudget", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},

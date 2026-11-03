@@ -42,6 +42,7 @@ scope / [pipe: api, error_handler: Errors] {
     get /fleet db.MachineFleet
 
     resources db.tags [default]
+    resources db.users [default, only: (index)]
 
     resources db.budgets [api, only: (index, show, create)]
     patch /budgets/:id(int) Budgets.Update [name: budget_ceiling, body: db.BudgetUpdate(id), only: (max_ms)]

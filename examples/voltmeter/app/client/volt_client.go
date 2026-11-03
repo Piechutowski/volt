@@ -166,6 +166,12 @@ func (c *Client) APIDeleteTag(ctx context.Context, slug string) error {
 	return c.Do(ctx, "DELETE", volt.URL("/api/tags/"+volt.Seg(slug)), nil, nil)
 }
 
+func (c *Client) APIUsers(ctx context.Context) ([]db.User, error) {
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/users"), nil, &voltOut)
+	return voltOut, voltErr
+}
+
 func (c *Client) APIBudgets(ctx context.Context) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/api/budgets"), nil)
 }

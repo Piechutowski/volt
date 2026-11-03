@@ -274,6 +274,7 @@ func ReadCalls(t Targets) []Call {
 		get("/api/fleet", app.PathAPIMachineFleet()),
 		get("/api/tags", app.PathAPITags()),
 		get("/api/tags/{slug}", app.PathAPITag(t.Tag)),
+		get("/api/users", app.PathAPIUsers()),
 		get("/api/budgets", app.PathAPIBudgets()),
 		get("/api/budgets/{id}", app.PathAPIBudget(t.Budget)),
 		get("/api/phases/load", app.PathAPIPhaseMsLoadRows(q("run", t.Run))),

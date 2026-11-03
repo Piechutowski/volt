@@ -297,6 +297,15 @@ func register(mux *http.ServeMux, c Controllers) {
 		})
 	}, errHandlerErrors, voltPerform, volt.Params("slug"))))
 
+	mux.Handle("GET /api/users", pipe0(volt.Handler("GET /api/users", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.UserList(), func(voltOut []db.User) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
+
 	mux.Handle("GET /api/budgets", pipe0(volt.Handler("GET /api/budgets", func(r volt.Request) volt.Response {
 		return c.Budgets.Index(r)
 	}, errHandlerErrors, voltPerform)))

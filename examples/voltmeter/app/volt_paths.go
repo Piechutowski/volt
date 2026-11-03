@@ -110,6 +110,10 @@ func PathAPITag(slug string, opts ...volt.URLOption) string {
 	return volt.URL("/api/tags/"+volt.Seg(slug), opts...)
 }
 
+func PathAPIUsers(opts ...volt.URLOption) string {
+	return volt.URL("/api/users", opts...)
+}
+
 func PathAPIBudgets(opts ...volt.URLOption) string {
 	return volt.URL("/api/budgets", opts...)
 }
