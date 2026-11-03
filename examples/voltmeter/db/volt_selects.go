@@ -523,3 +523,116 @@ const voltRunAnnotatedSQL = `SELECT "id", "commit", "dirty", "machine_id", "tag"
 func RunAnnotated() rt.Query[Run] {
 	return rt.Query[Run]{SQL: voltRunAnnotatedSQL, Args: nil, Scan: voltRunScan}
 }
+
+type OnSystem struct {
+	ID        int          `db:"id" json:"id"`
+	Commit    units.Commit `db:"commit" json:"commit"`
+	MachineOs string       `db:"machine_os" json:"machine_os"`
+}
+
+func voltOnSystemScan(r rt.Row) (OnSystem, error) {
+	var voltV OnSystem
+	voltErr := r.Scan(&voltV.ID, &voltV.Commit, &voltV.MachineOs)
+	return voltV, voltErr
+}
+
+const voltRunOnSystemSQL = `SELECT "runs"."id", "runs"."commit", "machine"."os" FROM "runs" INNER JOIN "machines" AS "machine" ON "machine"."id" = "runs"."machine_id" WHERE "machine"."os" = ? ORDER BY "runs"."id" ASC`
+
+func RunOnSystem(os string) rt.Query[OnSystem] {
+	return rt.Query[OnSystem]{SQL: voltRunOnSystemSQL, Args: []any{os}, Scan: voltOnSystemScan}
+}
+
+const voltLineCountOutgrownSQL = `SELECT "sha", "fixture", "volt_lines", "hand_lines", "gen_lines" FROM "line_counts" WHERE ("gen_lines" > "hand_lines" AND NOT ("fixture" IN (?))) ORDER BY "sha" ASC`
+
+func LineCountOutgrown() rt.Query[LineCount] {
+	return rt.Query[LineCount]{SQL: voltLineCountOutgrownSQL, Args: []any{"examples/voltmeter"}, Scan: voltLineCountScan}
+}
+
+const voltRunUncommittedSQL = `SELECT "id", "commit", "dirty", "machine_id", "tag", "baseline_id", "note", "created_at" FROM "runs" WHERE "dirty" = ? ORDER BY "id" ASC`
+
+func RunUncommitted() rt.Query[Run] {
+	return rt.Query[Run]{SQL: voltRunUncommittedSQL, Args: []any{true}, Scan: voltRunScan}
+}
+
+const voltCommitAddedSQL = `SELECT "sha", "subject", "author", "at" FROM "commits" WHERE ("subject" LIKE ? AND "at" >= ?) ORDER BY "at" ASC`
+
+func CommitAdded(since time.Time) rt.Query[Commit] {
+	return rt.Query[Commit]{SQL: voltCommitAddedSQL, Args: []any{"Add%", since}, Scan: voltCommitScan}
+}
+
+const voltSampleQuickSQL = `SELECT "id", "run_id", "route", "status", "ms", "at" FROM "samples" WHERE ("ms" < ? AND "status" = ? AND "route" != ?) ORDER BY "id" ASC`
+
+func SampleQuick() rt.Query[Sample] {
+	return rt.Query[Sample]{SQL: voltSampleQuickSQL, Args: []any{2.5, 200, "/runs/:id"}, Scan: voltSampleScan}
+}
+
+type Churn struct {
+	RunID   int     `db:"run_id" json:"run_id"`
+	Tables  int     `db:"tables" json:"tables"`
+	Garbage float64 `db:"garbage" json:"garbage"`
+	Moved   float64 `db:"moved" json:"moved"`
+}
+
+func voltChurnScan(r rt.Row) (Churn, error) {
+	var voltV Churn
+	voltErr := r.Scan(&voltV.RunID, &voltV.Tables, &voltV.Garbage, &voltV.Moved)
+	return voltV, voltErr
+}
+
+const voltMsGenerateChurnSQL = `SELECT "run_id", "tables", (("alloc_mb" - "heap_mb") * ?) AS "garbage", ("alloc_mb" + "output_mb") AS "moved" FROM "ms_generate" WHERE "run_id" = ? ORDER BY "tables" ASC`
+
+func MsGenerateChurn(scale float64, run int) rt.Query[Churn] {
+	return rt.Query[Churn]{SQL: voltMsGenerateChurnSQL, Args: []any{scale, run}, Scan: voltChurnScan}
+}
+
+type Span struct {
+	First       rt.Null[time.Time] `db:"first" json:"first"`
+	Last        rt.Null[time.Time] `db:"last" json:"last"`
+	FirstAuthor rt.Null[string]    `db:"first_author" json:"first_author"`
+	LastSubject rt.Null[string]    `db:"last_subject" json:"last_subject"`
+}
+
+func voltSpanScan(r rt.Row) (Span, error) {
+	var voltV Span
+	voltErr := r.Scan(&voltV.First, &voltV.Last, &voltV.FirstAuthor, &voltV.LastSubject)
+	return voltV, voltErr
+}
+
+const voltCommitSpanSQL = `SELECT min("at") AS "first", max("at") AS "last", min("author") AS "first_author", max("subject") AS "last_subject" FROM "commits"`
+
+func CommitSpan() rt.Lookup[Span] {
+	return rt.Lookup[Span]{SQL: voltCommitSpanSQL, Args: nil, Scan: voltSpanScan}
+}
+
+type Names struct {
+	ID   int    `db:"id" json:"id"`
+	Name string `db:"name" json:"name"`
+}
+
+func voltNamesScan(r rt.Row) (Names, error) {
+	var voltV Names
+	voltErr := r.Scan(&voltV.ID, &voltV.Name)
+	return voltV, voltErr
+}
+
+const voltDashboardNamesSQL = `SELECT "id", "name" FROM "dashboards" WHERE "owner_id" = ? ORDER BY "name" ASC`
+
+func DashboardNames(owner int) rt.With[Names, Widget, int, NamesWithWidgets] {
+	return rt.With[Names, Widget, int, NamesWithWidgets]{
+		Parent:    rt.Query[Names]{SQL: voltDashboardNamesSQL, Args: []any{owner}, Scan: voltNamesScan},
+		Child:     voltDashboardNamesChildrenSQL,
+		ChildScan: voltWidgetScan,
+		ParentKey: func(voltP Names) int { return voltP.ID },
+		ChildKey:  func(voltC Widget) int { return voltC.DashboardID },
+		Build: func(voltP Names, voltCs []Widget) NamesWithWidgets {
+			return NamesWithWidgets{Names: voltP, Widgets: voltCs}
+		},
+	}
+}
+
+type NamesWithWidgets struct {
+	Names
+	Widgets []Widget
+}
+
+const voltDashboardNamesChildrenSQL = `SELECT "id", "dashboard_id", "position", "phase", "tables" FROM "widgets" WHERE "dashboard_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`

@@ -5,8 +5,30 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"strings"
+	"time"
 )
+
+func timeOfText(text string) (time.Time, error) {
+	layouts := [...]string{
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02T15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02T15:04:05.999999999",
+		"2006-01-02 15:04",
+		"2006-01-02T15:04",
+		"2006-01-02",
+	}
+	s := strings.TrimSuffix(text, "Z")
+	for _, layout := range layouts {
+		if t, err := time.ParseInLocation(layout, s, time.UTC); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("rt: %q is no date/time SQLite writes", text)
+}
 
 // Null is the representation of a nullable column: a value
 // plus a validity bit, never a pointer. The zero value is NULL. JSON shows
@@ -36,9 +58,29 @@ func (n Null[T]) Or(def T) T {
 // Scan implements sql.Scanner through database/sql's rules via sql.Null,
 // but converts a value of bool kind itself unless the type implements
 // sql.Scanner, since database/sql scans an integer into a bool and not
-// into a named bool (spec §types), and reads a valid []byte through
-// Bytes, never nil (spec §columns).
+// into a named bool (spec §types), reads a valid []byte through
+// Bytes, never nil (spec §columns), and reads a time.Time from the text
+// SQLite answers for an expression over a date/time column, such as
+// min(at), which carries no declared type for the driver to convert by
+// (spec §selects-over-groups, rule 9).
 func (n *Null[T]) Scan(src any) error {
+	if t, ok := any(&n.V).(*time.Time); ok && src != nil {
+		var text string
+		switch v := src.(type) {
+		case string:
+			text = v
+		case []byte:
+			text = string(v)
+		}
+		if text != "" {
+			parsed, err := timeOfText(text)
+			if err != nil {
+				return err
+			}
+			*t, n.Valid = parsed, true
+			return nil
+		}
+	}
 	if b, ok := any(&n.V).(*[]byte); ok && src != nil {
 		if err := bytesScan(b, src); err != nil {
 			return err

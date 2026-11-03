@@ -51,14 +51,16 @@ var commentRE = regexp.MustCompile(`(?s)//[^\n]*|/\*.*?\*/`)
 // lexicon: no lexical error; line and block comments that leave nothing
 // but whitespace between tokens; identifiers, numbers, expression literals,
 // single-line strings with an escape and a multi-line string whose
-// indentation is stripped; the literal words false and null; >=, <= and
-// != each one token by the longest match, never < or > followed by =;
-// and every element starting in the first column, the package clause
-// first (spec §lexical-structure, §program-structure).
+// indentation is stripped; the literal words true, false and null; a
+// decimal number; every operator, + and - among them; >=, <= and != each
+// one token by the longest match, never < or > followed by =; and every
+// element starting in the first column, the package clause first (spec
+// §lexical-structure, §program-structure). An exponent, a negative
+// literal and escapes other than the quote are not used.
 func TestSourcesSpeakTheLexicon(t *testing.T) {
 	kinds := map[vtoken.Kind]int{}
 	literals := map[string]bool{}
-	var lineComments, blockComments, escapes, multis int
+	var lineComments, blockComments, escapes, multis, decimals int
 	for name, src := range voltSources(t) {
 		toks, errs := scanner.Scan(name, src)
 		for _, e := range errs {
@@ -95,8 +97,12 @@ func TestSourcesSpeakTheLexicon(t *testing.T) {
 			}
 			switch tk.Kind {
 			case vtoken.IDENT:
-				if tk.Val == "false" || tk.Val == "null" {
+				if tk.Val == "true" || tk.Val == "false" || tk.Val == "null" {
 					literals[tk.Val] = true
+				}
+			case vtoken.NUMBER:
+				if strings.Contains(tk.Val, ".") {
+					decimals++
 				}
 			case vtoken.STRING:
 				if tk.Multi {
@@ -125,7 +131,10 @@ func TestSourcesSpeakTheLexicon(t *testing.T) {
 	if multis == 0 || escapes == 0 {
 		t.Errorf("multi-line strings %d, escaped strings %d", multis, escapes)
 	}
-	for _, w := range []string{"false", "null"} {
+	if decimals == 0 {
+		t.Error("no decimal number in the sources")
+	}
+	for _, w := range []string{"true", "false", "null"} {
 		if !literals[w] {
 			t.Errorf("no %s literal in the sources", w)
 		}
@@ -134,7 +143,7 @@ func TestSourcesSpeakTheLexicon(t *testing.T) {
 		vtoken.IDENT, vtoken.STRING, vtoken.NUMBER, vtoken.FUNCEXPR,
 		vtoken.LBRACE, vtoken.RBRACE, vtoken.LBRACKET, vtoken.RBRACKET, vtoken.LPAREN, vtoken.RPAREN,
 		vtoken.COMMA, vtoken.COLON, vtoken.DOT, vtoken.TILDE, vtoken.STAR, vtoken.SLASH,
-		vtoken.LT, vtoken.GT, vtoken.BACKSLASH, vtoken.EQ, vtoken.GE, vtoken.LE, vtoken.NEQ, vtoken.PLUS,
+		vtoken.LT, vtoken.GT, vtoken.BACKSLASH, vtoken.EQ, vtoken.GE, vtoken.LE, vtoken.NEQ, vtoken.PLUS, vtoken.MINUS,
 	} {
 		if kinds[k] == 0 {
 			t.Errorf("no %s token in the sources", k)

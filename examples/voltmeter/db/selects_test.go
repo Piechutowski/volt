@@ -3,6 +3,7 @@ package db_test
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/Piechutowski/volt/examples/voltmeter/db"
 	"github.com/Piechutowski/volt/examples/voltmeter/units"
@@ -244,4 +245,70 @@ func TestPredicateAlgebra(t *testing.T) {
 	equal(t, "RunOthers(machine, r1)", ids(others, func(r db.Run) int { return r.ID }), []int{r3, r2})
 	annotated := do(t, d, db.RunAnnotated())
 	equal(t, "RunAnnotated", ids(annotated, func(r db.Run) int { return r.ID }), []int{r2})
+}
+
+// TestSelectFormsTheOthersLeaveOut proves the forms of a predicate and a
+// projection the other selects do not use, value by value (spec
+// §predicates, §selects-over-groups): a qualified column of the joined
+// machine, two columns compared, a negated membership of string
+// literals, true, a float and an int literal, a string literal pattern
+// and inequality, a date/time bound, arithmetic with a parameter and
+// both additive operators, min and max of text and time, and a with
+// select with a projection.
+func TestSelectFormsTheOthersLeaveOut(t *testing.T) {
+	d := dbOpen(t)
+	w := worldSeed(t, d)
+	r1, r2 := w.runs[0], w.runs[1]
+
+	on := do(t, d, db.RunOnSystem("linux"))
+	if !slices.Equal(ids(on, func(r db.OnSystem) int { return r.ID }), []int{1, 2, 3}) || on[1].MachineOs != "linux" || on[1].Commit != "bbbb2222" {
+		t.Errorf("RunOnSystem(linux) = %+v", on)
+	}
+	if got := do(t, d, db.RunOnSystem("darwin")); len(got) != 0 {
+		t.Errorf("RunOnSystem(darwin) = %+v", got)
+	}
+
+	do(t, d, db.LineCountCreate(db.LineCountNew().ShaSet("aaaa1111").FixtureSet("examples/tiny").VoltLinesSet(1).HandLinesSet(50).GenLinesSet(10)))
+	outgrown := do(t, d, db.LineCountOutgrown())
+	var got []string
+	for _, lc := range outgrown {
+		got = append(got, lc.Sha+" "+lc.Fixture)
+	}
+	if want := []string{"aaaa1111 itest/blog", "bbbb2222 itest/blog", "cccc3333 itest/blog"}; !slices.Equal(got, want) {
+		t.Errorf("LineCountOutgrown = %v, want %v: the tiny fixture has more hand lines, the voltmeter fixture is left out", got, want)
+	}
+
+	equal(t, "RunUncommitted", ids(do(t, d, db.RunUncommitted()), func(r db.Run) int { return r.ID }), []int{r2.ID})
+
+	sha := func(cs []db.Commit) []string {
+		var out []string
+		for _, c := range cs {
+			out = append(out, c.Sha)
+		}
+		return out
+	}
+	if got := sha(do(t, d, db.CommitAdded(w.commits[0].At))); !slices.Equal(got, []string{"aaaa1111", "cccc3333"}) {
+		t.Errorf("CommitAdded since the first commit = %v", got)
+	}
+	if got := sha(do(t, d, db.CommitAdded(w.commits[0].At.Add(time.Second)))); !slices.Equal(got, []string{"cccc3333"}) {
+		t.Errorf("CommitAdded a second after the first commit = %v", got)
+	}
+
+	equal(t, "SampleQuick", ids(do(t, d, db.SampleQuick()), func(s db.Sample) int { return s.ID }), []int{1, 2})
+
+	churn := do(t, d, db.MsGenerateChurn(1024, r1.ID))
+	want := []db.Churn{{RunID: r1.ID, Tables: 2, Garbage: -1024, Moved: 3.5}, {RunID: r1.ID, Tables: 4, Garbage: -2048, Moved: 7}, {RunID: r1.ID, Tables: 8, Garbage: -4096, Moved: 14}}
+	if !slices.Equal(churn, want) {
+		t.Errorf("MsGenerateChurn = %+v, want %+v", churn, want)
+	}
+
+	span := do(t, d, db.CommitSpan())
+	if !span.First.V.Equal(w.commits[0].At) || !span.Last.V.Equal(w.commits[2].At) || span.FirstAuthor.V != "ADA" || span.LastSubject.V != "Remove the project element" {
+		t.Errorf("CommitSpan = %+v; min and max of text compare bytes, so ADA sorts before Ada", span)
+	}
+
+	names := do(t, d, db.DashboardNames(1))
+	if len(names) != 2 || names[0].Name != "Empty" || len(names[0].Widgets) != 0 || names[1].Name != "Overview" || len(names[1].Widgets) != 2 || names[1].Widgets[0].Position != 1 {
+		t.Errorf("DashboardNames(1) = %+v", names)
+	}
 }

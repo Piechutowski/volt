@@ -55,3 +55,17 @@ select slow          for samples where of_run and (status >= 400 or ms > :ms) [o
 select server_errors for samples where of_run and status in (500, 502, 503, 504) [order: (id asc)]
 select others        for runs where machine_id = :machine and id != :id [order: (id desc)]
 select annotated     for runs where note is not null [order: (id asc)]
+
+// The forms no select above uses: a qualified column of a join in the
+// predicate, two columns compared, a negated membership, a literal of
+// each kind, a date/time bound, arithmetic with a parameter and both
+// additive operators, min and max over text and time, and a with
+// select that projects.
+select on_system (id, commit, machine.os) for runs join machine where machine.os = :os [order: (id asc)]
+select outgrown  for line_counts where gen_lines > hand_lines and not fixture in ("examples/voltmeter") [order: (sha asc)]
+select uncommitted for runs where dirty = true [order: (id asc)]
+select added     for commits where subject like "Add%" and at >= :since [order: (at asc)]
+select quick     for samples where ms < 2.5 and status = 200 and route != "/runs/:id" [order: (id asc)]
+select churn     (run_id, tables, (alloc_mb - heap_mb) * :scale as garbage, alloc_mb + output_mb as moved) for ms_generate where of_run [order: (tables asc)]
+select span      (min(at) as first, max(at) as last, min(author) as first_author, max(subject) as last_subject) for commits
+select names     (id, name) for dashboards with widgets where owner_id = :owner [order: (name asc)]
