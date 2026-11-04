@@ -116,7 +116,7 @@ func (x *SettingList) Get(name string) *Setting {
 type Setting struct {
 	NameTok token.Token // the name as written
 	Name    string
-	Value   Node // nil for flags; BasicLit, Ident, FuncExpr, NegNumber, QualIdent, IdentList, or RefEndpoint for ref:
+	Value   Node // nil for flags; BasicLit, Ident, FuncExpr, NegNumber, QualIdent, IdentList, Param, a query call, or RefEndpoint for ref:
 	endPos  token.Position
 }
 

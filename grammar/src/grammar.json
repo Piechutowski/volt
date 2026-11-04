@@ -4389,6 +4389,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "query_param"
+        },
+        {
+          "type": "SYMBOL",
           "name": "_name"
         }
       ]

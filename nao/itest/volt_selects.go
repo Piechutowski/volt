@@ -284,6 +284,58 @@ func UserEveryone() rt.With[User, Order, int, UserWithOrders] {
 
 const voltUserEveryoneChildrenSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "user_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
+const voltPageViewFirstDaysSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" ORDER BY "day" ASC, "id" ASC LIMIT ?`
+
+func PageViewFirstDays() rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewFirstDaysSQL, Args: []any{2}, Scan: voltPageViewScan}
+}
+
+const voltLinkClickFirstDaysSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" ORDER BY "day" ASC, "id" ASC LIMIT ?`
+
+func LinkClickFirstDays() rt.Query[LinkClick] {
+	return rt.Query[LinkClick]{SQL: voltLinkClickFirstDaysSQL, Args: []any{2}, Scan: voltLinkClickScan}
+}
+
+const voltPageViewTopHitsSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE "site" = ? ORDER BY "hits" DESC, "id" ASC LIMIT ?`
+
+func PageViewTopHits(site string, limit int) rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewTopHitsSQL, Args: []any{site, limit}, Scan: voltPageViewScan, Err: rt.LimitCheck(limit)}
+}
+
+type TopSites struct {
+	Site  string `db:"site" json:"site"`
+	Total int    `db:"total" json:"total"`
+}
+
+func voltTopSitesScan(r rt.Row) (TopSites, error) {
+	var voltV TopSites
+	voltErr := r.Scan(&voltV.Site, &voltV.Total)
+	return voltV, voltErr
+}
+
+const voltPageViewTopSitesSQL = `SELECT "site", sum("hits") AS "total" FROM "page_views" GROUP BY "site" ORDER BY "total" DESC, "site" ASC LIMIT ?`
+
+func PageViewTopSites(limit int) rt.Query[TopSites] {
+	return rt.Query[TopSites]{SQL: voltPageViewTopSitesSQL, Args: []any{limit}, Scan: voltTopSitesScan, Err: rt.LimitCheck(limit)}
+}
+
+const voltUserNewestSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" ORDER BY "id" DESC LIMIT ?`
+
+func UserNewest(limit int) rt.With[User, Order, int, UserWithOrders] {
+	return rt.With[User, Order, int, UserWithOrders]{
+		Parent:    rt.Query[User]{SQL: voltUserNewestSQL, Args: []any{limit}, Scan: voltUserScan, Err: rt.LimitCheck(limit)},
+		Child:     voltUserNewestChildrenSQL,
+		ChildScan: voltOrderScan,
+		ParentKey: func(voltP User) int { return voltP.ID },
+		ChildKey:  func(voltC Order) int { return voltC.UserID },
+		Build: func(voltP User, voltCs []Order) UserWithOrders {
+			return UserWithOrders{User: voltP, Orders: voltCs}
+		},
+	}
+}
+
+const voltUserNewestChildrenSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "user_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+
 const voltUserStampedSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "created_at" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
 func UserStamped(stamps []time.Time) rt.Query[User] {

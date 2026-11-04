@@ -19,6 +19,12 @@ func UserSince(since time.Time) rt.Query[User] {
 	return rt.Query[User]{SQL: voltUserSinceSQL, Args: []any{since}, Scan: voltUserScan}
 }
 
+const voltUserLatestSQL = `SELECT "id", "email", "created_at" FROM "users" ORDER BY "id" DESC LIMIT ?`
+
+func UserLatest(limit int) rt.Query[User] {
+	return rt.Query[User]{SQL: voltUserLatestSQL, Args: []any{limit}, Scan: voltUserScan, Err: rt.LimitCheck(limit)}
+}
+
 const voltMsRevenueBrowseSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "year" = ? ORDER BY "id" ASC`
 
 func MsRevenueBrowse(year int) rt.Query[MsRevenue] {

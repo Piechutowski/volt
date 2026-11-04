@@ -161,6 +161,10 @@ func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t 
 	if fn.Lookup {
 		effect = "rt.Lookup"
 	}
+	check := ""
+	if fn.LimitParam != "" {
+		check = ", Err: rt.LimitCheck(" + fn.LimitParam + ")"
+	}
 	if w := fn.With; w != nil {
 		child, err := pl.Table(w.TableKey)
 		if err != nil {
@@ -178,7 +182,7 @@ func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t 
 		kind := fmt.Sprintf("rt.With[%s, %s, %s, %s]", row, child.Model, key.BaseType, w.RowType)
 		fmt.Fprintf(b, "func %s(%s) %s {\n", name, strings.TrimPrefix(sig.String(), ", "), kind)
 		fmt.Fprintf(b, "\treturn %s{\n", kind)
-		fmt.Fprintf(b, "\t\tParent:    rt.Query[%s]{SQL: %s, Args: %s, Scan: %s},\n", row, constName, argsList(args), naming.RowScan(row))
+		fmt.Fprintf(b, "\t\tParent:    rt.Query[%s]{SQL: %s, Args: %s, Scan: %s%s},\n", row, constName, argsList(args), naming.RowScan(row), check)
 		fmt.Fprintf(b, "\t\tChild:     %s,\n", withConst(t, fn))
 		fmt.Fprintf(b, "\t\tChildScan: %s,\n", child.Names.Scan)
 		fmt.Fprintf(b, "\t\tParentKey: func(voltP %s) %s { return voltP.%s },\n", row, key.BaseType, key.GoField)
@@ -188,7 +192,7 @@ func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t 
 		return nil
 	}
 	fmt.Fprintf(b, "func %s(%s) %s[%s] {\n", name, strings.TrimPrefix(sig.String(), ", "), effect, row)
-	fmt.Fprintf(b, "\treturn %s[%s]{SQL: %s, Args: %s, Scan: %s}\n}\n\n", effect, row, constName, argsList(args), naming.RowScan(row))
+	fmt.Fprintf(b, "\treturn %s[%s]{SQL: %s, Args: %s, Scan: %s%s}\n}\n\n", effect, row, constName, argsList(args), naming.RowScan(row), check)
 	return nil
 }
 

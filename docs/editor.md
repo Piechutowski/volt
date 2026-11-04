@@ -242,8 +242,8 @@ layer:
   migrations in name order ("migration 2 of 3") and whether it runs
   backward (§migrations); the project index answers it, so a
   migration alone in its own file counts its siblings.
-- A select hovers as its row types, its rendered `WHERE` and `ORDER
-  BY`, and its method signatures. A select kept unresolved by a column
+- A select hovers as its row types, its rendered `WHERE`, `ORDER BY`
+  and `LIMIT` with what each binds, and its method signatures. A select kept unresolved by a column
   of unknown type (§columns) hovers as its header, its row types with
   that field, nullable or not, spelled in its declared type and marked
   unknown, and one line naming the unknown columns; never an empty Go

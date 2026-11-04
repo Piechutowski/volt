@@ -468,7 +468,7 @@ then reads it as that keyword, so the error is reported once.
 |---|---|---|
 | element and block words | `table`, `table_partial`, `type`, `ref`, `records`, `group`, `pred`, `select`, `migration`, `pipeline`, `scope`, `indexes`, `validators` | §program-structure, §indexes, §validators |
 | package words | `package`, `import` | §projects-and-packages, §imports |
-| setting names | `pk`, `null`, `unique`, `index`, `autoincrement`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `group`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
+| setting names | `pk`, `null`, `unique`, `index`, `autoincrement`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `group`, `limit`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
 | referential actions | `cascade`, `restrict`, `set_null`, `set_default` | §relationships-ref |
 | resource actions | `index`, `new`, `create`, `show`, `edit`, `update`, `delete` | §the-action-table |
 | order directions | `asc`, `desc` | §selects-over-groups |
@@ -642,7 +642,7 @@ comment, `;`, `#` and `'` among them, is a lexical error. Their roles:
 | `{ }`   | element bodies and the blocks inside them                   |
 | `[ ]`   | settings lists, and the `[]` of the type `[]byte`           |
 | `( )`   | composite column lists (index keys, `table.(a, b)` endpoints), records column lists, group sets (§groups), select projections and their exclusion sets (§selects-over-groups), import blocks (§imports), a path parameter's type (§route-paths), validator arguments (§validators), the lists of `only:`, `except:`, `group:` and `order:` (§settings-whitelists), predicate grouping and `in` lists (§predicates) |
-| `:`     | a setting value, the body of `ref:`, a route parameter (§route-paths), a query parameter (§predicates) |
+| `:`     | a setting value, the body of `ref:`, a route parameter (§route-paths), a query parameter (§predicates), also as a select's `limit:` (§selects-over-groups) |
 | `,`     | separator inside `[ ]`, `( )` and record rows               |
 | `.`     | qualification: `table.column`, `pkg.Name` (§types), `pkg.name` (§imports), `Controller.Action` (§handler-references); three contiguous `.` end a wildcard, `:name...` (§route-paths) |
 | `~`     | `table_partial` injection prefix                               |
@@ -1868,7 +1868,8 @@ both.
 3. **The rule.** The network layer may use the data layer, never the
    reverse. The route files call a data package's queries and
    changesets, and the root `volt` package reads the data runtime's
-   refused write to choose its status (§formats). No data file and no
+   errors, a refused write, a row miss and a refused limit, to choose
+   its status (§formats). No data file and no
    package under `nao/` reaches the root `volt` package, the route
    generator `gen/router`, the generation driver `gen/model`, the
    language server or the tool, and `nao/rt` imports the standard
@@ -2563,6 +2564,10 @@ scope /api [pipe: api] {
    - every other parameter binds from the **query string** by name,
      parsed to its type; a missing or unparseable value is a 400 that
      names the parameter.
+   A select's `limit:` parameter (§selects-over-groups) is an `int`
+   and binds as one, from a path parameter of its name or the query
+   string; a value below 1 is refused by the query itself, a 400
+   (§formats).
    A parameter binds from the query string only when its type is
    `string`, `bool`, `int`, `float64` or `time.Time`, or a slice of one
    of those (a list parameter); a select with a parameter of any other
@@ -2655,8 +2660,9 @@ for a format suffix.
    (§data-and-network-layers): an `HTTPError` keeps its own; a refused
    write, the data runtime's `*rt.Invalid` (§changesets), is 409 when a
    `unique` field error is among its fields and 422 otherwise; a query's
-   row miss is 404; any other error has none and is the default
-   handler's 500. A rendered value is encoded before anything is
+   row miss is 404; a select's limit below 1 (`rt.ErrLimit`,
+   §selects-over-groups) is 400; any other error has none and is the
+   default handler's 500. A rendered value is encoded before anything is
    written, and the response carries its `Content-Length`. A 406, and
    a value the negotiated format cannot carry, such as an infinite
    float in JSON, or whose encoder panics, are failures like any
@@ -3135,7 +3141,7 @@ an element is an error on that element):
 | route | `name`, `timeout`, `body`, `only` |
 | resources | `api`, `only`, `except`, `param`, `singular`, `default` |
 | dataset | `strip`, `only`, `except` |
-| Select | `order`, `group` |
+| Select | `order`, `group`, `limit` |
 | `migration` | `irreversible`, `no_transaction` |
 
 The identifier-list value form `(a, b, c)` (production in Collected
@@ -3145,7 +3151,10 @@ dataset, a column list on a route (§request-bodies), the grouping
 columns of a select (§selects-over-groups). A select's
 `order:` takes its order list (§selects-over-groups). The query-call
 value form `pkg.Query(a)` is valid only as the value of a route's
-`body:`.
+`body:`. The parameter value form `:name` (§predicates) is valid only
+as the value of a select's `limit:`, which takes it or a positive
+integer (§selects-over-groups); a parameter as the value of any other
+setting is an error.
 
 ## Generation contract (informative)
 
@@ -3460,6 +3469,8 @@ select recent  (id, ts, value, metric.name, metric.unit) for points join metric 
 select hourly  (metric_id, ts / 3600 * 3600 as hour, avg(value) as mean, count() as n) for points where ts >= :since [group: (metric_id, hour), order: (hour asc)]
 select totals  (count() as n, max(value) as top) for points
 select board   for metrics with points where unit = :unit [order: (name asc)]
+select latest  for points where ts >= :since [order: (ts desc, id desc), limit: :limit]
+select peaks   (metric_id, max(value) as peak) for points [group: (metric_id), order: (peak desc), limit: 10]
 ```
 
 The clauses read in SQL order — name, columns, source, filter — and
@@ -3501,11 +3512,12 @@ the optional projection narrows the emitted columns.
    (§generated-query-surface) —
    `func <Model><SelectName>(<params>) rt.Query[<Row>]`
    — parameters in first-appearance order over the expanded
-   expression, each typed by §predicates; `<Row>` is the member's row
+   expression, each typed by §predicates, and the `limit:` parameter
+   last (rule 12); `<Row>` is the member's row
    type (the model itself when there is no projection); the
    emitted SQL is the runtime renderer's output (§predicates,
    rendering), `SELECT <projected columns> FROM <table> [WHERE …] [ORDER BY
-   …]` with positional `?` placeholders, the function binding its
+   …] [LIMIT ?]` with positional `?` placeholders, the function binding its
    parameters and the expression's literals in the order the text
    names them. A list parameter renders as `<column> IN (SELECT value
    FROM json_each(?))` and binds one JSON array (`rt.JSONList`), so
@@ -3612,7 +3624,7 @@ the optional projection narrows the emitted columns.
     once; a joined column goes in through an alias. A select that
     aggregates without `group:` yields exactly one row, so it is
     generated as an `rt.Lookup` of the row type rather than an
-    `rt.Query`, and `order:` on it is an error. `where` sees columns,
+    `rt.Query`, and `order:` and `limit:` on it are errors. `where` sees columns,
     never aliases, and there is no `having`: a filter over an aggregate
     is the one escape, a statement written in Go against the runtime
     (§generated-query-surface).
@@ -3638,6 +3650,36 @@ the optional projection narrows the emitted columns.
     runs for no parents, a parent without children carries an empty
     slice, and a NULL key never matches. One level, no projection of
     the children, and no `with` across a junction table.
+12. **`limit:`.** `limit:` keeps the first rows of the select in the
+    order `order:` sets. Its value is a positive integer literal,
+    `limit: 10`, or a parameter, `limit: :limit`, the one setting value
+    that may be a parameter (§settings-whitelists). The literal is
+    decimal digits whose value is at least 1 and fits `int64`, bound
+    in canonical form as a predicate's literal is (§predicates), so
+    `limit: 007` binds `7`. The parameter is an `int`, obeys the
+    parameter rules of §predicates, and names no other parameter of
+    the select; it joins the select's parameters after every
+    parameter the projection, the `where` clause and the other
+    settings read, so the signature ends with it: `func
+    PointLatest(since int, limit int) rt.Query[Point]`. Each of these
+    is an error: `limit:` without `order:`, since the rows kept would
+    be arbitrary; a literal below 1, since `LIMIT 0` keeps nothing and
+    SQLite reads a negative limit as none, a literal that does not fit
+    `int64`, and any other value; `limit:` on a select that yields one
+    row (rule 10),
+    which has nothing to cap; and a second `limit:`. The statement
+    ends in `LIMIT ?` after `ORDER BY`, the literal or the parameter
+    bound behind it (§predicates, rendering): each member's statement
+    of a group takes it, after `GROUP BY` it counts groups, and under
+    `with` it is the parent statement's, so it counts parents and each
+    keeps all its children. At run time a parameter below 1 makes the
+    function's effect carry `rt.ErrLimit` in `Err` (`Parent.Err` under
+    `with`), which the runner returns without running a statement
+    (§generated-query-surface): SQLite reads `LIMIT -1` as no limit at
+    all and would return every row. The error spine answers
+    `rt.ErrLimit` with 400 (§formats). A query route binds the
+    parameter like any other (§query-routes), and the generated client
+    method takes it (§generated-client).
 
 ---
 
@@ -4537,7 +4579,7 @@ migration column setting  = column setting
 
 (* setting value, extended (Part I §settings-lists): *)
 setting value  = (* schema-layer alternatives *) | ident list | order list
-               | query ref | query call ;
+               | query ref | query call | param ;
 ident list     = "(", name, { ",", name }, ")" ;
 ```
 
@@ -4545,7 +4587,9 @@ The `group decl`, `pred decl` and `select decl` productions — with the
 predicate expression grammar they share — are collected in §groups, §predicates
 and §selects-over-groups, and the validators block in §validators; they are not
 duplicated here. The `order list` that extends `setting value` above is the
-value of a Select's `order:` and is defined in §selects-over-groups.
+value of a Select's `order:` and is defined in §selects-over-groups; the
+`param` that extends it is the value of a Select's `limit:` and is
+defined in §predicates.
 
 All tokens of a `route path` and of a `package path` MUST be contiguous
 (§route-paths, §imports) — the grammar above is subject to that adjacency
@@ -4885,7 +4929,10 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    layer render when the function is called, so a rendering that
    fails (an `After` without an `OrderBy`) is a value carrying its
    error in `Err`, which the runner returns without running a
-   statement. `Create` and `Update` render from the changeset's marks
+   statement. A select whose `limit:` parameter is below 1 carries
+   `rt.ErrLimit` the same way: its function sets `Err` to
+   `rt.LimitCheck(n)`, nil for an `n` of at least 1
+   (§selects-over-groups). `Create` and `Update` render from the changeset's marks
    and end in `RETURNING` (§changesets). The runner maps a database
    refusal of a `Write` or a keyed `Delete` onto `*rt.Invalid`;
    `DeleteWhere` and `UpdateWhere` yield the driver's error.

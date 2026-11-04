@@ -17,6 +17,7 @@ scope / [pipe: api, error_handler: Errors] {
 		get /stats Admin.Stats {
 			totals db.UserTotals()
 			feed   db.UserFeed()
+			latest db.UserLatest(5)
 		}
 	}
 
@@ -50,6 +51,7 @@ scope / [pipe: api, error_handler: Errors] {
 		get    /since            db.UserSince
 		get    /totals           db.UserTotals
 		get    /feed             db.UserFeed
+		get    /latest           db.UserLatest
 		get    /roles/:userID(int)/:roleID(int) db.UserRoleGet
 		patch  /roles/:userID(int)/:roleID(int) db.UserRoleUpdate
 	}

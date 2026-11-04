@@ -13,6 +13,7 @@ table users {
 
 select picked for users where id in :ids [order: (id asc)]
 select since for users where created_at > :since [order: (id asc)]
+select latest for users [order: (id desc), limit: :limit]
 
 table profiles {
 	user_id int    [pk]

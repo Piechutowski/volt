@@ -22,7 +22,7 @@ var SettingNames = []string{
 	"required", "model", "name", "where", "delete", "update", "from",
 	"down", "irreversible", "no_transaction",
 	"pipe", "error_handler", "api", "only", "except", "param", "singular",
-	"strip", "order", "group", "as", "reverse", "timeout", "body",
+	"strip", "order", "group", "limit", "as", "reverse", "timeout", "body",
 }
 
 // RefActions are the values of delete: and update: (spec §keywords).

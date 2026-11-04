@@ -314,7 +314,7 @@ type Opt[M any] interface{ optApply(*querySpec[M]) }
 type querySpec[M any] struct {
 	preds     []Pred[M]
 	orders    []Order[M]
-	limit     int
+	limit     any
 	limitSet  bool
 	offset    int
 	offsetSet bool
@@ -334,7 +334,7 @@ func (o orderOpt[M]) optApply(s *querySpec[M]) { s.orders = append(s.orders, o.t
 // OrderBy options append.
 func OrderBy[M any](terms ...Order[M]) Opt[M] { return orderOpt[M]{terms: terms} }
 
-type limitOpt[M any] struct{ n int }
+type limitOpt[M any] struct{ n any }
 
 func (o limitOpt[M]) optApply(s *querySpec[M]) { s.limit, s.limitSet = o.n, true }
 
@@ -342,6 +342,26 @@ func (o limitOpt[M]) optApply(s *querySpec[M]) { s.limit, s.limitSet = o.n, true
 // is bound as a parameter, so page size does not change the SQL text
 // (one cached statement).
 func Limit[M any](n int) Opt[M] { return limitOpt[M]{n: n} }
+
+// LimitVal is a limit over a value slot (spec §selects-over-groups), the
+// option a select's limit: lowers to: the literal or the parameter the
+// generated function binds behind LIMIT ?.
+func LimitVal(v any) Opt[Gen] { return limitOpt[Gen]{n: v} }
+
+// ErrLimit is what a select's effect carries when its limit parameter is
+// below 1 (spec §selects-over-groups): SQLite reads a negative LIMIT as no
+// limit at all, so the runner returns it without running a statement.
+var ErrLimit = errors.New("rt: a limit is at least 1")
+
+// LimitCheck is nil for a limit of at least 1 and ErrLimit, naming n,
+// otherwise (spec §selects-over-groups); a generated select sets its
+// effect's Err to it.
+func LimitCheck(n int) error {
+	if n >= 1 {
+		return nil
+	}
+	return fmt.Errorf("%w, not %d", ErrLimit, n)
+}
 
 type offsetOpt[M any] struct{ n int }
 

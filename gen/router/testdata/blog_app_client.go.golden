@@ -134,6 +134,13 @@ func (c *Client) APIUserFeed(ctx context.Context) ([]db.UserWithPosts, error) {
 	return voltOut, voltErr
 }
 
+func (c *Client) APIUserLatest(ctx context.Context, limit int) ([]db.User, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/latest", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
 func (c *Client) APIUserRoleGet(ctx context.Context, userID int, roleID int) (db.UserRole, error) {
 	var voltOut db.UserRole
 	voltErr := c.Do(ctx, "GET", volt.URL("/api/roles/"+volt.SegInt(userID)+"/"+volt.SegInt(roleID)), nil, &voltOut)

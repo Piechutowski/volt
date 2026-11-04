@@ -102,6 +102,10 @@ func PathAPIUserSince(opts ...volt.URLOption) string {
 	return volt.URL("/api/since", opts...)
 }
 
+func PathAPIUserLatest(opts ...volt.URLOption) string {
+	return volt.URL("/api/latest", opts...)
+}
+
 func PathMsRevenueBrowse(opts ...volt.URLOption) string {
 	return volt.URL("/ms/revenue", opts...)
 }

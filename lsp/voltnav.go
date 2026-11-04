@@ -544,6 +544,9 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	if si.OrderSQL != "" {
 		b.WriteString("```sql\nORDER BY " + si.OrderSQL + "\n```\n")
 	}
+	if si.Limit != "" {
+		b.WriteString("```sql\nLIMIT ?\n```\nbinds: `" + si.Limit + "`\n\n")
+	}
 
 	var params strings.Builder
 	for _, p := range si.Params {

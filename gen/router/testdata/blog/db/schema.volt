@@ -52,3 +52,4 @@ table posts {
 
 select totals (count() as n, max(id) as last) for users
 select feed   for users with posts [order: (id asc)]
+select latest for users [order: (id desc), limit: :limit]

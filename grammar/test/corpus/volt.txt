@@ -372,6 +372,56 @@ select rows for series [order: (
             (identifier)))))))
 
 ==================
+select with a limit, a literal and a parameter
+==================
+
+select top for page_views [order: (hits desc), limit: 10]
+select page for page_views where day >= :from [order: (day asc, id asc), limit: :limit]
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_target)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))))
+      (setting
+        (setting_name
+          (identifier))
+        (number))))
+  (select_definition
+    (select_name)
+    (select_target)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name))))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
+          (identifier)
+          (ident_modifier
+            (identifier))))
+      (setting
+        (setting_name
+          (identifier))
+        (query_param
+          (parameter_name))))))
+
+==================
 select projections
 ==================
 

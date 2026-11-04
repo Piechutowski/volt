@@ -177,6 +177,15 @@ select joined (name, min(created_at) as first, max(created_at) as last) for user
 select carts    for users with orders where id = :id
 select everyone for users with orders [order: (id asc)]
 
+// Limits (spec §selects-over-groups): the first rows in order, a literal
+// on every member of the group, a parameter the effect checks before any
+// statement runs, groups counted after the grouping, and parents counted
+// under a nesting, each keeping all its children.
+select first_days for metrics [order: (day asc, id asc), limit: 2]
+select top_hits   for page_views where site = :site [order: (hits desc, id asc), limit: :limit]
+select top_sites  (site, sum(hits) as total) for page_views [group: (site), order: (total desc, site asc), limit: :limit]
+select newest     for users with orders [order: (id desc), limit: :limit]
+
 // A date/time list parameter and a date/time with key travel as JSON
 // arrays of the canonical text the column holds (spec §go-types).
 select stamped for users where created_at in :stamps [order: (id asc)]

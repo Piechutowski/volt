@@ -268,3 +268,55 @@ const voltMerchantPeriodPlacedSQL = `SELECT "merchant_periods"."id", "merchants"
 func MerchantPeriodPlaced(pattern string) rt.Query[Placed] {
 	return rt.Query[Placed]{SQL: voltMerchantPeriodPlacedSQL, Args: []any{pattern}, Scan: voltPlacedScan}
 }
+
+const voltPageViewTopSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" WHERE "day" >= ? ORDER BY "hits" DESC, "id" ASC LIMIT ?`
+
+func PageViewTop(from int, limit int) rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewTopSQL, Args: []any{from, limit}, Scan: voltPageViewScan, Err: rt.LimitCheck(limit)}
+}
+
+const voltPageViewFirstSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" ORDER BY "day" ASC, "id" ASC LIMIT ?`
+
+func PageViewFirst() rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewFirstSQL, Args: []any{3}, Scan: voltPageViewScan}
+}
+
+const voltLinkClickFirstSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" ORDER BY "day" ASC, "id" ASC LIMIT ?`
+
+func LinkClickFirst() rt.Query[LinkClick] {
+	return rt.Query[LinkClick]{SQL: voltLinkClickFirstSQL, Args: []any{3}, Scan: voltLinkClickScan}
+}
+
+type Leading struct {
+	Site  string `db:"site" json:"site"`
+	Total int    `db:"total" json:"total"`
+}
+
+func voltLeadingScan(r rt.Row) (Leading, error) {
+	var voltV Leading
+	voltErr := r.Scan(&voltV.Site, &voltV.Total)
+	return voltV, voltErr
+}
+
+const voltPageViewLeadingSQL = `SELECT "site", sum("hits") AS "total" FROM "page_views" GROUP BY "site" ORDER BY "total" DESC, "site" ASC LIMIT ?`
+
+func PageViewLeading(n int) rt.Query[Leading] {
+	return rt.Query[Leading]{SQL: voltPageViewLeadingSQL, Args: []any{n}, Scan: voltLeadingScan, Err: rt.LimitCheck(n)}
+}
+
+const voltHostNewestSQL = `SELECT "id", "name" FROM "hosts" ORDER BY "id" DESC LIMIT ?`
+
+func HostNewest(limit int) rt.With[Host, Visit, int, HostWithVisits] {
+	return rt.With[Host, Visit, int, HostWithVisits]{
+		Parent:    rt.Query[Host]{SQL: voltHostNewestSQL, Args: []any{limit}, Scan: voltHostScan, Err: rt.LimitCheck(limit)},
+		Child:     voltHostNewestChildrenSQL,
+		ChildScan: voltVisitScan,
+		ParentKey: func(voltP Host) int { return voltP.ID },
+		ChildKey:  func(voltC Visit) int { return voltC.HostID },
+		Build: func(voltP Host, voltCs []Visit) HostWithVisits {
+			return HostWithVisits{Host: voltP, Visits: voltCs}
+		},
+	}
+}
+
+const voltHostNewestChildrenSQL = `SELECT "id", "host_id", "owner_id", "day" FROM "visits" WHERE "host_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`

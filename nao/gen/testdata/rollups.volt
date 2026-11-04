@@ -87,3 +87,12 @@ table merchant_periods {
 ref: merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)
 
 select placed (id, merchants.name) for merchant_periods join merchants where merchants.name like :pattern
+
+// Limits (spec §selects-over-groups): LIMIT ? after ORDER BY, a literal
+// bound as an argument, a parameter last in the signature and checked by
+// the effect, on every member of a group, after a grouping, and on the
+// parents of a nesting.
+select top     for page_views where day >= :from [order: (hits desc, id asc), limit: :limit]
+select first   for traffic [order: (day asc, id asc), limit: 3]
+select leading (site, sum(hits) as total) for page_views [group: (site), order: (total desc, site asc), limit: :n]
+select newest  for hosts with visits [order: (id desc), limit: :limit]

@@ -1,6 +1,8 @@
 package rt
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -143,6 +145,30 @@ func TestSelectRenderShaping(t *testing.T) {
 		t.Errorf("query = %q, want %q", query, want)
 	}
 	argsCheck(t, args, "%@x", 10, 20)
+}
+
+// A select's limit: (spec §selects-over-groups) renders after ORDER BY
+// over its value slot, and LimitCheck refuses a limit below 1, which
+// SQLite would read as none when negative.
+func TestSelectRenderLimitVal(t *testing.T) {
+	query, args, err := SelectRender(`"users"`, `"id"`, []Opt[Gen]{OrderBy(OrderTerm("id", true)), LimitVal("limit")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `SELECT "id" FROM "users" ORDER BY "id" DESC LIMIT ?`; query != want {
+		t.Errorf("query = %q, want %q", query, want)
+	}
+	argsCheck(t, args, "limit")
+	for _, n := range []int{1, 50} {
+		if err := LimitCheck(n); err != nil {
+			t.Errorf("LimitCheck(%d) = %v, want nil", n, err)
+		}
+	}
+	for _, n := range []int{0, -1} {
+		if err := LimitCheck(n); !errors.Is(err, ErrLimit) || !strings.Contains(err.Error(), fmt.Sprint(n)) {
+			t.Errorf("LimitCheck(%d) = %v, want ErrLimit naming %d", n, err, n)
+		}
+	}
 }
 
 func TestSelectRenderOffsetWithoutLimit(t *testing.T) {

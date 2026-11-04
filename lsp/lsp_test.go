@@ -326,8 +326,8 @@ func TestCompletionSettingsPerHeader(t *testing.T) {
 	if got := strings.Join(at("table t2 ["), " "); got != "note:  model: " {
 		t.Errorf("table settings are note and model (§table), completion offers %q", got)
 	}
-	if got := strings.Join(at("select s for users ["), " "); got != "order: (" {
-		t.Errorf("a select takes order: (§selects-over-groups), completion offers %q", got)
+	if got := strings.Join(at("select s for users ["), " "); got != "order: ( group: ( limit: " {
+		t.Errorf("a select takes order:, group: and limit: (§selects-over-groups, §settings-whitelists), completion offers %q", got)
 	}
 	for _, needle := range []string{"  tablename string [", "  refcount int ["} {
 		if got := at(needle); !slices.Contains(got, "pk") || slices.Contains(got, "model: ") || slices.Contains(got, "delete: ") {

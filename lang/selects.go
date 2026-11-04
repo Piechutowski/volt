@@ -46,6 +46,8 @@ type SelectInfo struct {
 	WhereSQL     string        // Where as the renderer spells it; "" when none
 	Binds        []string      // the Go expressions behind WhereSQL's placeholders, in order
 	OrderSQL     string        // Order as the renderer spells it; "" when none
+	Limit        string        // the Go expression LIMIT ? binds, the literal or the parameter; "" when none (§selects-over-groups)
+	LimitParam   string        // the limit parameter, "" when the limit is a literal or absent
 	Params       []SelectParam
 	Items        []naming.SelectItem // explicit projection, declared order (§selects-over-groups)
 	Group        []string            // the group: items as the statement names them (§selects-over-groups)
@@ -676,9 +678,22 @@ func (l *selectLowering) check() *SelectInfo {
 			si.Lookup = true
 		}
 	}
-	if si.Lookup && len(order) > 0 {
-		l.errorf(sel.Settings.Get("order").Pos(), "select %q aggregates without group:, so it yields one row, which order: cannot sort (§selects-over-groups)", sel.Name.Name())
-		return nil
+	if si.Lookup {
+		one := false
+		if len(order) > 0 {
+			l.errorf(sel.Settings.Get("order").Pos(), "select %q aggregates without group:, so it yields one row, which order: cannot sort (§selects-over-groups)", sel.Name.Name())
+			one = true
+		}
+		if si.Limit != "" {
+			l.errorf(sel.Settings.Get("limit").Pos(), "select %q aggregates without group:, so it yields one row, which limit: has nothing to cap (§selects-over-groups)", sel.Name.Name())
+			one = true
+		}
+		if one {
+			return nil
+		}
+	}
+	if si.Limit != "" && sel.Settings.Get("order") == nil {
+		l.errorf(sel.Settings.Get("limit").Pos(), "select %q takes limit: without order:, so the rows it keeps would be arbitrary; order them, [order: (...), limit: ...] (§selects-over-groups)", sel.Name.Name())
 	}
 	if len(l.unknown) > 0 {
 		si.Unresolved = true
@@ -1313,6 +1328,8 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 		return nil
 	}
 	var terms []rt.GenOrder
+	var limitParam *ast.Param
+	var limitSeen bool
 	repeated, dupDiags := settingsRepeated(sel.Settings, "order", "group")
 	l.diags = append(l.diags, dupDiags...)
 	for _, s := range sel.Settings.Settings {
@@ -1320,6 +1337,13 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 			continue
 		}
 		switch s.Name {
+		case "limit":
+			if limitSeen {
+				l.errorf(s.Pos(), "select %q takes limit: twice; a select keeps one count of rows (§selects-over-groups)", sel.Name.Name())
+				continue
+			}
+			limitSeen = true
+			limitParam = l.limitSetting(s)
 		case "group":
 			l.groupSetting(env, s)
 		case "order":
@@ -1374,10 +1398,47 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 				}
 			}
 		default:
-			l.errorf(s.Pos(), "unknown select setting %q; selects take [order: (...)] and [group: (...)] (§selects-over-groups)", s.Name)
+			l.errorf(s.Pos(), "unknown select setting %q; selects take [order: (...)], [group: (...)] and [limit: ...] (§selects-over-groups)", s.Name)
+		}
+	}
+	if limitParam != nil {
+		name := limitParam.Name.Name()
+		if _, used := env.params[name]; used || env.dropped[name] {
+			l.errorf(limitParam.Pos(), "parameter :%s is the limit and a parameter of the select besides; a limit takes a parameter of its own (§selects-over-groups)", name)
+		} else {
+			env.paramBind(limitParam, "int")
+			l.si.Limit, l.si.LimitParam = name, name
 		}
 	}
 	return terms
+}
+
+// limitSetting reads a select's limit: (spec §selects-over-groups): a
+// positive integer literal, which it records in canonical form, or a
+// parameter, which it returns for the caller to bind after every other.
+func (l *selectLowering) limitSetting(s *ast.Setting) *ast.Param {
+	switch v := s.Value.(type) {
+	case *ast.Param:
+		return v
+	case *ast.NegNumber:
+		l.errorf(v.Pos(), "limit: keeps at least 1 row, not -%s (§selects-over-groups)", v.Num.Tok.Val)
+		return nil
+	case *ast.BasicLit:
+		if v.Tok.Kind == token.NUMBER && strings.Trim(v.Tok.Val, "0123456789") == "" {
+			n, err := strconv.ParseInt(v.Tok.Val, 10, 64)
+			switch {
+			case err != nil:
+				l.errorf(v.Pos(), "limit: %s does not fit int64 (§selects-over-groups)", v.Tok.Val)
+			case n < 1:
+				l.errorf(v.Pos(), "limit: keeps at least 1 row, not %s (§selects-over-groups)", v.Tok.Val)
+			default:
+				l.si.Limit = strconv.FormatInt(n, 10)
+			}
+			return nil
+		}
+	}
+	l.errorf(s.Pos(), "limit: takes a positive integer or a parameter, :name (§selects-over-groups)")
+	return nil
 }
 
 // aliasBinding is the binding an order: term takes for a derived item
@@ -1971,6 +2032,8 @@ func (p *Package) SelectFns() []naming.SelectFn {
 				MethodSuffix: si.MethodSuffix,
 				Where:        si.Where,
 				Order:        si.Order,
+				Limit:        si.Limit,
+				LimitParam:   si.LimitParam,
 				Items:        si.Items,
 				Excluded:     si.Excluded,
 				SharedType:   si.Shared,

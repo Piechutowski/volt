@@ -683,6 +683,12 @@ func (p *parser) settingValue() ast.Node {
 	case token.MINUS:
 		p.next()
 		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "setting value (§settings-lists)"))}
+	case token.COLON:
+		colon := p.next().Pos
+		if !p.at(token.IDENT) || !p.contiguous() {
+			p.fail(p.cur(), "':' must be directly followed by a parameter name (§predicates)")
+		}
+		return &ast.Param{ColonPos: colon, Name: p.ident("parameter (§predicates)")}
 	case token.LPAREN:
 		l := p.next()
 		il := &ast.IdentList{Lparen: l.Pos}

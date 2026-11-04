@@ -31,7 +31,7 @@ var (
 	settingsByContext = map[string][]string{
 		"column":    {"pk", "null", "unique", "index", "autoincrement", "required", "default: ", "note: ", "ref: ", "tag: "},
 		"table":     {"note: ", "model: "},
-		"select":    {"order: ("},
+		"select":    {"order: (", "group: (", "limit: "},
 		"index":     {"name: ", "unique", "where: "},
 		"migration": {"irreversible", "no_transaction"},
 		"ref":       {"delete: ", "update: "},

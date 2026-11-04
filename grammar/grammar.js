@@ -814,6 +814,8 @@ module.exports = grammar({
     // A setting name is one identifier: `no_transaction` (§settings-lists).
     setting_name: ($) => $._name,
 
+    // A parameter is the value of a select's limit: (§selects-over-groups,
+    // §settings-whitelists).
     _setting_value: ($) =>
       choice(
         $.string,
@@ -825,6 +827,7 @@ module.exports = grammar({
         $.ident_group,
         $.query_call,
         alias($._query_ref, $.go_ref),
+        $.query_param,
         $._name,
       ),
 

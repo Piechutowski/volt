@@ -85,6 +85,9 @@ func TestProblemOfPrecedence(t *testing.T) {
 	if p, ok := ProblemOf(fmt.Errorf("load: %w", rt.ErrNotFound)); !ok || p.Status != http.StatusNotFound {
 		t.Errorf("a row miss = %+v, %v; want 404", p, ok)
 	}
+	if p, ok := ProblemOf(rt.LimitCheck(0)); !ok || p.Status != http.StatusBadRequest {
+		t.Errorf("a limit below 1 = %+v, %v; want 400 (§selects-over-groups)", p, ok)
+	}
 	if _, ok := ProblemOf(errors.New("disk I/O error")); ok {
 		t.Error("an unknown error has no Problem; the default handler answers 500")
 	}

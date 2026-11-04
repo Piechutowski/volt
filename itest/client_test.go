@@ -58,6 +58,14 @@ func TestClientQueryRoutes(t *testing.T) {
 		if none, err := c.APIUserPicked(ctx, nil); err != nil || len(none) != 0 {
 			t.Fatalf("%v: picked none = %+v, %v", f, none, err)
 		}
+		latest, err := c.APIUserLatest(ctx, 1)
+		if err != nil || len(latest) != 1 || latest[0].ID != made.ID {
+			t.Fatalf("%v: latest 1 = %+v, %v; want the newest user (§generated-client)", f, latest, err)
+		}
+		var pe *volt.ProblemError
+		if _, err := c.APIUserLatest(ctx, 0); !errors.As(err, &pe) || pe.Status != 400 {
+			t.Fatalf("%v: latest 0 = %v, want a 400 problem (§selects-over-groups)", f, err)
+		}
 		if err := c.APIUserDelete(ctx, made.ID); err != nil {
 			t.Fatalf("%v: delete = %v", f, err)
 		}

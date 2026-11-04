@@ -537,6 +537,9 @@ func (pl *Plan) SelectSQL(fn SelectFn) (string, []string, error) {
 	if len(fn.Order) > 0 {
 		opts = append(opts, rt.OrderBy(fn.Order...))
 	}
+	if fn.Limit != "" {
+		opts = append(opts, rt.LimitVal(fn.Limit))
+	}
 	from := rt.Ident(t.SQLName)
 	if len(fn.Joins) > 0 {
 		joins := make([]rt.Join, len(fn.Joins))

@@ -18,6 +18,8 @@ type SelectFn struct {
 	MethodSuffix string
 	Where        rt.GenPred    // the zero value when the select has no where clause
 	Order        []rt.GenOrder // nil when it has no order: setting
+	Limit        string        // the Go expression LIMIT ? binds, a literal or the limit parameter; "" when none (spec §selects-over-groups)
+	LimitParam   string        // the limit parameter the effect checks; "" for a literal or none
 	Params       []SelectParam
 	Items        []SelectItem // explicit projection, declared order; nil = all or star form
 	Excluded     []string     // star-form exclusions; nil = none

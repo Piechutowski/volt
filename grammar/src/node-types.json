@@ -1928,6 +1928,10 @@
             "named": true
           },
           {
+            "type": "query_param",
+            "named": true
+          },
+          {
             "type": "ref_endpoint",
             "named": true
           },

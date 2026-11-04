@@ -153,6 +153,8 @@ func TestVoltSyntaxErrors(t *testing.T) {
 		{"projection unclosed set", "select p (* \\ (a, b for t\n", "expected ')'"},
 		{"in without list", "pred p { site in }\n", "expected '('"},
 		{"in with column", "pred p { site in other }\n", "expected '('"},
+		{"space in a limit parameter", "select s for t [order: (id asc), limit: : n]\n", "':' must be directly followed by a parameter name"},
+		{"limit parameter on the next line", "select s for t [order: (id asc), limit: :\nn]\n", "':' must be directly followed by a parameter name"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

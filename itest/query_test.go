@@ -197,6 +197,35 @@ func TestQueryRouteTimeParam(t *testing.T) {
 	}
 }
 
+// TestQueryRouteLimitParam (§query-routes, §selects-over-groups): a
+// select's limit parameter binds from the query string like any int,
+// keeps the first rows in order, and a value below 1 is a 400 that runs
+// no statement, as a missing or unparseable one is.
+func TestQueryRouteLimitParam(t *testing.T) {
+	h := handlerWithDB(t)
+	call(h, "POST", "/api/users", strings.NewReader(`{"email":"two@example.com"}`))
+	call(h, "POST", "/api/users", strings.NewReader(`{"email":"three@example.com"}`))
+
+	rec := call(h, "GET", app.PathAPIUserLatest(volt.Query("limit", "2")), nil)
+	var rows []db.User
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &rows) != nil || len(rows) != 2 || rows[0].ID != 3 || rows[1].ID != 2 {
+		t.Fatalf("latest 2: %d %s, want ids 3 and 2", rec.Code, rec.Body.String())
+	}
+	for _, q := range []string{"limit=0", "limit=-1"} {
+		var p volt.Problem
+		rec = call(h, "GET", "/api/latest?"+q, nil)
+		if rec.Code != 400 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || p.Status != 400 || !strings.Contains(p.Message, "limit") {
+			t.Fatalf("%s: %d %q, want a 400 problem about the limit (§formats)", q, rec.Code, rec.Body.String())
+		}
+	}
+	if rec = call(h, "GET", "/api/latest?limit=many", nil); rec.Code != 400 || !strings.Contains(rec.Body.String(), "limit") {
+		t.Fatalf("unparseable limit: %d %q, want 400 naming limit", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "GET", "/api/latest", nil); rec.Code != 400 {
+		t.Fatalf("missing limit: %d, want 400", rec.Code)
+	}
+}
+
 // TestQueryRouteTable: query rows carry the reference as written and no
 // controller, and only reads have helpers (§query-routes).
 func TestQueryRouteTable(t *testing.T) {
@@ -213,8 +242,8 @@ func TestQueryRouteTable(t *testing.T) {
 			t.Errorf("%s %s: helper %q — only GET query routes have one", r.Method, r.Spelled, r.Helper)
 		}
 	}
-	if seen != 25 {
-		t.Errorf("query rows = %d, want 25 (seven query routes, one under a scope load, two dataset members, fifteen resources [default] routes)", seen)
+	if seen != 26 {
+		t.Errorf("query rows = %d, want 26 (eight query routes, one under a scope load, two dataset members, fifteen resources [default] routes)", seen)
 	}
 }
 

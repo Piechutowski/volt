@@ -146,6 +146,13 @@ func (c *Client) APIUserSince(ctx context.Context, since time.Time) ([]db.User, 
 	return voltOut, voltErr
 }
 
+func (c *Client) APIUserLatest(ctx context.Context, limit int) ([]db.User, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/latest", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
 func (c *Client) MsRevenueBrowse(ctx context.Context, year int) ([]db.MsRevenue, error) {
 	voltQ := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
 	var voltOut []db.MsRevenue
