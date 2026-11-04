@@ -81,12 +81,13 @@ not the 97 percent of a pure CRUD table (`examples/byhand`): the rules
 are handlers either way. Writing the Volt version found five gaps,
 paid for in its own lines: a scope load could not answer its own miss,
 so every handler checks the member, which `Load.Rescue` now spares
-though the blog is not yet rewritten onto it; a transaction cannot
-use an id an earlier step assigned, so a post's tags are not written
-atomically; a select has no limit, so the feed reads every post after
-the cursor; a select has no optional predicate, so the tag filter is a
-second select; and the generated client is untyped for controller
-routes, so the typed client is written by hand.
+though the blog is not yet rewritten onto it (`docs/plan.md`, step
+20); a transaction cannot use an id an earlier step assigned, so a
+post's tags are not written atomically; a select has no limit, so the
+feed reads every post after the cursor; a select has no optional
+predicate, so the tag filter is a second select; and the generated
+client is untyped for controller routes, so the typed client is
+written by hand.
 
 ## Crib sheet
 

@@ -45,7 +45,8 @@ func Params(names ...string) HandlerOption {
 
 // Timeout bounds the handler and every effect it describes with one
 // deadline from the request's arrival (spec §route-loads); an effect the
-// deadline cuts off is a 504 through the error handler.
+// deadline cuts off fails with a 504, which its rescue answers if it has
+// one and the error handler otherwise.
 func Timeout(d time.Duration) HandlerOption {
 	return func(s *shim) { s.timeout = d }
 }

@@ -2236,10 +2236,11 @@ func (r Response) Rescue(on func(error) Response) Response
    names the function that answers for its effect's failure instead,
    for a route that must decide on a miss; on a done response it does
    nothing. It covers that one effect: the function receives the
-   error, and its response goes on through the shim as `next`'s would,
-   a `Fail(err)` to the error handler; a step `next` returns is rescued
-   only by a `Rescue` of its own. A scope load's `Rescue` does the same
-   for the load's effect (§scope-loads).
+   error, a timeout's 504 among them (§route-loads), and its response
+   goes on through the shim as `next`'s would, a `Fail(err)` to the
+   error handler; a step `next` returns is rescued only by a `Rescue`
+   of its own. A scope load's `Rescue` does the same for the load's
+   effect (§scope-loads).
    `Reject` is a Problem body of the handler's own, with `WithDetails`
    for the field errors of a changeset it judged.
 4. **Bodies.** `Render` and `RenderStatus` write a value in the
@@ -2406,8 +2407,10 @@ parameters, so the handler reads them and never asks for them.
 5. **`timeout`.** A route setting, a positive integer of seconds,
    bounds the whole chain, loads and the handler's own effects, with
    one deadline from the request's arrival; an effect the deadline
-   cuts off is a 504 through the error spine. A query route takes it
-   too; an event route, whose stream the runtime serves, takes none.
+   cuts off fails with a 504, which goes to the error spine unless a
+   rescue answers for that effect (§requests-and-responses,
+   §scope-loads). A query route takes it too; an event route, whose
+   stream the runtime serves, takes none.
 6. A load block on a query route or an event route is an error: their
    handlers are generated.
 

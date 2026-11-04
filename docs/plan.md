@@ -9,10 +9,11 @@ Scope as decided: the language first, then the non-core features and
 the tooling. Steps 2, 3 (without `volt fmt`), 4 and 6 to 12 land now, in
 that order. Step 5 (the Elm client), `volt fmt` and steps 13 to 19 are
 deferred; each keeps a one-line section below so the file still says
-what is deferred and why. The deferred spec sections are not written,
-and no spec text of the steps that land mentions a session, `r.Session()`
-or the vet rule `session-csrf`: the request value gets `Now()` and
-nothing session-shaped until step 13 is reopened.
+what is deferred and why. Step 20 is open. The deferred spec sections
+are not written, and no spec text of the steps that land mentions a
+session, `r.Session()` or the vet rule `session-csrf`: the request
+value gets `Now()` and nothing session-shaped until step 13 is
+reopened.
 
 How to use it:
 
@@ -244,6 +245,20 @@ landed; more follow one feature at a time.
 
 ---
 
+## Step 20. The comparison on `Load.Rescue`
+
+`compare/volt` was written while a scope load could not answer its own
+miss, so `CurrentMember` loads a list, empty for an unknown member, and
+every handler checks it; `Load.Rescue` (spec §scope-loads) answers the
+miss in the load. Rewrite the blog onto it: `CurrentMember` returns
+`volt.Load[db.Member]` over `db.MemberGet`, rescuing `rt.ErrNotFound`
+with the contract's 401 and failing with every other error, and the
+handlers lose their checks. `compare/suite` passes unchanged, `go run
+./compare/measure` remeasures, and the README's table and its first
+gap change in the commit that deletes this section.
+
+---
+
 ## Verification bar
 
 Before claiming any step done:
@@ -266,6 +281,7 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 | Step | Depends on | Lands |
 |---|---|---|
 | 5, 13 to 19 | | deferred |
+| 20 | | next |
 
 The blog fixture under `itest/blog` is the application every step
 rebuilds. Measured at each step on it and recorded in the commit

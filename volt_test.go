@@ -423,4 +423,28 @@ func TestTimeoutIs504(t *testing.T) {
 	if rec.Code != http.StatusGatewayTimeout {
 		t.Fatalf("a chain past its timeout = %d, want 504", rec.Code)
 	}
+
+	eh := func(r Request, err error) Response {
+		return DefaultErrorHandler(r, err).WithHeader("X-Error-Handler", "route")
+	}
+	var rescued []error
+	busy := func(err error) Response {
+		rescued = append(rescued, err)
+		return Reject(http.StatusServiceUnavailable, "try again")
+	}
+	rescuedChain := func(Request) Response {
+		return Then(rt.Query[int]{SQL: "SELECT 1"}, func([]int) Response { return NoContent() }).Rescue(busy)
+	}
+	rescuedLoad := func(Request) Response {
+		return Continue(LoadWith(rt.Query[int]{SQL: "SELECT 1"}).Rescue(busy), func([]int) Response { return NoContent() })
+	}
+	for name, h := range map[string]HandlerFunc{"a rescued continuation": rescuedChain, "a rescued scope load": rescuedLoad} {
+		rescued = nil
+		rec = httptest.NewRecorder()
+		Handler("GET /x", h, eh, slow, Timeout(10*time.Millisecond)).ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+		var he HTTPError
+		if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("X-Error-Handler") != "" || len(rescued) != 1 || !errors.As(rescued[0], &he) || he.StatusCode() != http.StatusGatewayTimeout {
+			t.Errorf("%s past its timeout = %d via %q, rescued %v; want the rescue to receive the 504 and answer for it", name, rec.Code, rec.Header().Get("X-Error-Handler"), rescued)
+		}
+	}
 }
