@@ -268,11 +268,13 @@ written while a select had no optional parameter, so the tag filter is
 a second select, `feed_tagged`, which joins `tags` to filter, and the
 first page passes a sentinel cursor; `feed` becomes the one select,
 `where visible and exists tags (tag = :tag?)` with `visible` reading
-`:at?` and `:id?` (spec §predicates), `feed_tagged` goes, and the
-handler passes absent values where the request has no cursor or no
-tag. `compare/suite` passes unchanged, `go run ./compare/measure`
-remeasures, and the README's table and its first four gaps change in
-the commit that deletes this section.
+`:at?` and `:id?` and keeping out the NULL `published_at` of a post
+never published, `published_at is not null`, since a NULL cursor
+would read as absent and start the feed over (spec §predicates),
+`feed_tagged` goes, and the handler passes absent values where the
+request has no cursor or no tag. `compare/suite` passes unchanged,
+`go run ./compare/measure` remeasures, and the README's table and its
+first four gaps change in the commit that deletes this section.
 
 ---
 

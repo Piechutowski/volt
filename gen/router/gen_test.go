@@ -666,3 +666,25 @@ func TestLoadTimeParamCompiles(t *testing.T) {
 func TestPackageNamedHTTPClientCompiles(t *testing.T) {
 	snippetCompiles(t, "v112_package_named_http")
 }
+
+// TestOptionalQueryRouteCompiles proves a query route and a load over a
+// select with optional parameters generate a router and a client that
+// build, the client spelling rt.Null (spec §query-routes, §route-loads,
+// §generated-client).
+func TestOptionalQueryRouteCompiles(t *testing.T) {
+	snippetCompiles(t, "v117_optional_query_route")
+}
+
+// TestDatasetOptionalParamCompiles proves a dataset over a group select
+// with an optional parameter beside a prefix parameter generates routes
+// and a client that build (spec §dataset-declaration).
+func TestDatasetOptionalParamCompiles(t *testing.T) {
+	snippetCompiles(t, "v118_dataset_optional")
+}
+
+// TestPredicateWordsProjectedCompiles proves columns named like
+// predicate keywords project, aggregate and compute into code that
+// builds (spec §keywords, §selects-over-groups).
+func TestPredicateWordsProjectedCompiles(t *testing.T) {
+	snippetCompiles(t, "v119_predicate_words_projected")
+}

@@ -1047,8 +1047,26 @@ app/routes.volt:11:23: error: spec/route-loads: argument 1 of db.PostPicked bind
 ## i507_exists_ambiguous_relation.volt
 db/i507_exists_ambiguous_relation.volt:16:40: error: spec/predicates: relation "posts" of table "members" is ambiguous, read as SQLite reads an alias, without regard to case: it is the reverse relation to "posts" (at db/i507_exists_ambiguous_relation.volt:12:18; name it with [reverse: name] on a ref element) and the reverse relation to "posts" (at db/i507_exists_ambiguous_relation.volt:13:24; name it with [reverse: name] on a ref element) (§relationships-ref, §predicates)
 
+## i508_exists_nested_pred.volt
+db/i508_exists_nested_pred.volt:21:18: error: spec/predicates: exists comments stands inside exists posts: exists does not nest, the depth is one (§predicates)
+
+## i509_load_declared_type
+app/routes.volt:11:26: error: spec/route-loads: parameter "price" of db.ProductCosting is money.Money, which no load binds: the query string cannot carry it, and neither a path parameter nor a literal spells it (§route-loads)
+
 ## i50_group_unknown.volt
 db/i50_group_unknown.volt:11:3: error: spec/groups: unknown group term "ms_revenu": no such table or group in package "db" (§groups)
+
+## i510_load_optional_declared_type
+app/routes.volt:11:26: error: spec/route-loads: parameter "price" of db.ProductCosting is rt.Null[money.Money], which no load binds: the query string cannot carry it, and neither a path parameter nor a literal spells it (§route-loads)
+app/routes.volt:14:26: error: spec/route-loads: parameter "price" of db.ProductCosting is rt.Null[money.Money], which no load binds: the query string cannot carry it, and neither a path parameter nor a literal spells it (§route-loads)
+
+## i511_dataset_optional_prefix
+app/routes.volt:10:2: error: spec/query-routes: parameter "year" of db.MsRevenueBrowse is optional, and a path segment is always present; pass it in the query string (§query-routes)
+app/routes.volt:10:2: error: spec/query-routes: parameter "year" of db.MsUsageBrowse is optional, and a path segment is always present; pass it in the query string (§query-routes)
+
+## i512_dataset_optional_list
+app/routes.volt:10:13: error: spec/query-routes: db.MsRevenuePicked takes the optional list parameter "ids", which a route cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§query-routes)
+app/routes.volt:10:13: error: spec/query-routes: db.MsUsagePicked takes the optional list parameter "ids", which a route cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§query-routes)
 
 ## i51_group_readd.volt
 db/i51_group_readd.volt:12:23: error: spec/groups: table "ms_revenue" is already a member (§groups)

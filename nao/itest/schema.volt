@@ -210,9 +210,12 @@ table metric_events {
 }
 
 // §predicates: an optional parameter's term is true when it is absent, a
-// keyset's first page among them, and exists tests a relation without
+// keyset's first page among them, a keyset over a nullable column sound
+// only with its NULLs kept out, and exists tests a relation without
 // joining it, so a grouped count beside it counts each row once.
 select keyset     for page_views where day < :day? or (day = :day? and id < :id?) [order: (day desc, id desc), limit: :limit]
+select placed_keyset       for orders where placed_at is not null and (placed_at < :at? or (placed_at = :at? and id < :id?)) [order: (placed_at desc, id desc), limit: :limit]
+select placed_keyset_loose for orders where placed_at < :at? or (placed_at = :at? and id < :id?) [order: (placed_at desc, id desc), limit: :limit]
 select picked     for page_views where site = :site? and hits >= :min? [order: (id asc)]
 select in_sites   for page_views where site in :sites? [order: (id asc)]
 select placed_by  for orders where placed_at < :before? [order: (id asc)]

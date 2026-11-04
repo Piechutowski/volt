@@ -3,7 +3,7 @@ package db
 table posts {
   id           int       [pk]
   title        string
-  published_at time.Time [null]
+  published_at time.Time
 }
 
 table post_tags {

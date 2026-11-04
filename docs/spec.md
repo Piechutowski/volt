@@ -1871,7 +1871,9 @@ both.
    standard library, the root `volt` package, the runner `nao/run` when
    it has a query route, and the data packages whose models and queries
    it names; the client imports the standard library, the root `volt`
-   package and those data packages.
+   package, those data packages and the data runtime `nao/rt` when a
+   method takes an optional parameter, whose `rt.Null[T]` it spells
+   (§generated-client), and never the runner.
 3. **The rule.** The network layer may use the data layer, never the
    reverse. The route files call a data package's queries and
    changesets, and the root `volt` package reads the data runtime's
@@ -2423,8 +2425,11 @@ parameters, so the handler reads them and never asks for them.
    loaded at all, for the reason a query route cannot route one
    (§query-routes). A literal MUST spell the parameter's Go type: a
    string literal a `string`, a number an `int` when it is whole and
-   a `float64` otherwise, `true` or `false` a `bool`; a type the
-   query string cannot carry takes a literal or nothing. A number
+   a `float64` otherwise, `true` or `false` a `bool`. A parameter of a
+   type the query string cannot carry, a declared type (§types) among
+   them, is spelled by no literal and no path parameter either, so no
+   load binds it, optional or not: whatever its argument, the load is
+   an error naming the parameter and its type. A number
    binds in canonical Go form, as a predicate's literal does
    (§predicates): `010` binds `10`, never the octal `8` Go would read
    in it. A select's `limit:` parameter (§selects-over-groups) takes a
@@ -2753,8 +2758,11 @@ application that shares the schema, a test, another service — calls
 the routes through typed methods instead of hand-built requests.
 
 1. The package is named `client` and imports only the standard
-   library, the runtime and the data packages the routes go through,
-   never the routing package, so a caller links no server code. The one exception is a package
+   library, the root `volt` package, the data packages the routes go
+   through and, when a method takes an optional parameter (rule 3),
+   the data runtime `nao/rt` for its `rt.Null[T]`, never the runner
+   `nao/run` and never the routing package, so a caller links no
+   server code. The one exception is a package
    that routes its own tables (§query-routes): its client imports it for the
    row types, and so links it; when that package is `main`, which Go
    cannot import, no client is generated.
@@ -2826,8 +2834,9 @@ the routes through typed methods instead of hand-built requests.
    front end that is `package main`. The row, changeset and params
    types are named bare, since the models written beside it declare them; the
    constructor is `NewClient(base string) *Client`, since `New` beside
-   it may be the query layer's; nothing but the standard library and
-   the runtime is imported.
+   it may be the query layer's; nothing but the standard library, the
+   root `volt` package and, for an optional parameter, `nao/rt` is
+   imported.
 
 ### Event routes
 
@@ -3167,9 +3176,14 @@ scope /ms [pipe: api] {
    member's select function (`<Model><SelectName>`). Every parameter of
    the select binds as §query-routes binds it: from a scope prefix
    parameter of the same name, else from the query string, a list
-   parameter as a repeated key; a prefix parameter the select does not
-   take is an error. The helper and client method names are the
-   scope name prefixes followed by the function name (§query-routes).
+   parameter as a repeated key, and an optional one (§predicates) from
+   the query string alone, absent when the key is missing; a prefix
+   parameter the select does not take is an error, and so is one that
+   names an optional parameter, since a path segment is always
+   present, and a select with an optional list parameter, which no
+   route carries, makes the dataset an error. The helper and client
+   method names are the scope name prefixes followed by the function
+   name (§query-routes).
 3. Expanded routes obey every rule of routes: conflicts (§route-conflicts), one
    helper namespace (§route-names-and-reverse-urls, §generated-client). To hand-write one member's route,
    take it out with `except:` and declare it beside the dataset, with
@@ -3433,6 +3447,17 @@ pred tagged  { exists tags (tag = :tag?) }
      a term inside it never vanishes on its own, since whenever every
      parameter the exists term reads is present, so is every parameter
      of each term inside it.
+   - A keyset pages soundly only over rows whose `order:` columns are
+     never NULL. Its cursor is the last row's values of those columns,
+     and a comparison never matches NULL, so no page after the first
+     reaches a row whose column is NULL; worse, an optional parameter
+     given that NULL, which the column's `rt.Null[T]` carries in the
+     parameter's own type, is absent, so the terms vanish and the page
+     after a row with NULL is the first page again, without end. The
+     keyset above therefore takes `published_at` to be declared
+     without `[null]`; over a nullable column, the `where` keeps the NULLs out,
+     `published_at is not null and (published_at < :at? or …)`, or the
+     keyset pages over key columns alone.
    - An optional list parameter that is present and empty keeps rule
      3's meaning: membership in an empty list is false, so
      `tag in :tags?` keeps every row for an absent list and none for an
@@ -5157,8 +5182,10 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    `OrderBy` terms. Every function of the three files shares the
    package scope with the column handles and the names of
    §changesets, so a column whose handle would take a function's name
-   (`count` on `users` gives `UserCount`) is a check error naming
-   both, as it is for the wrappers (`lint.md`, `dynname`).
+   (`count` on `users` gives `UserCount`, `exists` gives `UserExists`)
+   is refused by `volt gen`, which names both, and reported before
+   generation by `volt vet`, as a wrapper's collision is (`lint.md`,
+   `dynname`).
 5. **The runner.** `run.Open(driver, dsn)` pins one connection and sets
    WAL, `busy_timeout = 5000` and `foreign_keys = ON`; `run.Wrap` takes
    a pool the application opened. `run.Run(ctx, db, e)` performs one

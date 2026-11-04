@@ -580,6 +580,15 @@ func (p *parser) colRef(ctx string) *ast.ColRef {
 	return &ast.ColRef{Qual: name, Name: p.ident(ctx)}
 }
 
+func (p *parser) projCol(ctx string) *ast.ColRef {
+	name := p.ident(ctx)
+	if !p.at(token.DOT) {
+		return &ast.ColRef{Name: name}
+	}
+	p.next()
+	return &ast.ColRef{Qual: name, Name: p.ident(ctx)}
+}
+
 func (p *parser) predIn(col *ast.ColRef) ast.PredExpr {
 	p.kwTake("in")
 	x := &ast.PredIn{Col: col}
@@ -732,7 +741,7 @@ func (p *parser) projItem() *ast.ProjItem {
 					p.fail(p.cur(), "%s takes a column; only count() counts the rows (§selects-over-groups)", agg.Name())
 					return item
 				}
-				item.Col = p.colRef("aggregate column (§selects-over-groups)")
+				item.Col = p.projCol("aggregate column (§selects-over-groups)")
 			}
 			item.EndPos = p.expect(token.RPAREN, "aggregate (§selects-over-groups)").End()
 		}
@@ -814,7 +823,7 @@ func (p *parser) arithFactor() ast.ArithExpr {
 	case p.at(token.COLON):
 		return p.param()
 	case p.at(token.IDENT):
-		return p.colRef("projected column (§selects-over-groups)")
+		return p.projCol("projected column (§selects-over-groups)")
 	default:
 		p.fail(t, "expected a column, an aggregate, a number, a :param or a parenthesized expression in the projection (§selects-over-groups), found %s", t)
 		return nil

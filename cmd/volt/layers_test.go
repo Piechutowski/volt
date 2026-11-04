@@ -206,6 +206,59 @@ func TestLayersGeneratedDataImports(t *testing.T) {
 	}
 }
 
+// TestLayersGeneratedRouteImports proves the import rule of the network
+// layer (spec §data-and-network-layers, §generated-client) on the router
+// goldens and the generated itest fixture: a route file imports the
+// standard library, the root volt package, nao/run and the data packages,
+// and a client the standard library, the root volt package, the data
+// packages and nao/rt, never the runner and never the routing package.
+func TestLayersGeneratedRouteImports(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden := filepath.Join(root, "gen", "router", "testdata")
+	fixture := filepath.Join(root, "itest", "blog", "app")
+	type unit struct {
+		data    string
+		routes  []string
+		clients []string
+	}
+	units := []unit{
+		{"blog/db", nil, []string{filepath.Join(golden, "blog_app_client.go.golden"), filepath.Join(golden, "blog_app_client_beside.go.golden")}},
+		{module + "/itest/blog/db", nil, []string{filepath.Join(fixture, "client", "volt_client.go")}},
+	}
+	for _, kind := range []string{"handlers", "paths", "router", "routes"} {
+		units[0].routes = append(units[0].routes, filepath.Join(golden, "blog_app_"+kind+".go.golden"))
+		units[1].routes = append(units[1].routes, filepath.Join(fixture, "volt_"+kind+".go"))
+	}
+	files, withRT := 0, 0
+	for _, u := range units {
+		for _, f := range u.routes {
+			files++
+			for _, path := range fileImports(t, f) {
+				if !stdlibPath(path) && path != module && path != runPath && path != u.data {
+					t.Errorf("route file %s imports %s, neither the standard library, the root volt package, nao/run nor its data package", f, path)
+				}
+			}
+		}
+		for _, f := range u.clients {
+			files++
+			for _, path := range fileImports(t, f) {
+				if path == rtPath {
+					withRT++
+				}
+				if !stdlibPath(path) && path != module && path != rtPath && path != u.data {
+					t.Errorf("client %s imports %s, neither the standard library, the root volt package, nao/rt nor its data package", f, path)
+				}
+			}
+		}
+	}
+	if files < 11 || withRT == 0 {
+		t.Fatalf("checked %d generated route files and clients, %d importing nao/rt; the walk sees too little", files, withRT)
+	}
+}
+
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil

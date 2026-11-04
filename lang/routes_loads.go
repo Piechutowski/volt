@@ -180,8 +180,14 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 			continue
 		}
 		list := strings.HasPrefix(sp.goType, "[]")
+		qp.Optional = sp.optional
+		if !queryValueTypes[strings.TrimPrefix(sp.goType, "[]")] {
+			l.errorf(arg.Pos(), "route-loads", "parameter %q of %s is %s, which no load binds: the query string cannot carry it, and neither a path parameter nor a literal spells it (§route-loads)", sp.name, ref, qp.Type())
+			ok = false
+			qr.Params = append(qr.Params, qp)
+			continue
+		}
 		if sp.optional {
-			qp.Optional = true
 			a, isName := arg.(*ast.Ident)
 			inPath := false
 			if isName {
@@ -196,9 +202,6 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 				ok = false
 			case list:
 				l.errorf(a.Pos(), "route-loads", "argument %d of %s binds the optional list parameter %q, which a load cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§route-loads, §query-routes)", i+1, ref, sp.name)
-				ok = false
-			case !queryValueTypes[sp.goType]:
-				l.errorf(a.Pos(), "route-loads", "parameter %q of %s is %s, which the query string cannot carry (§route-loads)", sp.name, ref, qp.Type())
 				ok = false
 			default:
 				qp.Source, qp.Name = FromQuery, a.Name()
@@ -234,10 +237,6 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 			qp.Source, qp.Name = FromQuery, a.Name()
 			if list {
 				qp.Source = FromList
-			}
-			if !queryValueTypes[strings.TrimPrefix(sp.goType, "[]")] {
-				l.errorf(a.Pos(), "route-loads", "parameter %q of %s is %s, which the query string cannot carry; write a literal (§route-loads)", sp.name, ref, sp.goType)
-				ok = false
 			}
 		case *ast.BasicLit:
 			qp.Source = FromLiteral

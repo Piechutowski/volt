@@ -39,6 +39,14 @@ func viewIDs(rows []PageView) []int {
 	return ids
 }
 
+func orderIDs(rows []Order) []int {
+	ids := make([]int, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	return ids
+}
+
 func idsSame(a, b []int) bool {
 	if len(a) != len(b) {
 		return false
@@ -141,6 +149,66 @@ func TestOptionalKeysetFirstPage(t *testing.T) {
 	}
 	if !idsSame(got, want) {
 		t.Errorf("pages read %v, want %v", got, want)
+	}
+}
+
+// A keyset over a nullable column pages soundly once the where keeps its
+// NULLs out; without that, a page that ends on a NULL hands the next page
+// an absent cursor, and the next page is the first again (spec
+// §predicates).
+func TestOptionalKeysetNullableColumn(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	ann, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("ann@blog.test").NameSet("Ann")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	early := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	late := early.Add(48 * time.Hour)
+	var o []Order
+	for _, at := range []rt.Null[time.Time]{rt.Some(early), {}, rt.Some(late), rt.Some(late), {}} {
+		row, err := run.Run(ctx, db, OrderCreate(OrderNew().UserIDSet(ann.ID).TotalSet(1).FeeSet(1).PlacedAtSet(at)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		o = append(o, row)
+	}
+	want := []int{o[3].ID, o[2].ID, o[0].ID}
+	var got []int
+	at, id := rt.Null[time.Time]{}, rt.Null[int]{}
+	for pages := 0; ; pages++ {
+		if pages > len(o) {
+			t.Fatalf("the keyset does not end; read %v", got)
+		}
+		rows, err := run.Run(ctx, db, OrderPlacedKeyset(at, id, 2))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) == 0 {
+			break
+		}
+		got = append(got, orderIDs(rows)...)
+		last := rows[len(rows)-1]
+		at, id = last.PlacedAt, rt.Some(last.ID)
+	}
+	if !idsSame(got, want) {
+		t.Errorf("pages read %v, want the placed orders %v", got, want)
+	}
+
+	first, err := run.Run(ctx, db, OrderPlacedKeysetLoose(rt.Null[time.Time]{}, rt.Null[int]{}, 4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := first[len(first)-1]
+	if last.PlacedAt.Valid {
+		t.Fatalf("the first page ends on %+v, want an order never placed", last)
+	}
+	again, err := run.Run(ctx, db, OrderPlacedKeysetLoose(last.PlacedAt, rt.Some(last.ID), 4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !idsSame(orderIDs(again), orderIDs(first)) {
+		t.Errorf("the page after a NULL cursor is %v, want the first page %v again", orderIDs(again), orderIDs(first))
 	}
 }
 

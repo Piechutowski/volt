@@ -370,6 +370,18 @@ func PageViewKeyset(day rt.Null[int], id rt.Null[int], limit int) rt.Query[PageV
 	return rt.Query[PageView]{SQL: voltPageViewKeysetSQL, Args: []any{day, day, day, day, id, id, limit}, Scan: voltPageViewScan, Err: rt.LimitCheck(limit)}
 }
 
+const voltOrderPlacedKeysetSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ("placed_at" IS NOT NULL AND ((? IS NULL OR "placed_at" < ?) OR ((? IS NULL OR "placed_at" = ?) AND (? IS NULL OR "id" < ?)))) ORDER BY "placed_at" DESC, "id" DESC LIMIT ?`
+
+func OrderPlacedKeyset(at rt.Null[time.Time], id rt.Null[int], limit int) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderPlacedKeysetSQL, Args: []any{at, at, at, at, id, id, limit}, Scan: voltOrderScan, Err: rt.LimitCheck(limit)}
+}
+
+const voltOrderPlacedKeysetLooseSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ((? IS NULL OR "placed_at" < ?) OR ((? IS NULL OR "placed_at" = ?) AND (? IS NULL OR "id" < ?))) ORDER BY "placed_at" DESC, "id" DESC LIMIT ?`
+
+func OrderPlacedKeysetLoose(at rt.Null[time.Time], id rt.Null[int], limit int) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderPlacedKeysetLooseSQL, Args: []any{at, at, at, at, id, id, limit}, Scan: voltOrderScan, Err: rt.LimitCheck(limit)}
+}
+
 const voltPageViewPickedSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE ((? IS NULL OR "site" = ?) AND (? IS NULL OR "hits" >= ?)) ORDER BY "id" ASC`
 
 func PageViewPicked(site rt.Null[string], min rt.Null[int]) rt.Query[PageView] {

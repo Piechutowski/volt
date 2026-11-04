@@ -230,6 +230,34 @@ func TestProjectionSetTerms(t *testing.T) {
 	}
 }
 
+// A predicate keyword names a column anywhere outside a predicate: a
+// projection lists, aggregates and computes over it, and only inside the
+// where clause is it the keyword (spec §keywords, §predicates).
+func TestProjectionTakesPredicateWords(t *testing.T) {
+	src := "package db\nselect p (id, exists, like.in, sum(is) as total, not + 1 as next) for t join like\n"
+	f, diags := ParseFile("t.volt", src)
+	if len(diags) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	var got []string
+	for _, d := range f.Decls {
+		if s, ok := d.(*ast.Select); ok {
+			for _, it := range s.Items {
+				if it.Col != nil {
+					got = append(got, it.Col.String())
+				}
+			}
+		}
+	}
+	if strings.Join(got, ",") != "id,exists,like.in,is" {
+		t.Errorf("projected columns = %v, want id,exists,like.in,is", got)
+	}
+	_, diags = ParseFile("t.volt", "package db\nselect p (id) for t where exists = 1\n")
+	if len(diags) == 0 || !strings.Contains(diags[0].Msg, "keyword inside a predicate") {
+		t.Errorf("exists as a column inside a predicate: %v, want the keyword error", diags)
+	}
+}
+
 func TestPipelineRecoversPerPlug(t *testing.T) {
 	src := "pipeline api {\n\tuse volt.RequestID\n\tRequestID\n\tBearerAuth extra\n\tuse Last\n}\n"
 	f, diags := ParseFile("p.volt", src)

@@ -442,3 +442,87 @@ func TestVoltCompleteExists(t *testing.T) {
 		t.Errorf("completion after exists t = %v, want [tags]", got)
 	}
 }
+
+// A pred named inside an exists term is a reference like any other:
+// definition reaches the pred, references list the use, and a rename
+// rewrites it (spec §predicates).
+func TestVoltExistsPredReference(t *testing.T) {
+	schema := "package db\n\ntable posts {\n\tid    int [pk]\n\ttitle string\n}\n\n" +
+		"table post_tags {\n\tpost_id int    [pk]\n\ttag     string [pk]\n}\n\n" +
+		"ref: post_tags.post_id > posts.id [as: post, reverse: tags]\n\n" +
+		"pred golang { tag = \"go\" }\n\n" +
+		"select tagged for posts where exists tags (golang) [order: (id asc)]\n" +
+		"select direct for post_tags where golang\n"
+	root := voltProject(t, map[string]string{"go.mod": "module lsptest\n", "db/schema.volt": schema})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), schema)
+	decl := posOf(t, schema, "golang {", 0)
+	inside := posOf(t, schema, "golang)", 0)
+	outside := posOf(t, schema, "golang\n", 0)
+
+	if loc := d.Definition(inside); loc == nil || loc.Range.Start.Line != decl.Line || loc.Range.Start.Character != decl.Character {
+		t.Errorf("definition from the use inside exists = %v, want the pred on line %d", loc, decl.Line)
+	}
+	refs := d.References(decl, true)
+	lines := map[protocol.UInteger]bool{}
+	for _, r := range refs {
+		lines[r.Range.Start.Line] = true
+	}
+	for _, at := range []protocol.Position{decl, inside, outside} {
+		if !lines[at.Line] {
+			t.Errorf("references %v miss line %d", refs, at.Line)
+		}
+	}
+	edit, err := d.Rename(decl, "gopher")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var renamed int
+	for _, edits := range edit.Changes {
+		for _, e := range edits {
+			if e.Range.Start == inside {
+				renamed++
+			}
+		}
+	}
+	if renamed != 1 {
+		t.Errorf("rename leaves the use inside exists untouched: %v", edit.Changes)
+	}
+}
+
+// A predicate term starts after a predicate's parenthesis too, where
+// completion offers the preds and exists; inside an exists term, which
+// does not nest, it offers the preds alone, and a projection's
+// parenthesis is no predicate (spec §predicates).
+func TestVoltCompletePredicateParens(t *testing.T) {
+	schema := strings.Replace(existsSchema, "select tagged", "pred recent { id > 0 }\n\nselect tagged", 1)
+	root := voltProject(t, map[string]string{"go.mod": "module lsptest\n", "db/schema.volt": schema})
+	for _, tc := range []struct {
+		line   string
+		exists bool
+		recent bool
+	}{
+		{"select feed for posts where (", true, true},
+		{"select feed for posts where ((re", false, true},
+		{"select feed for posts where title != \"\" or (ex", true, false},
+		{"select feed for posts where not (", true, true},
+		{"select feed for posts where exists tags (", false, true},
+		{"select feed for posts where exists tags (tag = \"go\" and ex", false, false},
+		{"select feed for posts where exists tags (tag = \"go\") and (ex", true, false},
+		{"pred fresh { (", true, true},
+		{"select feed (", false, false},
+		{"select feed for posts where id in (", false, false},
+		{"select feed for posts [order: (", false, false},
+	} {
+		text := strings.Replace(schema, "select tagged", tc.line+"\nselect tagged", 1)
+		d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
+		pos := posOf(t, text, tc.line, 0)
+		pos.Character += uint32(len(tc.line))
+		labels := map[string]bool{}
+		for _, it := range d.Complete(pos) {
+			labels[it.Label] = true
+		}
+		if labels["exists "] != tc.exists || labels["recent"] != tc.recent {
+			t.Errorf("completion after %q = %v, want exists %v and recent %v", tc.line, labels, tc.exists, tc.recent)
+		}
+	}
+}

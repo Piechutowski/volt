@@ -230,8 +230,11 @@ layer:
   (case-insensitively filtered), verbs and `resources` in `scope`
   bodies, tables and groups in a `group` body, operations in a
   `migration` body, the columns of the named table after `ref: table.`,
-  `pred` names and `exists` where a predicate term starts and the
-  relations of the select's table after `exists` (§predicates),
+  `pred` names and `exists` where a predicate term starts, after
+  `where`, `and`, `or`, `not`, a pred's `{` or a predicate's `(` (not
+  a projection's, a list's or a setting's), `exists` left out inside
+  an exists term, which does not nest, and the relations of the
+  select's table after `exists` (§predicates),
   settings per construct and none on a construct that takes none
   (§settings-lists, §settings-whitelists), and `true`/`false` after
   `default:` only on a column stored as `bool`. Every keyword

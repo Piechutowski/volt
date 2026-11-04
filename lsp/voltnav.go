@@ -293,6 +293,8 @@ func (ix *voltIndex) predExprRefs(path string, x ast.PredExpr) {
 		ix.predExprRefs(path, x.X)
 	case *ast.PredParen:
 		ix.predExprRefs(path, x.X)
+	case *ast.PredExists:
+		ix.predExprRefs(path, x.X)
 	case *ast.PredRef:
 		sp := spanOf(x.Name)
 		ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{"pred", path, x.Name.Name()}, false, x.Name.Name()})
@@ -845,12 +847,13 @@ func (d *Document) voltComplete(prefix string) []protocol.CompletionItem {
 		items = append(items, d.namedDefItems("group", m[1], protocol.CompletionItemKindStruct)...)
 		return items
 	}
-	if m := voltExistsRE.FindStringSubmatch(prefix); m != nil {
+	inExists := existsOpen(prefix)
+	if m := voltExistsRE.FindStringSubmatch(prefix); m != nil && !inExists {
 		return d.relationItems(m[1], m[2])
 	}
-	if m := voltWhereRE.FindStringSubmatch(prefix); m != nil {
-		items := d.namedDefItems("pred", m[1], protocol.CompletionItemKindFunction)
-		if strings.HasPrefix("exists", strings.ToLower(m[1])) {
+	if partial, ok := predTermAt(prefix); ok {
+		items := d.namedDefItems("pred", partial, protocol.CompletionItemKindFunction)
+		if !inExists && strings.HasPrefix("exists", strings.ToLower(partial)) {
 			items = append(items, keywordItems([]string{"exists "})...)
 		}
 		return items
@@ -880,6 +883,49 @@ var voltSelectForRE = regexp.MustCompile(`^\s*select\s+\w+\s+for\s+([A-Za-z0-9_]
 var voltWhereRE = regexp.MustCompile(`\b(?:where|and|or|not|\{)\s+([A-Za-z0-9_]*)$`)
 
 var voltExistsRE = regexp.MustCompile(`^\s*select\s+\w+.*?\bfor\s+([A-Za-z0-9_]+)\b.*\bexists\s+([A-Za-z0-9_]*)$`)
+
+var voltPredParenRE = regexp.MustCompile(`\(\s*([A-Za-z0-9_]*)$`)
+
+var voltPredOpenerRE = regexp.MustCompile(`(?:\b(?:where|and|or|not)|\{|\bexists\s+[A-Za-z0-9_]+)$`)
+
+var voltPredContextRE = regexp.MustCompile(`\bwhere\b|\{`)
+
+var voltExistsOpenRE = regexp.MustCompile(`\bexists\s+[A-Za-z0-9_]+\s*\(`)
+
+func predTermAt(prefix string) (string, bool) {
+	if m := voltWhereRE.FindStringSubmatch(prefix); m != nil {
+		return m[1], true
+	}
+	m := voltPredParenRE.FindStringSubmatchIndex(prefix)
+	if m == nil {
+		return "", false
+	}
+	before := strings.TrimRight(prefix[:m[0]], " \t(")
+	if !voltPredContextRE.MatchString(before) || !voltPredOpenerRE.MatchString(before) {
+		return "", false
+	}
+	return prefix[m[2]:m[3]], true
+}
+
+func existsOpen(prefix string) bool {
+	opens := voltExistsOpenRE.FindAllStringIndex(prefix, -1)
+	if len(opens) == 0 {
+		return false
+	}
+	depth := 0
+	for _, r := range prefix[opens[len(opens)-1][1]-1:] {
+		switch r {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return false
+			}
+		}
+	}
+	return depth > 0
+}
 
 func (d *Document) relationItems(table, partial string) []protocol.CompletionItem {
 	info := d.vpkg.Schema()
