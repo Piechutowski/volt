@@ -1,0 +1,274 @@
+// Optional parameters and exists terms on a real SQLite (spec
+// §predicates): a term that reads an absent optional parameter is true, a
+// present one filters as written, an optional list present and empty
+// matches no row, and exists tests a relation without repeating rows.
+package itest
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/nao/run"
+)
+
+type viewSeed struct {
+	site      string
+	day, hits int
+}
+
+func viewsSeed(t *testing.T, db run.DB, seeds []viewSeed) []PageView {
+	t.Helper()
+	var out []PageView
+	for _, s := range seeds {
+		v, err := run.Run(context.Background(), db, PageViewCreate(PageViewNew().SiteSet(s.site).DaySet(s.day).HitsSet(s.hits)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+func viewIDs(rows []PageView) []int {
+	ids := make([]int, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	return ids
+}
+
+func idsSame(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestOptionalAbsentAndPresent(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	v := viewsSeed(t, db, []viewSeed{{"blog", 1, 5}, {"blog", 2, 50}, {"docs", 3, 80}})
+	for _, tc := range []struct {
+		name string
+		q    rt.Query[PageView]
+		want []int
+	}{
+		{"both absent", PageViewPicked(rt.Null[string]{}, rt.Null[int]{}), []int{v[0].ID, v[1].ID, v[2].ID}},
+		{"site present", PageViewPicked(rt.Some("blog"), rt.Null[int]{}), []int{v[0].ID, v[1].ID}},
+		{"min present", PageViewPicked(rt.Null[string]{}, rt.Some(40)), []int{v[1].ID, v[2].ID}},
+		{"both present", PageViewPicked(rt.Some("blog"), rt.Some(40)), []int{v[1].ID}},
+		{"a present empty string is a value", PageViewPicked(rt.Some(""), rt.Null[int]{}), []int{}},
+		{"list absent", PageViewInSites(rt.Null[[]string]{}), []int{v[0].ID, v[1].ID, v[2].ID}},
+		{"list present", PageViewInSites(rt.Some([]string{"docs"})), []int{v[2].ID}},
+		{"list present and empty", PageViewInSites(rt.Some([]string{})), []int{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rows, err := run.Run(ctx, db, tc.q)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := viewIDs(rows); !idsSame(got, tc.want) {
+				t.Errorf("rows %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// The term of an absent optional parameter is true even where the column
+// is NULL, and a present time binds as its stored form (spec §go-types).
+func TestOptionalTimeOverNullColumn(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	ann, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("ann@blog.test").NameSet("Ann")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	early := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	var ids []int
+	for _, at := range []rt.Null[time.Time]{rt.Some(early), {}, rt.Some(early.Add(48 * time.Hour))} {
+		o, err := run.Run(ctx, db, OrderCreate(OrderNew().UserIDSet(ann.ID).TotalSet(1).FeeSet(1).PlacedAtSet(at)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, o.ID)
+	}
+	all, err := run.Run(ctx, db, OrderPlacedBy(rt.Null[time.Time]{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 3 {
+		t.Errorf("an absent bound keeps %d orders, want all 3, the one never placed included", len(all))
+	}
+	before, err := run.Run(ctx, db, OrderPlacedBy(rt.Some(early.Add(24*time.Hour))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(before) != 1 || before[0].ID != ids[0] {
+		t.Errorf("a present bound keeps %+v, want the order placed first alone", before)
+	}
+}
+
+// A keyset over (day desc, id desc) whose first page passes its cursor
+// absent and every later page the last row's values walks every row once.
+func TestOptionalKeysetFirstPage(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	v := viewsSeed(t, db, []viewSeed{{"blog", 3, 1}, {"blog", 1, 1}, {"blog", 3, 1}, {"docs", 2, 1}, {"docs", 1, 1}})
+	want := []int{v[2].ID, v[0].ID, v[3].ID, v[4].ID, v[1].ID}
+	var got []int
+	day, id := rt.Null[int]{}, rt.Null[int]{}
+	for pages := 0; ; pages++ {
+		if pages > len(v) {
+			t.Fatalf("the keyset does not end; read %v", got)
+		}
+		rows, err := run.Run(ctx, db, PageViewKeyset(day, id, 2))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) == 0 {
+			break
+		}
+		got = append(got, viewIDs(rows)...)
+		last := rows[len(rows)-1]
+		day, id = rt.Some(last.Day), rt.Some(last.ID)
+	}
+	if !idsSame(got, want) {
+		t.Errorf("pages read %v, want %v", got, want)
+	}
+}
+
+// Filtering through a join of a reverse relation repeats each row once
+// per matching row, which a grouped count reads; exists keeps the row
+// once, so the count is the user's orders (spec §predicates).
+func TestExistsReverseRelationKeepsCounts(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	ann, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("ann@blog.test").NameSet("Ann")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("bob@blog.test").NameSet("Bob")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("cy@blog.test").NameSet("Cy"))); err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range []rt.AnyEffect{
+		UserTagCreate(UserTagNew().UserIDSet(ann.ID).TagSet("go")),
+		UserTagCreate(UserTagNew().UserIDSet(ann.ID).TagSet("sql")),
+		UserTagCreate(UserTagNew().UserIDSet(bob.ID).TagSet("go")),
+		OrderCreate(OrderNew().UserIDSet(ann.ID).TotalSet(1).FeeSet(1)),
+		OrderCreate(OrderNew().UserIDSet(ann.ID).TotalSet(2).FeeSet(1)),
+		OrderCreate(OrderNew().UserIDSet(ann.ID).TotalSet(3).FeeSet(1)),
+		OrderCreate(OrderNew().UserIDSet(bob.ID).TotalSet(4).FeeSet(1)),
+	} {
+		if _, err := run.Run(ctx, db, rt.Tx(w)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tags := []string{"go", "sql"}
+	joined, err := run.Run(ctx, db, UserJoinedCounts(tags))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(joined) != 2 || joined[0].ID != ann.ID || joined[0].N != 6 || joined[1].N != 1 {
+		t.Fatalf("through a join Ann's 3 orders count %+v, want 6, twice over her two matching tags, the inflation exists avoids", joined)
+	}
+	counted, err := run.Run(ctx, db, UserOrderCounts(tags))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(counted) != 2 || counted[0].ID != ann.ID || counted[0].N != 3 || counted[1].ID != bob.ID || counted[1].N != 1 {
+		t.Errorf("through exists the counts are %+v, want Ann 3 and Bob 1, Cy untagged and left out", counted)
+	}
+	none, err := run.Run(ctx, db, UserOrderCounts(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(none) != 0 {
+		t.Errorf("exists over an empty list keeps %+v, want no user", none)
+	}
+}
+
+// An exists term that reads an absent optional parameter is true for every
+// row, those the relation reaches nothing from included.
+func TestExistsOptionalVanishesWhole(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	ann, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("ann@blog.test").NameSet("Ann")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("bob@blog.test").NameSet("Bob")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run.Run(ctx, db, UserTagCreate(UserTagNew().UserIDSet(ann.ID).TagSet("go"))); err != nil {
+		t.Fatal(err)
+	}
+	all, err := run.Run(ctx, db, UserTagged(rt.Null[string]{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 || all[0].ID != ann.ID || all[1].ID != bob.ID {
+		t.Errorf("an absent tag keeps %+v, want Ann and the untagged Bob", all)
+	}
+	gophers, err := run.Run(ctx, db, UserTagged(rt.Some("go")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gophers) != 1 || gophers[0].ID != ann.ID {
+		t.Errorf("tag go keeps %+v, want Ann alone", gophers)
+	}
+	nobody, err := run.Run(ctx, db, UserTagged(rt.Some("rust")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nobody) != 0 {
+		t.Errorf("an unused tag keeps %+v, want nobody", nobody)
+	}
+}
+
+// exists over a forward relation tests the one row the foreign key
+// refers to.
+func TestExistsForwardRelation(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	ann, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("ann@blog.test").NameSet("Ann")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("bob@blog.test").NameSet("Bob")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var anns []int
+	for _, u := range []User{ann, bob, ann} {
+		o, err := run.Run(ctx, db, OrderCreate(OrderNew().UserIDSet(u.ID).TotalSet(1).FeeSet(1)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if u.ID == ann.ID {
+			anns = append(anns, o.ID)
+		}
+	}
+	rows, err := run.Run(ctx, db, OrderBoughtBy("Ann"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]int, len(rows))
+	for i, r := range rows {
+		got[i] = r.ID
+	}
+	if !idsSame(got, anns) {
+		t.Errorf("orders bought by Ann: %v, want %v", got, anns)
+	}
+}

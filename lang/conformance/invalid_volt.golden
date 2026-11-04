@@ -990,6 +990,63 @@ db/i487_limit_order_ties_unique_key.volt:10:42: error: spec/selects-over-groups:
 ## i488_limit_no_key.volt
 db/i488_limit_no_key.volt:10:55: error: spec/selects-over-groups: select "top" takes limit: over an order that leaves ties: order: names no key of hit_log, so two rows can tie and the ones kept at the cut would be arbitrary; a table without a key, a primary key or a unique column or index whose columns are never NULL, takes no limit: (§selects-over-groups)
 
+## i489_optional_mixed.volt
+db/i489_optional_mixed.volt:12:43: error: spec/predicates: parameter :id here is :id? at db/i489_optional_mixed.volt:10:19: a parameter is optional at every use in a select, the preds it uses included, or at none (§predicates)
+
+## i490_optional_under_not.volt
+db/i490_optional_under_not.volt:10:30: error: spec/predicates: not stands over the optional parameter :min?: a term that reads an absent optional parameter is true, and not would make it false; write the parameter without ? or the predicate without not (§predicates)
+
+## i491_optional_under_not_pred.volt
+db/i491_optional_under_not_pred.volt:12:30: error: spec/predicates: not stands over the optional parameter :min?: a term that reads an absent optional parameter is true, and not would make it false; write the parameter without ? or the predicate without not (§predicates)
+
+## i492_optional_under_not_exists.volt
+db/i492_optional_under_not_exists.volt:16:33: error: spec/predicates: not stands over the optional parameter :tag?: a term that reads an absent optional parameter is true, and not would make it false; write the parameter without ? or the predicate without not (§predicates)
+
+## i493_optional_in_projection.volt
+db/i493_optional_in_projection.volt:10:27: error: spec/predicates: the optional parameter :width? stands in a projection; an optional parameter stands in a predicate term only (§predicates)
+
+## i494_optional_limit.volt
+db/i494_optional_limit.volt:9:49: error: spec/predicates: limit: takes the optional parameter :limit?; a limit is never optional, and an optional parameter stands in a predicate term only (§predicates, §selects-over-groups)
+
+## i495_optional_space.volt
+db/i495_optional_space.volt:9:38: error: syntax: '?' makes a parameter optional only directly after its name, :id? (§predicates)
+
+## i496_exists_nested.volt
+db/i496_exists_nested.volt:20:45: error: spec/predicates: exists comments stands inside exists posts: exists does not nest, the depth is one (§predicates)
+
+## i497_exists_no_relation.volt
+db/i497_exists_no_relation.volt:16:39: error: spec/predicates: table "posts" has no relation "labels" for exists to reach; its relations: tags (§predicates, §relationships-ref)
+
+## i498_exists_qualified_column.volt
+db/i498_exists_qualified_column.volt:16:45: error: spec/predicates: inside exists tags a column is one of table "post_tags"'s, named bare; tags.tag is qualified (§predicates)
+
+## i499_exists_wrong_table_column.volt
+db/i499_exists_wrong_table_column.volt:17:45: error: spec/predicates: table "post_tags", which exists tags reaches, has no column "title"; inside exists a bare name is a column of the relation's table (§predicates)
+
+## i500_exists_group.volt
+db/i500_exists_group.volt:22:41: error: spec/predicates: exists needs a table: "content" is a group, and a group has no relations (§predicates)
+
+## i501_exists_keyword.volt
+db/i501_exists_keyword.volt:10:28: error: syntax: "exists" is a keyword inside a predicate and names no column there (§predicates)
+
+## i502_optional_path_param
+app/routes.volt:10:12: error: spec/query-routes: parameter "tag" of db.PostFeed is optional, and a path segment is always present; pass it in the query string (§query-routes)
+
+## i503_optional_list_route
+app/routes.volt:10:17: error: spec/query-routes: db.PostPicked takes the optional list parameter "ids", which a route cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§query-routes)
+
+## i504_load_optional_literal
+app/routes.volt:11:20: error: spec/route-loads: argument 1 of db.PostFeed binds the optional parameter "tag", which a literal, always present, cannot bind; name a query-string key (§route-loads)
+
+## i505_load_optional_path
+app/routes.volt:11:20: error: spec/route-loads: argument 1 of db.PostFeed binds the optional parameter "tag", which a path parameter, always present, cannot bind; name a query-string key (§route-loads)
+
+## i506_load_optional_list
+app/routes.volt:11:23: error: spec/route-loads: argument 1 of db.PostPicked binds the optional list parameter "ids", which a load cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§route-loads, §query-routes)
+
+## i507_exists_ambiguous_relation.volt
+db/i507_exists_ambiguous_relation.volt:16:40: error: spec/predicates: relation "posts" of table "members" is ambiguous, read as SQLite reads an alias, without regard to case: it is the reverse relation to "posts" (at db/i507_exists_ambiguous_relation.volt:12:18; name it with [reverse: name] on a ref element) and the reverse relation to "posts" (at db/i507_exists_ambiguous_relation.volt:13:24; name it with [reverse: name] on a ref element) (§relationships-ref, §predicates)
+
 ## i50_group_unknown.volt
 db/i50_group_unknown.volt:11:3: error: spec/groups: unknown group term "ms_revenu": no such table or group in package "db" (§groups)
 

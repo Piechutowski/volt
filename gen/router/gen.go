@@ -21,6 +21,7 @@ import (
 const (
 	voltImport = "github.com/Piechutowski/volt"
 	runImport  = "github.com/Piechutowski/volt/nao/run"
+	rtImport   = "github.com/Piechutowski/volt/nao/rt"
 )
 
 // Options configures generation.
@@ -322,6 +323,20 @@ func (g *generator) timeParams() bool {
 	return false
 }
 
+func (g *generator) queryOptionalParams() bool {
+	for _, r := range g.pkg.Routes {
+		if r.Query == nil || r.ClientName == "" {
+			continue
+		}
+		for _, p := range r.Query.Params {
+			if p.Optional {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (g *generator) queryTimeParams() bool {
 	for _, r := range g.pkg.Routes {
 		if r.Query == nil {
@@ -446,7 +461,7 @@ func (g *generator) queryShimBody(r *lang.RouteInfo, parsed map[string]string) {
 		case lang.FromPath:
 			args = append(args, parsed[p.Name])
 		case lang.FromQuery:
-			g.pf("\t\tvolt%s, err := volt.QueryParam[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", p.Name, p.GoType, p.Name)
+			g.pf("\t\tvolt%s, err := volt.%s[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", p.Name, queryBinder(p), p.GoType, p.Name)
 			g.limitCheckEmit(p, "volt"+p.Name, "\t\t")
 			args = append(args, "volt"+p.Name)
 		case lang.FromList:
@@ -690,6 +705,9 @@ func (g *generator) clientEmit() error {
 		imports = append(imports, "time")
 	}
 	imports = append(imports, "", voltImport)
+	if g.queryOptionalParams() {
+		imports = append(imports, rtImport)
+	}
 	for _, q := range g.clientPackages() {
 		if !g.opts.ClientBeside {
 			imports = append(imports, dataImport(q))
@@ -739,13 +757,17 @@ func (g *generator) clientEmit() error {
 		var opts []string
 		var arg string
 		for _, p := range q.Params {
-			goType := p.GoType
+			goType := p.Type()
 			if g.opts.ClientBeside {
 				goType = strings.TrimPrefix(goType, q.Qualifier+".")
 			}
 			fmt.Fprintf(&sig, ", %s %s", p.Name, goType)
 			switch p.Source {
 			case lang.FromQuery:
+				if p.Optional {
+					fmt.Fprintf(&body, "\tif %s.Valid {\n\t\tvoltQ = append(voltQ, volt.Query(%q, volt.FormatQuery(%s.V)))\n\t}\n", p.Name, p.Name, p.Name)
+					break
+				}
 				opts = append(opts, fmt.Sprintf("volt.Query(%q, volt.FormatQuery(%s))", p.Name, p.Name))
 			case lang.FromList:
 				fmt.Fprintf(&body, "\tfor _, voltV := range %s {\n\t\tvoltQ = append(voltQ, volt.Query(%q, volt.FormatQuery(voltV)))\n\t}\n", p.Name, p.Name)
@@ -876,7 +898,7 @@ func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call,
 				argsOf[i][j] = v
 			default:
 				v := "volt_" + ld.Name + "_" + p.Name
-				g.pf("%s%s, err := volt.QueryParam[%s](r, %q)\n%sif err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, v, p.GoType, p.Name, indent, indent, indent)
+				g.pf("%s%s, err := volt.%s[%s](r, %q)\n%sif err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, v, queryBinder(p), p.GoType, p.Name, indent, indent, indent)
 				g.limitCheckEmit(p, v, indent)
 				argsOf[i][j] = v
 			}
@@ -898,6 +920,13 @@ func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call,
 	for i := len(closers) - 1; i >= 0; i-- {
 		g.pf("%s", closers[i])
 	}
+}
+
+func queryBinder(p lang.QueryParam) string {
+	if p.Optional {
+		return "QueryParamOptional"
+	}
+	return "QueryParam"
 }
 
 // limitCheckEmit refuses the value v of a select's limit: parameter

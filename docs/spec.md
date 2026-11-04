@@ -456,9 +456,10 @@ Volt reserves no word outside a predicate. Every keyword is
 contextual: a word acts as a keyword only in keyword position, where
 the grammar places it, and is an ordinary identifier everywhere else (a
 column may be named `table`, `indexes` or `type`). Inside a predicate
-expression the words `and`, `or`, `not`, `in`, `like`, `is` and
-`null`, in any case, and `true` and `false` where an operand stands,
-are reserved: they name no column and no `pred` there (§predicates).
+expression the words `and`, `or`, `not`, `in`, `like`, `is`,
+`exists` and `null`, in any case, and `true` and `false` where an
+operand stands, are reserved: they name no column, no relation and no
+`pred` there (§predicates).
 
 Keywords are case-sensitive (§case-sensitivity-and-terminology), and
 each has one spelling, all lowercase: the element and block words of
@@ -478,7 +479,7 @@ then reads it as that keyword, so the error is reported once.
 | resource actions | `index`, `new`, `create`, `show`, `edit`, `update`, `delete` | §the-action-table |
 | order directions | `asc`, `desc` | §selects-over-groups |
 | literal words | `true`, `false`, `null` | §boolean-and-null-literals |
-| clause words | `from`, `for`, `join`, `with`, `where`, `as`, `and`, `or`, `not`, `in`, `like`, `is` | §types, §selects-over-groups, §predicates |
+| clause words | `from`, `for`, `join`, `with`, `where`, `as`, `and`, `or`, `not`, `in`, `like`, `is`, `exists` | §types, §selects-over-groups, §predicates |
 | aggregate words | `count`, `sum`, `avg`, `min`, `max` | §selects-over-groups |
 | route words | `get`, `post`, `patch`, `delete`, `options`, `head`, `any`, `resources`, `dataset`, `use`, `load` | §routes, §resources, §datasets, §pipelines, §scope-loads |
 | parameter types | `int` | §route-paths |
@@ -635,7 +636,7 @@ expression literal = "`", { any char - "`" }, "`" ;
 punct = "{" | "}" | "[" | "]" | "(" | ")"
       | "," | ":" | "." | "~" | "*" | "/"
       | "<" | ">" | "-" | "+" | "\" | "="
-      | "!=" | "<=" | ">=" ;
+      | "!=" | "<=" | ">=" | "?" ;
 ```
 
 These are every token that is neither a name nor a literal; any other
@@ -657,6 +658,7 @@ comment, `;`, `#` and `'` among them, is a lexical error. Their roles:
 | `/`     | route paths (§route-paths) and import paths (§imports)      |
 | `+ \`   | group union and difference (§groups); `\` also leaves columns out of a star projection, `(* \ a)` (§selects-over-groups) |
 | `= != < <= >=` | comparisons in a predicate (§predicates); `=` also defines a group by expression, `Group g = a + b` (§groups) |
+| `?`     | an optional query parameter, written directly after its name, `:name?` (§predicates) |
 
 ---
 
@@ -1791,7 +1793,7 @@ expression literal   = "`", { any char - "`" }, "`" ;
 punct                = "{" | "}" | "[" | "]" | "(" | ")"
                      | "," | ":" | "." | "~" | "*" | "/"
                      | "<" | ">" | "-" | "+" | "\" | "="
-                     | "!=" | "<=" | ">=" ;
+                     | "!=" | "<=" | ">=" | "?" ;
 ```
 
 ---
@@ -2414,7 +2416,12 @@ parameters, so the handler reads them and never asks for them.
    query string by that name, a list parameter from the repeated key,
    with the types the query string carries (§query-routes); a missing
    or unparseable value is a 400 naming the key, before any of the
-   route's loads runs. A literal MUST spell the parameter's Go type: a
+   route's loads runs. An optional parameter (§predicates) binds from
+   the query string only, absent when the key is missing, as a query
+   route binds it; a path parameter or a literal, which is always
+   present, cannot bind it, and an optional list parameter cannot be
+   loaded at all, for the reason a query route cannot route one
+   (§query-routes). A literal MUST spell the parameter's Go type: a
    string literal a `string`, a number an `int` when it is whole and
    a `float64` otherwise, `true` or `false` a `bool`; a type the
    query string cannot carry takes a literal or nothing. A number
@@ -2600,6 +2607,14 @@ scope /api [pipe: api] {
      `patch` (clause 1);
    - a **list parameter** (§predicates) binds from the **repeated query
      key** of its name; absent means the empty list;
+   - an **optional parameter** (§predicates) binds from the **query
+     string** by name as `rt.Null[T]`: absent when the key is missing,
+     present with the parsed value otherwise, and an unparseable value
+     is a 400 that names the parameter. A path segment is always
+     present, so a path parameter of its name is an error. An optional
+     list parameter is not routable: the query string has no spelling
+     for a present empty list, which matches no row where an absent
+     list matches every row, so a route to its select is an error;
    - every other parameter binds from the **query string** by name,
      parsed to its type; a missing or unparseable value is a 400 that
      names the parameter.
@@ -2610,8 +2625,9 @@ scope /api [pipe: api] {
    the path parameters parse, before the scope loads (§scope-loads),
    and from the query string where it binds, before the query runs.
    A parameter binds from the query string only when its type is
-   `string`, `bool`, `int`, `float64` or `time.Time`, or a slice of one
-   of those (a list parameter); a select with a parameter of any other
+   `string`, `bool`, `int`, `float64` or `time.Time`, a slice of one
+   of those (a list parameter), or an `rt.Null` of one of those (an
+   optional parameter); a select with a parameter of any other
    type, a declared type (§types) included, is not a query route, and
    the route is an error. A path parameter the function does not take is
    an error: the route would capture a value nothing consumes; the key
@@ -2772,7 +2788,10 @@ the routes through typed methods instead of hand-built requests.
    query-string parameters through `volt.FormatQuery`, a `time.Time`
    as RFC 3339 with its fractional seconds, so the instant arrives
    whole, a list as a
-   repeated key, a changeset as the body: `APIUserCreate(ctx, cs
+   repeated key, an optional parameter (§predicates) as the
+   `rt.Null[T]` the query takes, left out of the query string when
+   absent, `APIPostFeed(ctx, tag rt.Null[string]) ([]db.Post, error)`,
+   a changeset as the body: `APIUserCreate(ctx, cs
    db.UserChangeset) (db.User, error)`, `APIUserUpdate(ctx, id int, cs
    db.UserChangeset) (db.User, error)`, sent as `cs.Params()`
    (§changesets). Each method sends its route's verb, the one the
@@ -3294,18 +3313,19 @@ pred expr    = pred and, { "or", pred and } ;
 pred and     = pred unary, { "and", pred unary } ;
 pred unary   = { "not" }, pred primary ;
 pred primary = "(", pred expr, ")"
-             | comparison | membership | pattern | null test
+             | comparison | membership | pattern | null test | exists term
              | name - pred keyword ;       (* reference to a Pred *)
 comparison   = operand, comp op, operand ;
 comp op      = "=" | "!=" | "<" | "<=" | ">" | ">=" ;
 membership   = column ref, "in", ( "(", literal, { ",", literal }, ")" | param ) ;
 pattern      = column ref, "like", ( string | param ) ;
 null test    = column ref, "is", [ "not" ], "null" ;
+exists term  = "exists", name - pred keyword, "(", pred expr, ")" ;
 operand      = column ref | param | literal ;
 column ref   = [ name - pred keyword, "." ], name - pred keyword ;
-param        = ":", name ;                 (* no space after ':' *)
+param        = ":", name, [ "?" ] ;        (* no space after ':' or before '?' *)
 literal      = [ "-" ], number | string | boolean ;
-pred keyword = "and" | "or" | "not" | "in" | "like" | "is" | "null" ;
+pred keyword = "and" | "or" | "not" | "in" | "like" | "is" | "null" | "exists" ;
 ```
 
 ```volt fragment
@@ -3313,11 +3333,14 @@ pred current { org = :org and year = :year }
 pred recent  { year >= :since }
 pred fresh   { current and recent }
 pred chosen  { org in :orgs }
+pred before  { published_at < :at? or (published_at = :at? and id < :id?) }
+pred tagged  { exists tags (tag = :tag?) }
 ```
 
-1. `and`, `or`, `not`, `in`, `like`, `is`, `null` are keywords inside a
-   predicate expression, lowercase (§keywords): a column of one of these
-   names, in any case, cannot be referenced in a predicate. `true` and
+1. `and`, `or`, `not`, `in`, `like`, `is`, `null` and `exists` are
+   keywords inside a predicate expression, lowercase (§keywords): a
+   column or a relation of one of these names, in any case, cannot be
+   referenced in a predicate. `true` and
    `false`, in any case, are the boolean literals where an operand
    stands, so a column of either name is referenced only before `in`,
    `like` or `is`, and a `pred` of either name only as a bare reference.
@@ -3387,7 +3410,79 @@ pred chosen  { org in :orgs }
    cannot take one: JSON carries
    no blob, and the text its bytes would travel as never equals the
    stored value.
-6. **Rendering.** There is one SQL renderer for the generated query
+6. **Optional parameters.** `:name?`, the `?` directly after the
+   name, makes a parameter **optional**: its Go type is `rt.Null[T]`,
+   `T` the type rule 3 gives the parameter, so an optional list
+   parameter is `rt.Null[[]T]` (`rt.Null[[]string]`), and the generated
+   function takes it present, `rt.Some(v)`, or absent, the zero value.
+   - A parameter is optional at every use in one select, the `pred`s it
+     uses included, or at none: `:at?` beside `:at` is an error naming
+     both uses. An optional parameter stands in a predicate term only:
+     in a projection's arithmetic or as the value of `limit:`
+     (§selects-over-groups) it is an error.
+   - **The vanishing rule.** A *term* is a comparison, a membership, a
+     pattern or an exists term (rule 7). A term reads the parameters it
+     names, and an exists term reads those of its inner predicate. A
+     term that reads an absent optional parameter is true. So
+     `published_at < :at? or (published_at = :at? and id < :id?)` is
+     true when both are absent, which makes the first page of a keyset
+     over `order: (published_at desc, id desc)` the same select as
+     every later page, and `exists tags (tag = :tag?)` is true when
+     `:tag` is absent, so every row passes. A term that reads no absent
+     parameter means what it says. An exists term vanishes as a whole:
+     a term inside it never vanishes on its own, since whenever every
+     parameter the exists term reads is present, so is every parameter
+     of each term inside it.
+   - An optional list parameter that is present and empty keeps rule
+     3's meaning: membership in an empty list is false, so
+     `tag in :tags?` keeps every row for an absent list and none for an
+     empty one.
+   - An optional parameter MUST NOT stand under `not`, written there or
+     reached through a `pred` reference, inside an exists term
+     included: a vanished term is true, and `not` would make it false,
+     which is not what absent means. The error names the `not`.
+   - The statement stays one constant text whatever is present: a term
+     that reads optional parameters renders behind one guard per
+     optional parameter it reads, `(? IS NULL OR <term>)`, the guards in
+     first-appearance order, and every placeholder of the parameter, its
+     guard's and the term's own, binds the parameter's `rt.Null`, which
+     binds NULL when absent (rule 8). An optional list parameter binds
+     as `rt.JSONListOptional(tags)`: NULL when absent, the JSON array of
+     rule 3 when present.
+7. **`exists`.** `exists rel (x)` is true for a row when at least one
+   row that the relation `rel` leads to from it matches `x`.
+   - `rel` is a relation of the select's `for` table, named as `join`
+     names one (§relationships-ref, §selects-over-groups): a forward
+     relation, which leads to the one row the foreign key refers to, or
+     a reverse relation, the rows that refer to this one. It MUST NOT
+     be ambiguous, and the target MUST be a table, since a group has no
+     relations. A name that is no relation of the table is an error
+     listing its relations.
+   - `x` is a predicate over the related table's columns, named bare:
+     inside `exists`, a bare name is a column of the relation's table,
+     typed as its own table types it (rules 3 to 5), and a qualified
+     name is an error. It sees no column of the outer row: the
+     relation's key is the one link between the two. A `pred` it
+     references expands there, over the same table. The `where` of a
+     select and a `pred` both take the term; a `pred` is typed at each
+     use site, so one that holds an exists term serves a table that has
+     the relation.
+   - `exists` does not nest: an exists term inside another one, written
+     or reached through a `pred` reference, is an error. The depth is
+     one, as it is for `with` (§selects-over-groups).
+   - `exists` reaches what `join` reaches but filters without joining.
+     A join of a reverse relation repeats the row of the `for` table
+     once per related row, so filtering through it multiplies the rows
+     every aggregate reads: in `select feed (id, count(comments.id) as
+     n) for posts join comments join tags where tags.tag in :tags
+     [group: (id)]` a post with two of the tags counts each comment
+     twice. `exists tags (tag in :tags)` keeps the post once and its
+     comments once each; an exists term repeats no row, so `limit:`
+     needs no key of the relation's table for it (§selects-over-groups).
+   - The term renders as a correlated subquery (rule 8): `EXISTS
+     (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" =
+     "posts"."id" AND ("tags"."tag" = ?))`.
+8. **Rendering.** There is one SQL renderer for the generated query
    surface, the runtime's (`rt.SelectRender` and its siblings): the
    select functions, the CRUD functions, the changeset writes and the
    dynamic layer are its output. The dynamic layer calls it at run
@@ -3416,6 +3511,19 @@ pred chosen  { org in :orgs }
      `(a AND b AND c)`; one operand is itself; `not` is `NOT (x)`, and
      when x brings its own parentheses (an `and`/`or` group, a raw
      fragment) they serve: `NOT ("a" = ? OR "b" = ?)`;
+   - an exists term (rule 7) is `EXISTS (SELECT 1 FROM <table> AS
+     "<relation>" WHERE <pairs> AND (x))`, `<table>` the relation's
+     table, `<pairs>` the relation's key as a join spells it,
+     `"<relation>"."<column>" = "<target>"."<column>"` per key column
+     joined by ` AND `, the target's column qualified by the target
+     table's name whether or not the select joins, and every column of
+     x qualified by the relation's name; the parentheses of x serve
+     when it brings its own, as under `not`;
+   - a term that reads optional parameters (rule 6) is `(? IS NULL OR
+     <term>)`, one `? IS NULL OR ` per optional parameter it reads, in
+     first-appearance order: `(? IS NULL OR "published_at" < ?)`,
+     `(? IS NULL OR EXISTS (SELECT 1 FROM …))`; each guard binds its
+     parameter's value, as every placeholder of the term does;
    - a value is always an argument behind a positional `?`, in
      left-to-right order of the text: a literal written in a Volt
      predicate is bound by the generated method like a parameter, the
@@ -3469,7 +3577,12 @@ pred chosen  { org in :orgs }
    not its output and follow their own spelling. A test renders a corpus of predicates once through the typed
    handles and once from Volt source and compares the bytes; the
    generator goldens and the integration tests prepare the constants
-   on a real SQLite.
+   on a real SQLite. An exists term and an optional parameter have no
+   typed handle: a Go caller of the dynamic layer leaves out a
+   predicate it has no value for, since a zero predicate vanishes, and
+   writes a subquery as `rt.Raw`. Their spellings are pinned by a test
+   of the renderer, by the generator goldens and by the integration
+   tests, which run them on SQLite.
 
 ## Selects over groups
 
@@ -3513,6 +3626,7 @@ select totals  (count() as n, max(value) as top) for points
 select board   for metrics with points where unit = :unit [order: (name asc)]
 select latest  for points where ts >= :since [order: (ts desc, id desc), limit: :limit]
 select peaks   (metric_id, max(value) as peak) for points [group: (metric_id), order: (peak desc, metric_id asc), limit: 10]
+select feed    for posts where exists tags (tag = :tag?) and (published_at < :at? or (published_at = :at? and id < :id?)) [order: (published_at desc, id desc), limit: :limit]
 ```
 
 The clauses read in SQL order — name, columns, source, filter — and
@@ -3534,10 +3648,13 @@ the optional projection narrows the emitted columns.
    aids (§groups). Since a group cannot take a table's name, at most
    one declaration matches.
 3. `where` takes a full §predicates expression — named Preds, inline
-   comparisons, and any composition of the two. Omitted = all rows.
+   comparisons, exists terms over the target's relations, and any
+   composition of them. Omitted = all rows.
 4. **The agreement rule.** Every column referenced by the `where`
    expression (`pred` references expanded) and by `order:` MUST exist in
-   **every** member, and all members MUST agree on its type (§predicates).
+   **every** member, and all members MUST agree on its type (§predicates);
+   a column inside an exists term is its relation's table's instead
+   (§predicates), and the target of one is a table.
    A missing column or a type disagreement is an error naming the
    offending members and their types — the predicate must be checkable
    for all members or it does not compile.
@@ -3554,7 +3671,10 @@ the optional projection narrows the emitted columns.
    (§generated-query-surface) —
    `func <Model><SelectName>(<params>) rt.Query[<Row>]`
    — parameters in first-appearance order over the expanded
-   expression, each typed by §predicates, and the `limit:` parameter
+   expression, each typed by §predicates, an optional one as
+   `rt.Null[T]` (`func PostFeed(tag rt.Null[string], at
+   rt.Null[time.Time], id rt.Null[int], limit int)
+   rt.Query[Post]`), and the `limit:` parameter
    last (rule 12); `<Row>` is the member's row
    type (the model itself when there is no projection); the
    emitted SQL is the runtime renderer's output (§predicates,
@@ -3635,7 +3755,11 @@ the optional projection narrows the emitted columns.
    optional relation, a composite key `AND`ing its pairs, every column
    qualified once a join is present. The relation name is the SQL
    alias, which is why a relation named as its table is ambiguous
-   (§relationships-ref).
+   (§relationships-ref). A relation joined only to filter on it is an
+   exists term instead (§predicates): a join of a reverse relation
+   repeats each row once per related row, which inflates every
+   aggregate the select computes, and `exists` filters without
+   repeating any.
 9. **Aggregates and arithmetic.** A projected item is a column, an
    aggregate or an arithmetic expression; the latter two are
    **derived** and carry an alias, `as name`, a lower-case identifier
@@ -3699,7 +3823,8 @@ the optional projection narrows the emitted columns.
     decimal digits whose value is at least 1 and fits `int64`, bound
     in canonical form as a predicate's literal is (§predicates), so
     `limit: 007` binds `7`. The parameter is an `int`, obeys the
-    parameter rules of §predicates, and names no other parameter of
+    parameter rules of §predicates, is never optional (`:limit?` is an
+    error, §predicates), and names no other parameter of
     the select; it joins the select's parameters after every
     parameter the projection, the `where` clause and the other
     settings read, so the signature ends with it: `func
@@ -3714,7 +3839,8 @@ the optional projection narrows the emitted columns.
     of a group, as its own columns, and a joined relation of many
     rows, a reverse relation (§relationships-ref), repeats that row
     for each of its own, so the order names a key of that relation's
-    table too, qualified (`comments.id`). With `group:` a row is a
+    table too, qualified (`comments.id`); an exists term
+    (§predicates) repeats no row and asks for no key. With `group:` a row is a
     group, so the order names every `group:` item, or a key of the
     `for` table that `group:` holds as its own columns when no `group:`
     item reaches a relation of many rows, one group then being one row
@@ -4783,7 +4909,8 @@ item, a `Set`, an `After` key and a `Raw` argument bind it alike; a
 valid `rt.Null[time.Time]` binds as that text itself, a declared type
 stored as `time.Time` through its own `Value` and then as that text,
 and every item of a list parameter or an `InList` travels in the JSON
-array as that text (`rt.JSONList`, §predicates). A year outside 0000
+array as that text (`rt.JSONList`, and `rt.JSONListOptional` for an
+optional list, §predicates). A year outside 0000
 to 9999 in UTC, past which SQLite's date functions and the text order
 end, is an error, the same one on every path: the statement returns
 it without running, an `In` item, a list parameter, an `InList` and

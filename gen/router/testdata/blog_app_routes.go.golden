@@ -35,6 +35,7 @@ var Table = []volt.Route{
 	{Method: "GET", Pattern: "/api/totals", Spelled: "/api/totals", Query: "db.UserTotals", Helper: "PathAPIUserTotals"},
 	{Method: "GET", Pattern: "/api/feed", Spelled: "/api/feed", Query: "db.UserFeed", Helper: "PathAPIUserFeed"},
 	{Method: "GET", Pattern: "/api/latest", Spelled: "/api/latest", Query: "db.UserLatest", Helper: "PathAPIUserLatest"},
+	{Method: "GET", Pattern: "/api/written", Spelled: "/api/written", Query: "db.UserWritten", Helper: "PathAPIUserWritten"},
 	{Method: "GET", Pattern: "/api/roles/{userID}/{roleID}", Spelled: "/api/roles/:userID(int)/:roleID(int)", Query: "db.UserRoleGet", Helper: "PathAPIUserRoleGet", Params: []volt.RouteParam{{Name: "userID", Type: "int"}, {Name: "roleID", Type: "int"}}},
 	{Method: "PATCH", Pattern: "/api/roles/{userID}/{roleID}", Spelled: "/api/roles/:userID(int)/:roleID(int)", Query: "db.UserRoleUpdate", Params: []volt.RouteParam{{Name: "userID", Type: "int"}, {Name: "roleID", Type: "int"}}},
 	{Method: "GET", Pattern: "/ms/revenue", Spelled: "/ms/revenue", Query: "db.MsRevenueBrowse", Helper: "PathMsRevenueBrowse"},

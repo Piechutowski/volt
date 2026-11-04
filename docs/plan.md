@@ -246,7 +246,7 @@ landed; more follow one feature at a time.
 
 ---
 
-## Step 20. The comparison on `Load.Rescue`, `rt.Atomic` and `limit:`
+## Step 20. The comparison on `Load.Rescue`, `rt.Atomic`, `limit:` and optional parameters
 
 `compare/volt` was written while a scope load could not answer its own
 miss, so `CurrentMember` loads a list, empty for an unknown member, and
@@ -261,11 +261,17 @@ continuation over `rt.Atomic(rt.Then(db.PostCreate(cs), next))`, whose
 `next` returns the `Transaction` of the tag inserts mapped back to the
 post (spec §generated-query-surface), so a refused tag leaves no post.
 It was also written while a select had no limit, so the feed reads
-every post after the cursor and cuts the page in Go; `feed` and
-`feed_tagged` take `limit: :limit` (spec §selects-over-groups) and the
-handler asks for one row past the page to know whether a next cursor
-exists. `compare/suite` passes unchanged, `go run ./compare/measure`
-remeasures, and the README's table and its first three gaps change in
+every post after the cursor and cuts the page in Go; the feed takes
+`limit: :limit` (spec §selects-over-groups) and the handler asks for
+one row past the page to know whether a next cursor exists. And it was
+written while a select had no optional parameter, so the tag filter is
+a second select, `feed_tagged`, which joins `tags` to filter, and the
+first page passes a sentinel cursor; `feed` becomes the one select,
+`where visible and exists tags (tag = :tag?)` with `visible` reading
+`:at?` and `:id?` (spec §predicates), `feed_tagged` goes, and the
+handler passes absent values where the request has no cursor or no
+tag. `compare/suite` passes unchanged, `go run ./compare/measure`
+remeasures, and the README's table and its first four gaps change in
 the commit that deletes this section.
 
 ---

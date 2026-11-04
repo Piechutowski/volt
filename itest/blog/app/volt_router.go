@@ -346,6 +346,23 @@ func register(mux *http.ServeMux, c Controllers) {
 		})
 	}, errHandlerErrors, voltPerform)))
 
+	mux.Handle("GET /api/described", pipe0(volt.Handler("GET /api/described", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		voltbio, err := volt.QueryParamOptional[string](r, "bio")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		voltfrom, err := volt.QueryParamOptional[int](r, "from")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.UserDescribed(voltbio, voltfrom), func(voltOut []db.User) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
+
 	mux.Handle("GET /ms/revenue", pipe0(volt.Handler("GET /ms/revenue", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
 			return volt.Fail(err)

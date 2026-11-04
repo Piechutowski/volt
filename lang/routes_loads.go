@@ -125,15 +125,15 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 	qr := &QueryRef{Qualifier: qual, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200}
 
 	type sigParam struct {
-		name, goType string
-		limits       bool
+		name, goType     string
+		limits, optional bool
 	}
 	var sig []sigParam
 	found := false
 	if si, m, ok := l.selectByMethod(target, name); ok {
 		found = true
 		for _, p := range si.Params {
-			sig = append(sig, sigParam{p.GoName, p.GoType, p.GoName == si.LimitParam})
+			sig = append(sig, sigParam{p.GoName, p.GoType, p.GoName == si.LimitParam, p.Optional})
 		}
 		switch {
 		case si.With != nil:
@@ -180,6 +180,32 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 			continue
 		}
 		list := strings.HasPrefix(sp.goType, "[]")
+		if sp.optional {
+			qp.Optional = true
+			a, isName := arg.(*ast.Ident)
+			inPath := false
+			if isName {
+				_, inPath = byName[a.Name()]
+			}
+			switch {
+			case !isName || a.Name() == "true" || a.Name() == "false":
+				l.errorf(arg.Pos(), "route-loads", "argument %d of %s binds the optional parameter %q, which a literal, always present, cannot bind; name a query-string key (§route-loads)", i+1, ref, sp.name)
+				ok = false
+			case inPath:
+				l.errorf(a.Pos(), "route-loads", "argument %d of %s binds the optional parameter %q, which a path parameter, always present, cannot bind; name a query-string key (§route-loads)", i+1, ref, sp.name)
+				ok = false
+			case list:
+				l.errorf(a.Pos(), "route-loads", "argument %d of %s binds the optional list parameter %q, which a load cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§route-loads, §query-routes)", i+1, ref, sp.name)
+				ok = false
+			case !queryValueTypes[sp.goType]:
+				l.errorf(a.Pos(), "route-loads", "parameter %q of %s is %s, which the query string cannot carry (§route-loads)", sp.name, ref, qp.Type())
+				ok = false
+			default:
+				qp.Source, qp.Name = FromQuery, a.Name()
+			}
+			qr.Params = append(qr.Params, qp)
+			continue
+		}
 		switch a := arg.(type) {
 		case *ast.Ident:
 			if a.Name() == "true" || a.Name() == "false" {

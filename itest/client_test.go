@@ -9,13 +9,17 @@ import (
 	"errors"
 	"io"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Piechutowski/volt"
+	"github.com/Piechutowski/volt/itest/blog/app"
 	"github.com/Piechutowski/volt/itest/blog/app/client"
 	"github.com/Piechutowski/volt/itest/blog/db"
+	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/nao/run"
 )
 
 func TestClientQueryRoutes(t *testing.T) {
@@ -222,5 +226,51 @@ func TestClientHeader(t *testing.T) {
 			t.Fatalf("%v: X-User 1 on a controller route = %v, %v", f, resp, err)
 		}
 		resp.Body.Close()
+	}
+}
+
+// An optional parameter travels only when present: the client leaves an
+// absent one out of the query string, the route binds the missing key as
+// absent, and the select's term that reads it is true, an exists term
+// whole (spec §predicates, §query-routes, §generated-client).
+func TestClientOptionalParams(t *testing.T) {
+	ctx := context.Background()
+	dbh := fixtureDB()
+	two, err := run.Run(ctx, dbh, db.UserCreate(db.UserNew().EmailSet("two@example.com")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run.Run(ctx, dbh, db.ProfileCreate(db.ProfileNew().UserIDSet(two.ID).BioSet("writes go"))); err != nil {
+		t.Fatal(err)
+	}
+	h := app.NewRouter(fixtureControllers(dbh, &volt.Broker{}))
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	c := client.New(srv.URL)
+	ids := func(rows []db.User) []int {
+		out := make([]int, len(rows))
+		for i, r := range rows {
+			out[i] = r.ID
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name string
+		bio  rt.Null[string]
+		from rt.Null[int]
+		want []int
+	}{
+		{"both absent", rt.Null[string]{}, rt.Null[int]{}, []int{1, two.ID}},
+		{"bio present", rt.Some("%go%"), rt.Null[int]{}, []int{two.ID}},
+		{"bio matching nobody", rt.Some("%rust%"), rt.Null[int]{}, []int{}},
+		{"from present", rt.Null[string]{}, rt.Some(two.ID), []int{two.ID}},
+	} {
+		rows, err := c.APIUserDescribed(ctx, tc.bio, tc.from)
+		if err != nil || !slices.Equal(ids(rows), tc.want) {
+			t.Errorf("%s: %v, %v; want %v", tc.name, ids(rows), err, tc.want)
+		}
+	}
+	if rec := call(h, "GET", "/api/described?from=many", nil); rec.Code != 400 || !strings.Contains(rec.Body.String(), "from") {
+		t.Errorf("an unparseable optional value: %d %q, want a 400 naming from", rec.Code, rec.Body.String())
 	}
 }

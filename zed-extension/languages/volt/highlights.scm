@@ -115,6 +115,7 @@
   "in"
   "like"
   "is"
+  "exists"
 ] @keyword.operator
 
 (pred_null "null" @keyword.operator)
@@ -152,6 +153,7 @@
 (aggregate_name) @function
 (alias_name) @variable
 (query_param ":" @operator)
+(query_param optional: (optional_marker) @operator)
 (query_param name: (parameter_name) @variable.parameter)
 (pred_compare op: _ @operator)
 (ident_modifier) @constant

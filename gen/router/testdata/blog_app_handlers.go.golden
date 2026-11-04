@@ -11,7 +11,7 @@ import (
 )
 
 type AdminController interface {
-	Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts, latest []db.User, ten []db.User) volt.Response
+	Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts, latest []db.User, ten []db.User, written []db.User) volt.Response
 	Top(r volt.Request, n int, top []db.User) volt.Response
 }
 
@@ -63,7 +63,7 @@ func NewRouter(c Controllers) http.Handler {
 
 func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	var voltOut []string
-	if !volt.Same(c.Admin.Stats(r, db.Totals{}, nil, nil, nil), c.Admin.Stats(r, db.Totals{}, nil, nil, nil)) {
+	if !volt.Same(c.Admin.Stats(r, db.Totals{}, nil, nil, nil, nil), c.Admin.Stats(r, db.Totals{}, nil, nil, nil, nil)) {
 		voltOut = append(voltOut, "Admin.Stats")
 	}
 	if !volt.Same(c.Admin.Top(r, 0, nil), c.Admin.Top(r, 0, nil)) {

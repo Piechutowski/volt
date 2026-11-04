@@ -208,3 +208,15 @@ table metric_events {
   id   int    [pk, autoincrement]
   name string
 }
+
+// §predicates: an optional parameter's term is true when it is absent, a
+// keyset's first page among them, and exists tests a relation without
+// joining it, so a grouped count beside it counts each row once.
+select keyset     for page_views where day < :day? or (day = :day? and id < :id?) [order: (day desc, id desc), limit: :limit]
+select picked     for page_views where site = :site? and hits >= :min? [order: (id asc)]
+select in_sites   for page_views where site in :sites? [order: (id asc)]
+select placed_by  for orders where placed_at < :before? [order: (id asc)]
+select tagged     for users where exists user_tags (tag = :tag?) [order: (id asc)]
+select bought_by  for orders where exists user (name = :name) [order: (id asc)]
+select order_counts (id, count(orders.id) as n) for users join orders where exists user_tags (tag in :tags) [group: (id), order: (id asc)]
+select joined_counts (id, count(orders.id) as n) for users join orders join user_tags where user_tags.tag in :tags [group: (id), order: (id asc)]

@@ -145,6 +145,7 @@ const (
 	NEQ       // !=
 	LE        // <=
 	GE        // >=
+	QUESTION  // ? (an optional query parameter, §predicates)
 )
 
 var kindNames = [...]string{
@@ -175,6 +176,7 @@ var kindNames = [...]string{
 	NEQ:       "'!='",
 	LE:        "'<='",
 	GE:        "'>='",
+	QUESTION:  "'?'",
 }
 
 func (k Kind) String() string {

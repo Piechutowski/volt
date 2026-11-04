@@ -32,6 +32,22 @@ func QueryParam[T QueryValue](r Request, name string) (T, error) {
 	return v, nil
 }
 
+// QueryParamOptional binds an optional parameter (§predicates) from the
+// query string by name, as a generated query route or route load does
+// (§query-routes): absent when the key is missing, the parsed value of
+// its first value otherwise; a value that does not parse is a 400 naming
+// the parameter, as for QueryParam.
+func QueryParamOptional[T QueryValue](r Request, name string) (rt.Null[T], error) {
+	if vals, ok := r.Query()[name]; !ok || len(vals) == 0 {
+		return rt.Null[T]{}, nil
+	}
+	v, err := QueryParam[T](r, name)
+	if err != nil {
+		return rt.Null[T]{}, err
+	}
+	return rt.Some(v), nil
+}
+
 // LimitCheck is nil for a limit of at least 1 and otherwise the 400 naming
 // the request key it came from (§query-routes, §route-loads): a generated
 // route refuses a select's limit: parameter below 1 where it binds it, a

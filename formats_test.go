@@ -183,6 +183,32 @@ func TestQueryBinding(t *testing.T) {
 	}
 }
 
+// An optional parameter binds absent when its key is missing, present when
+// it is there, an empty value included, and refuses a value that does not
+// parse as the scalar binder does (spec §query-routes).
+func TestQueryOptionalBinding(t *testing.T) {
+	r := requestOf(httptest.NewRequest("GET", "/x?year=2024&tag=&at=2024-01-02T03:04:05Z&n=abc", nil))
+	year, err := QueryParamOptional[int](r, "year")
+	if err != nil || !year.Valid || year.V != 2024 {
+		t.Errorf("year = %+v, %v; want present 2024", year, err)
+	}
+	tag, err := QueryParamOptional[string](r, "tag")
+	if err != nil || !tag.Valid || tag.V != "" {
+		t.Errorf("tag= = %+v, %v; want present and empty", tag, err)
+	}
+	at, err := QueryParamOptional[time.Time](r, "at")
+	if err != nil || !at.Valid || at.V.Hour() != 3 {
+		t.Errorf("at = %+v, %v; want present", at, err)
+	}
+	missing, err := QueryParamOptional[int](r, "missing")
+	if err != nil || missing.Valid {
+		t.Errorf("a missing key = %+v, %v; want absent and no error", missing, err)
+	}
+	if _, err := QueryParamOptional[int](r, "n"); err == nil || !strings.Contains(err.Error(), "n") {
+		t.Errorf("an unparseable value should be a 400 naming it: %v", err)
+	}
+}
+
 func TestNoRowsIs404(t *testing.T) {
 	rec := serve(t, func(Request) Response { return Fail(rt.ErrNotFound) }, httptest.NewRequest("GET", "/x", nil))
 	if rec.Code != 404 {

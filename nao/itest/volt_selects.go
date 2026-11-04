@@ -363,3 +363,73 @@ type BatchWithBatchItems struct {
 }
 
 const voltBatchTrailChildrenSQL = `SELECT "id", "opened_at" FROM "batch_items" WHERE "opened_at" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+
+const voltPageViewKeysetSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE ((? IS NULL OR "day" < ?) OR ((? IS NULL OR "day" = ?) AND (? IS NULL OR "id" < ?))) ORDER BY "day" DESC, "id" DESC LIMIT ?`
+
+func PageViewKeyset(day rt.Null[int], id rt.Null[int], limit int) rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewKeysetSQL, Args: []any{day, day, day, day, id, id, limit}, Scan: voltPageViewScan, Err: rt.LimitCheck(limit)}
+}
+
+const voltPageViewPickedSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE ((? IS NULL OR "site" = ?) AND (? IS NULL OR "hits" >= ?)) ORDER BY "id" ASC`
+
+func PageViewPicked(site rt.Null[string], min rt.Null[int]) rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewPickedSQL, Args: []any{site, site, min, min}, Scan: voltPageViewScan}
+}
+
+const voltPageViewInSitesSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (? IS NULL OR "site" IN (SELECT value FROM json_each(?))) ORDER BY "id" ASC`
+
+func PageViewInSites(sites rt.Null[[]string]) rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewInSitesSQL, Args: []any{rt.JSONListOptional(sites), rt.JSONListOptional(sites)}, Scan: voltPageViewScan}
+}
+
+const voltOrderPlacedBySQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE (? IS NULL OR "placed_at" < ?) ORDER BY "id" ASC`
+
+func OrderPlacedBy(before rt.Null[time.Time]) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderPlacedBySQL, Args: []any{before, before}, Scan: voltOrderScan}
+}
+
+const voltUserTaggedSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE (? IS NULL OR EXISTS (SELECT 1 FROM "user_tags" AS "user_tags" WHERE "user_tags"."user_id" = "users"."id" AND ("user_tags"."tag" = ?))) ORDER BY "id" ASC`
+
+func UserTagged(tag rt.Null[string]) rt.Query[User] {
+	return rt.Query[User]{SQL: voltUserTaggedSQL, Args: []any{tag, tag}, Scan: voltUserScan}
+}
+
+const voltOrderBoughtBySQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE EXISTS (SELECT 1 FROM "users" AS "user" WHERE "user"."id" = "orders"."user_id" AND ("user"."name" = ?)) ORDER BY "id" ASC`
+
+func OrderBoughtBy(name string) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderBoughtBySQL, Args: []any{name}, Scan: voltOrderScan}
+}
+
+type OrderCounts struct {
+	ID int `db:"id" json:"id"`
+	N  int `db:"n" json:"n"`
+}
+
+func voltOrderCountsScan(r rt.Row) (OrderCounts, error) {
+	var voltV OrderCounts
+	voltErr := r.Scan(&voltV.ID, &voltV.N)
+	return voltV, voltErr
+}
+
+const voltUserOrderCountsSQL = `SELECT "users"."id", count("orders"."id") AS "n" FROM "users" LEFT JOIN "orders" AS "orders" ON "orders"."user_id" = "users"."id" WHERE EXISTS (SELECT 1 FROM "user_tags" AS "user_tags" WHERE "user_tags"."user_id" = "users"."id" AND ("user_tags"."tag" IN (SELECT value FROM json_each(?)))) GROUP BY "users"."id" ORDER BY "users"."id" ASC`
+
+func UserOrderCounts(tags []string) rt.Query[OrderCounts] {
+	return rt.Query[OrderCounts]{SQL: voltUserOrderCountsSQL, Args: []any{rt.JSONList(tags)}, Scan: voltOrderCountsScan}
+}
+
+type JoinedCounts struct {
+	ID int `db:"id" json:"id"`
+	N  int `db:"n" json:"n"`
+}
+
+func voltJoinedCountsScan(r rt.Row) (JoinedCounts, error) {
+	var voltV JoinedCounts
+	voltErr := r.Scan(&voltV.ID, &voltV.N)
+	return voltV, voltErr
+}
+
+const voltUserJoinedCountsSQL = `SELECT "users"."id", count("orders"."id") AS "n" FROM "users" LEFT JOIN "orders" AS "orders" ON "orders"."user_id" = "users"."id" LEFT JOIN "user_tags" AS "user_tags" ON "user_tags"."user_id" = "users"."id" WHERE "user_tags"."tag" IN (SELECT value FROM json_each(?)) GROUP BY "users"."id" ORDER BY "users"."id" ASC`
+
+func UserJoinedCounts(tags []string) rt.Query[JoinedCounts] {
+	return rt.Query[JoinedCounts]{SQL: voltUserJoinedCountsSQL, Args: []any{rt.JSONList(tags)}, Scan: voltJoinedCountsScan}
+}

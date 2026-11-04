@@ -568,7 +568,7 @@ var singleOps = map[rune]token.Kind{
 	',': token.COMMA, ':': token.COLON, '.': token.DOT,
 	'~': token.TILDE, '*': token.STAR, '/': token.SLASH,
 	'-': token.MINUS, '+': token.PLUS, '=': token.EQ,
-	'\\': token.BACKSLASH,
+	'\\': token.BACKSLASH, '?': token.QUESTION,
 }
 
 func operatorScan(s *Scanner) stateFn {

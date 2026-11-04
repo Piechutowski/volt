@@ -464,6 +464,8 @@ func (p *parser) predPrimary() ast.PredExpr {
 		(p.atKw("true") || p.atKw("false")) && p.compOpAt(1):
 		x := p.operand()
 		return p.comparisonTail(x)
+	case p.atKw("exists") && p.peekKind(1) == token.IDENT:
+		return p.predExists()
 	case p.at(token.IDENT):
 		col := p.colRef("predicate (§predicates)")
 		switch {
@@ -485,6 +487,32 @@ func (p *parser) predPrimary() ast.PredExpr {
 		p.fail(t, "expected a predicate expression (§predicates), found %s", t)
 		return nil
 	}
+}
+
+func (p *parser) param() *ast.Param {
+	colon := p.next().Pos
+	if !p.at(token.IDENT) || !p.contiguous() {
+		p.fail(p.cur(), "':' must be directly followed by a parameter name (§predicates)")
+	}
+	x := &ast.Param{ColonPos: colon, Name: p.ident("parameter (§predicates)")}
+	if p.at(token.QUESTION) {
+		if !p.contiguous() {
+			p.fail(p.cur(), "'?' makes a parameter optional only directly after its name, :%s? (§predicates)", x.Name.Name())
+		}
+		p.next()
+		x.Optional = true
+	}
+	return x
+}
+
+func (p *parser) predExists() ast.PredExpr {
+	x := &ast.PredExists{ExistsPos: p.kwTake("exists").Pos}
+	p.predKeywordCheck()
+	x.Rel = p.ident("exists (§predicates)")
+	x.Lparen = p.expect(token.LPAREN, "exists (§predicates)").Pos
+	x.X = p.predExpr()
+	x.Rparen = p.expect(token.RPAREN, "exists (§predicates)").End()
+	return x
 }
 
 func (p *parser) predKeywordCheck() {
@@ -517,12 +545,7 @@ func (p *parser) operand() ast.Operand {
 	t := p.cur()
 	switch {
 	case p.at(token.COLON):
-		colon := p.next().Pos
-		if !p.at(token.IDENT) || !p.contiguous() {
-			p.fail(p.cur(), "':' must be directly followed by a parameter name (§predicates)")
-		}
-		name := p.ident("parameter (§predicates)")
-		return &ast.Param{ColonPos: colon, Name: name}
+		return p.param()
 	case p.at(token.NUMBER), p.at(token.STRING):
 		return &ast.Lit{Tok: p.next()}
 	case p.at(token.MINUS) && p.peekKind(1) == token.NUMBER:
@@ -789,11 +812,7 @@ func (p *parser) arithFactor() ast.ArithExpr {
 		num.Pos = minus.Pos
 		return &ast.Lit{Tok: num}
 	case p.at(token.COLON):
-		colon := p.next().Pos
-		if !p.at(token.IDENT) || !p.contiguous() {
-			p.fail(p.cur(), "':' must be directly followed by a parameter name (§predicates)")
-		}
-		return &ast.Param{ColonPos: colon, Name: p.ident("parameter (§predicates)")}
+		return p.param()
 	case p.at(token.IDENT):
 		return p.colRef("projected column (§selects-over-groups)")
 	default:

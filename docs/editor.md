@@ -128,7 +128,8 @@ load-bearing patterns, each citing the spec section it implements:
   wildcards, `resources` with an optional package qualifier, and the
   query layer — `group` algebra, the `pred` expression grammar
   (prec.left or/and, keyword operators at the same precedence as other
-  keywords), `Select ... for ... where`.
+  keywords, `exists rel (...)` terms, and a query parameter's optional
+  `?` as a token immediate after its name), `Select ... for ... where`.
   `/` is a token per §layers-files-and-the-superset-rule.
 - **Keywords of a migration body are tokens of the migration rules
   only** (§migrations, §keywords). `up`, `down`, `create`, `drop`,
@@ -229,6 +230,8 @@ layer:
   (case-insensitively filtered), verbs and `resources` in `scope`
   bodies, tables and groups in a `group` body, operations in a
   `migration` body, the columns of the named table after `ref: table.`,
+  `pred` names and `exists` where a predicate term starts and the
+  relations of the select's table after `exists` (§predicates),
   settings per construct and none on a construct that takes none
   (§settings-lists, §settings-whitelists), and `true`/`false` after
   `default:` only on a column stored as `bool`. Every keyword

@@ -495,6 +495,21 @@ func (x *PredNull) Pos() token.Position { return x.Col.Pos() }
 func (x *PredNull) End() token.Position { return x.EndPos }
 func (x *PredNull) predExpr()           {}
 
+// PredExists is "exists relation (x)": true for a row when a row the
+// relation leads to matches x, a predicate over the related table's
+// columns (spec §predicates).
+type PredExists struct {
+	ExistsPos token.Position
+	Rel       *Ident
+	Lparen    token.Position
+	X         PredExpr
+	Rparen    token.Position
+}
+
+func (x *PredExists) Pos() token.Position { return x.ExistsPos }
+func (x *PredExists) End() token.Position { return x.Rparen }
+func (x *PredExists) predExpr()           {}
+
 // Operand is a comparison operand: column reference, :param, or literal.
 type Operand interface {
 	Node
@@ -526,15 +541,22 @@ func (x *ColRef) String() string {
 	return x.Name.Name()
 }
 
-// Param is a ":name" query parameter (spec §predicates).
+// Param is a ":name" query parameter, ":name?" when optional (spec
+// §predicates).
 type Param struct {
 	ColonPos token.Position
 	Name     *Ident
+	Optional bool
 }
 
 func (x *Param) Pos() token.Position { return x.ColonPos }
-func (x *Param) End() token.Position { return x.Name.End() }
-func (x *Param) operand()            {}
+func (x *Param) End() token.Position {
+	if x.Optional {
+		return x.Name.End().Advance(1)
+	}
+	return x.Name.End()
+}
+func (x *Param) operand() {}
 
 // Lit is a number, string or boolean literal operand.
 type Lit struct {
@@ -662,7 +684,12 @@ func (x *Lit) arithExpr()    {}
 func (x *Param) arithExpr()  {}
 
 // String spells the parameter as written.
-func (x *Param) String() string { return ":" + x.Name.Name() }
+func (x *Param) String() string {
+	if x.Optional {
+		return ":" + x.Name.Name() + "?"
+	}
+	return ":" + x.Name.Name()
+}
 
 func (d *Select) Pos() token.Position { return d.SelectPos }
 func (d *Select) End() token.Position { return d.EndPos }

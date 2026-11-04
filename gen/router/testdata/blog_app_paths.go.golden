@@ -102,6 +102,10 @@ func PathAPIUserLatest(opts ...volt.URLOption) string {
 	return volt.URL("/api/latest", opts...)
 }
 
+func PathAPIUserWritten(opts ...volt.URLOption) string {
+	return volt.URL("/api/written", opts...)
+}
+
 func PathAPIUserRoleGet(userID int, roleID int, opts ...volt.URLOption) string {
 	return volt.URL("/api/roles/"+volt.SegInt(userID)+"/"+volt.SegInt(roleID), opts...)
 }

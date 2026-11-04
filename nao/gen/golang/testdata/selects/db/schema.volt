@@ -72,3 +72,9 @@ table merchant_periods {
 ref: merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)
 
 select placed (id, merchants.name) for merchant_periods join merchants
+
+select keyset  for visits where day < :day? or (day = :day? and id < :id?) [order: (day desc, id desc), limit: :limit]
+select picked  for page_views where id in :ids? and site like :site? [order: (id asc)]
+select visited for hosts where exists visits (day >= :from?) and not exists owned (day = 0) [order: (id asc)]
+select by_host (id, day) for visits where exists host (name = :name)
+select active  for merchants where exists merchant_periods (id > 0)

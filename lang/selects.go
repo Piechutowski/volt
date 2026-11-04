@@ -29,8 +29,18 @@ type GroupInfo struct {
 // SelectParam is one parameter of a generated select method, in first
 // appearance order (§selects-over-groups).
 type SelectParam struct {
-	GoName string // Go parameter name, the name written after ':'
-	GoType string // e.g. "string", "int64", "time.Time"
+	GoName   string // Go parameter name, the name written after ':'
+	GoType   string // e.g. "string", "int64", "time.Time"; the type an optional parameter would have
+	Optional bool   // written :name?, so the method takes rt.Null[GoType] (§predicates)
+}
+
+// Type is the parameter's Go type in the generated signature: GoType,
+// or rt.Null of it when the parameter is optional (spec §predicates).
+func (p SelectParam) Type() string {
+	if p.Optional {
+		return "rt.Null[" + p.GoType + "]"
+	}
+	return p.GoType
 }
 
 // SelectInfo is one checked Select (§selects-over-groups), lowered to the
@@ -100,6 +110,17 @@ type joinTarget struct {
 	rel   *check.RelationInfo
 	why   string
 	model memberModel
+}
+
+type existsTarget struct {
+	name string
+	rel  *check.RelationInfo
+	why  string
+}
+
+type existsScope struct {
+	name  string
+	table *check.TableInfo
 }
 
 func (c *checker) dataQueries(pkg *Package) {
@@ -206,7 +227,8 @@ type selectEntry struct {
 	joined  []any
 	with    *check.RelationInfo
 	withRef any
-	whys    []string // why each join or the with resolved to no relation, the relation names last
+	exists  []*check.RelationInfo
+	whys    []string // why each join, the with and each exists resolved to no relation, the relation names last
 	preds   map[string]*ast.Pred
 	lookups []nameLookup
 	adds    []nameAdd
@@ -214,12 +236,17 @@ type selectEntry struct {
 	diags   []diag.Diagnostic
 }
 
-func (e *selectEntry) holds(members []*check.TableInfo, models []any, joins []*check.RelationInfo, joined []any, with *check.RelationInfo, withRef any, whys []string, preds map[string]*ast.Pred, names *naming.Names) bool {
-	if len(members) != len(e.members) || len(preds) != len(e.preds) || len(joins) != len(e.joins) || !slices.Equal(whys, e.whys) {
+func (e *selectEntry) holds(members []*check.TableInfo, models []any, joins []*check.RelationInfo, joined []any, with *check.RelationInfo, withRef any, exists []*check.RelationInfo, whys []string, preds map[string]*ast.Pred, names *naming.Names) bool {
+	if len(members) != len(e.members) || len(preds) != len(e.preds) || len(joins) != len(e.joins) || len(exists) != len(e.exists) || !slices.Equal(whys, e.whys) {
 		return false
 	}
 	if !relationEqual(with, e.with) || withRef != e.withRef {
 		return false
+	}
+	for i, r := range exists {
+		if !relationEqual(r, e.exists[i]) {
+			return false
+		}
 	}
 	for i, m := range members {
 		if m != e.members[i] || models[i] != e.models[i] {
@@ -290,17 +317,36 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *nam
 		where = append(where, sel.Where)
 	}
 	preds := predsIn(where, c.pkg.Preds)
+	existsNamed := existsNames(where, preds)
+	exists := make([]existsTarget, len(existsNamed))
+	existsRels := make([]*check.RelationInfo, len(existsNamed))
+	for i, name := range existsNamed {
+		exists[i].name = name
+		if info.Table(sel.Target.Name()) == nil {
+			continue
+		}
+		rel, named := info.Relation(members[0].Key, name)
+		if rel == nil {
+			exists[i].why = relationAmbiguity(members[0].Key, name, named)
+			continue
+		}
+		exists[i].rel, existsRels[i] = rel, rel
+	}
 	var relationNames []string
-	if len(sel.Joins) > 0 || sel.With != nil {
+	if len(sel.Joins) > 0 || sel.With != nil || len(exists) > 0 {
 		relationNames = info.RelationNames(members[0].Key)
 	}
-	whys := make([]string, 0, len(joins)+2)
+	whys := make([]string, 0, len(joins)+len(exists)+2)
 	for _, j := range joins {
 		whys = append(whys, j.why)
 	}
-	whys = append(whys, with.why, strings.Join(relationNames, ","))
+	whys = append(whys, with.why)
+	for _, x := range exists {
+		whys = append(whys, x.name+":"+x.why)
+	}
+	whys = append(whys, strings.Join(relationNames, ","))
 	if memo != nil {
-		if e := memo.prev[sel]; e != nil && e.holds(members, refs, rels, joined, withRel, withRef, whys, preds, minted) {
+		if e := memo.prev[sel]; e != nil && e.holds(members, refs, rels, joined, withRel, withRef, existsRels, whys, preds, minted) {
 			for _, a := range e.adds {
 				minted.Add(a.name, a.desc)
 			}
@@ -310,13 +356,13 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *nam
 			return e.si
 		}
 	}
-	si, lookups, adds, diags := selectCheck(sel, members, models, joins, with, relationNames, preds, minted)
+	si, lookups, adds, diags := selectCheck(sel, members, models, joins, with, exists, relationNames, preds, minted)
 	for _, a := range adds {
 		minted.Add(a.name, a.desc)
 	}
 	c.diags = append(c.diags, diags...)
 	if memo != nil {
-		memo.next[sel] = &selectEntry{members: members, models: refs, joins: rels, joined: joined, with: withRel, withRef: withRef, whys: whys, preds: preds, lookups: lookups, adds: adds, si: si, diags: diags}
+		memo.next[sel] = &selectEntry{members: members, models: refs, joins: rels, joined: joined, with: withRel, withRef: withRef, exists: existsRels, whys: whys, preds: preds, lookups: lookups, adds: adds, si: si, diags: diags}
 		memo.Misses++
 	}
 	return si
@@ -353,6 +399,7 @@ type selectLowering struct {
 	with          joinTarget
 	goFields      map[string]string // the Go fields projected so far, by name
 	joins         []joinTarget
+	exists        []existsTarget
 	relationNames string // the target table's relations, for the join diagnostics
 	sel           *ast.Select
 	members       []*check.TableInfo
@@ -564,9 +611,39 @@ func predWalk(x ast.PredExpr, f func(*ast.PredRef)) {
 		predWalk(x.X, f)
 	case *ast.PredParen:
 		predWalk(x.X, f)
+	case *ast.PredExists:
+		predWalk(x.X, f)
 	case *ast.PredRef:
 		f(x)
 	}
+}
+
+func existsNames(where []ast.PredExpr, preds map[string]*ast.Pred) []string {
+	var names []string
+	for _, x := range where {
+		names = existsCollect(x, names)
+	}
+	for _, d := range preds {
+		if d != nil {
+			names = existsCollect(d.X, names)
+		}
+	}
+	sort.Strings(names)
+	return slices.Compact(names)
+}
+
+func existsCollect(x ast.PredExpr, acc []string) []string {
+	switch x := x.(type) {
+	case *ast.PredBinary:
+		return existsCollect(x.Y, existsCollect(x.X, acc))
+	case *ast.PredNot:
+		return existsCollect(x.X, acc)
+	case *ast.PredParen:
+		return existsCollect(x.X, acc)
+	case *ast.PredExists:
+		return existsCollect(x.X, append(acc, x.Rel.Name()))
+	}
+	return acc
 }
 
 type typeClass int
@@ -619,8 +696,8 @@ func (b *colBinding) litClass() typeClass {
 	return b.storage
 }
 
-func selectCheck(sel *ast.Select, members []*check.TableInfo, models []memberModel, joins []joinTarget, with joinTarget, relationNames []string, preds map[string]*ast.Pred, names nameScope) (*SelectInfo, []nameLookup, []nameAdd, []diag.Diagnostic) {
-	l := &selectLowering{sel: sel, members: members, models: models, joins: joins, with: with, relationNames: relationList(relationNames), preds: preds, names: names}
+func selectCheck(sel *ast.Select, members []*check.TableInfo, models []memberModel, joins []joinTarget, with joinTarget, exists []existsTarget, relationNames []string, preds map[string]*ast.Pred, names nameScope) (*SelectInfo, []nameLookup, []nameAdd, []diag.Diagnostic) {
+	l := &selectLowering{sel: sel, members: members, models: models, joins: joins, with: with, exists: exists, relationNames: relationList(relationNames), preds: preds, names: names}
 	si := l.check()
 	return si, l.lookups, l.adds, l.diags
 }
@@ -651,6 +728,7 @@ func (l *selectLowering) check() *SelectInfo {
 		joins:   si.Joins,
 		cols:    map[string]*colBinding{},
 		params:  map[string]*SelectParam{},
+		paramAt: map[string]*ast.Param{},
 		aliases: map[string]*ast.ProjItem{},
 	}
 	if len(si.Joins) > 0 {
@@ -1287,6 +1365,10 @@ func (e *selectEnv) arithLower(x ast.ArithExpr, typ *colBinding) (rt.Expr, bool)
 		}
 		return rt.ExprVal(slot), true
 	case *ast.Param:
+		if x.Optional {
+			e.predErrorf(x.Pos(), "the optional parameter %s stands in a projection; an optional parameter stands in a predicate term only (§predicates)", x.String())
+			return rt.Expr{}, false
+		}
 		return rt.ExprVal(e.paramBind(x, typ.goType)), true
 	case *ast.ArithParen:
 		return e.arithLower(x.X, typ)
@@ -1414,7 +1496,9 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 	}
 	if limitParam != nil {
 		name := limitParam.Name.Name()
-		if _, used := env.params[name]; used || env.dropped[name] {
+		if limitParam.Optional {
+			env.predErrorf(limitParam.Pos(), "limit: takes the optional parameter %s; a limit is never optional, and an optional parameter stands in a predicate term only (§predicates, §selects-over-groups)", limitParam.String())
+		} else if _, used := env.params[name]; used || env.dropped[name] {
 			l.errorf(limitParam.Pos(), "parameter :%s is the limit and a parameter of the select besides; a limit takes a parameter of its own (§selects-over-groups)", name)
 		} else {
 			env.paramBind(limitParam, "int")
@@ -1680,14 +1764,24 @@ type selectEnv struct {
 	aliases   map[string]*ast.ProjItem
 	cols      map[string]*colBinding
 	params    map[string]*SelectParam
+	paramAt   map[string]*ast.Param // the first use of each parameter
 	paramList []SelectParam
 	failed    bool
 	dropped   map[string]bool
+	scope     *existsScope     // the exists term being lowered, nil outside one (§predicates)
+	reads     []string         // the optional parameters the term being lowered reads, in first-appearance order
+	nots      []token.Position // the nots the expression being lowered stands under, outermost first
+	notsSaid  map[token.Position]bool
 }
 
 func (e *selectEnv) errorf(pos token.Position, format string, args ...any) {
 	e.failed = true
 	e.l.errorf(pos, format, args...)
+}
+
+func (e *selectEnv) predErrorf(pos token.Position, format string, args ...any) {
+	e.failed = true
+	e.l.diags = append(e.l.diags, diag.Errorf(pos, "spec/predicates", format, args...))
 }
 
 func (e *selectEnv) join(name string) *JoinInfo {
@@ -1721,6 +1815,9 @@ func fieldByCol(fields []naming.FieldSig, col string) (naming.FieldSig, bool) {
 // over the joined relation's table; the binding's name is what the
 // statement spells, qualified once a join is present.
 func (e *selectEnv) columnBind(cr *ast.ColRef) (b *colBinding, unknown bool) {
+	if e.scope != nil {
+		return e.existsColumnBind(cr)
+	}
 	written := cr.String()
 	if b, done := e.cols[written]; done {
 		return b, false
@@ -1824,6 +1921,37 @@ func (e *selectEnv) columnBind(cr *ast.ColRef) (b *colBinding, unknown bool) {
 	return b, false
 }
 
+func (e *selectEnv) existsColumnBind(cr *ast.ColRef) (*colBinding, bool) {
+	sc := e.scope
+	if cr.Qual != nil {
+		e.predErrorf(cr.Pos(), "inside exists %s a column is one of table %q's, named bare; %s is qualified (§predicates)", sc.name, sc.table.Key, cr.String())
+		return nil, false
+	}
+	name := cr.Name.Name()
+	sqlName := sc.name + "." + name
+	key := "exists " + sqlName
+	if b, done := e.cols[key]; done {
+		return b, false
+	}
+	cd := sc.table.Column(name)
+	if cd == nil {
+		e.predErrorf(cr.Name.Pos(), "table %q, which exists %s reaches, has no column %q; inside exists a bare name is a column of the relation's table (§predicates)", sc.table.Key, sc.name, name)
+		return nil, false
+	}
+	if !cd.Type.Known() {
+		e.l.unknownAdd(sqlName)
+		return nil, true
+	}
+	class := classOfType(cd.Type)
+	if class == classForbidden {
+		e.errorf(cr.Name.Pos(), "column %q (%s) cannot appear in a predicate (§predicates)", sqlName, cd.Col.Type.String())
+		return nil, false
+	}
+	b := &colBinding{name: sqlName, goType: cd.Type.Go, storageGo: cd.Type.Storage, class: class, storage: classOfName(cd.Type.StorageClass()), nullable: cd.Nullable}
+	e.cols[key] = b
+	return b, false
+}
+
 func (e *selectEnv) paramsDrop(ops ...ast.Operand) {
 	for _, op := range ops {
 		if p, ok := op.(*ast.Param); ok {
@@ -1845,19 +1973,119 @@ func tableList(names []string) string {
 func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 	name := p.Name.Name()
 	if prev, seen := e.params[name]; seen {
-		if prev.GoType != goType {
+		switch first := e.paramAt[name]; {
+		case prev.Optional != p.Optional:
+			e.predErrorf(p.Pos(), "parameter %s here is %s at %s: a parameter is optional at every use in a select, the preds it uses included, or at none (§predicates)", p.String(), first.String(), first.Pos())
+		case prev.GoType != goType:
 			e.errorf(p.Pos(), "parameter :%s used as %s here but %s earlier — one name, one type (§predicates)", name, goType, prev.GoType)
 		}
+		e.paramRead(p)
 		return name
 	}
 	if !goParamOK(name) {
 		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)", name)
 		return name
 	}
-	sp := SelectParam{GoName: name, GoType: goType}
+	sp := SelectParam{GoName: name, GoType: goType, Optional: p.Optional}
 	e.params[name] = &sp
+	e.paramAt[name] = p
 	e.paramList = append(e.paramList, sp)
+	e.paramRead(p)
 	return name
+}
+
+func (e *selectEnv) paramRead(p *ast.Param) {
+	if !p.Optional {
+		return
+	}
+	if len(e.nots) > 0 {
+		at := e.nots[len(e.nots)-1]
+		if !e.notsSaid[at] {
+			if e.notsSaid == nil {
+				e.notsSaid = map[token.Position]bool{}
+			}
+			e.notsSaid[at] = true
+			e.predErrorf(at, "not stands over the optional parameter %s: a term that reads an absent optional parameter is true, and not would make it false; write the parameter without ? or the predicate without not (§predicates)", p.String())
+		}
+	}
+	name := p.Name.Name()
+	for _, read := range e.reads {
+		if read == name {
+			return
+		}
+	}
+	e.reads = append(e.reads, name)
+}
+
+func (e *selectEnv) paramSlot(name string) string {
+	if prm := e.params[name]; prm != nil && strings.HasPrefix(prm.GoType, "[]") {
+		return e.listSlot(name, prm.Optional)
+	}
+	return name
+}
+
+func (e *selectEnv) listSlot(name string, optional bool) string {
+	if optional {
+		return "rt.JSONListOptional(" + name + ")"
+	}
+	return "rt.JSONList(" + name + ")"
+}
+
+func (e *selectEnv) termBegin() bool {
+	if e.scope != nil {
+		return false
+	}
+	e.reads = nil
+	return true
+}
+
+func (e *selectEnv) termEnd(own bool, p rt.GenPred) rt.GenPred {
+	if !own {
+		return p
+	}
+	guards := make([]any, 0, len(e.reads))
+	for _, name := range e.reads {
+		guards = append(guards, e.paramSlot(name))
+	}
+	e.reads = nil
+	return rt.PredOptional(guards, p)
+}
+
+func (e *selectEnv) existsLower(x *ast.PredExists, preds map[string]bool) rt.GenPred {
+	name := x.Rel.Name()
+	if e.scope != nil {
+		e.predErrorf(x.Pos(), "exists %s stands inside exists %s: exists does not nest, the depth is one (§predicates)", name, e.scope.name)
+		return rt.GenPred{}
+	}
+	target := e.sel.Target.Name()
+	if len(e.members) != 1 || e.members[0].Key != target {
+		e.predErrorf(x.Rel.Pos(), "exists needs a table: %q is a group, and a group has no relations (§predicates)", target)
+		return rt.GenPred{}
+	}
+	var et *existsTarget
+	for i := range e.l.exists {
+		if e.l.exists[i].name == name {
+			et = &e.l.exists[i]
+		}
+	}
+	switch {
+	case et != nil && et.rel == nil && et.why != "":
+		e.predErrorf(x.Rel.Pos(), "%s (§relationships-ref, §predicates)", et.why)
+		return rt.GenPred{}
+	case et == nil || et.rel == nil:
+		e.predErrorf(x.Rel.Pos(), "table %q has no relation %q for exists to reach; its relations: %s (§predicates, §relationships-ref)", target, name, e.l.relationNames)
+		return rt.GenPred{}
+	}
+	rel := et.rel
+	own := e.termBegin()
+	e.scope = &existsScope{name: name, table: rel.Table}
+	inner := e.exprLower(x.X, preds)
+	e.scope = nil
+	on := make([][2]string, len(rel.On))
+	for i, pair := range rel.On {
+		on[i] = [2]string{name + "." + pair[1], target + "." + pair[0]}
+	}
+	return e.termEnd(own, rt.PredExists(rel.Table.Key, name, on, inner))
 }
 
 func goParamOK(name string) bool {
@@ -1878,9 +2106,14 @@ func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred 
 		}
 		return rt.And(operands...)
 	case *ast.PredNot:
-		return rt.Not(e.exprLower(x.X, preds))
+		e.nots = append(e.nots, x.NotPos)
+		p := rt.Not(e.exprLower(x.X, preds))
+		e.nots = e.nots[:len(e.nots)-1]
+		return p
 	case *ast.PredParen:
 		return e.exprLower(x.X, preds)
+	case *ast.PredExists:
+		return e.existsLower(x, preds)
 	case *ast.PredRef:
 		name := x.Name.Name()
 		d := e.l.preds[name]
@@ -1896,11 +2129,14 @@ func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred 
 		delete(preds, name)
 		return p
 	case *ast.PredCompare:
-		return e.compareLower(x)
+		own := e.termBegin()
+		return e.termEnd(own, e.compareLower(x))
 	case *ast.PredIn:
-		return e.inLower(x)
+		own := e.termBegin()
+		return e.termEnd(own, e.inLower(x))
 	case *ast.PredLike:
-		return e.likeLower(x)
+		own := e.termBegin()
+		return e.termEnd(own, e.likeLower(x))
 	case *ast.PredNull:
 		b, _ := e.columnBind(x.Col)
 		if b == nil {
@@ -2082,7 +2318,7 @@ func (e *selectEnv) inLower(x *ast.PredIn) rt.GenPred {
 			e.errorf(x.Col.Pos(), "column %q has declared type %s stored as []byte; it cannot take a list parameter: JSON carries no blob, and its text never equals the stored bytes (§predicates)", b.name, b.goType)
 			return rt.GenPred{}
 		}
-		return rt.PredInList(b.name, "rt.JSONList("+e.paramBind(x.List, "[]"+b.goType)+")")
+		return rt.PredInList(b.name, e.listSlot(e.paramBind(x.List, "[]"+b.goType), x.List.Optional))
 	}
 	slots := make([]any, 0, len(x.Items))
 	ok := true
@@ -2190,6 +2426,8 @@ func predsIn(exprs []ast.PredExpr, all map[string]*ast.Pred) map[string]*ast.Pre
 		case *ast.PredNot:
 			walk(x.X)
 		case *ast.PredParen:
+			walk(x.X)
+		case *ast.PredExists:
 			walk(x.X)
 		case *ast.PredRef:
 			name := x.Name.Name()

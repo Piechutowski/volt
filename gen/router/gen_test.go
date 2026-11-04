@@ -249,7 +249,7 @@ type stub struct{}
 func (stub) Index(r volt.Request) volt.Response { return volt.NoContent() }
 func (stub) About(r volt.Request) volt.Response { return volt.NoContent() }
 func (stub) Ping(r volt.Request) volt.Response { return volt.NoContent() }
-func (stub) Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts, latest, ten []db.User) volt.Response {
+func (stub) Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts, latest, ten, written []db.User) volt.Response {
 	return volt.NoContent()
 }
 func (stub) Serve(r volt.Request, path string) volt.Response { return volt.NoContent() }

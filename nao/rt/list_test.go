@@ -52,3 +52,21 @@ func TestJSONListRefusesWithoutPanicking(t *testing.T) {
 		}
 	}
 }
+
+func TestJSONListOptional(t *testing.T) {
+	absent, err := JSONListOptional(Null[[]string]{}).Value()
+	if err != nil || absent != nil {
+		t.Errorf("an absent list binds %#v, %v; want NULL", absent, err)
+	}
+	empty, err := JSONListOptional(Some([]string{})).Value()
+	if err != nil || empty != "[]" {
+		t.Errorf("a present empty list binds %#v, %v; want []", empty, err)
+	}
+	two, err := JSONListOptional(Some([]int{1, 2})).Value()
+	if err != nil || two != "[1,2]" {
+		t.Errorf("a present list binds %#v, %v; want [1,2]", two, err)
+	}
+	if s := JSONListOptional(Null[[]int]{}).String(); s != "NULL" {
+		t.Errorf("an absent list reads %q, want NULL", s)
+	}
+}

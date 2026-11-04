@@ -9,6 +9,7 @@ import (
 
 	"blog/db"
 	"github.com/Piechutowski/volt"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 type Client struct {
@@ -153,6 +154,19 @@ func (c *Client) APIUserLatest(ctx context.Context, limit int) ([]db.User, error
 	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
 	var voltOut []db.User
 	voltErr := c.Do(ctx, "GET", volt.URL("/api/latest", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) APIUserWritten(ctx context.Context, title rt.Null[string], after rt.Null[time.Time]) ([]db.User, error) {
+	voltQ := []volt.URLOption{}
+	if title.Valid {
+		voltQ = append(voltQ, volt.Query("title", volt.FormatQuery(title.V)))
+	}
+	if after.Valid {
+		voltQ = append(voltQ, volt.Query("after", volt.FormatQuery(after.V)))
+	}
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/written", voltQ...), nil, &voltOut)
 	return voltOut, voltErr
 }
 

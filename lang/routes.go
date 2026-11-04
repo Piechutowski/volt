@@ -98,11 +98,21 @@ const (
 
 // QueryParam is one parameter of a query function, in signature order.
 type QueryParam struct {
-	Name    string // Go parameter name, also the URL key
-	GoType  string // unqualified Go type ("int", "[]string"); a changeset is qualified ("db.UserChangeset")
-	Source  QuerySource
-	Literal string // the Go spelling of a FromLiteral argument (§route-loads)
-	Limit   bool   // the select's limit: parameter, which a request value binds only when at least 1 (§selects-over-groups)
+	Name     string // Go parameter name, also the URL key
+	GoType   string // unqualified Go type ("int", "[]string"); a changeset is qualified ("db.UserChangeset"); the type an optional parameter would have
+	Source   QuerySource
+	Literal  string // the Go spelling of a FromLiteral argument (§route-loads)
+	Limit    bool   // the select's limit: parameter, which a request value binds only when at least 1 (§selects-over-groups)
+	Optional bool   // an optional parameter (§predicates): FromQuery, absent when the key is missing, rt.Null[GoType] in Go
+}
+
+// Type is the parameter's Go type in the query's signature: GoType, or
+// rt.Null of it when the parameter is optional (spec §predicates).
+func (p QueryParam) Type() string {
+	if p.Optional {
+		return "rt.Null[" + p.GoType + "]"
+	}
+	return p.GoType
 }
 
 // LoadInfo is one load of a controller route (§route-loads): the name the

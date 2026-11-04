@@ -41,6 +41,7 @@ var Table = []volt.Route{
 	{Method: "GET", Pattern: "/api/picked", Spelled: "/api/picked", Query: "db.UserPicked", Helper: "PathAPIUserPicked"},
 	{Method: "GET", Pattern: "/api/since", Spelled: "/api/since", Query: "db.UserSince", Helper: "PathAPIUserSince"},
 	{Method: "GET", Pattern: "/api/latest", Spelled: "/api/latest", Query: "db.UserLatest", Helper: "PathAPIUserLatest"},
+	{Method: "GET", Pattern: "/api/described", Spelled: "/api/described", Query: "db.UserDescribed", Helper: "PathAPIUserDescribed"},
 	{Method: "GET", Pattern: "/ms/revenue", Spelled: "/ms/revenue", Query: "db.MsRevenueBrowse", Helper: "PathMsRevenueBrowse"},
 	{Method: "GET", Pattern: "/ms/usage", Spelled: "/ms/usage", Query: "db.MsUsageBrowse", Helper: "PathMsUsageBrowse"},
 	{Method: "GET", Pattern: "/ref/users", Spelled: "/ref/users", Query: "db.UserList", Helper: "PathRefUsers"},

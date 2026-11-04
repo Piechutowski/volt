@@ -1121,6 +1121,32 @@
     }
   },
   {
+    "type": "pred_exists",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "pred_expr",
+            "named": true
+          }
+        ]
+      },
+      "relation": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "relation_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "pred_expr",
     "named": true,
     "fields": {},
@@ -1130,6 +1156,10 @@
       "types": [
         {
           "type": "pred_compare",
+          "named": true
+        },
+        {
+          "type": "pred_exists",
           "named": true
         },
         {
@@ -1307,6 +1337,16 @@
         "types": [
           {
             "type": "parameter_name",
+            "named": true
+          }
+        ]
+      },
+      "optional": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "optional_marker",
             "named": true
           }
         ]
@@ -2481,6 +2521,10 @@
     "named": false
   },
   {
+    "type": "exists",
+    "named": false
+  },
+  {
     "type": "expression_content",
     "named": true
   },
@@ -2578,6 +2622,10 @@
   },
   {
     "type": "number",
+    "named": true
+  },
+  {
+    "type": "optional_marker",
     "named": true
   },
   {

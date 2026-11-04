@@ -789,3 +789,75 @@ scope /me {
       (go_ref
         (identifier)
         (identifier)))))
+
+==================
+volt: optional parameters and exists terms
+==================
+
+pred before { published_at < :at? or (published_at = :at? and id < :id?) }
+select feed for posts where exists tags (tag in :tags? and not tag = "draft") and before [order: (published_at desc, id desc), limit: :limit]
+
+---
+
+(source_file
+  (pred_definition
+    (pred_name)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name)
+          (optional_marker)))
+      (pred_expr
+        (pred_compare
+          (column_ref)
+          (query_param
+            (parameter_name)
+            (optional_marker)))
+        (pred_compare
+          (column_ref)
+          (query_param
+            (parameter_name)
+            (optional_marker))))))
+  (select_definition
+    (select_name)
+    (select_target)
+    (pred_expr
+      (pred_exists
+        (relation_name)
+        (pred_expr
+          (pred_in
+            (column_ref)
+            (query_param
+              (parameter_name)
+              (optional_marker)))
+          (pred_compare
+            (column_ref)
+            (string
+              (string_content)))))
+      (pred_ref))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
+          (identifier)
+          (ident_modifier
+            (identifier))))
+      (setting
+        (setting_name
+          (identifier))
+        (query_param
+          (parameter_name))))))
+
+==================
+volt: a space before ? leaves the parameter required and the ? an error
+:error
+==================
+
+select feed for posts where id < :id ? [order: (id asc)]
+
+---

@@ -87,4 +87,4 @@ var literalWords = []string{"true", "false", "null"}
 // §keywords, §selects-over-groups).
 var AggregateWords = []string{"count", "sum", "avg", "min", "max"}
 var orderWords = []string{"asc", "desc"}
-var predWords = []string{"and", "or", "not", "in", "like", "is", "null"}
+var predWords = []string{"and", "or", "not", "in", "like", "is", "null", "exists"}

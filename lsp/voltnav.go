@@ -550,7 +550,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 
 	var params strings.Builder
 	for _, p := range si.Params {
-		fmt.Fprintf(&params, ", %s %s", p.GoName, p.GoType)
+		fmt.Fprintf(&params, ", %s %s", p.GoName, p.Type())
 	}
 	b.WriteString("```go\n")
 	for _, m := range si.Members {
@@ -845,8 +845,15 @@ func (d *Document) voltComplete(prefix string) []protocol.CompletionItem {
 		items = append(items, d.namedDefItems("group", m[1], protocol.CompletionItemKindStruct)...)
 		return items
 	}
+	if m := voltExistsRE.FindStringSubmatch(prefix); m != nil {
+		return d.relationItems(m[1], m[2])
+	}
 	if m := voltWhereRE.FindStringSubmatch(prefix); m != nil {
-		return d.namedDefItems("pred", m[1], protocol.CompletionItemKindFunction)
+		items := d.namedDefItems("pred", m[1], protocol.CompletionItemKindFunction)
+		if strings.HasPrefix("exists", strings.ToLower(m[1])) {
+			items = append(items, keywordItems([]string{"exists "})...)
+		}
+		return items
 	}
 	if m := voltResourcesRE.FindStringSubmatch(prefix); m != nil {
 		items := d.packageTableItems(d.vpkg.Path, m[1])
@@ -871,6 +878,22 @@ func (d *Document) voltComplete(prefix string) []protocol.CompletionItem {
 var voltSelectForRE = regexp.MustCompile(`^\s*select\s+\w+\s+for\s+([A-Za-z0-9_]*)$`)
 
 var voltWhereRE = regexp.MustCompile(`\b(?:where|and|or|not|\{)\s+([A-Za-z0-9_]*)$`)
+
+var voltExistsRE = regexp.MustCompile(`^\s*select\s+\w+.*?\bfor\s+([A-Za-z0-9_]+)\b.*\bexists\s+([A-Za-z0-9_]*)$`)
+
+func (d *Document) relationItems(table, partial string) []protocol.CompletionItem {
+	info := d.vpkg.Schema()
+	if info == nil || info.Table(table) == nil {
+		return nil
+	}
+	var items []protocol.CompletionItem
+	for _, name := range info.RelationNames(table) {
+		if strings.HasPrefix(strings.ToLower(name), strings.ToLower(partial)) {
+			items = append(items, item(name, protocol.CompletionItemKindField, "relation of "+table))
+		}
+	}
+	return items
+}
 
 func (d *Document) namedDefItems(kind, partial string, itemKind protocol.CompletionItemKind) []protocol.CompletionItem {
 	var items []protocol.CompletionItem

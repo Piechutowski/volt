@@ -11,22 +11,31 @@ import (
 // Volt cannot bind fails its statement like any other argument instead
 // of panicking where the statement is built (spec §predicates).
 type List struct {
-	text string
-	err  error
+	text   string
+	err    error
+	absent bool
 }
 
-// Value is the list's JSON text, or the error that stops it binding.
+// Value is the list's JSON text, NULL for an absent optional list, or
+// the error that stops it binding.
 func (l List) Value() (driver.Value, error) {
-	if l.err != nil {
+	switch {
+	case l.err != nil:
 		return nil, l.err
+	case l.absent:
+		return nil, nil
 	}
 	return l.text, nil
 }
 
-// String is the list's JSON text, or its error.
+// String is the list's JSON text, NULL for an absent optional list, or
+// its error.
 func (l List) String() string {
-	if l.err != nil {
+	switch {
+	case l.err != nil:
 		return l.err.Error()
+	case l.absent:
+		return "NULL"
 	}
 	return l.text
 }
@@ -67,4 +76,15 @@ func JSONList[T any](v []T) List {
 		return List{err: fmt.Errorf("rt: list: %w", err)}
 	}
 	return List{text: string(b)}
+}
+
+// JSONListOptional encodes an optional list parameter (spec
+// §predicates): NULL when the list is absent, which makes every term
+// that reads it true, and JSONList of it when present, so a present
+// empty list is "[]" and matches no row.
+func JSONListOptional[T any](v Null[[]T]) List {
+	if !v.Valid {
+		return List{absent: true}
+	}
+	return JSONList(v.V)
 }

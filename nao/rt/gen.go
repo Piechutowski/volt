@@ -85,6 +85,30 @@ func PredNotNull(col string) GenPred {
 	return Column[Gen, any]{Name: col}.IsNotNull()
 }
 
+// PredExists is the exists term over a relation (spec §predicates):
+// true for a row when a row of table, under the alias as, matches p and
+// the relation's key, the pairs of on, each a column of the related
+// table qualified by as and the column of the outer table it equals.
+// A zero p tests the key alone.
+func PredExists(table, as string, on [][2]string, p GenPred) GenPred {
+	x := GenPred{kind: predExists, col: table, col2: as, pairs: on}
+	if p.kind != predEmpty {
+		x.kids = []GenPred{p}
+	}
+	return x
+}
+
+// PredOptional is p behind one guard per optional parameter it reads
+// (spec §predicates), (? IS NULL OR p), each guard a value slot that
+// binds the parameter, so p is true whenever one of them is absent. No
+// guards is p itself, and a zero p stays zero.
+func PredOptional(guards []any, p GenPred) GenPred {
+	if len(guards) == 0 || p.kind == predEmpty {
+		return p
+	}
+	return GenPred{kind: predOptional, vals: guards, kids: []GenPred{p}}
+}
+
 // OrderTerm is one ORDER BY term (spec §predicates), the value
 // Column.Asc or Column.Desc builds.
 func OrderTerm(col string, desc bool) GenOrder {

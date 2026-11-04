@@ -5,8 +5,18 @@ import "github.com/Piechutowski/volt/nao/rt"
 // SelectParam is one Go parameter of a generated select method
 // (spec §selects-over-groups), in declaration order.
 type SelectParam struct {
-	GoName string
-	GoType string // e.g. "string", "int64", "time.Time"
+	GoName   string
+	GoType   string // e.g. "string", "int64", "time.Time"; the type an optional parameter would have
+	Optional bool   // written :name?, so the method takes rt.Null[GoType] (spec §predicates)
+}
+
+// Type is the parameter's Go type in the generated signature: GoType,
+// or rt.Null of it when the parameter is optional (spec §predicates).
+func (p SelectParam) Type() string {
+	if p.Optional {
+		return "rt.Null[" + p.GoType + "]"
+	}
+	return p.GoType
 }
 
 // SelectFn is one select instantiation: a query function for one

@@ -158,14 +158,15 @@ func valsAny[T any](vs []T) []any {
 // The zero value is the empty predicate: it filters nothing and vanishes
 // from And, Or, Not and WHERE clauses.
 type Pred[M any] struct {
-	kind predKind
-	col  string
-	op   string
-	col2 string
-	vals []any
-	not  bool
-	raw  string
-	kids []Pred[M]
+	kind  predKind
+	col   string
+	op    string
+	col2  string
+	vals  []any
+	not   bool
+	raw   string
+	kids  []Pred[M]
+	pairs [][2]string
 }
 
 type predKind uint8
@@ -181,6 +182,8 @@ const (
 	predAnd
 	predOr
 	predNot
+	predExists
+	predOptional
 )
 
 // And is the conjunction of the given predicates. Empty predicates are
@@ -276,19 +279,48 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 		}
 		b.WriteString(")")
 	case predNot:
-		k := p.kids[0]
-		if k.kind == predAnd || k.kind == predOr || k.kind == predRaw {
-			b.WriteString("NOT ")
-			return k.render(b, args)
+		b.WriteString("NOT ")
+		return p.kids[0].renderParenthesized(b, args)
+	case predExists:
+		b.WriteString("EXISTS (SELECT 1 FROM " + Ident(p.col) + " AS " + Ident(p.col2) + " WHERE ")
+		for i, pair := range p.pairs {
+			if i > 0 {
+				b.WriteString(" AND ")
+			}
+			b.WriteString(Ident(pair[0]) + " = " + Ident(pair[1]))
 		}
-		b.WriteString("NOT (")
-		if err := k.render(b, args); err != nil {
+		if len(p.kids) > 0 {
+			b.WriteString(" AND ")
+			if err := p.kids[0].renderParenthesized(b, args); err != nil {
+				return err
+			}
+		}
+		b.WriteString(")")
+	case predOptional:
+		b.WriteString("(")
+		for _, v := range p.vals {
+			b.WriteString("? IS NULL OR ")
+			*args = argsAppend(*args, v)
+		}
+		if err := p.kids[0].render(b, args); err != nil {
 			return err
 		}
 		b.WriteString(")")
 	default:
 		return errors.New("rt: cannot render an empty predicate")
 	}
+	return nil
+}
+
+func (p Pred[M]) renderParenthesized(b *strings.Builder, args *[]any) error {
+	if p.kind == predAnd || p.kind == predOr || p.kind == predRaw {
+		return p.render(b, args)
+	}
+	b.WriteString("(")
+	if err := p.render(b, args); err != nil {
+		return err
+	}
+	b.WriteString(")")
 	return nil
 }
 

@@ -323,3 +323,69 @@ func TestSelectDroppedTermsNameTheirParams(t *testing.T) {
 		}
 	}
 }
+
+// An optional parameter guards every term that reads it, an exists term
+// renders as a subquery over its relation, and both bind in the order of
+// the text (spec §predicates, rendering). The typed handles have neither,
+// so the spelling is pinned here.
+func TestSelectRenderOptionalAndExists(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod": modFile,
+		"db/schema.volt": "package db\n\ntable members {\n\tid int [pk]\n\tname string\n}\n\n" +
+			"table posts {\n\tid int [pk]\n\tauthor_id int [ref: members.id]\n\tat time.Time [null]\n}\n\n" +
+			"table post_tags {\n\tpost_id int [pk]\n\ttag string [pk]\n\tkind string\n}\n\n" +
+			"ref: post_tags.post_id > posts.id [as: post, reverse: tags]\n\n" +
+			"table comments {\n\tid int [pk]\n\tpost_id int [ref: posts.id]\n}\n\n" +
+			"pred before { at < :at? or (at = :at? and id < :id?) }\n\n" +
+			"select keyset for posts where before\n" +
+			"select tagged for posts where exists tags (tag = :tag? and kind = :kind?) and id > 0\n" +
+			"select listed for posts where id in :ids?\n" +
+			"select byname for posts where exists author (name like :pat)\n" +
+			"select joined (id, count(comments.id) as n) for posts join comments where exists tags (tag = :tag) [group: (id)]\n",
+	})
+	wantClean(t, diags)
+	got := map[string]*SelectInfo{}
+	for _, si := range pr.Packages["db"].Selects {
+		got[si.Decl.Name.Name()] = si
+	}
+	for _, tc := range []struct {
+		name   string
+		where  string
+		binds  []string
+		params []SelectParam
+	}{
+		{"keyset", `((? IS NULL OR "at" < ?) OR ((? IS NULL OR "at" = ?) AND (? IS NULL OR "id" < ?)))`,
+			[]string{"at", "at", "at", "at", "id", "id"},
+			[]SelectParam{{GoName: "at", GoType: "time.Time", Optional: true}, {GoName: "id", GoType: "int", Optional: true}}},
+		{"tagged", `((? IS NULL OR ? IS NULL OR EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ("tags"."tag" = ? AND "tags"."kind" = ?))) AND "id" > ?)`,
+			[]string{"tag", "kind", "tag", "kind", "0"},
+			[]SelectParam{{GoName: "tag", GoType: "string", Optional: true}, {GoName: "kind", GoType: "string", Optional: true}}},
+		{"listed", `(? IS NULL OR "id" IN (SELECT value FROM json_each(?)))`,
+			[]string{"rt.JSONListOptional(ids)", "rt.JSONListOptional(ids)"},
+			[]SelectParam{{GoName: "ids", GoType: "[]int", Optional: true}}},
+		{"byname", `EXISTS (SELECT 1 FROM "members" AS "author" WHERE "author"."id" = "posts"."author_id" AND ("author"."name" LIKE ?))`,
+			[]string{"pat"},
+			[]SelectParam{{GoName: "pat", GoType: "string"}}},
+		{"joined", `EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ("tags"."tag" = ?))`,
+			[]string{"tag"},
+			[]SelectParam{{GoName: "tag", GoType: "string"}}},
+	} {
+		si := got[tc.name]
+		if si == nil {
+			t.Errorf("select %s not lowered", tc.name)
+			continue
+		}
+		if si.WhereSQL != tc.where {
+			t.Errorf("select %s: WhereSQL\n\t%s\nwant\n\t%s", tc.name, si.WhereSQL, tc.where)
+		}
+		if !reflect.DeepEqual(si.Binds, tc.binds) {
+			t.Errorf("select %s: Binds %q, want %q", tc.name, si.Binds, tc.binds)
+		}
+		if !reflect.DeepEqual(si.Params, tc.params) {
+			t.Errorf("select %s: Params %+v, want %+v", tc.name, si.Params, tc.params)
+		}
+	}
+	if typ := got["listed"].Params[0].Type(); typ != "rt.Null[[]int]" {
+		t.Errorf("an optional list parameter is %s, want rt.Null[[]int]", typ)
+	}
+}

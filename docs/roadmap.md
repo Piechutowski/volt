@@ -22,7 +22,8 @@ that lands it.
 | Generated Elm client | no | missing | |
 | Models, CRUD, dynamic queries | Ecto / ActiveRecord | built | |
 | Changesets and validation | Ecto changesets / validations | built | |
-| Joins in declared queries | yes | built (`join` over relation names) | |
+| Joins in declared queries | yes | built (`join` over relation names, `exists` over one without joining) | |
+| Optional filters in declared queries | yes | built (`:name?`, a term that is true when its parameter is absent) | |
 | Aggregates and grouping | yes | built (`count`, `sum`, `avg`, `min`, `max`, arithmetic, `group:`) | |
 | Nested results (preload / include) | yes | built (`with` over a reverse relation) | |
 | Many-to-many through a junction | yes | missing | |

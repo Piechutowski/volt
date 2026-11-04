@@ -382,3 +382,63 @@ func TestVoltCompleteLeavesSchemaChains(t *testing.T) {
 		t.Errorf("schema ref-chain completion lost: %v", labels)
 	}
 }
+
+const existsSchema = "package db\n\ntable posts {\n\tid    int [pk]\n\ttitle string\n}\n\n" +
+	"table post_tags {\n\tpost_id int    [pk]\n\ttag     string [pk]\n}\n\n" +
+	"ref: post_tags.post_id > posts.id [as: post, reverse: tags]\n\n" +
+	"select tagged for posts where exists tags (tag = :tag?) [order: (id asc)]\n"
+
+func existsDocument(t *testing.T, text string) *Document {
+	t.Helper()
+	root := voltProject(t, map[string]string{"go.mod": "module lsptest\n", "db/schema.volt": existsSchema})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
+	if d.vpkg == nil {
+		t.Fatal("project index should be active for this file")
+	}
+	return d
+}
+
+// An exists term's relation and the columns inside it resolve against
+// the table the relation leads to (spec §predicates).
+func TestVoltExistsResolvesTheRelatedTable(t *testing.T) {
+	d := existsDocument(t, existsSchema)
+	loc := d.Definition(posOf(t, existsSchema, "tag =", 0))
+	if loc == nil {
+		t.Fatal("no definition for the column inside exists")
+	}
+	if want := posOf(t, existsSchema, "tag     string", 0); loc.Range.Start.Line != want.Line {
+		t.Errorf("the column inside exists resolves to line %d, want post_tags.tag on line %d", loc.Range.Start.Line, want.Line)
+	}
+	rel := d.Definition(posOf(t, existsSchema, "tags (", 0))
+	if rel == nil || rel.Range.Start.Line != posOf(t, existsSchema, "post_tags {", 0).Line {
+		t.Errorf("the relation of exists resolves to %v, want the table post_tags", rel)
+	}
+}
+
+// Inside a predicate completion offers exists, and after exists the
+// relations of the select's target (spec §predicates, §keywords).
+func TestVoltCompleteExists(t *testing.T) {
+	text := strings.Replace(existsSchema, "where exists tags (tag = :tag?)", "where ex", 1)
+	d := existsDocument(t, text)
+	pos := posOf(t, text, "where ex", 0)
+	pos.Character += uint32(len("where ex"))
+	labels := map[string]bool{}
+	for _, it := range d.Complete(pos) {
+		labels[it.Label] = true
+	}
+	if !labels["exists "] {
+		t.Errorf("completion after where ex = %v, want exists", labels)
+	}
+
+	text = strings.Replace(existsSchema, "where exists tags (tag = :tag?)", "where exists t", 1)
+	d = existsDocument(t, text)
+	pos = posOf(t, text, "exists t", 0)
+	pos.Character += uint32(len("exists t"))
+	var got []string
+	for _, it := range d.Complete(pos) {
+		got = append(got, it.Label)
+	}
+	if len(got) != 1 || got[0] != "tags" {
+		t.Errorf("completion after exists t = %v, want [tags]", got)
+	}
+}

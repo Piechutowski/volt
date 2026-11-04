@@ -399,6 +399,16 @@ func (ix *Index) walkPredCols(ti *check.TableInfo, partial string, x ast.PredExp
 		ix.addColRef(ti, partial, x.Col)
 	case *ast.PredNull:
 		ix.addColRef(ti, partial, x.Col)
+	case *ast.PredExists:
+		if ti == nil || ix.Info == nil {
+			return
+		}
+		r, _ := ix.Info.Relation(ti.Key, x.Rel.Name())
+		if r == nil {
+			return
+		}
+		ix.add(SymbolID{SymTable, "", r.Table.Key}, x.Rel, false)
+		ix.walkPredCols(r.Table, "", x.X)
 	}
 }
 

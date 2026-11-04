@@ -597,8 +597,8 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	qr := &QueryRef{Qualifier: qual, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200}
 
 	type sigParam struct {
-		name, goType      string
-		body, key, limits bool
+		name, goType                string
+		body, key, limits, optional bool
 	}
 	var sig []sigParam
 	found, op := false, ""
@@ -607,7 +607,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	if si, m, ok := l.selectByMethod(target, name); ok {
 		found, op, dropped = true, "select", si.droppedParams
 		for _, p := range si.Params {
-			sig = append(sig, sigParam{name: p.GoName, goType: p.GoType, limits: p.GoName == si.LimitParam})
+			sig = append(sig, sigParam{name: p.GoName, goType: p.GoType, limits: p.GoName == si.LimitParam, optional: p.Optional})
 		}
 		switch {
 		case si.With != nil:
@@ -679,10 +679,25 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 			qr.Unresolved = true
 			continue
 		}
-		qp := QueryParam{Name: sp.name, GoType: sp.goType, Limit: sp.limits}
+		qp := QueryParam{Name: sp.name, GoType: sp.goType, Limit: sp.limits, Optional: sp.optional}
 		switch {
 		case sp.body:
 			qp.Source = FromBody
+		case sp.optional:
+			qp.Source = FromQuery
+			if pp, inPath := byName[sp.name]; inPath {
+				bound[sp.name] = true
+				l.errorf(segAt.pos(pp.Name), "query-routes", "parameter %q of %s is optional, and a path segment is always present; pass it in the query string (§query-routes)", sp.name, ref)
+				ok = false
+			}
+			switch {
+			case strings.HasPrefix(sp.goType, "[]"):
+				l.errorf(pos, "query-routes", "%s takes the optional list parameter %q, which a route cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§query-routes)", ref, sp.name)
+				ok = false
+			case !queryValueTypes[sp.goType]:
+				l.errorf(pos, "query-routes", "parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, qp.Type())
+				ok = false
+			}
 		case strings.HasPrefix(sp.goType, "[]"):
 			qp.Source = FromList
 			if pp, inPath := byName[sp.name]; inPath {

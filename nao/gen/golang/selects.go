@@ -150,7 +150,7 @@ func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t 
 
 	var sig strings.Builder
 	for _, prm := range fn.Params {
-		fmt.Fprintf(&sig, ", %s %s", prm.GoName, prm.GoType)
+		fmt.Fprintf(&sig, ", %s %s", prm.GoName, prm.Type())
 	}
 	for _, a := range args {
 		if strings.HasPrefix(a, "rt.") {

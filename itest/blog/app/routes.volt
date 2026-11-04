@@ -71,6 +71,7 @@ scope / [pipe: api, error_handler: Errors] {
 		get    /picked           db.UserPicked
 		get    /since            db.UserSince
 		get    /latest           db.UserLatest
+		get    /described        db.UserDescribed
 	}
 
 	// A dataset (§datasets): one query route per member of the group select.

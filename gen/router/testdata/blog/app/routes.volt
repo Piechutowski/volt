@@ -19,6 +19,7 @@ scope / [pipe: api, error_handler: Errors] {
 			feed   db.UserFeed()
 			latest db.UserLatest(5)
 			ten    db.UserLatest(010)
+			written db.UserWritten(title, after)
 		}
 		get /top/:n(int) Admin.Top {
 			top db.UserLatest(n)
@@ -61,6 +62,7 @@ scope / [pipe: api, error_handler: Errors] {
 		get    /totals           db.UserTotals
 		get    /feed             db.UserFeed
 		get    /latest           db.UserLatest
+		get    /written          db.UserWritten
 		get    /roles/:userID(int)/:roleID(int) db.UserRoleGet
 		patch  /roles/:userID(int)/:roleID(int) db.UserRoleUpdate
 	}

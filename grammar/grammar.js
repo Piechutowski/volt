@@ -498,6 +498,7 @@ module.exports = grammar({
         $.pred_in,
         $.pred_like,
         $.pred_null,
+        $.pred_exists,
         alias($.identifier, $.pred_ref),
       ),
 
@@ -531,6 +532,17 @@ module.exports = grammar({
         kw('is'),
         optional(kw('not')),
         kw('null'),
+      ),
+
+    // exists rel (expr): a row the relation leads to matches expr, a
+    // predicate over the related table's columns (§predicates).
+    pred_exists: ($) =>
+      seq(
+        kw('exists'),
+        field('relation', alias($.identifier, $.relation_name)),
+        '(',
+        field('body', $.pred_expr),
+        ')',
       ),
 
     _pred_operand: ($) =>
@@ -582,8 +594,14 @@ module.exports = grammar({
     _pred_literal: ($) =>
       choice($.number, seq('-', $.number), $.string, $.boolean),
 
+    // :name, or :name? when optional, the ? directly after the name
+    // (§predicates).
     query_param: ($) =>
-      seq(':', field('name', alias($._ident_immediate, $.parameter_name))),
+      seq(
+        ':',
+        field('name', alias($._ident_immediate, $.parameter_name)),
+        optional(field('optional', alias(token.immediate('?'), $.optional_marker))),
+      ),
 
     // Select name [(cols) | (* \ cols)] for target [where expr]
     // [settings] (§selects-over-groups, §predicates)

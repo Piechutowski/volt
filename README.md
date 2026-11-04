@@ -87,9 +87,11 @@ transaction, so a post's tags are not written atomically, which
 `rt.Atomic` over `rt.Then` now spares, also not yet in the blog (step
 20); a select had no limit, so the feed reads every post after the
 cursor, which `limit:` now spares though the blog is not yet rewritten
-onto it either (step 20); a select has no optional predicate, so the
-tag filter is a second select; and the generated client is untyped for
-controller routes, so the typed client is written by hand.
+onto it either (step 20); a select had no optional predicate, so the
+tag filter is a second select and the feed's first page passes a
+sentinel cursor, which optional parameters and `exists` now spare,
+also not yet in the blog (step 20); and the generated client is untyped
+for controller routes, so the typed client is written by hand.
 
 ## Crib sheet
 

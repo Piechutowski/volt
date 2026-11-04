@@ -96,3 +96,13 @@ select top     for page_views where day >= :from [order: (hits desc, id asc), li
 select first   for traffic [order: (day asc, id asc), limit: 3]
 select leading (site, sum(hits) as total) for page_views [group: (site), order: (total desc, site asc), limit: :n]
 select newest  for hosts with visits [order: (id desc), limit: :limit]
+
+// Optional parameters and exists (spec §predicates): a term that reads an
+// absent optional parameter is true behind its guard, an optional list
+// binds through JSONListOptional, and an exists term tests a forward or a
+// reverse relation without joining it, a composite key on every pair.
+select keyset  for visits where day < :day? or (day = :day? and id < :id?) [order: (day desc, id desc), limit: :limit]
+select picked  for page_views where id in :ids? and site like :site? [order: (id asc)]
+select visited for hosts where exists visits (day >= :from?) and not exists owned (day = 0) [order: (id asc)]
+select by_host (id, day) for visits where exists host (name = :name)
+select active  for merchants where exists merchant_periods (id > 0)

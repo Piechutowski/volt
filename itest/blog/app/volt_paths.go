@@ -118,6 +118,10 @@ func PathAPIUserLatest(opts ...volt.URLOption) string {
 	return volt.URL("/api/latest", opts...)
 }
 
+func PathAPIUserDescribed(opts ...volt.URLOption) string {
+	return volt.URL("/api/described", opts...)
+}
+
 func PathMsRevenueBrowse(opts ...volt.URLOption) string {
 	return volt.URL("/ms/revenue", opts...)
 }
