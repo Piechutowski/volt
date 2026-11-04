@@ -16,7 +16,7 @@ type Client struct {
 }
 
 func New(base string) *Client {
-	return &Client{volt.Client{Base: base, Header: http.Header{}}}
+	return &Client{volt.Client{Base: base, Header: map[string][]string{}}}
 }
 
 func (c *Client) Root(ctx context.Context) (*http.Response, error) {

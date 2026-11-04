@@ -1098,6 +1098,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 			FromResources: true,
 			ScopeLoads:    inh.loads,
 			Table:         tableName,
+			collection:    a.Name == "Index",
 		}
 		if qr != nil {
 			r.Controller, r.Action = "", ""

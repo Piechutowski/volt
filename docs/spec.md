@@ -2674,9 +2674,11 @@ the routes through typed methods instead of hand-built requests.
    none. The headers the client writes itself are its own and never
    come from `Header`: `Accept`, the format's media type
    (`text/event-stream` on a stream); `Content-Type`, the format's when
-   a body goes and absent otherwise; and a stream's `Last-Event-ID`.
-   `Stream` reads the client once, when it is called, so its
-   reconnections, which run on a goroutine of their own, send the
+   a body goes and absent otherwise; and a stream's `Last-Event-ID`,
+   absent on its first connection. `Do` and `Raw` write no
+   `Last-Event-ID`, so one in `Header` goes out on them as any other
+   header does. `Stream` reads the client once, when it is called, so
+   its reconnections, which run on a goroutine of their own, send the
    headers of that moment; a change to the client afterwards reaches
    the next call, not a stream already open. A non-2xx reply comes
    back as an `HTTPError`: a `*volt.ProblemError` carrying the Problem's
@@ -2710,12 +2712,17 @@ the routes through typed methods instead of hand-built requests.
    read and close: Volt does not know what a hand-written action
    writes.
 5. Client method names and reverse-URL helper names share one
-   namespace per package (§route-names-and-reverse-urls); a collision is an error naming
-   `name:`. The namespace also holds the names of the embedded runtime
-   client: `Client`, its fields `Base`, `HTTP`, `Format` and `Header`,
-   and its methods `Do`, `Raw` and `Stream`, which the generated
-   methods call. A route that derives one of them is an error naming
-   `name:`.
+   namespace per package (§route-names-and-reverse-urls); a collision
+   is an error naming what renames the later route: its `name:`; for
+   resources, which take no `name:`, `singular:` on a member route
+   (§settings); and always the name of an enclosing scope, which
+   prefixes every name beneath it (§scopes) and is the only renaming a
+   resources collection route or a dataset route has. The namespace
+   also holds the names of the embedded runtime client: `Client`, its
+   fields `Base`, `HTTP`, `Format` and `Header`, and its methods `Do`,
+   `Raw` and `Stream`, which the generated methods call. A route that
+   derives one of them is an error naming what renames it in the same
+   way.
 6. **Beside the models.** `volt gen -o DIR` (§projects-and-packages) writes the client
    as `DIR/volt_client.go` in the package `DIR` holds instead of as a
    subpackage, for a program that is the client — a desktop or browser

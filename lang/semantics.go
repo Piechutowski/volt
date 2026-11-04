@@ -800,7 +800,7 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 				c.errorf(r.Pos, "resources", "resources %q: the collection and member reverse-URL helpers are both %q, because singularizing %q does not change it (§table-resolution); set the singular explicitly, e.g. [singular: <name>]",
 					prev.Table, r.HelperName, prev.Table)
 			} else {
-				c.errorf(r.Pos, "scopes-and-routes", "reverse-URL helper or client method %q already produced by the route at %s (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name", name, prev.Pos)
+				c.errorf(r.Pos, "scopes-and-routes", "reverse-URL helper or client method %q already produced by the route at %s (§route-names-and-reverse-urls, §generated-client); disambiguate with %s", name, prev.Pos, r.renameWith())
 			}
 			r.HelperName, r.ClientName = "", ""
 		} else {
@@ -811,7 +811,7 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 		r.ClientName = r.HelperName
 	}
 	if what, taken := voltClientNames[r.ClientName]; taken {
-		c.errorf(r.Pos, "scopes-and-routes", "client method %q would take the name of the embedded volt.Client's %s (§generated-client); rename the route with [name:] or a scope name", r.ClientName, what)
+		c.errorf(r.Pos, "generated-client", "client method %q would take the name of the embedded volt.Client's %s (§generated-client); rename the route with %s", r.ClientName, what, r.renameWith())
 	}
 
 	r.ord = len(c.pkg.Routes)
@@ -835,6 +835,16 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Params: r.Params, Body: r.Body, Loads: r.Loads, ScopeLoads: r.ScopeLoads, Routes: []*RouteInfo{&r}})
 	}
 	c.routeAccept(&r)
+}
+
+func (r *RouteInfo) renameWith() string {
+	switch {
+	case r.FromDataset, r.collection:
+		return "a scope name"
+	case r.FromResources:
+		return "[singular:] or a scope name"
+	}
+	return "[name:] or a scope name"
 }
 
 func (c *checker) routeAccept(r *RouteInfo) {

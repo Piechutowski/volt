@@ -258,6 +258,7 @@ func (c *Client) streamOnce(ctx context.Context, url string, last *string, out c
 		return false
 	}
 	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Del("Last-Event-ID")
 	if *last != "" {
 		req.Header.Set("Last-Event-ID", *last)
 	}

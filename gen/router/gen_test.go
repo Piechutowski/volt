@@ -653,3 +653,12 @@ func TestClientImportsTimeForTimeParamsAlone(t *testing.T) {
 func TestLoadTimeParamCompiles(t *testing.T) {
 	snippetCompiles(t, "v108_route_load_time_param")
 }
+
+// TestPackageNamedHTTPClientCompiles proves a package named http that
+// routes its own tables through query routes alone generates a client
+// that builds: the constructor's empty Header needs no net/http import
+// to collide with the package's own (spec §generated-client,
+// §projects-and-packages).
+func TestPackageNamedHTTPClientCompiles(t *testing.T) {
+	snippetCompiles(t, "v112_package_named_http")
+}

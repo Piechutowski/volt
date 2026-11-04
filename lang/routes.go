@@ -79,9 +79,10 @@ type RouteInfo struct {
 	Table         string // the resources declaration's table name, when FromResources
 	FromDataset   bool   // expanded from a dataset item (§datasets)
 
-	shape    pathShape
-	shapeKey string
-	ord      int
+	collection bool
+	shape      pathShape
+	shapeKey   string
+	ord        int
 }
 
 // QuerySource says where a query route binds one parameter from.

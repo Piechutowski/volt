@@ -584,8 +584,8 @@ app/i353_reserved_param_ctx.volt:6:9: error: spec/scopes-and-routes: path parame
 app/i354_reserved_param_c.volt:6:9: error: spec/scopes-and-routes: path parameter "c" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body
 
 ## i355_client_method_runtime_name.volt
-app/i355_client_method_runtime_name.volt:6:2: error: spec/scopes-and-routes: client method "Raw" would take the name of the embedded volt.Client's method Raw (§generated-client); rename the route with [name:] or a scope name
-app/i355_client_method_runtime_name.volt:7:2: error: spec/scopes-and-routes: client method "Client" would take the name of the embedded volt.Client's embedded field Client (§generated-client); rename the route with [name:] or a scope name
+app/i355_client_method_runtime_name.volt:6:2: error: spec/generated-client: client method "Raw" would take the name of the embedded volt.Client's method Raw (§generated-client); rename the route with [name:] or a scope name
+app/i355_client_method_runtime_name.volt:7:2: error: spec/generated-client: client method "Client" would take the name of the embedded volt.Client's embedded field Client (§generated-client); rename the route with [name:] or a scope name
 
 ## i356_select_takes_getby.volt
 app/i356_select_takes_getby.volt:10:8: error: spec/selects-over-groups: select "get_by_email" mints UserGetByEmail for table "users", which is already the method UserGetByEmail of table "users" (§selects-over-groups)
@@ -906,7 +906,19 @@ db/i457_migration_shape_rowid_alias.volt:38:5: error: spec/migrations: rebuild t
 app/i45_model_setting_removed.volt:10:19: error: spec/resources: model: is not a setting; name the table in the declaration itself — `resources <table>` (§declaration)
 
 ## i463_client_method_header.volt
-app/i463_client_method_header.volt:6:2: error: spec/scopes-and-routes: client method "Header" would take the name of the embedded volt.Client's field Header (§generated-client); rename the route with [name:] or a scope name
+app/i463_client_method_header.volt:6:2: error: spec/generated-client: client method "Header" would take the name of the embedded volt.Client's field Header (§generated-client); rename the route with [name:] or a scope name
+
+## i464_resources_member_reserved_name.volt
+app/i464_resources_member_reserved_name.volt:11:2: error: spec/generated-client: client method "Header" would take the name of the embedded volt.Client's field Header (§generated-client); rename the route with [singular:] or a scope name
+
+## i465_resources_collection_reserved_name.volt
+app/i465_resources_collection_reserved_name.volt:11:2: error: spec/generated-client: client method "Stream" would take the name of the embedded volt.Client's method Stream (§generated-client); rename the route with a scope name
+
+## i466_resources_helper_collision.volt
+app/i466_resources_helper_collision.volt:12:2: error: spec/scopes-and-routes: reverse-URL helper or client method "Post" already produced by the route at app/i466_resources_helper_collision.volt:11:2 (§route-names-and-reverse-urls, §generated-client); disambiguate with [singular:] or a scope name
+
+## i467_dataset_helper_collision.volt
+app/i467_dataset_helper_collision.volt:13:2: error: spec/scopes-and-routes: reverse-URL helper or client method "MsRevenueRows" already produced by the route at app/i467_dataset_helper_collision.volt:12:2 (§route-names-and-reverse-urls, §generated-client); disambiguate with a scope name
 
 ## i46_table_case.volt
 app/i46_table_case.volt:10:12: error: spec/resources: no table "Posts" in package "app"; did you mean "posts"? names are case-sensitive (§declaration)

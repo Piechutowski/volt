@@ -16,7 +16,7 @@ type Client struct {
 	Base   string       // server origin, e.g. "http://localhost:8888"; no trailing slash
 	HTTP   *http.Client // nil means http.DefaultClient
 	Format Format       // wire format for request bodies and Accept; FormatJSON by default
-	Header http.Header  // default headers of every request; Accept, Content-Type and Last-Event-ID stay the client's own
+	Header http.Header  // default headers of every request; Accept, Content-Type and a stream's Last-Event-ID stay the client's own
 }
 
 // Do issues one request. A non-nil in is encoded as the body; a non-nil
@@ -76,7 +76,7 @@ func (c *Client) requestNew(ctx context.Context, method, url string, body io.Rea
 	}
 	for k, vs := range c.Header {
 		switch http.CanonicalHeaderKey(k) {
-		case "Accept", "Content-Type", "Last-Event-Id":
+		case "Accept", "Content-Type":
 			continue
 		}
 		for _, v := range vs {

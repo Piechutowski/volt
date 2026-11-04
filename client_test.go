@@ -11,9 +11,9 @@ import (
 
 // TestClientHeaderOnEveryRequest proves the client's Header rides on every
 // request Do, Raw and the event stream send, while Accept, Content-Type
-// and Last-Event-ID stay the client's own, and that a stream keeps the
-// headers of the moment it was opened across reconnections (spec
-// §generated-client).
+// and a stream's Last-Event-ID stay the client's own, and that a stream
+// keeps the headers of the moment it was opened across reconnections
+// (spec §generated-client).
 func TestClientHeaderOnEveryRequest(t *testing.T) {
 	b := &Broker{Heartbeat: 10 * time.Millisecond}
 	events := EventsHandler(b)
@@ -52,6 +52,12 @@ func TestClientHeaderOnEveryRequest(t *testing.T) {
 			t.Errorf("%s: Content-Type %q, want %q", what, got, contentType)
 		}
 	}
+	expectResumeFromHeader := func(what string, h http.Header) {
+		t.Helper()
+		if got := h.Values("Last-Event-ID"); !reflect.DeepEqual(got, []string{"stale-9"}) {
+			t.Errorf("%s: Last-Event-ID %q, want the Header's %q: only a stream writes its own", what, got, "stale-9")
+		}
+	}
 
 	c := &Client{Base: srv.URL, Header: http.Header{}}
 	c.Header.Set("X-User", "1")
@@ -66,11 +72,15 @@ func TestClientHeaderOnEveryRequest(t *testing.T) {
 		if err := c.Do(ctx, "GET", "/posts", nil, nil); err != nil {
 			t.Fatal(err)
 		}
-		expect(f.MIME()+" Do without a body", next("Do"), "1", f.MIME(), "")
+		h := next("Do")
+		expect(f.MIME()+" Do without a body", h, "1", f.MIME(), "")
+		expectResumeFromHeader(f.MIME()+" Do without a body", h)
 		if err := c.Do(ctx, "POST", "/posts", row{1, "first post"}, nil); err != nil {
 			t.Fatal(err)
 		}
-		expect(f.MIME()+" Do with a body", next("Do"), "1", f.MIME(), f.MIME())
+		h = next("Do")
+		expect(f.MIME()+" Do with a body", h, "1", f.MIME(), f.MIME())
+		expectResumeFromHeader(f.MIME()+" Do with a body", h)
 		for _, in := range []any{nil, row{2, "second post"}} {
 			resp, err := c.Raw(ctx, "POST", "/posts/1/publish", in)
 			if err != nil {
@@ -81,7 +91,9 @@ func TestClientHeaderOnEveryRequest(t *testing.T) {
 			if in != nil {
 				want = f.MIME()
 			}
-			expect(f.MIME()+" Raw", next("Raw"), "1", f.MIME(), want)
+			h = next("Raw")
+			expect(f.MIME()+" Raw", h, "1", f.MIME(), want)
+			expectResumeFromHeader(f.MIME()+" Raw", h)
 		}
 	}
 	if got := c.Header.Get("Accept"); got != "text/html" {
