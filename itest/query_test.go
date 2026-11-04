@@ -291,6 +291,31 @@ func TestLoadLimitParam(t *testing.T) {
 	}
 }
 
+// TestLoadKeyBindsTwice (§route-loads): one query key binds a required
+// limit of one load and an optional parameter of another, each by its own
+// rule, so the key present feeds both and the key missing is a 400 naming
+// it before any load runs, the optional binding notwithstanding.
+func TestLoadKeyBindsTwice(t *testing.T) {
+	h, ran := countedHandler()
+	call(h, "POST", "/api/users", strings.NewReader(`{"email":"two@example.com"}`))
+	call(h, "POST", "/api/users", strings.NewReader(`{"email":"three@example.com"}`))
+
+	rec := call(h, "GET", app.PathBoth(1, volt.Query("count", "3")), nil)
+	var got map[string]int
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &got) != nil || got["latest"] != 3 || got["described"] != 1 {
+		t.Fatalf("count=3: %d %s, want the 3 latest and the 1 user from id 3", rec.Code, rec.Body.String())
+	}
+	before := ran.Load()
+	var p volt.Problem
+	rec = call(h, "GET", app.PathBoth(1), nil)
+	if rec.Code != 400 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || !strings.Contains(p.Message, "count") {
+		t.Fatalf("no count: %d %q, want a 400 problem naming count", rec.Code, rec.Body.String())
+	}
+	if n := ran.Load() - before; n != 0 {
+		t.Fatalf("no count ran %d statements; want none", n)
+	}
+}
+
 // TestScopeLoadLimitParam (§scope-loads, §route-loads, §query-routes): a
 // limit from the path is checked with the path parameters, before the
 // scope load runs or halts, and one from the query string where it binds,

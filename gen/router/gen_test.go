@@ -660,9 +660,8 @@ func TestLoadTimeParamCompiles(t *testing.T) {
 
 // TestPackageNamedHTTPClientCompiles proves a package named http that
 // routes its own tables through query routes alone generates a client
-// that builds: the constructor's empty Header needs no net/http import
-// to collide with the package's own (spec §generated-client,
-// §projects-and-packages).
+// that builds, importing the package as voltHttp beside no net/http (spec
+// §generated-client, §projects-and-packages).
 func TestPackageNamedHTTPClientCompiles(t *testing.T) {
 	snippetCompiles(t, "v112_package_named_http")
 }
@@ -687,4 +686,21 @@ func TestDatasetOptionalParamCompiles(t *testing.T) {
 // builds (spec §keywords, §selects-over-groups).
 func TestPredicateWordsProjectedCompiles(t *testing.T) {
 	snippetCompiles(t, "v119_predicate_words_projected")
+}
+
+// TestLoadKeyBindsTwiceCompiles proves one query key binding several load
+// arguments, optional and required, and loads whose names and keys join
+// alike, each bind under a local of their own and build (spec
+// §route-loads).
+func TestLoadKeyBindsTwiceCompiles(t *testing.T) {
+	snippetCompiles(t, "v120_load_key_twice")
+}
+
+// TestPackagesNamedLikeImportsCompile proves packages named context, http,
+// rt and time route their own tables, a changeset body among them, into
+// clients that import them as volt and the name and build, and that one
+// imported under an alias routes from another package (spec §imports,
+// §generated-client).
+func TestPackagesNamedLikeImportsCompile(t *testing.T) {
+	snippetCompiles(t, "v121_packages_named_like_imports")
 }

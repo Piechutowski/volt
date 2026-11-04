@@ -2019,7 +2019,18 @@ package path = name, { slash, name } ;
    qualifier is never referenced is an error. An import MAY take the
    package's own name as its qualifier, since that name qualifies
    nothing else (rule 4).
-6. **Import cycles are errors.** The package import graph MUST be
+6. **The generated files' own names.** A qualifier MUST NOT be
+   `context`, `http`, `rt`, `run`, `time` or `volt`: the route files
+   and the client import the standard library's `context`, `net/http`
+   and `time`, the data runtime `nao/rt`, the runner `nao/run` and the
+   root `volt` package under those names (§data-and-network-layers),
+   and they import a data package under its qualifier, so a project
+   package under one of those names would give a generated file two
+   imports of one name. The error names an alias to write: the entry
+   `rtdb rt` imports a package `rt` under `rtdb`. A package that
+   routes its own tables imports nothing, and its client names it as
+   §generated-client says.
+7. **Import cycles are errors.** The package import graph MUST be
    acyclic.
 
 ```volt fragment
@@ -2418,7 +2429,10 @@ parameters, so the handler reads them and never asks for them.
    query string by that name, a list parameter from the repeated key,
    with the types the query string carries (§query-routes); a missing
    or unparseable value is a 400 naming the key, before any of the
-   route's loads runs. An optional parameter (§predicates) binds from
+   route's loads runs. One key may bind several arguments, of one load
+   or of several, and each binds by its own parameter's type and rule,
+   so a missing key that one of them requires is a 400 whatever else
+   it binds. An optional parameter (§predicates) binds from
    the query string only, absent when the key is missing, as a query
    route binds it; a path parameter or a literal, which is always
    present, cannot bind it, and an optional list parameter cannot be
@@ -2634,9 +2648,14 @@ scope /api [pipe: api] {
    of those (a list parameter), or an `rt.Null` of one of those (an
    optional parameter); a select with a parameter of any other
    type, a declared type (§types) included, is not a query route, and
-   the route is an error. A path parameter the function does not take is
-   an error: the route would capture a value nothing consumes; the key
-   of an `Update` is consumed by the load.
+   the route is an error. A `float64` takes no NaN, which SQLite binds
+   as NULL, so a present optional value would read as absent
+   (§predicates): `NaN`, in any case, is an unparseable value, a 400
+   like any other, wherever a `float64` binds from the query string,
+   a list item and a load's argument (§route-loads) included. A path
+   parameter the function does not take is an error: the route would
+   capture a value nothing consumes; the key of an `Update` is
+   consumed by the load.
 3. **Response.** The result renders in the negotiated format
    (Formats): rows or a row with status 200, a created row with 201,
    a delete with 204 and no body. A query's row miss (`rt.ErrNotFound`) is a 404 through the error
@@ -2764,7 +2783,10 @@ the routes through typed methods instead of hand-built requests.
    `nao/run` and never the routing package, so a caller links no
    server code. The one exception is a package
    that routes its own tables (§query-routes): its client imports it for the
-   row types, and so links it; when that package is `main`, which Go
+   row types, and so links it, under the package's name, or as `volt`
+   and the name with an upper-case initial (`voltRt`) when the name is
+   one the client imports for itself, `context`, `http`, `rt` or
+   `time` (§imports); when that package is `main`, which Go
    cannot import, no client is generated.
 2. `type Client struct { volt.Client }` and `New(base string)
    *Client`. The embedded runtime client carries the origin, the
@@ -3390,7 +3412,8 @@ pred tagged  { exists tags (tag = :tag?) }
      both `string` and `string [null]`, `[]int`, `[]time.Time`); a
      `time.Time` item travels in the JSON array, the list's wire form
      (§selects-over-groups), as the text the column holds, its stored
-     form (§go-types);
+     form (§go-types). Membership in an empty list is false, so
+     `id in :ids` with no ids matches no row;
    - `[]byte` columns may not appear in predicates;
    - a `param` adopts the type of the expression position it appears
      in, the column's Go type without `rt.Null` for a nullable column
@@ -3447,14 +3470,27 @@ pred tagged  { exists tags (tag = :tag?) }
      a term inside it never vanishes on its own, since whenever every
      parameter the exists term reads is present, so is every parameter
      of each term inside it.
+   - **Absent is what binds NULL.** A guard (below) reads the value the
+     parameter binds, so the parameter is absent whenever that value
+     binds as NULL: the zero `rt.Null[T]`, and a present value whose
+     driver value is NULL too, a `float64` NaN, which SQLite binds as
+     NULL, or a value of a declared type whose `Value` answers nil
+     (§types). A query route takes no NaN for a `float64`
+     (§query-routes). A nullable column's field has the parameter's
+     own type, `rt.Null[T]`, so a value read from such a column passes
+     as an optional parameter, and its NULL is absent:
+     `OrderPlacedBy(o.PlacedAt)`, over `placed_at < :before?`, filters
+     nothing for an order never placed, where `placed_at < :before`
+     would match no row. Pass a value that may be NULL as an optional
+     parameter only where its NULL should mean no filter; NULL itself
+     is tested with `is null` (rule 3).
    - A keyset pages soundly only over rows whose `order:` columns are
      never NULL. Its cursor is the last row's values of those columns,
      and a comparison never matches NULL, so no page after the first
-     reaches a row whose column is NULL; worse, an optional parameter
-     given that NULL, which the column's `rt.Null[T]` carries in the
-     parameter's own type, is absent, so the terms vanish and the page
-     after a row with NULL is the first page again, without end. The
-     keyset above therefore takes `published_at` to be declared
+     reaches a row whose column is NULL; worse, a cursor taken from a
+     row whose column is NULL is absent (above), so the terms vanish
+     and the page after that row is the first page again, without end.
+     The keyset above therefore takes `published_at` to be declared
      without `[null]`; over a nullable column, the `where` keeps the NULLs out,
      `published_at is not null and (published_at < :at? or …)`, or the
      keyset pages over key columns alone.
@@ -3473,7 +3509,14 @@ pred tagged  { exists tags (tag = :tag?) }
      guard's and the term's own, binds the parameter's `rt.Null`, which
      binds NULL when absent (rule 8). An optional list parameter binds
      as `rt.JSONListOptional(tags)`: NULL when absent, the JSON array of
-     rule 3 when present.
+     rule 3 when present. The one text costs an index: SQLite plans the
+     statement once for whatever it binds, so a guarded term finds no
+     row through an index, even when the parameter is present. `"site"
+     = ?` searches an index on `site`; `(? IS NULL OR "site" = ?)`
+     reads every row. An exists term's subquery is planned as it is
+     without the guard, which stands outside it. Where a filter should
+     search an index, write it with a required parameter, in a select
+     of its own.
 7. **`exists`.** `exists rel (x)` is true for a row when at least one
    row that the relation `rel` leads to from it matches `x`.
    - `rel` is a relation of the select's `for` table, named as `join`
@@ -3780,11 +3823,13 @@ the optional projection narrows the emitted columns.
    optional relation, a composite key `AND`ing its pairs, every column
    qualified once a join is present. The relation name is the SQL
    alias, which is why a relation named as its table is ambiguous
-   (§relationships-ref). A relation joined only to filter on it is an
-   exists term instead (§predicates): a join of a reverse relation
-   repeats each row once per related row, which inflates every
-   aggregate the select computes, and `exists` filters without
-   repeating any.
+   (§relationships-ref). A filter on a relation needs no join: an
+   exists term (§predicates) tests it and adds no row. The two differ
+   for a reverse relation, whose join repeats each row once per
+   related row, which inflates every aggregate the select computes; a
+   forward relation leads to one row at most, so a filter through its
+   join and the exists term over it keep the same rows, and a join is
+   what projects or orders by the relation's columns.
 9. **Aggregates and arithmetic.** A projected item is a column, an
    aggregate or an arithmetic expression; the latter two are
    **derived** and carry an alias, `as name`, a lower-case identifier

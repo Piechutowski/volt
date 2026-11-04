@@ -467,7 +467,11 @@ func (p *parser) predPrimary() ast.PredExpr {
 	case p.atKw("exists") && p.peekKind(1) == token.IDENT:
 		return p.predExists()
 	case p.at(token.IDENT):
-		col := p.colRef("predicate (§predicates)")
+		bare := "pred"
+		if p.compOpAt(1) || p.kwAt(1, "in") || p.kwAt(1, "like") || p.kwAt(1, "is") {
+			bare = "column"
+		}
+		col := p.colRef("predicate (§predicates)", bare)
 		switch {
 		case p.compOpAt(0):
 			return p.comparisonTail(col)
@@ -507,7 +511,7 @@ func (p *parser) param() *ast.Param {
 
 func (p *parser) predExists() ast.PredExpr {
 	x := &ast.PredExists{ExistsPos: p.kwTake("exists").Pos}
-	p.predKeywordCheck()
+	p.predKeywordCheck("relation")
 	x.Rel = p.ident("exists (§predicates)")
 	x.Lparen = p.expect(token.LPAREN, "exists (§predicates)").Pos
 	x.X = p.predExpr()
@@ -515,14 +519,25 @@ func (p *parser) predExists() ast.PredExpr {
 	return x
 }
 
-func (p *parser) predKeywordCheck() {
+// predKeywordCheck refuses a predicate keyword where a name stands, naming
+// what the name would be there, a column, a relation or a pred
+// (§keywords, §predicates).
+func (p *parser) predKeywordCheck(role string) {
 	t := p.cur()
 	if t.Kind != token.IDENT {
 		return
 	}
 	if _, ok := foldTo(t.Val, predWords); ok {
-		p.fail(t, "%q is a keyword inside a predicate and names no column there (§predicates)", t.Val)
+		p.fail(t, "%q is a keyword inside a predicate and names no %s there (§predicates)", t.Val, role)
 	}
+}
+
+func (p *parser) kwAt(n int, kw string) bool {
+	if p.pos+n >= len(p.toks) {
+		return false
+	}
+	t := p.toks[p.pos+n]
+	return t.Kind == token.IDENT && strings.EqualFold(t.Val, kw)
 }
 
 func (p *parser) compOpAt(n int) bool {
@@ -559,7 +574,7 @@ func (p *parser) operand() ast.Operand {
 	case p.atKw("false"):
 		return &ast.Lit{Tok: p.kwTake("false")}
 	case p.at(token.IDENT):
-		return p.colRef("operand (§predicates)")
+		return p.colRef("operand (§predicates)", "column")
 	default:
 		p.fail(t, "expected a column, :param or literal (§predicates), found %s", t)
 		return nil
@@ -568,15 +583,19 @@ func (p *parser) operand() ast.Operand {
 
 // colRef reads a column reference: a name, or relation.column
 // (§predicates, §selects-over-groups); neither part is a predicate
-// keyword.
-func (p *parser) colRef(ctx string) *ast.ColRef {
-	p.predKeywordCheck()
+// keyword, and bare names what a lone name stands for, a column or a pred.
+func (p *parser) colRef(ctx, bare string) *ast.ColRef {
+	role := bare
+	if p.peekKind(1) == token.DOT {
+		role = "relation"
+	}
+	p.predKeywordCheck(role)
 	name := p.ident(ctx)
 	if !p.at(token.DOT) {
 		return &ast.ColRef{Name: name}
 	}
 	p.next()
-	p.predKeywordCheck()
+	p.predKeywordCheck("column")
 	return &ast.ColRef{Qual: name, Name: p.ident(ctx)}
 }
 

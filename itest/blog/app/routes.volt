@@ -39,6 +39,10 @@ scope / [pipe: api, error_handler: Errors] {
 		peers db.UserLatest(n)
 		more  db.UserLatest(count)
 	}
+	get /users/:id(int)/both Users.Both [name: both] {
+		latest    db.UserLatest(count)
+		described db.UserDescribed(bio, count)
+	}
 	patch /users/:id(int)/email Users.ChangeEmail [name: change_email, body: db.UserUpdate(id), only: (email)]
 	post  /login                Session.Login     [name: login, body: LoginForm]
 	get /files/:path...          Files.Serve

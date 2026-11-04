@@ -58,6 +58,10 @@ func PathPeers(id int, n int, opts ...volt.URLOption) string {
 	return volt.URL("/users/"+volt.SegInt(id)+"/peers/"+volt.SegInt(n), opts...)
 }
 
+func PathBoth(id int, opts ...volt.URLOption) string {
+	return volt.URL("/users/"+volt.SegInt(id)+"/both", opts...)
+}
+
 func PathChangeEmail(id int, opts ...volt.URLOption) string {
 	return volt.URL("/users/"+volt.SegInt(id)+"/email", opts...)
 }

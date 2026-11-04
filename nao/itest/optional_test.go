@@ -6,6 +6,7 @@ package itest
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -120,6 +121,47 @@ func TestOptionalTimeOverNullColumn(t *testing.T) {
 	}
 	if len(before) != 1 || before[0].ID != ids[0] {
 		t.Errorf("a present bound keeps %+v, want the order placed first alone", before)
+	}
+}
+
+// Absent is what binds NULL: a present float64 NaN, which SQLite binds as
+// NULL, reads as absent and keeps every row, where the same NaN compared
+// by a term with no guard matches none (spec §predicates).
+func TestOptionalNaNReadsAbsent(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	ann, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet("ann@blog.test").NameSet("Ann")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, total := range []float64{5, 9} {
+		if _, err := run.Run(ctx, db, OrderCreate(OrderNew().UserIDSet(ann.ID).TotalSet(total).FeeSet(1))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		name string
+		min  rt.Null[float64]
+		want int
+	}{
+		{"absent", rt.Null[float64]{}, 2},
+		{"present", rt.Some(6.0), 1},
+		{"present NaN", rt.Some(math.NaN()), 2},
+	} {
+		rows, err := run.Run(ctx, db, OrderCosting(tc.min))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != tc.want {
+			t.Errorf("%s: %d orders, want %d", tc.name, len(rows), tc.want)
+		}
+	}
+	rows, err := run.Run(ctx, db, OrderQuery(OrderTotal.Ge(math.NaN())))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("total >= NaN with no guard keeps %d orders, want none", len(rows))
 	}
 }
 

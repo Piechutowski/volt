@@ -161,7 +161,8 @@ the path), since the tool carries its own SQLite.
 
 **The local grammar mirror** (`scripts/sync-grammar.sh`): Zed loads
 grammars from a *git repository* even for dev extensions. The script
-regenerates `src/parser.c` if a tree-sitter CLI is present, mirrors
+regenerates `src/parser.c` if the pinned tree-sitter CLI is present
+(section 5), mirrors
 `grammar/` into `~/.cache/volt/tree-sitter-volt-git`, commits there,
 and rewrites `[grammars.volt]` with the mirror's `file://` URL and
 fresh SHA. The rewritten lines are machine-local by design; the
@@ -297,6 +298,17 @@ agree. The LSP picks it up automatically.
 `tree-sitter test` → section 8's differential checks →
 `./scripts/sync-grammar.sh` → Rebuild in Zed.
 
+The CLI is pinned: `grammar/package-lock.json` holds tree-sitter-cli
+0.25.10, the version the first line of `src/parser.c` names, and
+`npm ci` in `grammar/` installs it as
+`grammar/node_modules/.bin/tree-sitter`. Run that one: another version
+rewrites the committed `src/` from an unchanged `grammar.js` (0.27.1
+rewrites `src/parser.c` and `src/tree_sitter/array.h`).
+`sync-grammar.sh` regenerates with the pinned version only, from
+`grammar/node_modules/.bin` or from the `PATH`, and otherwise leaves
+`src/` as committed and says so. Moving the pin is a change of its
+own: update the lockfile, regenerate, and commit both.
+
 ## 6. Tooling choices
 
 The server is Go and wraps the reference front end, so diagnostics come
@@ -383,7 +395,7 @@ How to audit that the three components implement
 | Claim | Check | Where |
 |---|---|---|
 | Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (files without a `package` clause = the schema pass, files with one and project dirs = the project pass); every diagnostic of every invalid snippet, recovery included, is a golden | `lang/conformance/snippets/` and `lang/conformance/invalid_*.golden` via `go test ./lang/...`; refresh with `-update` after reading the diff |
-| Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` |
+| Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` with the pinned CLI, tree-sitter-cli 0.25.10 (section 5) |
 | Spec grammar and front end agree | the spec's EBNF read as data: every derived sentence parses, every one-token neighbour is decided alike by the grammar and the front end | `lang/spec_grammar_test.go` via `go test ./lang/...` |
 | Grammar and front end agree | every valid conformance snippet (the files its loader reads, so not `testdata/` or a nested module) and `grammar/examples/*` must produce zero front-end diagnostics, and every derived sentence of the spec's grammar (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) zero parser diagnostics; all of them must produce zero tree-sitter ERROR nodes, except where a limitation of section 7 applies: today `v55_element_continuation` (a `ref:` continued on an indented line) and `34_no_reserved_words` (a column named `indexes`) | differential run after grammar changes |
 | Highlight queries cover the grammar | every keyword `grammar.js` matches (`kw(...)`) is captured in `highlights.scm`, by its spelling or through the node it is aliased to (a verb, a boolean, `null`, an aggregate name) | `lsp/highlights_test.go` via `go test ./lsp/...`; `tree-sitter query zed-extension/languages/volt/highlights.scm FILE` from `grammar/` shows the captures |

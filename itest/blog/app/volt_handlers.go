@@ -61,6 +61,7 @@ type UsersController interface {
 	Profile(r volt.Request, id int, user db.User) volt.Response
 	Card(r volt.Request, id int) volt.Response
 	Peers(r volt.Request, id int, n int, user db.User, peers []db.User, more []db.User) volt.Response
+	Both(r volt.Request, id int, latest []db.User, described []db.User) volt.Response
 	ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response
 }
 
@@ -155,6 +156,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	}
 	if !volt.Same(c.Users.Peers(r, 0, 0, db.User{}, nil, nil), c.Users.Peers(r, 0, 0, db.User{}, nil, nil)) {
 		voltOut = append(voltOut, "Users.Peers")
+	}
+	if !volt.Same(c.Users.Both(r, 0, nil, nil), c.Users.Both(r, 0, nil, nil)) {
+		voltOut = append(voltOut, "Users.Both")
 	}
 	if !volt.Same(c.Users.ChangeEmail(r, 0, db.UserNew()), c.Users.ChangeEmail(r, 0, db.UserNew())) {
 		voltOut = append(voltOut, "Users.ChangeEmail")

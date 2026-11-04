@@ -7,7 +7,9 @@
 # script keeps that contract without polluting the main repo with a nested
 # git checkout:
 #
-#   1. (optional) regenerate src/parser.c if a tree-sitter CLI is available
+#   1. (optional) regenerate src/parser.c if the pinned tree-sitter CLI is
+#      available: grammar/package-lock.json pins it, `npm ci` in grammar/
+#      installs it, and any other version rewrites the committed src/
 #   2. mirror grammar/ into ~/.cache/volt/tree-sitter-volt-git
 #      and commit the current state there
 #   3. rewrite [grammars.volt] in zed-extension/extension.toml with the
@@ -26,13 +28,27 @@ grammar_src="$repo_root/grammar"
 extension_toml="$repo_root/zed-extension/extension.toml"
 mirror="${VOLT_GRAMMAR_MIRROR:-${XDG_CACHE_HOME:-$HOME/.cache}/volt/tree-sitter-volt-git}"
 
-# 1. Regenerate the parser when a CLI is around (committed src/ still works
-#    when it is not).
-if command -v tree-sitter >/dev/null 2>&1; then
-    echo "Regenerating parser with $(tree-sitter --version)..."
-    (cd "$grammar_src" && tree-sitter generate)
+# 1. Regenerate the parser with the pinned CLI when it is around (committed
+#    src/ still works when it is not). The pin is the tree-sitter-cli version
+#    of grammar/package-lock.json; grammar/node_modules/.bin/tree-sitter is
+#    preferred, then a tree-sitter on PATH of the same version.
+pinned="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["packages"]["node_modules/tree-sitter-cli"]["version"])' "$grammar_src/package-lock.json")"
+ts=""
+for cand in "$grammar_src/node_modules/.bin/tree-sitter" "$(command -v tree-sitter || true)"; do
+    if [ -n "$cand" ] && [ -x "$cand" ]; then
+        have="$("$cand" --version | awk '{print $2}')"
+        if [ "$have" = "$pinned" ]; then
+            ts="$cand"
+            break
+        fi
+        echo "Skipping $cand: tree-sitter $have, not the pinned $pinned."
+    fi
+done
+if [ -n "$ts" ]; then
+    echo "Regenerating parser with tree-sitter $pinned ($ts)..."
+    (cd "$grammar_src" && "$ts" generate)
 else
-    echo "tree-sitter CLI not found; using committed src/parser.c as-is."
+    echo "tree-sitter $pinned not found (cd grammar && npm ci installs it); using committed src/ as-is."
 fi
 
 # 2. Mirror into a standalone git repo.
@@ -95,7 +111,7 @@ git -C "$tmp" checkout -q "$sha"
     { echo "error: mirror lacks src/parser.c" >&2; exit 1; }
 grep -q 'tree_sitter_volt' "$tmp/src/parser.c" ||
     { echo "error: src/parser.c does not export tree_sitter_volt — regenerate it:" >&2
-      echo "       cd grammar && npm install && ./node_modules/.bin/tree-sitter generate" >&2
+      echo "       cd grammar && npm ci && ./node_modules/.bin/tree-sitter generate" >&2
       exit 1; }
 
 echo "Grammar mirrored at: $mirror"

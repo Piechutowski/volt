@@ -52,6 +52,9 @@ func (users) Profile(r volt.Request, id int, user db.User) volt.Response { retur
 func (users) Peers(r volt.Request, id, n int, user db.User, peers, more []db.User) volt.Response {
 	return volt.Render(map[string]any{"user": user.ID, "peers": len(peers), "more": len(more)})
 }
+func (users) Both(r volt.Request, id int, latest, described []db.User) volt.Response {
+	return volt.Render(map[string]any{"latest": len(latest), "described": len(described)})
+}
 func (users) Card(r volt.Request, id int) volt.Response {
 	return volt.Then(db.UserGet(id), func(u db.User) volt.Response { return volt.Render(u) })
 }
@@ -204,6 +207,7 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathAvatar":           {"GET", app.PathAvatar(7)},
 		"PathProfile":          {"GET", app.PathProfile(1)},
 		"PathPeers":            {"GET", app.PathPeers(1, 2, volt.Query("count", "1"))},
+		"PathBoth":             {"GET", app.PathBoth(1, volt.Query("count", "1"))},
 		"PathCard":             {"GET", app.PathCard(1)},
 		"PathChangeEmail":      {"PATCH", app.PathChangeEmail(1)},
 		"PathLogin":            {"POST", app.PathLogin()},
@@ -232,7 +236,7 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathRefProfile":       {"GET", app.PathRefProfile(1)},
 		"PathEvents":           {"GET", app.PathEvents()},
 	}
-	queryRoutes := map[string]bool{"PathProfile": true, "PathCard": true, "PathPeers": true}
+	queryRoutes := map[string]bool{"PathProfile": true, "PathCard": true, "PathPeers": true, "PathBoth": true}
 	bodyRoutes := map[string]bool{"PathChangeEmail": true, "PathLogin": true}
 	haltRoutes := map[string]bool{"PathMeShow": true, "PathMeUserList": true, "PathMePicks": true, "PathMeUserLatest": true}
 	for _, r := range app.Table {
@@ -544,7 +548,7 @@ func TestTableMatchesServedReality(t *testing.T) {
 			}
 			continue
 		}
-		if row.Action == "Peers" {
+		if row.Action == "Peers" || row.Action == "Both" {
 			if rec.Code != 400 {
 				t.Errorf("%s %s: a limited load without its count = %d, want 400 before anything loads", method, url, rec.Code)
 			}

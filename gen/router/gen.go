@@ -710,7 +710,7 @@ func (g *generator) clientEmit() error {
 	}
 	for _, q := range g.clientPackages() {
 		if !g.opts.ClientBeside {
-			imports = append(imports, dataImport(q))
+			imports = append(imports, clientImport(q))
 		}
 	}
 	ctor := "New"
@@ -740,11 +740,7 @@ func (g *generator) clientEmit() error {
 		if r.Query == nil {
 			sig, in := sigParams(r.Params), "nil"
 			if b := r.Body; b != nil && b.Kind == lang.BodyChangeset {
-				goType := b.GoType()
-				if g.opts.ClientBeside {
-					goType = strings.TrimPrefix(goType, b.Query.Qualifier+".")
-				}
-				sig, in = sig+", cs "+goType, "cs.Params()"
+				sig, in = sig+", cs "+g.clientType(b.Query, b.Query.Changeset.Type), "cs.Params()"
 			} else if b != nil {
 				sig, in = sig+", body any", "body"
 			}
@@ -758,8 +754,8 @@ func (g *generator) clientEmit() error {
 		var arg string
 		for _, p := range q.Params {
 			goType := p.Type()
-			if g.opts.ClientBeside {
-				goType = strings.TrimPrefix(goType, q.Qualifier+".")
+			if p.Source == lang.FromBody {
+				goType = g.clientType(q, strings.TrimPrefix(goType, q.Qualifier+"."))
 			}
 			fmt.Fprintf(&sig, ", %s %s", p.Name, goType)
 			switch p.Source {
@@ -788,10 +784,7 @@ func (g *generator) clientEmit() error {
 		}
 		result := ""
 		if q.Result != "" {
-			result = q.Qualifier + "." + q.Result
-			if g.opts.ClientBeside {
-				result = q.Result
-			}
+			result = g.clientType(q, q.Result)
 			if q.Many {
 				result = "[]" + result
 			}
@@ -808,6 +801,39 @@ func (g *generator) clientEmit() error {
 		g.pf("\tvoltErr := c.Do(ctx, %q, %s, %s, &voltOut)\n\treturn voltOut, voltErr\n}\n\n", method, url, in)
 	}
 	return nil
+}
+
+// clientOwnImports are the names the client imports a package of the
+// standard library or the runtime under (spec §generated-client).
+var clientOwnImports = map[string]bool{"context": true, "http": true, "rt": true, "time": true}
+
+// clientQualifier is the name the client imports the data package of q
+// under (spec §generated-client): its import qualifier, which §imports
+// keeps off the client's own imports, or for a package that routes its
+// own tables its name, as volt and the name with an upper-case initial
+// when the client imports a package of that name for itself.
+func clientQualifier(q *lang.QueryRef) string {
+	if q.Local && clientOwnImports[q.Qualifier] {
+		return "volt" + strings.ToUpper(q.Qualifier[:1]) + q.Qualifier[1:]
+	}
+	return q.Qualifier
+}
+
+func clientImport(q *lang.QueryRef) string {
+	if qual := clientQualifier(q); qual != q.PkgName {
+		return qual + " " + fmt.Sprintf("%q", q.Import)
+	}
+	return q.Import
+}
+
+// clientType spells the type name of the data package of q in the
+// client: bare beside the models, qualified as clientQualifier says
+// otherwise.
+func (g *generator) clientType(q *lang.QueryRef, name string) string {
+	if g.opts.ClientBeside {
+		return name
+	}
+	return clientQualifier(q) + "." + name
 }
 
 func zeroArgs(ps []lang.Param) string {
@@ -882,6 +908,10 @@ func zeroLoads(ls []lang.LoadInfo) string {
 	return b.String()
 }
 
+// loadsEmit binds every argument of the route's loads, each under a local
+// of its own, voltLoad<i>Arg<j>, since one query key may bind several
+// arguments, each by its own parameter's type and rule (spec
+// §route-loads), and then runs the loads in order before call.
 func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call, indent string) {
 	argsOf := make([][]string, len(r.Loads))
 	for i, ld := range r.Loads {
@@ -893,11 +923,11 @@ func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call,
 			case lang.FromLiteral:
 				argsOf[i][j] = p.Literal
 			case lang.FromList:
-				v := "volt_" + ld.Name + "_" + p.Name
+				v := fmt.Sprintf("voltLoad%dArg%d", i, j)
 				g.pf("%s%s, err := volt.QueryParams[%s](r, %q)\n%sif err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, v, strings.TrimPrefix(p.GoType, "[]"), p.Name, indent, indent, indent)
 				argsOf[i][j] = v
 			default:
-				v := "volt_" + ld.Name + "_" + p.Name
+				v := fmt.Sprintf("voltLoad%dArg%d", i, j)
 				g.pf("%s%s, err := volt.%s[%s](r, %q)\n%sif err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, v, queryBinder(p), p.GoType, p.Name, indent, indent, indent)
 				g.limitCheckEmit(p, v, indent)
 				argsOf[i][j] = v

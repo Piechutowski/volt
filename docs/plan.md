@@ -272,7 +272,11 @@ first page passes a sentinel cursor; `feed` becomes the one select,
 never published, `published_at is not null`, since a NULL cursor
 would read as absent and start the feed over (spec §predicates),
 `feed_tagged` goes, and the handler passes absent values where the
-request has no cursor or no tag. `compare/suite` passes unchanged,
+request has no cursor or no tag. The fold loses no index search, which
+a guarded term never makes (spec §predicates): no index of `posts`
+serves the feed's terms, and the exists term's subquery, which its
+guard leaves as it is, reaches `post_tags` through its key, `post_id`
+first. `compare/suite` passes unchanged,
 `go run ./compare/measure` remeasures, and the README's table and its
 first four gaps change in the commit that deletes this section.
 

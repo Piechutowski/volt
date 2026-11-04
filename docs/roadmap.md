@@ -23,7 +23,7 @@ that lands it.
 | Models, CRUD, dynamic queries | Ecto / ActiveRecord | built | |
 | Changesets and validation | Ecto changesets / validations | built | |
 | Joins in declared queries | yes | built (`join` over relation names, `exists` over one without joining) | |
-| Optional filters in declared queries | yes | built (`:name?`, a term that is true when its parameter is absent) | |
+| Optional filters in declared queries | yes | built (`:name?`, a term that is true when its parameter is absent and searches no index) | |
 | Aggregates and grouping | yes | built (`count`, `sum`, `avg`, `min`, `max`, arithmetic, `group:`) | |
 | Nested results (preload / include) | yes | built (`with` over a reverse relation) | |
 | Many-to-many through a junction | yes | missing | |

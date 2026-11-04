@@ -280,7 +280,7 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 		b.WriteString(")")
 	case predNot:
 		b.WriteString("NOT ")
-		return p.kids[0].renderParenthesized(b, args)
+		return p.kids[0].parenRender(b, args)
 	case predExists:
 		b.WriteString("EXISTS (SELECT 1 FROM " + Ident(p.col) + " AS " + Ident(p.col2) + " WHERE ")
 		for i, pair := range p.pairs {
@@ -291,7 +291,7 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 		}
 		if len(p.kids) > 0 {
 			b.WriteString(" AND ")
-			if err := p.kids[0].renderParenthesized(b, args); err != nil {
+			if err := p.kids[0].parenRender(b, args); err != nil {
 				return err
 			}
 		}
@@ -312,7 +312,7 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 	return nil
 }
 
-func (p Pred[M]) renderParenthesized(b *strings.Builder, args *[]any) error {
+func (p Pred[M]) parenRender(b *strings.Builder, args *[]any) error {
 	if p.kind == predAnd || p.kind == predOr || p.kind == predRaw {
 		return p.render(b, args)
 	}

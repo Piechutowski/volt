@@ -1068,6 +1068,20 @@ app/routes.volt:10:2: error: spec/query-routes: parameter "year" of db.MsUsageBr
 app/routes.volt:10:13: error: spec/query-routes: db.MsRevenuePicked takes the optional list parameter "ids", which a route cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§query-routes)
 app/routes.volt:10:13: error: spec/query-routes: db.MsUsagePicked takes the optional list parameter "ids", which a route cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§query-routes)
 
+## i513_keyword_relation.volt
+db/i513_keyword_relation.volt:16:38: error: syntax: "like" is a keyword inside a predicate and names no relation there (§predicates)
+db/i513_keyword_relation.volt:17:56: error: syntax: "like" is a keyword inside a predicate and names no relation there (§predicates)
+
+## i514_keyword_pred.volt
+db/i514_keyword_pred.volt:10:31: error: syntax: "null" is a keyword inside a predicate and names no pred there (§predicates)
+
+## i515_query_optional_declared_type
+app/routes.volt:10:18: error: spec/query-routes: parameter "price" of db.ProductCosting is rt.Null[money.Money], which the query string cannot carry (§query-routes)
+
+## i516_import_generated_name
+app/routes.volt:6:2: error: spec/imports: import qualifier "rt" is the name the generated route files and client import the data runtime nao/rt under (§imports); alias the import: rtdb rt
+app/routes.volt:7:2: error: spec/imports: import qualifier "run" is the name the generated route files and client import the runner nao/run under (§imports); alias the import: rundb db
+
 ## i51_group_readd.volt
 db/i51_group_readd.volt:12:23: error: spec/groups: table "ms_revenue" is already a member (§groups)
 

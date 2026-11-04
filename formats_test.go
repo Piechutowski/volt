@@ -209,6 +209,28 @@ func TestQueryOptionalBinding(t *testing.T) {
 	}
 }
 
+// A float64 takes no NaN from the query string, in any case and in any
+// binder, since SQLite binds NaN as NULL and a present optional NaN would
+// read as absent; infinities still bind (spec §query-routes, §predicates).
+func TestQueryFloatRefusesNaN(t *testing.T) {
+	r := requestOf(httptest.NewRequest("GET", "/x?a=NaN&b=nan&c=-NAN&l=1&l=NaN&inf=-Inf", nil))
+	for _, name := range []string{"a", "b", "c"} {
+		_, err := QueryParam[float64](r, name)
+		if p, _ := ProblemOf(err); err == nil || !strings.Contains(err.Error(), name) || p.Status != 400 {
+			t.Errorf("QueryParam %s: %v; want a 400 naming it", name, err)
+		}
+		if v, err := QueryParamOptional[float64](r, name); err == nil || v.Valid {
+			t.Errorf("QueryParamOptional %s = %+v, %v; want a 400, never a present NaN", name, v, err)
+		}
+	}
+	if _, err := QueryParams[float64](r, "l"); err == nil || !strings.Contains(err.Error(), "l") {
+		t.Errorf("a list with a NaN item: %v; want a 400 naming it", err)
+	}
+	if v, err := QueryParam[float64](r, "inf"); err != nil || !math.IsInf(v, -1) {
+		t.Errorf("-Inf = %v, %v; want negative infinity", v, err)
+	}
+}
+
 func TestNoRowsIs404(t *testing.T) {
 	rec := serve(t, func(Request) Response { return Fail(rt.ErrNotFound) }, httptest.NewRequest("GET", "/x", nil))
 	if rec.Code != 404 {

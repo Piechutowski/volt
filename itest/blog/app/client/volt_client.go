@@ -72,6 +72,10 @@ func (c *Client) Peers(ctx context.Context, id int, n int) (*http.Response, erro
 	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/peers/"+volt.SegInt(n)), nil)
 }
 
+func (c *Client) Both(ctx context.Context, id int) (*http.Response, error) {
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/both"), nil)
+}
+
 func (c *Client) ChangeEmail(ctx context.Context, id int, cs db.UserChangeset) (*http.Response, error) {
 	return c.Raw(ctx, "PATCH", volt.URL("/users/"+volt.SegInt(id)+"/email"), cs.Params())
 }

@@ -227,6 +227,18 @@ func (c *checker) fileRules(pkg *Package) {
 	}
 }
 
+// generatedImportNames are the names the route files and the client import
+// the standard library and the runtime under, each with what it names
+// there; no import qualifier takes one (§imports).
+var generatedImportNames = map[string]string{
+	"context": "the standard library's context",
+	"http":    "net/http",
+	"rt":      "the data runtime nao/rt",
+	"run":     "the runner nao/run",
+	"time":    "the standard library's time",
+	"volt":    "the root volt package",
+}
+
 func (c *checker) importsResolve(pkg *Package) {
 	byPath := map[string]*ast.ImportSpec{}
 	for _, f := range pkg.Files {
@@ -249,6 +261,9 @@ func (c *checker) importsResolve(pkg *Package) {
 				qual := spec.Qualifier()
 				if spec.Alias != nil && !goIdentOK(qual) {
 					c.errorf(spec.Alias.Pos(), "imports", "import alias %q is not an identifier of ASCII letters, digits and underscores (§imports)", qual)
+				}
+				if what := generatedImportNames[qual]; what != "" {
+					c.errorf(spec.Pos(), "imports", "import qualifier %q is the name the generated route files and client import %s under (§imports); alias the import: %s %s", qual, what, qual+"db", path)
 				}
 				if prev, taken := pkg.Imports[qual]; taken && prev != path {
 					c.errorf(spec.Pos(), "imports", "import qualifier %q already used for package %q (§imports); alias one of them", qual, prev)
@@ -397,7 +412,7 @@ func (c *checker) routing(pkg *Package) {
 	c.typesRouterCheck(pkg)
 
 	for _, spec := range pkg.importSpecs {
-		if _, resolved := pkg.Imports[spec.Qualifier()]; resolved && !c.usedQual[spec.Qualifier()] {
+		if _, resolved := pkg.Imports[spec.Qualifier()]; resolved && !c.usedQual[spec.Qualifier()] && generatedImportNames[spec.Qualifier()] == "" {
 			c.errorf(spec.Pos(), "imports", "package %q imported and not used (§imports)", spec.PathString())
 		}
 	}

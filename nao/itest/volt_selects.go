@@ -400,6 +400,12 @@ func OrderPlacedBy(before rt.Null[time.Time]) rt.Query[Order] {
 	return rt.Query[Order]{SQL: voltOrderPlacedBySQL, Args: []any{before, before}, Scan: voltOrderScan}
 }
 
+const voltOrderCostingSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE (? IS NULL OR "total" >= ?) ORDER BY "id" ASC`
+
+func OrderCosting(min rt.Null[float64]) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderCostingSQL, Args: []any{min, min}, Scan: voltOrderScan}
+}
+
 const voltUserTaggedSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE (? IS NULL OR EXISTS (SELECT 1 FROM "user_tags" AS "user_tags" WHERE "user_tags"."user_id" = "users"."id" AND ("user_tags"."tag" = ?))) ORDER BY "id" ASC`
 
 func UserTagged(tag rt.Null[string]) rt.Query[User] {

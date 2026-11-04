@@ -219,6 +219,7 @@ select placed_keyset_loose for orders where placed_at < :at? or (placed_at = :at
 select picked     for page_views where site = :site? and hits >= :min? [order: (id asc)]
 select in_sites   for page_views where site in :sites? [order: (id asc)]
 select placed_by  for orders where placed_at < :before? [order: (id asc)]
+select costing    for orders where total >= :min? [order: (id asc)]
 select tagged     for users where exists user_tags (tag = :tag?) [order: (id asc)]
 select bought_by  for orders where exists user (name = :name) [order: (id asc)]
 select order_counts (id, count(orders.id) as n) for users join orders where exists user_tags (tag in :tags) [group: (id), order: (id asc)]

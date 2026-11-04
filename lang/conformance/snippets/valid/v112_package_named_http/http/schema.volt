@@ -1,4 +1,4 @@
-// spec: §projects-and-packages, §generated-client, a package named http routes its own posts through query routes alone, and its client imports no net/http for the qualifier to collide with
+// spec: §projects-and-packages, §generated-client, a package named http routes its own posts through query routes alone, and its client imports it as voltHttp
 package http
 
 table posts {

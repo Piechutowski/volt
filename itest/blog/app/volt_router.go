@@ -122,21 +122,48 @@ func register(mux *http.ServeMux, c Controllers) {
 		if err := volt.LimitCheck("n", voltn); err != nil {
 			return volt.Fail(err)
 		}
-		volt_more_count, err := volt.QueryParam[int](r, "count")
+		voltLoad2Arg0, err := volt.QueryParam[int](r, "count")
 		if err != nil {
 			return volt.Fail(err)
 		}
-		if err := volt.LimitCheck("count", volt_more_count); err != nil {
+		if err := volt.LimitCheck("count", voltLoad2Arg0); err != nil {
 			return volt.Fail(err)
 		}
 		return volt.Then(db.UserGet(voltid), func(user db.User) volt.Response {
 			return volt.Then(db.UserLatest(voltn), func(peers []db.User) volt.Response {
-				return volt.Then(db.UserLatest(volt_more_count), func(more []db.User) volt.Response {
+				return volt.Then(db.UserLatest(voltLoad2Arg0), func(more []db.User) volt.Response {
 					return c.Users.Peers(r, voltid, voltn, user, peers, more)
 				})
 			})
 		})
 	}, errHandlerErrors, voltPerform, volt.Params("id", "n"))))
+
+	mux.Handle("GET /users/{id}/both", pipe0(volt.Handler("GET /users/{id}/both", func(r volt.Request) volt.Response {
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		voltLoad0Arg0, err := volt.QueryParam[int](r, "count")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		if err := volt.LimitCheck("count", voltLoad0Arg0); err != nil {
+			return volt.Fail(err)
+		}
+		voltLoad1Arg0, err := volt.QueryParamOptional[string](r, "bio")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		voltLoad1Arg1, err := volt.QueryParamOptional[int](r, "count")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.UserLatest(voltLoad0Arg0), func(latest []db.User) volt.Response {
+			return volt.Then(db.UserDescribed(voltLoad1Arg0, voltLoad1Arg1), func(described []db.User) volt.Response {
+				return c.Users.Both(r, voltid, latest, described)
+			})
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
 	mux.Handle("PATCH /users/{id}/email", pipe0(volt.Handler("PATCH /users/{id}/email", func(r volt.Request) volt.Response {
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
