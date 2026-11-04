@@ -346,6 +346,7 @@ type pragmaCutConnector struct {
 	inner driver.Driver
 	dsn   string
 	cut   func()
+	sent  func(query string)
 }
 
 func (c pragmaCutConnector) Driver() driver.Driver { return c.inner }
@@ -355,15 +356,19 @@ func (c pragmaCutConnector) Connect(context.Context) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pragmaCutConn{Conn: conn, cut: c.cut}, nil
+	return pragmaCutConn{Conn: conn, cut: c.cut, sent: c.sent}, nil
 }
 
 type pragmaCutConn struct {
 	driver.Conn
-	cut func()
+	cut  func()
+	sent func(query string)
 }
 
 func (c pragmaCutConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if c.sent != nil {
+		c.sent(query)
+	}
 	res, err := c.Conn.(driver.ExecerContext).ExecContext(context.Background(), query, args)
 	if query == "PRAGMA busy_timeout = 0" && err == nil {
 		c.cut()
@@ -408,5 +413,55 @@ func TestWriteBeginRestoresTheBusyTimeout(t *testing.T) {
 	}
 	if _, err := run.Run(context.Background(), db, rt.Atomic(UserCreate(UserNew().EmailSet("b@example.com").NameSet("Bob")))); err != nil {
 		t.Fatalf("the next write = %v", err)
+	}
+}
+
+// TestWriteBeginOfAnEndedContextTakesNoLock proves that the wait of an
+// immediate begin makes no attempt once its context ended (spec
+// §generated-query-surface, the runner): a context that ends while the
+// runner sets the busy timeout to zero fails the transaction with the
+// context's error without sending BEGIN IMMEDIATE, so a request already
+// gone takes no write lock from the writers still waiting for it, and
+// the timeout it set is restored.
+func TestWriteBeginOfAnEndedContextTakesNoLock(t *testing.T) {
+	probe, err := sql.Open("sqlite3", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner := probe.Driver()
+	_ = probe.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var mu sync.Mutex
+	var sent []string
+	record := func(query string) {
+		mu.Lock()
+		sent = append(sent, query)
+		mu.Unlock()
+	}
+	dsn := "file:" + filepath.Join(t.TempDir(), "ended.db") + "?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on"
+	pool := sql.OpenDB(pragmaCutConnector{inner: inner, dsn: dsn, cut: cancel, sent: record})
+	pool.SetMaxOpenConns(1)
+	db := run.Wrap(pool)
+	defer db.Close()
+	ddlApply(t, db)
+	mu.Lock()
+	sent = nil
+	mu.Unlock()
+	_, err = run.Run(ctx, db, rt.Atomic(UserCreate(UserNew().EmailSet("a@example.com").NameSet("Ann"))))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("a write whose context ended at the pragma = %v; want context.Canceled", err)
+	}
+	mu.Lock()
+	got := strings.Join(sent, "; ")
+	mu.Unlock()
+	if strings.Contains(got, "BEGIN IMMEDIATE") {
+		t.Fatalf("the runner sent %q; want no BEGIN IMMEDIATE once the context ended", got)
+	}
+	if !strings.Contains(got, "PRAGMA busy_timeout = 0; PRAGMA busy_timeout = 5000") {
+		t.Fatalf("the runner sent %q; want the timeout set to zero and restored", got)
+	}
+	if n, err := run.Run(context.Background(), db, UserCount()); err != nil || n != 0 {
+		t.Fatalf("after a write whose context ended, UserCount = %d, %v; want 0", n, err)
 	}
 }

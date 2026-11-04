@@ -138,15 +138,33 @@ func (x poolExecutor) Query(ctx context.Context, query string, args []any) (rt.R
 	if err != nil {
 		return nil, err
 	}
-	defer release()
+	var rows *sql.Rows
+	defer func() {
+		if rows == nil {
+			release()
+		}
+	}()
 	bound, err := rt.ArgsBound(args)
 	if err != nil {
 		return nil, err
 	}
 	start := time.Now()
-	rows, err := stmt.QueryContext(ctx, bound...)
+	rows, err = stmt.QueryContext(ctx, bound...)
 	x.db.logged(query, start, err)
-	return rows, err
+	if err != nil {
+		return nil, err
+	}
+	return heldRows{Rows: rows, release: release}, nil
+}
+
+type heldRows struct {
+	*sql.Rows
+	release func()
+}
+
+func (r heldRows) Close() error {
+	defer r.release()
+	return r.Rows.Close()
 }
 
 func (x poolExecutor) Exec(ctx context.Context, query string, args []any) (int64, error) {
@@ -225,6 +243,9 @@ func immediateBegin(ctx context.Context, conn *sql.Conn) error {
 
 func immediateRetry(ctx context.Context, conn *sql.Conn, deadline time.Time) error {
 	for i := 0; ; i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		_, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE")
 		if err == nil || !strings.Contains(err.Error(), "database is locked") {
 			return err
