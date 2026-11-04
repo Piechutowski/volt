@@ -30,6 +30,7 @@ type HomeController interface {
 
 type MeController interface {
 	Show(r volt.Request, user db.User) volt.Response
+	Picks(r volt.Request, user db.User, n int, picks []db.User) volt.Response
 }
 
 type OpsController interface {
@@ -106,6 +107,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	}
 	if !volt.Same(c.Me.Show(r, *new(db.User)), c.Me.Show(r, *new(db.User))) {
 		voltOut = append(voltOut, "Me.Show")
+	}
+	if !volt.Same(c.Me.Picks(r, *new(db.User), 0, nil), c.Me.Picks(r, *new(db.User), 0, nil)) {
+		voltOut = append(voltOut, "Me.Picks")
 	}
 	if !volt.Same(c.Ops.Fail(r), c.Ops.Fail(r)) {
 		voltOut = append(voltOut, "Ops.Fail")

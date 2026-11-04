@@ -78,6 +78,14 @@ func PathMeUserList(opts ...volt.URLOption) string {
 	return volt.URL("/me/peers", opts...)
 }
 
+func PathMePicks(n int, opts ...volt.URLOption) string {
+	return volt.URL("/me/picks/"+volt.SegInt(n), opts...)
+}
+
+func PathMeUserLatest(opts ...volt.URLOption) string {
+	return volt.URL("/me/latest", opts...)
+}
+
 func PathTag(name string, opts ...volt.URLOption) string {
 	return volt.URL("/tags/"+volt.Seg(name), opts...)
 }

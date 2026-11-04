@@ -2385,15 +2385,20 @@ parameters, so the handler reads them and never asks for them.
    path parameter bind a list parameter. Any other name binds from the
    query string by that name, a list parameter from the repeated key,
    with the types the query string carries (§query-routes); a missing
-   or unparseable value is a 400 naming the key, before any load runs.
-   A literal binds as itself and MUST spell the parameter's Go type: a
+   or unparseable value is a 400 naming the key, before any of the
+   route's loads runs. A literal MUST spell the parameter's Go type: a
    string literal a `string`, a number an `int` when it is whole and
    a `float64` otherwise, `true` or `false` a `bool`; a type the
-   query string cannot carry takes a literal or nothing. A select's
-   `limit:` parameter (§selects-over-groups) takes a value of at least
-   1: a literal below 1 is an error, since every request would be
-   refused, and a value from the path or the query string below 1 is a
-   400 naming the key, before any load runs.
+   query string cannot carry takes a literal or nothing. A number
+   binds in canonical Go form, as a predicate's literal does
+   (§predicates): `010` binds `10`, never the octal `8` Go would read
+   in it. A select's `limit:` parameter (§selects-over-groups) takes a
+   value of at least 1: a literal below 1 is an error, since every
+   request would be refused; a value below 1 from a path parameter is
+   a 400 naming the key once the path parameters parse, before the
+   scope loads (§scope-loads), and one from the query string is a 400
+   naming the key where it binds, before any of the route's loads
+   runs.
 3. **Order and the shim.** Loads run in declaration order before the
    handler, each a continuation of the shim (§requests-and-responses),
    and every argument is bound before the first runs. The handler's
@@ -2475,8 +2480,10 @@ routes need and whether the request goes on.
 3. **Order and the shim.** `scope` loads run for every route beneath
    the scope, controller and query routes alike, outermost scope
    first and in declaration order within a scope, after the path
-   parameters parse and before the body (§request-bodies) and the
-   route loads (§route-loads); a halt answers with its response, an
+   parameters parse, a path parameter that binds a select's `limit:`
+   checked with them (§route-loads, §query-routes), and before the body
+   (§request-bodies), the query string and the route loads
+   (§route-loads); a halt answers with its response, an
    effect that fails goes to the error spine (§requests-and-responses)
    unless the load rescues it.
    A controller route's handler receives the values as its leading
@@ -2570,8 +2577,10 @@ scope /api [pipe: api] {
      names the parameter.
    A select's `limit:` parameter (§selects-over-groups) is an `int`
    and binds as one, from a path parameter of its name or the query
-   string; a value below 1 is a 400 that names the parameter, before
-   the query runs, since SQLite reads a negative limit as none.
+   string; a value below 1 is a 400 that names the parameter, since
+   SQLite reads a negative limit as none: from a path parameter once
+   the path parameters parse, before the scope loads (§scope-loads),
+   and from the query string where it binds, before the query runs.
    A parameter binds from the query string only when its type is
    `string`, `bool`, `int`, `float64` or `time.Time`, or a slice of one
    of those (a list parameter); a select with a parameter of any other
@@ -3681,15 +3690,17 @@ the optional projection narrows the emitted columns.
     group, so the order names every `group:` item, or a key of the
     `for` table that `group:` holds as its own columns when no `group:`
     item reaches a relation of many rows, one group then being one row
-    of the table. The key may stand anywhere in the list, and a table
-    with no key takes no `limit:`. Each of
+    of the table. An alias of a lone column (rule 9) is that column
+    here, in `order:` and in `group:` alike: `(id as ident, ...)`
+    ordered by `ident` names `id`. The key may stand anywhere in the
+    list, and a table with no key takes no `limit:`. Each of
     these is an error: `limit:` without `order:`, or over an order
     that leaves ties (`order: (value desc)` alone), since the rows kept
     at the cut would be arbitrary; a literal below 1, since `LIMIT 0`
     keeps nothing and SQLite reads a negative limit as none, a literal
-    that does not fit `int64`, and any other value; and `limit:` on a
-    select that yields one row (rule 10), which has nothing to cap. A
-    second `limit:` is the repeated setting of §settings-lists. The statement
+    that does not fit `int64`, and any other value; `limit:` on a
+    select that yields one row (rule 10), which has nothing to cap; and
+    a second `limit:`, since a select keeps one count of rows. The statement
     ends in `LIMIT ?` after `ORDER BY`, the literal or the parameter
     bound behind it (§predicates, rendering): each member's statement
     of a group takes it, after `GROUP BY` it counts groups, and under

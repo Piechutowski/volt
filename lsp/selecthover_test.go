@@ -16,7 +16,7 @@ const projSchema = "package db\n\n" +
 	"select public (* \\ site) for link_clicks\n" +
 	"select chosen for metrics where site in :sites and day in :days\n" +
 	"select busy for page_views where hits > 10 and site = :site and day in :days\n" +
-	"select leaders for page_views where site = :site [order: (hits desc), limit: :limit]\n"
+	"select leaders for page_views where site = :site [order: (hits desc, id asc), limit: :limit]\n"
 
 func projSelectDoc(t *testing.T) (*Document, string) {
 	t.Helper()
@@ -99,13 +99,16 @@ func TestSelectHoverListParam(t *testing.T) {
 
 func TestSelectHoverLimit(t *testing.T) {
 	d, text := projSelectDoc(t)
+	if diags := d.LSPDiagnostics(); len(diags) != 0 {
+		t.Fatalf("the hovered project must check clean, or the hover shows a select the checker refuses: %v", diags)
+	}
 	h := d.Hover(posOf(t, text, "leaders", 0))
 	if h == nil {
 		t.Fatal("no hover for the leaders select")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
 	for _, want := range []string{
-		"```sql\nORDER BY \"hits\" DESC\n```\n```sql\nLIMIT ?\n```\nbinds: `limit`\n",
+		"```sql\nORDER BY \"hits\" DESC, \"id\" ASC\n```\n```sql\nLIMIT ?\n```\nbinds: `limit`\n",
 		"PageViewLeaders(site string, limit int) rt.Query[PageView]",
 	} {
 		if !strings.Contains(md, want) {

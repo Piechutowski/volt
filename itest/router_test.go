@@ -77,11 +77,17 @@ func (session) Login(r volt.Request, body app.LoginForm) volt.Response {
 type me struct{}
 
 func (me) Show(r volt.Request, user db.User) volt.Response { return volt.Render(user) }
+func (me) Picks(r volt.Request, user db.User, n int, picks []db.User) volt.Response {
+	return volt.Render(map[string]int{"user": user.ID, "n": n, "picks": len(picks)})
+}
 
 type meNext struct{}
 
 func (meNext) Show(r volt.Request, user db.User) volt.Response {
 	return volt.Then(db.UserGet(user.ID+1), func(next db.User) volt.Response { return volt.Render(next) })
+}
+func (meNext) Picks(r volt.Request, user db.User, n int, picks []db.User) volt.Response {
+	return me{}.Picks(r, user, n, picks)
 }
 
 type files struct{}
@@ -203,6 +209,8 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathLogin":           {"POST", app.PathLogin()},
 		"PathMeShow":          {"GET", app.PathMeShow()},
 		"PathMeUserList":      {"GET", app.PathMeUserList()},
+		"PathMePicks":         {"GET", app.PathMePicks(2)},
+		"PathMeUserLatest":    {"GET", app.PathMeUserLatest(volt.Query("limit", "2"))},
 		"PathServe":           {"GET", app.PathServe("a/b c.txt")},
 		"PathOpsFail":         {"GET", app.PathOpsFail()},
 		"PathTag":             {"GET", app.PathTag("hello world")},
@@ -225,7 +233,7 @@ func TestRoundTripTotality(t *testing.T) {
 	}
 	queryRoutes := map[string]bool{"PathProfile": true, "PathCard": true, "PathPeers": true}
 	bodyRoutes := map[string]bool{"PathChangeEmail": true, "PathLogin": true}
-	haltRoutes := map[string]bool{"PathMeShow": true, "PathMeUserList": true}
+	haltRoutes := map[string]bool{"PathMeShow": true, "PathMeUserList": true, "PathMePicks": true, "PathMeUserLatest": true}
 	for _, r := range app.Table {
 		if r.Query != "" && r.Helper != "" {
 			queryRoutes[r.Helper] = true

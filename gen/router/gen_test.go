@@ -249,7 +249,7 @@ type stub struct{}
 func (stub) Index(r volt.Request) volt.Response { return volt.NoContent() }
 func (stub) About(r volt.Request) volt.Response { return volt.NoContent() }
 func (stub) Ping(r volt.Request) volt.Response { return volt.NoContent() }
-func (stub) Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts, latest []db.User) volt.Response {
+func (stub) Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts, latest, ten []db.User) volt.Response {
 	return volt.NoContent()
 }
 func (stub) Serve(r volt.Request, path string) volt.Response { return volt.NoContent() }
@@ -269,6 +269,9 @@ func (stub) Login(r volt.Request, body LoginForm) volt.Response        { return 
 type me struct{}
 
 func (me) Show(r volt.Request, user db.User) volt.Response { return volt.NoContent() }
+func (me) Picks(r volt.Request, user db.User, n int, picks []db.User) volt.Response {
+	return volt.NoContent()
+}
 
 func CurrentUser(r volt.Request) volt.Load[db.User] { return volt.LoadWith(db.UserGet(1)) }
 

@@ -258,26 +258,19 @@ func limitLiteralOK(lit string) bool {
 	return err == nil && n >= 1
 }
 
-// numberLiteral is the Go spelling of lit as a value of goType, "" when
-// the number does not spell one: an integer for int, any number for
-// float64.
+// numberLiteral is the canonical Go spelling of lit as a value of goType
+// (spec §route-loads, §predicates), "" when the number does not spell
+// one: a decimal integer for int, so 010 is 10 and never Go's octal 8,
+// and a float literal for float64.
 func numberLiteral(lit, goType string) string {
-	switch goType {
-	case "int":
-		if _, err := strconv.ParseInt(lit, 10, 64); err != nil {
-			return ""
-		}
-		return lit
-	case "float64":
-		if _, err := strconv.ParseFloat(lit, 64); err != nil {
-			return ""
-		}
-		if !strings.ContainsAny(lit, ".eE") {
-			return lit + ".0"
-		}
-		return lit
+	if goType != "int" && goType != "float64" {
+		return ""
 	}
-	return ""
+	s, err := numberGo(lit, goType)
+	if err != nil {
+		return ""
+	}
+	return s
 }
 
 // timeout reads a route's timeout: setting (spec §route-loads): a

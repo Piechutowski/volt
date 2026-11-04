@@ -11,7 +11,7 @@ import (
 )
 
 type AdminController interface {
-	Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts, latest []db.User) volt.Response
+	Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts, latest []db.User, ten []db.User) volt.Response
 	Top(r volt.Request, n int, top []db.User) volt.Response
 }
 
@@ -27,6 +27,7 @@ type HomeController interface {
 
 type MeController interface {
 	Show(r volt.Request, user db.User) volt.Response
+	Picks(r volt.Request, user db.User, n int, picks []db.User) volt.Response
 }
 
 type SessionController interface {
@@ -62,7 +63,7 @@ func NewRouter(c Controllers) http.Handler {
 
 func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	var voltOut []string
-	if !volt.Same(c.Admin.Stats(r, db.Totals{}, nil, nil), c.Admin.Stats(r, db.Totals{}, nil, nil)) {
+	if !volt.Same(c.Admin.Stats(r, db.Totals{}, nil, nil, nil), c.Admin.Stats(r, db.Totals{}, nil, nil, nil)) {
 		voltOut = append(voltOut, "Admin.Stats")
 	}
 	if !volt.Same(c.Admin.Top(r, 0, nil), c.Admin.Top(r, 0, nil)) {
@@ -82,6 +83,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	}
 	if !volt.Same(c.Me.Show(r, *new(db.User)), c.Me.Show(r, *new(db.User))) {
 		voltOut = append(voltOut, "Me.Show")
+	}
+	if !volt.Same(c.Me.Picks(r, *new(db.User), 0, nil), c.Me.Picks(r, *new(db.User), 0, nil)) {
+		voltOut = append(voltOut, "Me.Picks")
 	}
 	if !volt.Same(c.Session.Login(r, LoginForm{}), c.Session.Login(r, LoginForm{})) {
 		voltOut = append(voltOut, "Session.Login")

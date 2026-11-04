@@ -93,6 +93,17 @@ func (c *Client) MeUserList(ctx context.Context) ([]db.User, error) {
 	return voltOut, voltErr
 }
 
+func (c *Client) MePicks(ctx context.Context, n int) (*http.Response, error) {
+	return c.Raw(ctx, "GET", volt.URL("/me/picks/"+volt.SegInt(n)), nil)
+}
+
+func (c *Client) MeUserLatest(ctx context.Context, limit int) ([]db.User, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/me/latest", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
 func (c *Client) Tag(ctx context.Context, name string) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/tags/"+volt.Seg(name)), nil)
 }

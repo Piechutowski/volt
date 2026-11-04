@@ -132,37 +132,53 @@ func (t *TableInfo) ColumnsUnique(names []string) bool {
 	return false
 }
 
-// ColumnsKeyed reports whether the named columns include a key no two
-// rows share (spec §selects-over-groups): every column of the primary
-// key, or of a unique key ColumnsUnique accepts whose columns are never
-// NULL, since a unique column or index lets NULLs repeat.
-func (t *TableInfo) ColumnsKeyed(names map[string]bool) bool {
-	within := func(key []string) bool {
+// Keys lists the keys no two rows share (spec §selects-over-groups), in
+// this order: the primary key, each column that carries unique, and the
+// key of each unique index whose key is columns only and which has no
+// where:, every one of them never NULL, since a unique column or index
+// lets NULLs repeat.
+func (t *TableInfo) Keys() [][]string {
+	notNull := func(key []string) bool {
 		for _, n := range key {
-			cd := t.Column(n)
-			if !names[n] || cd == nil || cd.Nullable {
+			if cd := t.Column(n); cd == nil || cd.Nullable {
 				return false
 			}
 		}
 		return len(key) > 0
 	}
+	var keys [][]string
 	var pk []string
 	for _, cd := range t.PK() {
 		pk = append(pk, cd.Col.Name.Name())
 	}
-	if within(pk) {
-		return true
+	if notNull(pk) {
+		keys = append(keys, pk)
 	}
 	for _, cd := range t.Columns {
-		if cd.Col.Settings.Get("unique") != nil && within([]string{cd.Col.Name.Name()}) {
-			return true
+		if key := []string{cd.Col.Name.Name()}; cd.Col.Settings.Get("unique") != nil && notNull(key) {
+			keys = append(keys, key)
 		}
 	}
 	for _, ix := range t.Indexes {
 		if ix.Settings.Get("unique") == nil || ix.Settings.Get("where") != nil {
 			continue
 		}
-		if key, ok := indexColumns(ix); ok && within(key) {
+		if key, ok := indexColumns(ix); ok && notNull(key) {
+			keys = append(keys, key)
+		}
+	}
+	return keys
+}
+
+// ColumnsKeyed reports whether the named columns include one of the
+// table's Keys (spec §selects-over-groups).
+func (t *TableInfo) ColumnsKeyed(names map[string]bool) bool {
+	for _, key := range t.Keys() {
+		within := true
+		for _, n := range key {
+			within = within && names[n]
+		}
+		if within {
 			return true
 		}
 	}

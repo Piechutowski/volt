@@ -445,7 +445,6 @@ func (g *generator) queryShimBody(r *lang.RouteInfo, parsed map[string]string) {
 		switch p.Source {
 		case lang.FromPath:
 			args = append(args, parsed[p.Name])
-			g.limitCheckEmit(p, parsed[p.Name], "\t\t")
 		case lang.FromQuery:
 			g.pf("\t\tvolt%s, err := volt.QueryParam[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", p.Name, p.GoType, p.Name)
 			g.limitCheckEmit(p, "volt"+p.Name, "\t\t")
@@ -503,6 +502,7 @@ func (g *generator) routeEmit(r *lang.RouteInfo) {
 			for _, p := range r.Params {
 				parsed[p.Name] = pathParse(&g.out, p)
 			}
+			g.pathLimitsEmit(r, parsed)
 			g.scopeLoadsEmit(r, func() { g.queryShimBody(r, parsed) })
 		} else {
 			parsed := map[string]string{}
@@ -511,6 +511,7 @@ func (g *generator) routeEmit(r *lang.RouteInfo) {
 				parsed[p.Name] = pathParse(&g.out, p)
 				call = append(call, parsed[p.Name])
 			}
+			g.pathLimitsEmit(r, parsed)
 			handler := fmt.Sprintf("c.%s.%s(r", r.Controller, r.Action)
 			for _, sl := range r.ScopeLoads {
 				handler += ", " + sl.Name
@@ -867,7 +868,6 @@ func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call,
 			switch p.Source {
 			case lang.FromPath:
 				argsOf[i][j] = parsed[p.Name]
-				g.limitCheckEmit(p, parsed[p.Name], indent)
 			case lang.FromLiteral:
 				argsOf[i][j] = p.Literal
 			case lang.FromList:
@@ -900,12 +900,39 @@ func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call,
 	}
 }
 
-// limitCheckEmit refuses a select's limit: parameter below 1 where the
-// request binds it (spec §query-routes, §route-loads): a 400 naming the
-// key, before anything runs.
+// limitCheckEmit refuses the value v of a select's limit: parameter
+// below 1 where the request binds it (spec §query-routes, §route-loads):
+// a 400 naming the key, from the query string before the query or any of
+// the route's loads runs.
 func (g *generator) limitCheckEmit(p lang.QueryParam, v, indent string) {
 	if p.Limit {
 		g.pf("%sif err := volt.LimitCheck(%q, %s); err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, p.Name, v, indent, indent)
+	}
+}
+
+// pathLimitsEmit refuses a path parameter below 1 that binds a select's
+// limit: parameter, for the query route or any load (spec §route-loads,
+// §scope-loads): a 400 naming the key once the path parameters parse,
+// before the scope loads run.
+func (g *generator) pathLimitsEmit(r *lang.RouteInfo, parsed map[string]string) {
+	limits := map[string]bool{}
+	note := func(q *lang.QueryRef) {
+		for _, p := range q.Params {
+			if p.Source == lang.FromPath && p.Limit {
+				limits[p.Name] = true
+			}
+		}
+	}
+	if r.Query != nil {
+		note(r.Query)
+	}
+	for _, ld := range r.Loads {
+		note(ld.Query)
+	}
+	for _, p := range r.Params {
+		if limits[p.Name] {
+			g.limitCheckEmit(lang.QueryParam{Name: p.Name, Limit: true}, parsed[p.Name], "\t\t")
+		}
 	}
 }
 

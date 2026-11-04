@@ -936,7 +936,7 @@ db/i470_limit_negative.volt:10:63: error: spec/selects-over-groups: limit: keeps
 db/i471_limit_on_one_row.volt:10:66: error: spec/selects-over-groups: select "totals" aggregates without group:, so it yields one row, which limit: has nothing to cap (§selects-over-groups)
 
 ## i472_limit_twice.volt
-db/i472_limit_twice.volt:10:67: error: spec/settings-lists: setting "limit" may appear at most once (§settings-lists)
+db/i472_limit_twice.volt:10:67: error: spec/selects-over-groups: select "top" takes limit: twice; a select keeps one count of rows (§selects-over-groups)
 
 ## i473_limit_not_integer.volt
 db/i473_limit_not_integer.volt:10:56: error: spec/selects-over-groups: limit: takes a positive integer or a parameter, :name (§selects-over-groups)
@@ -983,6 +983,12 @@ db/i485_limit_order_ties_join.volt:16:85: error: spec/selects-over-groups: selec
 
 ## i486_limit_order_ties_group_join.volt
 db/i486_limit_order_ties_group_join.volt:16:148: error: spec/selects-over-groups: select "per_commenter" takes limit: over an order that leaves ties: order: does not name the group: item "commenter", so two groups can tie and the ones kept at the cut would be arbitrary; name every group: item in order:, or a key of the target that group: holds (§selects-over-groups)
+
+## i487_limit_order_ties_unique_key.volt
+db/i487_limit_order_ties_unique_key.volt:10:42: error: spec/selects-over-groups: select "top" takes limit: over an order that leaves ties: order: names no key of tags, so two rows can tie and the ones kept at the cut would be arbitrary; end it in a key of tags, (..., slug asc) (§selects-over-groups)
+
+## i488_limit_no_key.volt
+db/i488_limit_no_key.volt:10:55: error: spec/selects-over-groups: select "top" takes limit: over an order that leaves ties: order: names no key of hit_log, so two rows can tie and the ones kept at the cut would be arbitrary; a table without a key, a primary key or a unique column or index whose columns are never NULL, takes no limit: (§selects-over-groups)
 
 ## i50_group_unknown.volt
 db/i50_group_unknown.volt:11:3: error: spec/groups: unknown group term "ms_revenu": no such table or group in package "db" (§groups)

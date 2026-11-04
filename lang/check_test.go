@@ -3,6 +3,7 @@ package lang
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -854,6 +855,37 @@ func TestRouteLoads(t *testing.T) {
 	action := app.Controllers["Metrics"].Actions[0]
 	if action.Name != "Show" || len(action.Loads) != 3 || action.Loads[0].Name != "metric" {
 		t.Errorf("action = %+v; want Show with the three loads in order", action)
+	}
+}
+
+// TestRouteLoadNumberLiterals: a number a load or a body key binds is
+// spelled in canonical Go form (§route-loads, §predicates), so a leading
+// zero never makes Go read an octal literal, or one it cannot compile.
+func TestRouteLoadNumberLiterals(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod":         modFile,
+		"db/schema.volt": "package db\n\ntable metrics {\n\tid    int [pk]\n\tscore float64\n}\n\nselect above for metrics where id > :id and score > :score [order: (id asc), limit: :limit]\n",
+		"app/r.volt": "package app\n\nimport (\n\tdb\n)\n\nscope / {\n" +
+			"\tget /metrics Metrics.Index {\n\t\toctal db.MetricAbove(010, 2.50, 08)\n\t\tnegative db.MetricAbove(-010, 1e2, 1)\n\t}\n" +
+			"\tpatch /metrics/first Metrics.Save [body: db.MetricUpdate(010)]\n}\n",
+	})
+	wantClean(t, diags)
+	app := pr.Packages["app"]
+	literals := func(q *QueryRef) []string {
+		var out []string
+		for _, p := range q.Params {
+			out = append(out, p.Literal)
+		}
+		return out
+	}
+	r := app.Routes[0]
+	for i, want := range [][]string{{"10", "2.5", "8"}, {"-10", "100.0", "1"}} {
+		if got := literals(r.Loads[i].Query); !slices.Equal(got, want) {
+			t.Errorf("load %s binds %q; want %q", r.Loads[i].Name, got, want)
+		}
+	}
+	if got := literals(app.Routes[1].Body.Query); !slices.Equal(got, []string{"10"}) {
+		t.Errorf("body key binds %q; want [10]", got)
 	}
 }
 

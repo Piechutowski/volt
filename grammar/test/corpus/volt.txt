@@ -375,7 +375,7 @@ select rows for series [order: (
 select with a limit, a literal and a parameter
 ==================
 
-select top for page_views [order: (hits desc), limit: 10]
+select top for page_views [order: (hits desc, id asc), limit: 10]
 select page for page_views where day >= :from [order: (day asc, id asc), limit: :limit]
 
 ---
@@ -389,6 +389,9 @@ select page for page_views where day >= :from [order: (day asc, id asc), limit: 
         (setting_name
           (identifier))
         (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
           (identifier)
           (ident_modifier
             (identifier))))

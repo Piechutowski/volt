@@ -34,8 +34,9 @@ func QueryParam[T QueryValue](r Request, name string) (T, error) {
 
 // LimitCheck is nil for a limit of at least 1 and otherwise the 400 naming
 // the request key it came from (§query-routes, §route-loads): a generated
-// route refuses a select's limit: parameter below 1 where it binds it,
-// before anything runs, since SQLite reads a negative limit as none.
+// route refuses a select's limit: parameter below 1 where it binds it, a
+// path parameter before the scope loads and a query key before the query
+// or the route's loads, since SQLite reads a negative limit as none.
 func LimitCheck(name string, n int) error {
 	if n >= 1 {
 		return nil

@@ -45,10 +45,16 @@ scope / [pipe: api, error_handler: Errors] {
 
 	// Scope loads (§scope-loads): the current user, read from a header,
 	// reaches every route beneath, and a query route runs it for the halt.
+	// A limit from the path is checked before the scope load runs, one
+	// from the query string after it.
 	scope /me [name: me] {
 		load user CurrentUser
 		get /      Me.Show
 		get /peers db.UserList
+		get /picks/:n(int) Me.Picks {
+			picks db.UserLatest(n)
+		}
+		get /latest db.UserLatest
 	}
 
 	get /tags/:name             Tags.Show    [name: tag]

@@ -364,7 +364,7 @@ type selectLowering struct {
 	adds    []nameAdd
 	diags   []diag.Diagnostic
 	unknown []string
-	ordered map[string]map[string]bool // the names order: lists, by qualifier, "" for the target's own and the aliases
+	ordered map[string]map[string]bool // the names order: lists, by qualifier, "" for the target's own and the aliases, and the column an alias of a lone column renames
 }
 
 func (l *selectLowering) errorf(pos token.Position, format string, args ...any) {
@@ -1334,7 +1334,8 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 	}
 	var terms []rt.GenOrder
 	var limitParam *ast.Param
-	repeated, dupDiags := settingsRepeated(sel.Settings, "order", "group", "limit")
+	var limitSeen bool
+	repeated, dupDiags := settingsRepeated(sel.Settings, "order", "group")
 	l.diags = append(l.diags, dupDiags...)
 	for _, s := range sel.Settings.Settings {
 		if repeated[s] {
@@ -1342,6 +1343,11 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 		}
 		switch s.Name {
 		case "limit":
+			if limitSeen {
+				l.errorf(s.Pos(), "select %q takes limit: twice; a select keeps one count of rows (§selects-over-groups)", sel.Name.Name())
+				continue
+			}
+			limitSeen = true
 			limitParam = l.limitSetting(s)
 		case "group":
 			l.groupSetting(env, s)
@@ -1371,6 +1377,11 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 				}
 				seenOrder[name] = true
 				l.orderedNote(cr)
+				if item, isAlias := env.aliases[id.Name()]; isAlias && cr.Qual == nil {
+					if col, renamed := item.Expr.(*ast.ColRef); renamed {
+						l.orderedNote(col)
+					}
+				}
 				if b != nil && b.class == classEqOnly {
 					l.errorf(id.Pos(), "column %q has declared type %s; a declared type cannot be ordered (§selects-over-groups)", b.name, b.goType)
 					continue
@@ -1472,9 +1483,10 @@ func (l *selectLowering) limitOrderTotal() {
 }
 
 // groupKeyed reports whether a grouped select's order names a key of
-// every member that group: holds as plain columns, while no group: item
-// reaches a joined relation of many rows (spec §selects-over-groups): one
-// group is then one row of the target.
+// every member that group: holds as its own columns, bare or under the
+// alias of a lone column, while no group: item reaches a joined relation
+// of many rows (spec §selects-over-groups): one group is then one row of
+// the target.
 func (l *selectLowering) groupKeyed(many []int) bool {
 	sel := l.sel
 	reverse := map[string]bool{}
@@ -1486,16 +1498,21 @@ func (l *selectLowering) groupKeyed(many []int) bool {
 		if item.Agg != nil {
 			continue
 		}
+		col := item.Col
 		if item.Expr != nil {
 			for _, cr := range arithCols(item.Expr, nil) {
 				if cr.Qual != nil && reverse[cr.Qual.Name()] {
 					return false
 				}
 			}
-			continue
+			renamed, ok := item.Expr.(*ast.ColRef)
+			if !ok {
+				continue
+			}
+			col = renamed
 		}
-		if item.Col.Qual == nil && l.ordered[""][item.Col.Name.Name()] {
-			held[item.Col.Name.Name()] = true
+		if col.Qual == nil && l.ordered[""][col.Name.Name()] {
+			held[col.Name.Name()] = true
 		}
 	}
 	for _, ti := range l.members {
@@ -1506,18 +1523,22 @@ func (l *selectLowering) groupKeyed(many []int) bool {
 	return true
 }
 
-// keyHint suggests the primary key to end an order with, qualified by
-// prefix for a joined relation (spec §selects-over-groups).
+// keyHint suggests the first of the table's keys to end an order with,
+// qualified by prefix for a joined relation (spec §selects-over-groups).
 func keyHint(ti *check.TableInfo, prefix string) string {
-	pk := ti.PK()
-	if len(pk) == 0 {
-		return "a table without a primary key or a unique column that is never NULL takes no limit:"
+	keys := ti.Keys()
+	if len(keys) == 0 {
+		return "a table without a key, a primary key or a unique column or index whose columns are never NULL, takes no limit:"
 	}
-	names := make([]string, len(pk))
-	for i, cd := range pk {
-		names[i] = prefix + cd.Col.Name.Name() + " asc"
+	names := make([]string, len(keys[0]))
+	for i, n := range keys[0] {
+		names[i] = prefix + n + " asc"
 	}
-	return "end it in the primary key, (..., " + strings.Join(names, ", ") + ")"
+	which := "the primary key"
+	if pk := ti.PK(); len(pk) == 0 || pk[0].Col.Name.Name() != keys[0][0] {
+		which = "a key of " + ti.Decl.Name.Name()
+	}
+	return "end it in " + which + ", (..., " + strings.Join(names, ", ") + ")"
 }
 
 // limitSetting reads a select's limit: (spec §selects-over-groups): a

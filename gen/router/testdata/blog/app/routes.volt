@@ -18,6 +18,7 @@ scope / [pipe: api, error_handler: Errors] {
 			totals db.UserTotals()
 			feed   db.UserFeed()
 			latest db.UserLatest(5)
+			ten    db.UserLatest(010)
 		}
 		get /top/:n(int) Admin.Top {
 			top db.UserLatest(n)
@@ -43,6 +44,10 @@ scope / [pipe: api, error_handler: Errors] {
 		load user CurrentUser
 		get /      Me.Show
 		get /peers db.UserList
+		get /picks/:n(int) Me.Picks {
+			picks db.UserLatest(n)
+		}
+		get /latest db.UserLatest
 	}
 
 	scope /api [name: api] {
