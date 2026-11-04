@@ -9,11 +9,10 @@ Scope as decided: the language first, then the non-core features and
 the tooling. Steps 2, 3 (without `volt fmt`), 4 and 6 to 12 land now, in
 that order. Step 5 (the Elm client), `volt fmt` and steps 13 to 19 are
 deferred; each keeps a one-line section below so the file still says
-what is deferred and why. Step 20 is open. The deferred spec sections
-are not written, and no spec text of the steps that land mentions a
-session, `r.Session()` or the vet rule `session-csrf`: the request
-value gets `Now()` and nothing session-shaped until step 13 is
-reopened.
+what is deferred and why. The deferred spec sections are not written,
+and no spec text of the steps that land mentions a session,
+`r.Session()` or the vet rule `session-csrf`: the request value gets
+`Now()` and nothing session-shaped until step 13 is reopened.
 
 How to use it:
 
@@ -246,42 +245,6 @@ landed; more follow one feature at a time.
 
 ---
 
-## Step 20. The comparison on `Load.Rescue`, `rt.Atomic`, `limit:` and optional parameters
-
-`compare/volt` was written while a scope load could not answer its own
-miss, so `CurrentMember` loads a list, empty for an unknown member, and
-every handler checks it; `Load.Rescue` (spec §scope-loads) answers the
-miss in the load. Rewrite the blog onto it: `CurrentMember` returns
-`volt.Load[db.Member]` over `db.MemberGet`, rescuing `rt.ErrNotFound`
-with the contract's 401 and failing with every other error, and the
-handlers lose their checks. It was written while an effect could not
-use an earlier one's result inside one transaction, so `Create` writes
-the post and then its tags in a second transaction; it becomes one
-continuation over `rt.Atomic(rt.Then(db.PostCreate(cs), next))`, whose
-`next` returns the `Transaction` of the tag inserts mapped back to the
-post (spec §generated-query-surface), so a refused tag leaves no post.
-It was also written while a select had no limit, so the feed reads
-every post after the cursor and cuts the page in Go; the feed takes
-`limit: :limit` (spec §selects-over-groups) and the handler asks for
-one row past the page to know whether a next cursor exists. And it was
-written while a select had no optional parameter, so the tag filter is
-a second select, `feed_tagged`, which joins `tags` to filter, and the
-first page passes a sentinel cursor; `feed` becomes the one select,
-`where visible and exists tags (tag = :tag?)` with `visible` reading
-`:at?` and `:id?` and keeping out the NULL `published_at` of a post
-never published, `published_at is not null`, since a NULL cursor
-would read as absent and start the feed over (spec §predicates),
-`feed_tagged` goes, and the handler passes absent values where the
-request has no cursor or no tag. The fold loses no index search, which
-a guarded term never makes (spec §predicates): no index of `posts`
-serves the feed's terms, and the exists term's subquery, which its
-guard leaves as it is, reaches `post_tags` through its key, `post_id`
-first. `compare/suite` passes unchanged,
-`go run ./compare/measure` remeasures, and the README's table and its
-first four gaps change in the commit that deletes this section.
-
----
-
 ## Verification bar
 
 Before claiming any step done:
@@ -304,7 +267,6 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 | Step | Depends on | Lands |
 |---|---|---|
 | 5, 13 to 19 | | deferred |
-| 20 | | next |
 
 The blog fixture under `itest/blog` is the application every step
 rebuilds. Measured at each step on it and recorded in the commit

@@ -18,12 +18,8 @@ type Me struct{}
 
 // Stats counts the member's drafts, published posts and the comments on
 // them.
-func (Me) Stats(r volt.Request, ms []db.Member) volt.Response {
-	m, ok := memberOf(ms)
-	if !ok {
-		return unauthorized()
-	}
-	return volt.Then(rt.All(db.PostByState(m.ID), db.PostReceived(m.ID)), func(out []any) volt.Response {
+func (Me) Stats(r volt.Request, member db.Member) volt.Response {
+	return volt.Then(rt.All(db.PostByState(member.ID), db.PostReceived(member.ID)), func(out []any) volt.Response {
 		s := Stats{CommentsReceived: out[1].(db.Received).N}
 		for _, b := range out[0].([]db.ByState) {
 			switch b.State {

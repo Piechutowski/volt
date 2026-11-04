@@ -4,11 +4,13 @@
 package app
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/compare/volt/db"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // PostForm is the body of a new post.
@@ -30,14 +32,19 @@ type CommentForm struct {
 	Body string `json:"body"`
 }
 
-// CurrentMember loads the member X-User names (§scope-loads): a list,
-// empty when there is none, which each handler checks.
-func CurrentMember(r volt.Request) volt.Load[[]db.Member] {
+// CurrentMember loads the member X-User names (§scope-loads), answering
+// a member that does not exist with 401 in the load itself.
+func CurrentMember(r volt.Request) volt.Load[db.Member] {
 	id, err := strconv.Atoi(r.Header().Get("X-User"))
 	if err != nil {
-		return volt.Halt[[]db.Member](volt.Reject(http.StatusUnauthorized, "send X-User: a member id"))
+		return volt.Halt[db.Member](volt.Reject(http.StatusUnauthorized, "send X-User: a member id"))
 	}
-	return volt.LoadWith(db.MemberWithID(id))
+	return volt.LoadWith(db.MemberGet(id)).Rescue(func(err error) volt.Response {
+		if errors.Is(err, rt.ErrNotFound) {
+			return volt.Reject(http.StatusUnauthorized, "no such member")
+		}
+		return volt.Fail(err)
+	})
 }
 
 // Errors answers every failure with the default mapping (§scopes).

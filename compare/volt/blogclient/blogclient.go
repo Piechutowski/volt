@@ -1,33 +1,35 @@
-// Package blogclient is the typed client of the Volt blog. The generated
-// client answers a controller route with a raw *http.Response, so this
-// layer names each route's reply type; X-User rides on the runtime
-// client's Header.
+// Package blogclient is the typed client of the Volt blog: the generated
+// client, X-User on its Header, with each controller route's method
+// replaced by one that names the route's reply type, since the
+// generated one answers with a raw *http.Response.
 package blogclient
 
 import (
 	"context"
-	"net/http"
 	"strconv"
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/compare/volt/app"
+	"github.com/Piechutowski/volt/compare/volt/app/client"
 	"github.com/Piechutowski/volt/compare/volt/db"
 )
 
 // Client calls the blog as one member.
 type Client struct {
-	volt.Client
+	*client.Client
 }
 
 // New is a client of the blog at base acting as member id.
 func New(base string, id int) *Client {
-	return &Client{volt.Client{Base: base, Header: http.Header{"X-User": {strconv.Itoa(id)}}}}
+	c := client.New(base)
+	c.Header.Set("X-User", strconv.Itoa(id))
+	return &Client{c}
 }
 
-// CreatePost stores a draft.
-func (c *Client) CreatePost(ctx context.Context, f app.PostForm) (app.PostView, error) {
+// Create stores a draft.
+func (c *Client) Create(ctx context.Context, f app.PostForm) (app.PostView, error) {
 	var p app.PostView
-	return p, c.Do(ctx, "POST", "/posts", f, &p)
+	return p, c.Do(ctx, "POST", app.PathCreate(), f, &p)
 }
 
 // Post reads a post.
@@ -36,8 +38,8 @@ func (c *Client) Post(ctx context.Context, id int) (app.PostView, error) {
 	return p, c.Do(ctx, "GET", app.PathPost(id), nil, &p)
 }
 
-// EditPost changes a draft's title or body.
-func (c *Client) EditPost(ctx context.Context, id int, e app.PostEdit) (app.PostView, error) {
+// PostEdit changes a draft's title or body.
+func (c *Client) PostEdit(ctx context.Context, id int, e app.PostEdit) (app.PostView, error) {
 	var p app.PostView
 	return p, c.Do(ctx, "PATCH", app.PathPostEdit(id), e, &p)
 }
@@ -70,8 +72,8 @@ func (c *Client) Feed(ctx context.Context, tag, after string, limit int) (app.Fe
 	return f, c.Do(ctx, "GET", app.PathFeed(opts...), nil, &f)
 }
 
-// Comment comments on a published post.
-func (c *Client) Comment(ctx context.Context, id int, body string) (db.Comment, error) {
+// CommentCreate comments on a published post.
+func (c *Client) CommentCreate(ctx context.Context, id int, body string) (db.Comment, error) {
 	var cm db.Comment
 	return cm, c.Do(ctx, "POST", app.PathCommentCreate(id), app.CommentForm{Body: body}, &cm)
 }
@@ -82,8 +84,8 @@ func (c *Client) Comments(ctx context.Context, id int) ([]db.Comment, error) {
 	return cs, c.Do(ctx, "GET", app.PathComments(id), nil, &cs)
 }
 
-// DeleteComment deletes a comment.
-func (c *Client) DeleteComment(ctx context.Context, id, cid int) error {
+// CommentDelete deletes a comment.
+func (c *Client) CommentDelete(ctx context.Context, id, cid int) error {
 	return c.Do(ctx, "DELETE", app.PathCommentDelete(id, cid), nil, nil)
 }
 

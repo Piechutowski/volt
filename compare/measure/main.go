@@ -29,8 +29,8 @@ type stack struct {
 var stacks = []stack{
 	{"volt", "Volt"},
 	{"gingorm", "Gin + GORM"},
-	{"chisqlc", "chi + sqlc"},
-	{"echosqlx", "Echo + sqlx"},
+	{"chisqlc", "chi + sqlc + goose"},
+	{"echosqlx", "Echo + sqlx + goose"},
 	{"oapient", "oapi-codegen + Ent"},
 }
 

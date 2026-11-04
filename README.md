@@ -70,28 +70,37 @@ are neither blank nor comments, tests left out; `go run
 
 | Stack | Server Go | Client Go | Contract and schema | Hand-written total | Generated | Third-party modules |
 |---|---:|---:|---:|---:|---:|---:|
-| Volt | 340 | 64 | 119 | 523 | 1377 | 2 |
+| Volt | 291 | 66 | 117 | 474 | 1356 | 2 |
 | Gin + GORM | 707 | 124 | 0 | 831 | 0 | 24 |
 | chi + sqlc + goose | 636 | 120 | 99 | 855 | 440 | 7 |
 | Echo + sqlx + goose | 671 | 168 | 43 | 882 | 0 | 23 |
 | oapi-codegen + Ent | 575 | 0 | 587 | 1162 | 16496 | 25 |
 
-Volt writes about 40 percent less than the hand-written stacks here,
-not the 97 percent of a pure CRUD table (`examples/byhand`): the rules
-are handlers either way. Writing the Volt version found five gaps,
-paid for in its own lines: a scope load could not answer its own miss,
-so every handler checks the member, which `Load.Rescue` now spares
-though the blog is not yet rewritten onto it (`docs/plan.md`, step
-20); an effect could not use an id an earlier one assigned inside one
-transaction, so a post's tags are not written atomically, which
-`rt.Atomic` over `rt.Then` now spares, also not yet in the blog (step
-20); a select had no limit, so the feed reads every post after the
-cursor, which `limit:` now spares though the blog is not yet rewritten
-onto it either (step 20); a select had no optional predicate, so the
-tag filter is a second select and the feed's first page passes a
-sentinel cursor, which optional parameters and `exists` now spare,
-also not yet in the blog (step 20); and the generated client is untyped
-for controller routes, so the typed client is written by hand.
+Volt's 474 hand-written lines are 57 percent of the 831 of Gin + GORM
+and 54 percent of the 882 of Echo + sqlx + goose, chi + sqlc + goose's
+855 between them, so 43 to 46 percent fewer than those three, and 41
+percent of the 1162 of oapi-codegen + Ent, 59 percent fewer; not the 97
+percent fewer of a pure CRUD table (`examples/byhand`): the rules are
+handlers either way. Writing the Volt version found five gaps, paid
+for in its own lines, and four are closed now, the blog rewritten onto
+them. A scope load could not answer its own miss, so every handler
+checked the member; `Load.Rescue` answers it with 401 in the load. An
+effect could not use the id an earlier one assigned inside one
+transaction, so a post's tags were written in a second one and a
+refused tag left the post; `rt.Atomic` over `rt.Then` writes both in
+one. A select had no limit, so the feed read every post after the
+cursor and cut the page in Go; `limit:` cuts it in SQL. A select had
+no optional predicate, so the tag filter was a second select and the
+first page passed a sentinel cursor; optional parameters and `exists`
+make the feed one select. The fifth is half closed: the generated
+client now carries default headers, so X-User rides on its `Header`
+where a hand-written transport carried it, but it stays untyped for
+controller routes, since Volt does not know what a hand-written action
+writes, and that stays as it is by decision, so the typed client is
+still written by hand, one method per route over the generated one.
+The rewrite took the blog from 523 hand-written lines to 474: 49 fewer
+of server Go and 2 fewer of `.volt`, while the typed client gained 2
+by building on the generated client instead of the runtime's.
 
 ## Crib sheet
 
