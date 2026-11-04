@@ -4,7 +4,9 @@
 // times at once, comments on it ten times at once as one member, whom
 // the rules allow three, and races sixteen edits to a short body against
 // four publishes of a fresh draft, which may only be published with a
-// long one. Counts change from run to run, since they are races. Run
+// long one. Counts change from run to run, since they are races; GORM's
+// log of the writes SQLite refuses is dropped, the replies counting them.
+// After go generate ./compare/..., run
 //
 //	go run ./compare/race [-rounds 30] [stack]
 package main
@@ -186,13 +188,21 @@ func main() {
 		fail(err)
 	}
 	defer os.RemoveAll(dir)
-	fmt.Println("| Stack | Rounds | Published more than once | More than three comments | Fewer than three comments | Published with a short body | Replies 5xx |")
+	quiet, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		fail(err)
+	}
+	defer quiet.Close()
+	stderr := os.Stderr
+	fmt.Println("| Stack | Rounds | Published more than once | More than three comments | Fewer than three comments | Published with a short body | Replies 5xx or none |")
 	fmt.Println("|---|---:|---:|---:|---:|---:|---:|")
 	for i, s := range stacks {
 		if flag.NArg() > 0 && !strings.Contains(strings.ToLower(s.name), strings.ToLower(flag.Arg(0))) {
 			continue
 		}
+		os.Stderr = quiet
 		h, err := s.handler(filepath.Join(dir, fmt.Sprintf("blog%d.db", i)))
+		os.Stderr = stderr
 		if err != nil {
 			fail(fmt.Errorf("%s: %w", s.name, err))
 		}

@@ -112,11 +112,11 @@ func PredOptional(guards []any, p GenPred) GenPred {
 // PredVanish is p with every term of it that reads an absent optional
 // parameter taken out (spec §predicates): such a term is the identity of
 // the connective it stands in, true under and and false under or, a
-// connective or an exists term all of whose operands are taken out is
-// itself taken out, and the whole is true when all of it is. The tree
-// p is the lowering's, its terms behind PredOptional, an exists term's
-// inner terms each behind its own; the result renders as one constant
-// text, every guard a value slot of the parameter.
+// connective, a not or an exists term all of whose operands are taken
+// out is itself taken out, and the whole is true when all of it is. The
+// tree p is the lowering's, its terms behind PredOptional, an exists
+// term's inner terms each behind its own; the result renders as one
+// constant text, every guard a value slot of the parameter.
 func PredVanish(p GenPred) GenPred {
 	if p.kind == predEmpty {
 		return p
@@ -158,6 +158,8 @@ func vanishCond(p GenPred) (GenPred, bool) {
 		if len(p.kids) == 0 {
 			return GenPred{}, false
 		}
+		return vanishCond(p.kids[0])
+	case predNot:
 		return vanishCond(p.kids[0])
 	}
 	return GenPred{}, false
@@ -201,6 +203,9 @@ func vanishEmit(p GenPred, inOr bool) GenPred {
 	case predNot:
 		q := p
 		q.kids = []GenPred{vanishEmit(p.kids[0], false)}
+		if cond, ok := vanishCond(p.kids[0]); ok {
+			return GenPred{kind: predVanish, not: inOr, kids: []GenPred{cond, q}}
+		}
 		return q
 	}
 	return p

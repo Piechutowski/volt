@@ -41,7 +41,7 @@ func (l *routeLowering) loads(r *ast.Route, params []Param, inh inherited) (load
 		name := ld.Name.Name()
 		switch {
 		case !loadNameOK(name):
-			l.errorf(ld.Name.Pos(), "route-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), not a predeclared Go identifier (string, int, len, nil and the rest), and not shaped like a generated local (§route-loads, §route-paths)", name)
+			l.errorf(ld.Name.Pos(), "route-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier and no Go keyword, that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), not a predeclared Go identifier (string, int, len, nil and the rest), and not shaped like a generated local (§route-loads, §route-paths)", name)
 			ok = false
 			continue
 		case loadNameQualifier(name, l.facts.pkgName, l.facts.imports):
@@ -117,13 +117,13 @@ func optionalWord(optional bool) string {
 }
 
 // loadNameOK reports whether a load may be named so (spec §route-loads,
-// §scope-loads): a lower-case Go identifier that is neither reserved,
-// nor err or ok, which the shim declares beside it, nor a name the
-// route files import a package under or a predeclared Go identifier,
-// which the shim's closures would shadow, nor shaped like a generated
-// local.
+// §scope-loads): a lower-case Go identifier, so no Go keyword, that is
+// neither reserved, nor err or ok, which the shim declares beside it,
+// nor a name the route files import a package under or a predeclared Go
+// identifier, which the shim's closures would shadow, nor shaped like a
+// generated local.
 func loadNameOK(name string) bool {
-	if naming.RouteSignatureName(name) || name == "_" || name == "err" || name == "ok" || generatedImportNames[name] != "" || goPredeclared[name] || naming.LocalName(name) || !exportedIdentOK(strings.ToUpper(name[:1])+name[1:]) {
+	if naming.RouteSignatureName(name) || name == "_" || name == "err" || name == "ok" || goKeywords[name] || generatedImportNames[name] != "" || goPredeclared[name] || naming.LocalName(name) || !exportedIdentOK(strings.ToUpper(name[:1])+name[1:]) {
 		return false
 	}
 	return name[0] >= 'a' && name[0] <= 'z'
@@ -345,16 +345,18 @@ func numberLiteral(lit, goType string) string {
 	return s
 }
 
-// limitSetting reads a route's limit: or max_limit: setting (spec
-// §route-loads): a positive integer of rows that fits int64.
-func (l *routeLowering) limitSetting(s *ast.Setting) (int, bool) {
+// limitSetting reads a route's or a dataset's default_limit: or
+// max_limit: setting (spec §route-loads, §dataset-settings): a positive
+// integer of rows that fits a 32-bit int, as the limit it governs is an
+// int on every target.
+func (l *routeLowering) limitSetting(s *ast.Setting, code, cite string) (int, bool) {
 	lit, ok := s.Value.(*ast.BasicLit)
 	if ok && lit.Tok.Kind == token.NUMBER {
-		if n, err := strconv.ParseInt(lit.Tok.Val, 10, 64); err == nil && n > 0 {
+		if n, err := strconv.ParseInt(lit.Tok.Val, 10, 32); err == nil && n > 0 {
 			return int(n), true
 		}
 	}
-	l.errorf(s.Pos(), "route-loads", "%s: takes a positive integer of rows that fits int64 (§route-loads)", s.Name)
+	l.errorf(s.Pos(), code, "%s: takes a positive integer of rows that fits a 32-bit int, at most 2147483647, the limit it governs being an int (%s)", s.Name, cite)
 	return 0, false
 }
 

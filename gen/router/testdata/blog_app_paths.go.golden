@@ -34,6 +34,10 @@ func PathAdminNewestPage(opts ...volt.URLOption) string {
 	return volt.URL("/admin/newest/page", opts...)
 }
 
+func PathAdminNewestMix(opts ...volt.URLOption) string {
+	return volt.URL("/admin/newest/mix", opts...)
+}
+
 func PathAdminTop(n int, opts ...volt.URLOption) string {
 	return volt.URL("/admin/top/"+volt.SegInt(n), opts...)
 }

@@ -410,6 +410,83 @@ func TestOptionalAbsentTakesTheTermOut(t *testing.T) {
 	}
 }
 
+// A not over a term or a connective taken out is taken out with it, and
+// over what of its operand is left negates that, under and and under or,
+// an exists term among the operands; a null test reads no parameter and
+// stays beside a term taken out (spec §predicates).
+func TestOptionalUnderNotAndBesideANullTest(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	ann := seedUser(t, db, "ann@blog.test")
+	bob := seedUser(t, db, "bob@blog.test")
+	cy := seedUser(t, db, "cy@blog.test")
+	if _, err := run.Run(ctx, db, UserTagCreate(UserTagNew().UserIDSet(ann.ID).TagSet("go"))); err != nil {
+		t.Fatal(err)
+	}
+	early := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	var o []Order
+	for _, row := range []struct {
+		user  int
+		total float64
+		at    rt.Null[time.Time]
+	}{{ann.ID, 5, rt.Some(early)}, {bob.ID, 50, rt.Some(early.Add(48 * time.Hour))}, {bob.ID, 1, rt.Null[time.Time]{}}} {
+		made, err := run.Run(ctx, db, OrderCreate(OrderNew().UserIDSet(row.user).TotalSet(row.total).FeeSet(1).PlacedAtSet(row.at)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		o = append(o, made)
+	}
+	for _, tc := range []struct {
+		name          string
+		buyer         rt.Null[int]
+		over          rt.Null[float64]
+		neither, eNot []int
+	}{
+		{"both absent", rt.Null[int]{}, rt.Null[float64]{}, []int{o[0].ID, o[1].ID, o[2].ID}, []int{o[0].ID, o[1].ID, o[2].ID}},
+		{"buyer alone", rt.Some(ann.ID), rt.Null[float64]{}, []int{o[1].ID, o[2].ID}, []int{o[0].ID}},
+		{"over alone", rt.Null[int]{}, rt.Some(10.0), []int{o[0].ID, o[2].ID}, []int{o[0].ID, o[2].ID}},
+		{"both", rt.Some(ann.ID), rt.Some(10.0), []int{o[2].ID}, []int{o[0].ID, o[2].ID}},
+	} {
+		rows, err := run.Run(ctx, db, OrderNeither(tc.buyer, tc.over))
+		if err != nil || !idsSame(orderIDs(rows), tc.neither) {
+			t.Errorf("not (buyer or over), %s: %v, %v; want %v", tc.name, orderIDs(rows), err, tc.neither)
+		}
+		rows, err = run.Run(ctx, db, OrderEitherNot(tc.buyer, tc.over))
+		if err != nil || !idsSame(orderIDs(rows), tc.eNot) {
+			t.Errorf("buyer or not over, %s: %v, %v; want %v", tc.name, orderIDs(rows), err, tc.eNot)
+		}
+	}
+	for _, tc := range []struct {
+		tag  rt.Null[string]
+		want []int
+	}{
+		{rt.Null[string]{}, []int{ann.ID, bob.ID, cy.ID}},
+		{rt.Some("go"), []int{bob.ID, cy.ID}},
+		{rt.Some("rust"), []int{ann.ID, bob.ID, cy.ID}},
+	} {
+		rows, err := run.Run(ctx, db, UserUntagged(tc.tag))
+		got := make([]int, len(rows))
+		for i, u := range rows {
+			got[i] = u.ID
+		}
+		if err != nil || !idsSame(got, tc.want) {
+			t.Errorf("not exists tag %v: %v, %v; want %v", tc.tag, got, err, tc.want)
+		}
+	}
+	for _, tc := range []struct {
+		before rt.Null[time.Time]
+		want   []int
+	}{
+		{rt.Null[time.Time]{}, []int{o[2].ID}},
+		{rt.Some(early.Add(24 * time.Hour)), []int{o[0].ID, o[2].ID}},
+	} {
+		rows, err := run.Run(ctx, db, OrderPlacedBeforeOrNever(tc.before))
+		if err != nil || !idsSame(orderIDs(rows), tc.want) {
+			t.Errorf("placed before %v or never: %v, %v; want %v", tc.before, orderIDs(rows), err, tc.want)
+		}
+	}
+}
+
 // exists over a forward relation tests the one row the foreign key
 // refers to.
 func TestExistsForwardRelation(t *testing.T) {

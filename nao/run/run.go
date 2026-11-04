@@ -133,15 +133,12 @@ func Run[T any](ctx context.Context, db DB, e rt.Effect[T]) (T, error) {
 
 type poolExecutor struct{ db DB }
 
-func (x poolExecutor) stmt(ctx context.Context, query string) (*sql.Stmt, error) {
-	return x.db.cache.Prepare(ctx, x.db.pool, query)
-}
-
 func (x poolExecutor) Query(ctx context.Context, query string, args []any) (rt.Rows, error) {
-	stmt, err := x.stmt(ctx, query)
+	stmt, release, err := x.db.cache.Prepare(ctx, x.db.pool, query)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	bound, err := rt.ArgsBound(args)
 	if err != nil {
 		return nil, err
@@ -153,10 +150,11 @@ func (x poolExecutor) Query(ctx context.Context, query string, args []any) (rt.R
 }
 
 func (x poolExecutor) Exec(ctx context.Context, query string, args []any) (int64, error) {
-	stmt, err := x.stmt(ctx, query)
+	stmt, release, err := x.db.cache.Prepare(ctx, x.db.pool, query)
 	if err != nil {
 		return 0, err
 	}
+	defer release()
 	bound, err := rt.ArgsBound(args)
 	if err != nil {
 		return 0, err
@@ -206,15 +204,16 @@ func (x poolExecutor) Transaction(ctx context.Context, writes bool, fn func(rt.E
 var busyDelays = [...]time.Duration{1, 2, 5, 10, 15, 20, 25, 25, 25, 50, 50, 100}
 
 func immediateBegin(ctx context.Context, conn *sql.Conn) error {
+	settled := context.WithoutCancel(ctx)
 	var timeout int64
-	if err := conn.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&timeout); err != nil {
+	if err := conn.QueryRowContext(settled, "PRAGMA busy_timeout").Scan(&timeout); err != nil {
 		return err
 	}
-	if _, err := conn.ExecContext(ctx, "PRAGMA busy_timeout = 0"); err != nil {
-		return err
+	_, err := conn.ExecContext(settled, "PRAGMA busy_timeout = 0")
+	if err == nil {
+		err = immediateRetry(ctx, conn, time.Now().Add(time.Duration(timeout)*time.Millisecond))
 	}
-	err := immediateRetry(ctx, conn, time.Now().Add(time.Duration(timeout)*time.Millisecond))
-	if _, e := conn.ExecContext(context.WithoutCancel(ctx), fmt.Sprintf("PRAGMA busy_timeout = %d", timeout)); e != nil {
+	if _, e := conn.ExecContext(settled, fmt.Sprintf("PRAGMA busy_timeout = %d", timeout)); e != nil {
 		if err == nil {
 			rollback(conn)
 		}

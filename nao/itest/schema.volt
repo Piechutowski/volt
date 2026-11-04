@@ -211,7 +211,8 @@ table metric_events {
 
 // §predicates: an optional parameter's term is taken out when it is
 // absent, true under and and false under or, a keyset's first page among
-// them, a keyset over a nullable column sound
+// them, a not or an exists term with it when all it holds is out, a null
+// test never, a keyset over a nullable column sound
 // only with its NULLs kept out, and exists tests a relation without
 // joining it, so a grouped count beside it counts each row once.
 select keyset     for page_views where day < :day? or (day = :day? and id < :id?) [order: (day desc, id desc), limit: :limit]
@@ -224,6 +225,10 @@ select costing    for orders where total >= :min? [order: (id asc)]
 select tagged     for users where exists user_tags (tag = :tag?) [order: (id asc)]
 select bought_by  for orders where exists user (name = :name) [order: (id asc)]
 select either     for orders where user_id = :buyer? or total > :over? [order: (id asc)]
+select neither    for orders where not (user_id = :buyer? or total > :over?) [order: (id asc)]
+select either_not for orders where user_id = :buyer? or not total > :over? [order: (id asc)]
+select untagged   for users where not exists user_tags (tag = :tag?) [order: (id asc)]
+select placed_before_or_never for orders where placed_at < :before? or placed_at is null [order: (id asc)]
 select spenders   for users where exists orders (status = :state? and total > :above?) [order: (id asc)]
 select order_counts (id, count(orders.id) as n) for users join orders where exists user_tags (tag in :tags) [group: (id), order: (id asc)]
 select joined_counts (id, count(orders.id) as n) for users join orders join user_tags where user_tags.tag in :tags [group: (id), order: (id asc)]

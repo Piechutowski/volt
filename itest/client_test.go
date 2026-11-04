@@ -234,6 +234,30 @@ func TestClientHeader(t *testing.T) {
 // absent one out of the query string, the route binds the missing key as
 // absent, and the select's term that reads it is true, an exists term
 // whole (spec §predicates, §query-routes, §generated-client).
+// TestClientDefaultLimit (§generated-client, §route-loads): the client
+// takes the limit of a route with default_limit: as an rt.Null[int], so
+// an absent limit leaves the key out and the route's default applies.
+func TestClientDefaultLimit(t *testing.T) {
+	ctx := context.Background()
+	dbh := fixtureDB()
+	for _, email := range []string{"two@example.com", "three@example.com"} {
+		if _, err := run.Run(ctx, dbh, db.UserCreate(db.UserNew().EmailSet(email))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	srv := httptest.NewServer(app.NewRouter(fixtureControllers(dbh, &volt.Broker{})))
+	defer srv.Close()
+	c := client.New(srv.URL)
+	for _, tc := range []struct {
+		limit rt.Null[int]
+		want  int
+	}{{rt.Null[int]{}, 2}, {rt.Some(3), 3}, {rt.Some(1), 1}} {
+		if rows, err := c.APIRecent(ctx, tc.limit); err != nil || len(rows) != tc.want {
+			t.Errorf("recent, limit %v: %d rows, %v; want %d", tc.limit, len(rows), err, tc.want)
+		}
+	}
+}
+
 func TestClientOptionalParams(t *testing.T) {
 	ctx := context.Background()
 	dbh := fixtureDB()

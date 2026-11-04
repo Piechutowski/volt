@@ -3,6 +3,7 @@ package lsp
 import (
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -187,17 +188,17 @@ func (d *Document) relationFollows(col SymbolID, oldName, newName string) []rena
 	return edits
 }
 
-// renameChecks refuses a rename whose result checks with more errors
-// than the text it edits: the project's when the document is in one,
-// the document's own otherwise, naming the first error it adds, so a
-// name that makes a relation ambiguous, or that a use the rename cannot
-// reach still spells, never lands.
+// renameChecks refuses a rename whose result checks with an error the
+// text it edits did not have: the project's when the document is in one,
+// the document's own otherwise, naming the first such error, so a name
+// that makes a relation ambiguous, or that a use the rename cannot reach
+// still spells, never lands, even beside an error it fixes.
 func (d *Document) renameChecks(edits []renameEdit, newName string) error {
 	path := pathFromURI(d.URI)
 	if d.vindex == nil {
 		after := editsApply(d.Text, edits)
 		before, now := fileErrors(path, d.Text), fileErrors(path, after)
-		return renameRefusal(newName, before, now)
+		return renameRefusal(newName, renamedNames(edits, func(string) string { return d.Text }), before, now)
 	}
 	root, ok := projectRootOf(path)
 	if !ok {
@@ -214,25 +215,48 @@ func (d *Document) renameChecks(edits []renameEdit, newName string) error {
 	for file, es := range byFile {
 		overlay[file] = editsApply(d.vindex.text(file), es)
 	}
-	return renameRefusal(newName, projectErrors(root, d.vindex.texts), projectErrors(root, overlay))
+	return renameRefusal(newName, renamedNames(edits, d.vindex.text), projectErrors(root, d.vindex.texts), projectErrors(root, overlay))
 }
 
-func renameRefusal(newName string, before, after []diag.Diagnostic) error {
-	if len(after) <= len(before) {
-		return nil
-	}
-	known := map[string]bool{}
-	for _, dg := range before {
-		known[dg.Msg] = true
-	}
-	first := after[0]
-	for _, dg := range after {
-		if !known[dg.Msg] {
-			first = dg
-			break
+// renamedNames maps each name the edits write to the name it replaces,
+// so that an error the rename only respells reads as the one it was.
+func renamedNames(edits []renameEdit, text func(file string) string) map[string]string {
+	names := map[string]string{}
+	for _, e := range edits {
+		t := text(e.file)
+		if e.start >= 0 && e.end <= len(t) && e.start < e.end && t[e.start:e.end] != e.text {
+			names[e.text] = t[e.start:e.end]
 		}
 	}
-	return fmt.Errorf("renaming to %s leaves %s: %s", newName, first.Pos, first.Msg)
+	return names
+}
+
+var diagPosRE = regexp.MustCompile(`(\.volt):\d+:\d+`)
+
+// renameDiagKey is what tells two errors apart across a rename: the
+// file and the message, the renamed names spelled as before and the
+// positions it names dropped, since a rename moves text.
+func renameDiagKey(dg diag.Diagnostic, names map[string]string) string {
+	msg := diagPosRE.ReplaceAllString(dg.Msg, "$1")
+	for to, from := range names {
+		msg = regexp.MustCompile(`\b`+regexp.QuoteMeta(to)+`\b`).ReplaceAllLiteralString(msg, from)
+	}
+	return dg.Pos.Filename() + "\x00" + msg
+}
+
+func renameRefusal(newName string, names map[string]string, before, after []diag.Diagnostic) error {
+	known := map[string]int{}
+	for _, dg := range before {
+		known[renameDiagKey(dg, nil)]++
+	}
+	for _, dg := range after {
+		if k := renameDiagKey(dg, names); known[k] > 0 {
+			known[k]--
+			continue
+		}
+		return fmt.Errorf("renaming to %s leaves %s: %s", newName, dg.Pos, dg.Msg)
+	}
+	return nil
 }
 
 func editsApply(text string, edits []renameEdit) string {

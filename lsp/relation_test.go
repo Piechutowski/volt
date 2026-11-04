@@ -218,3 +218,51 @@ func TestRelationHoverAndDefinition(t *testing.T) {
 		t.Errorf("references of writer = %v; want its as: and four uses", refs)
 	}
 }
+
+// TestRenameRefusesAnErrorBesideOneItFixes proves that a rename lands
+// only when it adds no error (editor.md section 7): beside an error it
+// fixes, a relation renamed so that a pred another select reads no
+// longer finds it is refused, naming the error it adds, and a rename
+// that adds none lands beside an error it leaves as it was.
+func TestRenameRefusesAnErrorBesideOneItFixes(t *testing.T) {
+	schema := "package db\n\n" +
+		"table users {\n\tid   int [pk]\n\tname string\n}\n\n" +
+		"table posts {\n\tid        int [pk]\n\teditor_id int\n}\n\n" +
+		"table pages {\n\tid        int [pk]\n\teditor_id int\n}\n\n" +
+		"ref: posts.editor_id > users.id [as: editor, reverse: posts_edited]\n" +
+		"ref: pages.editor_id > users.id [as: editor, reverse: pages_edited]\n\n" +
+		"select p (id, editor.name) for posts join editor where by_editor [order: (id asc)]\n" +
+		"select g (id, editor.name) for pages join editor where by_editor [order: (id asc)]\n" +
+		"select typo (id, reviser.name) for posts join reviser [order: (id asc)]\n"
+	root := voltProject(t, map[string]string{"go.mod": "module rel\n", "db/schema.volt": schema, "db/preds.volt": "package db\n\npred by_editor { editor.name = :n }\n"})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), schema)
+	if n := len(d.LSPDiagnostics()); n != 1 {
+		t.Fatalf("the project checks with %d errors before the rename; want the one of select typo", n)
+	}
+	_, err := d.Rename(posOf(t, schema, "editor, reverse: posts_edited", 0), "reviser")
+	if err == nil || !strings.Contains(err.Error(), "by_editor") {
+		t.Errorf("renaming posts' editor to reviser = %v; want a refusal naming the pred by_editor, which select g still reads as editor", err)
+	}
+	if _, err := d.Rename(posOf(t, schema, "pages_edited", 0), "pages_kept"); err != nil {
+		t.Errorf("renaming a relation no select reads beside the error of select typo = %v; want it to land", err)
+	}
+}
+
+// TestRelationNamedAfterATableHovers proves that a relation named after
+// the table it leads to hovers as the relationship it walks and then
+// the table (editor.md section 7), as one named by as: does, while it
+// stays that table's symbol for rename and definition.
+func TestRelationNamedAfterATableHovers(t *testing.T) {
+	_, d := relationProject(t, relationSchema)
+	h := d.Hover(posOf(t, relationSchema, "comments (body", 0))
+	if h == nil {
+		t.Fatal("no hover at a relation named after its table")
+	}
+	md := h.Contents.(protocol.MarkupContent).Value
+	if !strings.Contains(md, "relation `comments`") || !strings.Contains(md, "comments.post_id") || !strings.Contains(md, "table comments") {
+		t.Errorf("hover at exists comments = %q; want the relation, the foreign key it walks and the table", md)
+	}
+	if h := d.Hover(posOf(t, relationSchema, "comments {", 0)); h == nil || strings.Contains(h.Contents.(protocol.MarkupContent).Value, "relation `") {
+		t.Errorf("hover at the table's declaration = %+v; want the table alone", h)
+	}
+}

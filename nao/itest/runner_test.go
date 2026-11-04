@@ -3,6 +3,7 @@ package itest
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"path/filepath"
 	"runtime"
@@ -338,5 +339,74 @@ func TestUnreadRowKeepsNoConnection(t *testing.T) {
 		if s := db.Pool().Stats(); s.InUse != 0 {
 			t.Fatalf("after %s %d connections stay in use", name, s.InUse)
 		}
+	}
+}
+
+type pragmaCutConnector struct {
+	inner driver.Driver
+	dsn   string
+	cut   func()
+}
+
+func (c pragmaCutConnector) Driver() driver.Driver { return c.inner }
+
+func (c pragmaCutConnector) Connect(context.Context) (driver.Conn, error) {
+	conn, err := c.inner.Open(c.dsn)
+	if err != nil {
+		return nil, err
+	}
+	return pragmaCutConn{Conn: conn, cut: c.cut}, nil
+}
+
+type pragmaCutConn struct {
+	driver.Conn
+	cut func()
+}
+
+func (c pragmaCutConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	res, err := c.Conn.(driver.ExecerContext).ExecContext(context.Background(), query, args)
+	if query == "PRAGMA busy_timeout = 0" && err == nil {
+		c.cut()
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return res, err
+}
+
+func (c pragmaCutConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	return c.Conn.(driver.QueryerContext).QueryContext(ctx, query, args)
+}
+
+// TestWriteBeginRestoresTheBusyTimeout proves that the wait of an
+// immediate begin leaves the connection's busy timeout as it found it
+// (spec §generated-query-surface, the runner): a context that ends
+// while the runner sets the timeout to zero, after SQLite applied it,
+// as go-sqlite3 reports an interrupted pragma, fails the transaction
+// with the context's error, and the connection's timeout stays 5000.
+func TestWriteBeginRestoresTheBusyTimeout(t *testing.T) {
+	probe, err := sql.Open("sqlite3", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner := probe.Driver()
+	_ = probe.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	dsn := "file:" + filepath.Join(t.TempDir(), "cut.db") + "?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on"
+	pool := sql.OpenDB(pragmaCutConnector{inner: inner, dsn: dsn, cut: cancel})
+	pool.SetMaxOpenConns(1)
+	db := run.Wrap(pool)
+	defer db.Close()
+	ddlApply(t, db)
+	_, err = run.Run(ctx, db, rt.Atomic(UserCreate(UserNew().EmailSet("a@example.com").NameSet("Ann"))))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("a write whose context ended at the pragma = %v; want context.Canceled", err)
+	}
+	if got := pragmaRead(t, db, "busy_timeout"); got != 5000 {
+		t.Fatalf("busy_timeout after a context ended at the pragma = %d; want the pool's 5000", got)
+	}
+	if _, err := run.Run(context.Background(), db, rt.Atomic(UserCreate(UserNew().EmailSet("b@example.com").NameSet("Bob")))); err != nil {
+		t.Fatalf("the next write = %v", err)
 	}
 }

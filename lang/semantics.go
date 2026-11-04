@@ -578,7 +578,7 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 func (c *checker) scopeLoad(ld *ast.ScopeLoad, above []ScopeLoad) (ScopeLoad, bool) {
 	name := ld.Name.Name()
 	if !loadNameOK(name) {
-		c.errorf(ld.Name.Pos(), "scope-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), not a predeclared Go identifier (string, int, len, nil and the rest), and not shaped like a generated local (§scope-loads, §route-paths)", name)
+		c.errorf(ld.Name.Pos(), "scope-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier and no Go keyword, that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), not a predeclared Go identifier (string, int, len, nil and the rest), and not shaped like a generated local (§scope-loads, §route-paths)", name)
 		return ScopeLoad{}, false
 	}
 	if loadNameQualifier(name, c.pkg.Name, c.pkg.Imports) {
@@ -599,7 +599,7 @@ func (c *checker) scopeLoad(ld *ast.ScopeLoad, above []ScopeLoad) (ScopeLoad, bo
 	}
 	fn := ld.Ref.Parts[0].Name()
 	if scopeLoadNamed(above, fn) {
-		c.errorf(ld.Ref.Pos(), "scope-loads", "scope load %q calls %s, the name of a load of this scope or one above it, whose value the shim holds under that name when it calls %s (§scope-loads)", name, fn, fn)
+		c.errorf(ld.Ref.Pos(), "scope-loads", "scope load %q calls %s, the name of an earlier load of this scope or of a load of one above it, whose value the shim holds under that name when it calls %s (§scope-loads)", name, fn, fn)
 		return ScopeLoad{}, false
 	}
 	const want = "func %s(r volt.Request) volt.Load[T]"

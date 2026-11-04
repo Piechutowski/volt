@@ -80,7 +80,7 @@ scope / [pipe: api, error_handler: Errors] {
 		get    /latest           db.UserLatest
 		get    /described        db.UserDescribed
 		get    /chosen           db.UserChosen
-		get    /recent           db.UserLatest [name: recent, limit: 2, max_limit: 3]
+		get    /recent           db.UserLatest [name: recent, default_limit: 2, max_limit: 3]
 		get    /top/:limit(int)  db.UserLatest [name: top, max_limit: 3]
 	}
 

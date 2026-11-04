@@ -1,5 +1,5 @@
 // spec: §route-loads, a default above the most would refuse every bare request
-// want: limit: 60 is above max_limit: 50
+// want: default_limit: 60 is above max_limit: 50
 package app
 
 import (
@@ -7,5 +7,5 @@ import (
 )
 
 scope /api {
-	get /feed db.PostFeed [limit: 60, max_limit: 50]
+	get /feed db.PostFeed [default_limit: 60, max_limit: 50]
 }

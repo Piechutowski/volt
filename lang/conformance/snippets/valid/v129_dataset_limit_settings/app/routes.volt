@@ -1,4 +1,4 @@
-// spec: §dataset-settings, limit: and max_limit: on a dataset give every member route's limit from the query string a default and a most
+// spec: §dataset-settings, default_limit: and max_limit: on a dataset give every member route's limit from the query string a default and a most
 package app
 
 import (
@@ -6,5 +6,5 @@ import (
 )
 
 scope /ms {
-	dataset db.recent [strip: "ms_", limit: 5, max_limit: 20]
+	dataset db.recent [strip: "ms_", default_limit: 5, max_limit: 20]
 }

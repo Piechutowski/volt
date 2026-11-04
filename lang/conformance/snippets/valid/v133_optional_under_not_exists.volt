@@ -1,5 +1,4 @@
-// spec: §predicates, an exists term that reads an optional parameter vanishes whole, so it does not stand under not
-// want: not stands over the optional parameter :tag?
+// spec: §predicates, a not over an exists term all of whose terms are taken out is taken out with it
 package db
 
 table posts {

@@ -424,6 +424,30 @@ func OrderEither(buyer rt.Null[int], over rt.Null[float64]) rt.Query[Order] {
 	return rt.Query[Order]{SQL: voltOrderEitherSQL, Args: []any{buyer, over, buyer, buyer, over, over}, Scan: voltOrderScan}
 }
 
+const voltOrderNeitherSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ((? IS NULL AND ? IS NULL) OR NOT ((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "user_id" = ?) OR (? IS NOT NULL AND "total" > ?)))) ORDER BY "id" ASC`
+
+func OrderNeither(buyer rt.Null[int], over rt.Null[float64]) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderNeitherSQL, Args: []any{buyer, over, buyer, over, buyer, buyer, over, over}, Scan: voltOrderScan}
+}
+
+const voltOrderEitherNotSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "user_id" = ?) OR (NOT (? IS NULL) AND NOT (? IS NULL OR "total" > ?)))) ORDER BY "id" ASC`
+
+func OrderEitherNot(buyer rt.Null[int], over rt.Null[float64]) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderEitherNotSQL, Args: []any{buyer, over, buyer, buyer, over, over, over}, Scan: voltOrderScan}
+}
+
+const voltUserUntaggedSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE (? IS NULL OR NOT (? IS NULL OR EXISTS (SELECT 1 FROM "user_tags" AS "user_tags" WHERE "user_tags"."user_id" = "users"."id" AND (? IS NULL OR "user_tags"."tag" = ?)))) ORDER BY "id" ASC`
+
+func UserUntagged(tag rt.Null[string]) rt.Query[User] {
+	return rt.Query[User]{SQL: voltUserUntaggedSQL, Args: []any{tag, tag, tag, tag}, Scan: voltUserScan}
+}
+
+const voltOrderPlacedBeforeOrNeverSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ((? IS NOT NULL AND "placed_at" < ?) OR "placed_at" IS NULL) ORDER BY "id" ASC`
+
+func OrderPlacedBeforeOrNever(before rt.Null[time.Time]) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderPlacedBeforeOrNeverSQL, Args: []any{before, before}, Scan: voltOrderScan}
+}
+
 const voltUserSpendersSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE ((? IS NULL AND ? IS NULL) OR EXISTS (SELECT 1 FROM "orders" AS "orders" WHERE "orders"."user_id" = "users"."id" AND ((? IS NULL OR "orders"."status" = ?) AND (? IS NULL OR "orders"."total" > ?)))) ORDER BY "id" ASC`
 
 func UserSpenders(state rt.Null[OrderState], above rt.Null[float64]) rt.Query[User] {

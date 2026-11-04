@@ -36,9 +36,9 @@ var (
 		"migration": {"irreversible", "no_transaction"},
 		"ref":       {"delete: ", "update: ", "as: ", "reverse: "},
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
-		"route":     {"name: ", "timeout: ", "body: ", "only: (", "limit: ", "max_limit: "},
+		"route":     {"name: ", "timeout: ", "body: ", "only: (", "default_limit: ", "max_limit: "},
 		"resources": {"only: (", "except: (", "param: ", "singular: ", "api", "default"},
-		"dataset":   {"strip: ", "only: (", "except: (", "limit: ", "max_limit: "},
+		"dataset":   {"strip: ", "only: (", "except: (", "default_limit: ", "max_limit: "},
 
 		"migrationcolumn": {"pk", "null", "unique", "index", "autoincrement", "default: ", "ref: ", "delete: ", "update: "},
 		"rebuildcolumn":   {"pk", "null", "unique", "index", "autoincrement", "default: ", "ref: ", "delete: ", "update: ", "from: "},
@@ -80,7 +80,7 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 	prefix := d.Text[lineStart:offset]
 	ctx, outer := d.blockContexts(int(pos.Line))
 
-	if items := d.voltComplete(prefix); items != nil {
+	if items := d.voltComplete(prefix, ctx == "pred"); items != nil {
 		return items
 	}
 
@@ -196,6 +196,8 @@ func headContext(head string) string {
 		return "ref"
 	case strings.HasPrefix(head, "pipeline"):
 		return "pipeline"
+	case strings.HasPrefix(head, "pred ") || strings.HasPrefix(head, "pred{"):
+		return "pred"
 	case strings.HasPrefix(head, "scope"):
 		return "scope"
 	case strings.HasPrefix(head, "migration"), upDownHeadRE.MatchString(head):

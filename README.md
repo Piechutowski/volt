@@ -111,26 +111,39 @@ runtime's.
 The counts are of each stack as written, and `compare/suite` sends one
 request at a time, so it does not hold the rules under concurrency;
 Volt's own test does (`compare/volt`), and the other stacks have none.
-`go run ./compare/race | grep '^|'` sends all five servers thirty
+After `go generate ./compare/...`, which writes the generated code the
+servers build on, `go run ./compare/race` sends all five servers thirty
 rounds of twenty publishes of one draft at once, ten comments by one
 member at once and sixteen edits to a short body racing four publishes
-of a draft; GORM logs each write SQLite refuses, which the `grep`
-drops. The counts are races and move from run to run; over seven runs
-every stack published a draft once, Volt and oapi-codegen + Ent broke
-no rule, and the other three broke these, in rounds of thirty:
+of a draft, and drops GORM's log of the writes SQLite refuses. The
+counts are races and move from run to run. Over twenty runs on one
+machine every stack published a draft once, Volt and oapi-codegen +
+Ent broke no rule, and the other three broke these, in rounds of
+thirty, each range the least and the most of the twenty, which another
+run can fall outside:
 
-| Stack | More than three comments | Published with a short body | Replies 500 |
+| Stack | More than three comments | Published with a short body | Replies 5xx or none |
 |---|---:|---:|---:|
-| Gin + GORM | 0 | 12 to 21 | 84 to 161 |
-| chi + sqlc + goose | 0 | 0 to 4 | 0 |
-| Echo + sqlx + goose | 12 to 25 | 4 to 11 | 0 |
+| Gin + GORM | 0 | 11 to 18 | 85 to 115 |
+| chi + sqlc + goose | 0 | 0 to 6 | 0 |
+| Echo + sqlx + goose | 14 to 25 | 5 to 14 | 0 |
 
-Gin + GORM's 500s are `database is locked`, mostly on the comments, and
-in up to five rounds a run they left a member fewer than the three
-comments the rules allow. Those three stacks make the checks Volt makes,
-but before writes that do not hold them, where Volt's 477 lines and
-Ent's 1162 make them inside the transaction that writes, so the
-percentages above compare programs that differ in that much.
+Gin + GORM's failed replies are `database is locked` on the comment
+insert, 90 of 90 in a run traced: it counts and inserts in one
+transaction that begins deferred, so a loser holding the read of its
+count cannot take the write lock, and in up to two rounds a run the
+refusals left a member fewer than the three comments the rules allow.
+The three stacks hold some rules where they write and not others.
+chi + sqlc counts and inserts a comment in one transaction that begins
+immediately, Gin + GORM in one that begins deferred, and Echo + sqlx
+counts before its insert; all three publish through an `UPDATE` that
+matches only a draft, so none publishes twice, and chi + sqlc edits
+through one too, where Gin + GORM and Echo + sqlx check an edit's draft
+before an `UPDATE` of any state; and all three check a publish's
+100-character body before the write, which an edit can shorten in
+between. Volt's 477 lines and Ent's 1162 make every check inside the
+transaction that writes, so the percentages above compare programs
+that differ in those checks.
 
 ## Crib sheet
 

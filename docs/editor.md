@@ -220,13 +220,18 @@ layer:
   (the hit-test span and the edit span are tracked separately), only
   occurrences whose spelling matches the one under the cursor, each
   once, and validates the new name against the identifier grammar
-  (§identifiers). It then checks what it would write: the project with
-  the edits applied (the file alone outside a project) must check with
-  no more errors than before, or the rename is refused naming the first
-  error it adds, so a name that makes a relation ambiguous, or that a
-  `pred` would no longer find, never lands (§relationships-ref). A
-  rename at a Go reference skips the check, since gopls renames the Go
-  side (section 7).
+  (§identifiers). It then checks what it would write: every error of
+  the project with the edits applied (the file alone outside a
+  project) must be one it had before, the same file and message with
+  the renamed names spelled as they were and the positions it names
+  set aside, or the rename is refused naming the first error it adds,
+  so a name that makes a relation ambiguous, or that a `pred` would no
+  longer find, never lands (§relationships-ref), even beside an error
+  it fixes. A rename at a Go reference skips the check, since gopls
+  renames the Go side (section 7). A rename rewrites `.volt` files
+  alone: the generated Go names derived from what it renames change at
+  the next `volt gen`, and hand-written Go that uses them does not
+  (section 7).
 - A relation is its own symbol (§relationships-ref): one a ref's `as:`
   or `reverse:` names is declared there, and renames, at the setting
   or at any use, with every use: a join, a column's qualifier, a
@@ -237,7 +242,7 @@ layer:
   after a table is that table's and renames with it. Definition at a
   relation goes to its `as:` or `reverse:`, else to its column, else to
   the table; it hovers as the relationship it walks and the table it
-  leads to.
+  leads to, one named after that table too.
 - Column identity is container-scoped; a column injected from a
   `table_partial` resolves into the partial, so renaming it updates the
   partial once plus every reference through every injecting table
@@ -251,8 +256,9 @@ layer:
   bodies, tables and groups in a `group` body, operations in a
   `migration` body, the columns of the named table after `ref: table.`,
   `pred` names and `exists` where a predicate term starts, after
-  `where`, `and`, `or`, `not`, a pred's `{` or a predicate's `(` (not
-  a projection's, a list's or a setting's), `exists` left out inside
+  `where`, `and`, `or`, `not`, a pred's `{`, with a space or without,
+  or a predicate's `(` (not a projection's, a list's or a setting's),
+  and at the start of a line of a pred body, `exists` left out inside
   an exists term, which does not nest, and the `pred`s there those
   whose every column is a column of the relation's table, and the relations of the
   select's table after `exists` (§predicates),
@@ -367,6 +373,16 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
   setting's name and its `:` (`[default` then `: 1` on the next line)
   draw an ERROR node, since a line break there is not whitespace to
   the grammar; the front end accepts them.
+- **LSP: a rename stops at the `.volt` files.** Renaming a table, a
+  column, a relation or a select renames the Go names `volt gen`
+  derives from it, a model, a field, a function, a with row's type
+  (`PostWithReplies`), a joined column's field (`PostTitle`) and its
+  JSON key among them, at the next generation, and the server does not
+  rewrite the hand-written Go that uses the old ones, which stops
+  compiling then; renaming each Go name with gopls first, while the
+  generated code still declares it, keeps the two in step. A rename at
+  a Go reference is the other way round: the Go side is gopls's, the
+  `.volt` spellings the server's.
 - **LSP: Go-side navigation is partial.** Handler references (`Home.Index`)
   and `error_handler:` point into Go, which this server does not
   index (roadmap). A query reference (`db.UserGet`, §query-routes) is

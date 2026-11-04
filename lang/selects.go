@@ -6,6 +6,7 @@ package lang
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strconv"
@@ -880,10 +881,14 @@ func (l *selectLowering) joinsCheck(si *SelectInfo) bool {
 }
 
 // relationAmbiguity says why a relation name cannot be joined (spec
-// §relationships-ref): "" when the table simply has none.
+// §relationships-ref): "" when the table simply has none, and the one
+// relation it misspells in case when it names one.
 func relationAmbiguity(table, name string, named []*check.RelationInfo) string {
 	if len(named) == 0 {
 		return ""
+	}
+	if len(named) == 1 && named[0].Name != name && !strings.EqualFold(name, table) {
+		return fmt.Sprintf("table %q has no relation %q; did you mean %q? names are case-sensitive", table, name, named[0].Name)
 	}
 	parts := make([]string, len(named))
 	for i, r := range named {
@@ -1384,7 +1389,7 @@ func (e *selectEnv) arithLower(x ast.ArithExpr, typ *colBinding) (rt.Expr, bool)
 			e.errorf(x.Pos(), "arithmetic takes numbers; found %s (§selects-over-groups)", x.String())
 			return rt.Expr{}, false
 		}
-		slot, err := numberGo(x.Tok.Val, typ.storageGo)
+		slot, err := argNumberGo(x.Tok.Val, typ.storageGo)
 		if err != nil {
 			e.errorf(x.Pos(), "literal %s does not fit %s, the type of the expression (§selects-over-groups)", x.Tok.Val, typ.storageGo)
 			return rt.Expr{}, false
@@ -1670,7 +1675,7 @@ func (l *selectLowering) limitSetting(s *ast.Setting) *ast.Param {
 			case n < 1:
 				l.errorf(v.Pos(), "limit: keeps at least 1 row, not %s (§selects-over-groups)", v.Tok.Val)
 			default:
-				l.si.Limit = strconv.FormatInt(n, 10)
+				l.si.Limit = intArgGo(n)
 			}
 			return nil
 		}
@@ -1794,10 +1799,8 @@ type selectEnv struct {
 	paramList []SelectParam
 	failed    bool
 	dropped   map[string]bool
-	scope     *existsScope // the exists term being lowered, nil outside one (§predicates)
-	reads     []string     // the optional parameters the term being lowered reads, in first-appearance order
-	nots      []notAt      // the nots the expression being lowered stands under, outermost first
-	notsSaid  map[token.Position]bool
+	scope     *existsScope   // the exists term being lowered, nil outside one (§predicates)
+	reads     []string       // the optional parameters the term being lowered reads, in first-appearance order
 	via       []*ast.PredRef // the pred references being expanded, the select's own first
 }
 
@@ -1811,13 +1814,6 @@ func (e *selectEnv) predErrorf(pos token.Position, format string, args ...any) {
 	e.failed = true
 	pos, format, args = e.viaSite(pos, format, args)
 	e.l.diags = append(e.l.diags, diag.Errorf(pos, "spec/predicates", format, args...))
-}
-
-// notAt is a not the expression being lowered stands under and how many
-// pred references deep it stands.
-type notAt struct {
-	pos   token.Position
-	depth int
 }
 
 // viaSite moves a fault found inside a pred to where the select names
@@ -2050,20 +2046,6 @@ func (e *selectEnv) paramRead(p *ast.Param) {
 	if !p.Optional {
 		return
 	}
-	if len(e.nots) > 0 {
-		n := e.nots[len(e.nots)-1]
-		at := n.pos
-		if !e.notsSaid[at] {
-			if e.notsSaid == nil {
-				e.notsSaid = map[token.Position]bool{}
-			}
-			e.notsSaid[at] = true
-			via := e.via
-			e.via = e.via[:n.depth]
-			defer func() { e.via = via }()
-			e.predErrorf(at, "not stands over the optional parameter %s: a term that reads an absent optional parameter is taken out, and not would turn it into its opposite; write the parameter without ? or the predicate without not (§predicates)", p.String())
-		}
-	}
 	name := p.Name.Name()
 	for _, read := range e.reads {
 		if read == name {
@@ -2171,10 +2153,7 @@ func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred 
 		}
 		return rt.And(operands...)
 	case *ast.PredNot:
-		e.nots = append(e.nots, notAt{x.NotPos, len(e.via)})
-		p := rt.Not(e.exprLower(x.X, preds))
-		e.nots = e.nots[:len(e.nots)-1]
-		return p
+		return rt.Not(e.exprLower(x.X, preds))
 	case *ast.PredParen:
 		return e.exprLower(x.X, preds)
 	case *ast.PredExists:
@@ -2325,7 +2304,7 @@ func (e *selectEnv) litSlot(l *ast.Lit, b *colBinding) (string, bool) {
 			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the number %s (§predicates)", b.name, b.goType, l.Tok.Val)
 			return "", false
 		}
-		slot, err := numberGo(l.Tok.Val, b.storageGo)
+		slot, err := argNumberGo(l.Tok.Val, b.storageGo)
 		if err != nil {
 			e.errorf(l.Pos(), "literal %s does not fit %s, the storage type of column %q (§predicates)", l.Tok.Val, b.storageGo, b.name)
 			return "", false
@@ -2351,6 +2330,29 @@ func (e *selectEnv) litSlot(l *ast.Lit, b *colBinding) (string, bool) {
 		}
 		return "false", true
 	}
+}
+
+// argNumberGo is numberGo for a literal a generated statement binds as
+// an argument (spec §predicates): an int beyond 32 bits is spelled
+// int64(n), since an untyped constant in []any is an int, which is 32
+// bits on some targets.
+func argNumberGo(val, storage string) (string, error) {
+	s, err := numberGo(val, storage)
+	if err != nil || storage == "float64" {
+		return s, err
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return "", err
+	}
+	return intArgGo(n), nil
+}
+
+func intArgGo(n int64) string {
+	if n < math.MinInt32 || n > math.MaxInt32 {
+		return "int64(" + strconv.FormatInt(n, 10) + ")"
+	}
+	return strconv.FormatInt(n, 10)
 }
 
 func numberGo(val, storage string) (string, error) {

@@ -63,8 +63,11 @@ func (c *Client) AdminPickedBy(ctx context.Context, ids rt.Null[[]int], email st
 	return voltOut, voltErr
 }
 
-func (c *Client) AdminNewest(ctx context.Context, limit int) ([]User, error) {
-	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+func (c *Client) AdminNewest(ctx context.Context, limit rt.Null[int]) ([]User, error) {
+	voltQ := []volt.URLOption{}
+	if limit.Valid {
+		voltQ = append(voltQ, volt.Query("limit", volt.FormatQuery(limit.V)))
+	}
 	var voltOut []User
 	voltErr := c.Do(ctx, "GET", volt.URL("/admin/newest", voltQ...), nil, &voltOut)
 	return voltOut, voltErr
@@ -73,6 +76,20 @@ func (c *Client) AdminNewest(ctx context.Context, limit int) ([]User, error) {
 func (c *Client) AdminNewestPage(ctx context.Context, size int) (*http.Response, error) {
 	voltQ := []volt.URLOption{volt.Query("size", volt.FormatQuery(size))}
 	return c.Raw(ctx, "GET", volt.URL("/admin/newest/page", voltQ...), nil)
+}
+
+func (c *Client) AdminNewestMix(ctx context.Context, n rt.Null[int], title rt.Null[string], after rt.Null[time.Time]) (*http.Response, error) {
+	voltQ := []volt.URLOption{}
+	if n.Valid {
+		voltQ = append(voltQ, volt.Query("n", volt.FormatQuery(n.V)))
+	}
+	if title.Valid {
+		voltQ = append(voltQ, volt.Query("title", volt.FormatQuery(title.V)))
+	}
+	if after.Valid {
+		voltQ = append(voltQ, volt.Query("after", volt.FormatQuery(after.V)))
+	}
+	return c.Raw(ctx, "GET", volt.URL("/admin/newest/mix", voltQ...), nil)
 }
 
 func (c *Client) AdminTop(ctx context.Context, n int) (*http.Response, error) {
@@ -255,15 +272,21 @@ func (c *Client) MsUsageBrowse(ctx context.Context, year int) ([]MsUsage, error)
 	return voltOut, voltErr
 }
 
-func (c *Client) MsrMsRevenueRecent(ctx context.Context, limit int) ([]MsRevenue, error) {
-	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+func (c *Client) MsrMsRevenueRecent(ctx context.Context, limit rt.Null[int]) ([]MsRevenue, error) {
+	voltQ := []volt.URLOption{}
+	if limit.Valid {
+		voltQ = append(voltQ, volt.Query("limit", volt.FormatQuery(limit.V)))
+	}
 	var voltOut []MsRevenue
 	voltErr := c.Do(ctx, "GET", volt.URL("/msr/revenue", voltQ...), nil, &voltOut)
 	return voltOut, voltErr
 }
 
-func (c *Client) MsrMsUsageRecent(ctx context.Context, limit int) ([]MsUsage, error) {
-	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+func (c *Client) MsrMsUsageRecent(ctx context.Context, limit rt.Null[int]) ([]MsUsage, error) {
+	voltQ := []volt.URLOption{}
+	if limit.Valid {
+		voltQ = append(voltQ, volt.Query("limit", volt.FormatQuery(limit.V)))
+	}
 	var voltOut []MsUsage
 	voltErr := c.Do(ctx, "GET", volt.URL("/msr/usage", voltQ...), nil, &voltOut)
 	return voltOut, voltErr

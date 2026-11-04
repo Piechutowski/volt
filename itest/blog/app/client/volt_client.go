@@ -207,8 +207,11 @@ func (c *Client) APIUserChosen(ctx context.Context, ids rt.Null[[]int]) ([]db.Us
 	return voltOut, voltErr
 }
 
-func (c *Client) APIRecent(ctx context.Context, limit int) ([]db.User, error) {
-	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+func (c *Client) APIRecent(ctx context.Context, limit rt.Null[int]) ([]db.User, error) {
+	voltQ := []volt.URLOption{}
+	if limit.Valid {
+		voltQ = append(voltQ, volt.Query("limit", volt.FormatQuery(limit.V)))
+	}
 	var voltOut []db.User
 	voltErr := c.Do(ctx, "GET", volt.URL("/api/recent", voltQ...), nil, &voltOut)
 	return voltOut, voltErr

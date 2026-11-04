@@ -70,7 +70,7 @@ type RouteInfo struct {
 	// Timeout the seconds of its timeout: setting, 0 when none.
 	Loads   []LoadInfo
 	Timeout int
-	// LimitDefault and LimitMost are its limit: and max_limit: settings,
+	// LimitDefault and LimitMost are its default_limit: and max_limit: settings,
 	// 0 when absent: the limit a select's limit: parameter takes from the
 	// query string when the key is missing, and the most it takes.
 	LimitDefault int

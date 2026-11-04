@@ -99,6 +99,26 @@ func register(mux *http.ServeMux, c Controllers) {
 		})
 	}, errHandlerErrors, voltPerform)))
 
+	mux.Handle("GET /admin/newest/mix", pipe0(volt.Handler("GET /admin/newest/mix", func(r volt.Request) volt.Response {
+		voltLoad0Arg0, err := volt.QueryLimit(r, "n", 3, 0)
+		if err != nil {
+			return volt.Fail(err)
+		}
+		voltLoad1Arg0, err := volt.QueryParamOptional[string](r, "title")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		voltLoad1Arg1, err := volt.QueryParamOptional[time.Time](r, "after")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.UserLatest(voltLoad0Arg0), func(rows []db.User) volt.Response {
+			return volt.Then(db.UserWritten(voltLoad1Arg0, voltLoad1Arg1), func(more []db.User) volt.Response {
+				return c.Admin.Mix(r, rows, more)
+			})
+		})
+	}, errHandlerErrors, voltPerform)))
+
 	mux.Handle("GET /admin/top/{n}", pipe0(volt.Handler("GET /admin/top/{n}", func(r volt.Request) volt.Response {
 		voltn, ok := volt.ParseInt(r.PathValue("n"))
 		if !ok {

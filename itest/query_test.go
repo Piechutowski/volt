@@ -255,7 +255,7 @@ func TestQueryRouteLimitParam(t *testing.T) {
 	}
 }
 
-// TestQueryRouteLimitSettings (§route-loads): a route's limit: is the
+// TestQueryRouteLimitSettings (§route-loads): a route's default_limit: is the
 // limit a request that leaves the key out gets, and its max_limit: the
 // most one may ask, from the query string or a path parameter, a larger
 // value a 400 naming the key that runs no statement.

@@ -50,6 +50,7 @@ type Index struct {
 
 	declTables map[string]*tableOccs
 	recording  *[]declEntry
+	vias       map[*ast.Ident]string
 }
 
 // IndexMemo remembers a package's per-table occurrences across builds
@@ -528,7 +529,22 @@ func (ix *Index) addRelation(ti *check.TableInfo, id *ast.Ident) {
 		ix.add(SymbolID{SymRelation, ti.Key, r.Name}, id, false)
 	default:
 		ix.add(SymbolID{SymTable, "", r.Table.Key}, id, false)
+		if ix.vias == nil {
+			ix.vias = map[*ast.Ident]string{}
+		}
+		ix.vias[id] = ti.Key
 	}
+}
+
+// Via is the relation an occurrence of a table names when the relation
+// takes the table's name (spec §relationships-ref), the zero SymbolID
+// for any other identifier.
+func (ix *Index) Via(id *ast.Ident) SymbolID {
+	table, ok := ix.vias[id]
+	if !ok {
+		return SymbolID{}
+	}
+	return SymbolID{SymRelation, table, id.Name()}
 }
 
 // relationNaming is what gives a relation its name (spec

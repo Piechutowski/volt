@@ -565,6 +565,37 @@ func TestVoltCompletePredicateParens(t *testing.T) {
 	}
 }
 
+// A pred's body starts a predicate term after its { with or without a
+// space, and on each line of a body the { opened on an earlier line,
+// where completion offers the preds and exists, not the element
+// keywords (spec §predicates, editor.md section 7).
+func TestVoltCompletePredBody(t *testing.T) {
+	schema := strings.Replace(existsSchema, "select tagged", "pred recent { id > 0 }\n\nselect tagged", 1)
+	root := voltProject(t, map[string]string{"go.mod": "module lsptest\n", "db/schema.volt": schema})
+	for _, tc := range []struct{ text, at string }{
+		{"pred zz { ", "pred zz { "},
+		{"pred zz {", "pred zz {"},
+		{"pred zz { re", "pred zz { re"},
+		{"pred zz { }", "pred zz { "},
+		{"pred zz {\n\t", "pred zz {\n\t"},
+		{"pred zz {\n\tre", "pred zz {\n\tre"},
+		{"pred zz {\n\t(", "pred zz {\n\t("},
+		{"pred zz {\n\tid > 1 and ", "pred zz {\n\tid > 1 and "},
+	} {
+		text := strings.Replace(schema, "pred recent", tc.text+"\n}\n\npred recent", 1)
+		d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
+		off := strings.Index(text, tc.at) + len(tc.at)
+		pos := offsetToLSP(text, off)
+		labels := map[string]bool{}
+		for _, it := range d.Complete(pos) {
+			labels[it.Label] = true
+		}
+		if !labels["recent"] || labels["table"] || labels["select"] {
+			t.Errorf("completion at the end of %q = %v; want the pred recent and no element keywords", tc.at, labels)
+		}
+	}
+}
+
 // Inside an exists completion offers the preds that type over the table
 // the relation leads to, one naming a fitting pred twice among them, and
 // none over the select's own (spec §predicates).

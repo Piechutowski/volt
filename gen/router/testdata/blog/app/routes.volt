@@ -26,9 +26,13 @@ scope / [pipe: api, error_handler: Errors] {
 			wrote  db.UserWritten("draft", after)
 		}
 		get /picked/:email db.UserChosen [name: picked_by]
-		get /newest db.UserLatest [name: newest, limit: 10, max_limit: 50]
+		get /newest db.UserLatest [name: newest, default_limit: 10, max_limit: 50]
 		get /newest/page Admin.Newest [name: newest_page, max_limit: 20] {
 			rows db.UserLatest(size)
+		}
+		get /newest/mix Admin.Mix [name: newest_mix, default_limit: 3] {
+			rows db.UserLatest(n)
+			more db.UserWritten(title, after)
 		}
 		get /top/:n(int) Admin.Top [max_limit: 100] {
 			top db.UserLatest(n)
@@ -86,7 +90,7 @@ scope / [pipe: api, error_handler: Errors] {
 		dataset db.browse [strip: "ms_"]
 	}
 	scope /msr [name: msr] {
-		dataset db.recent [strip: "ms_", limit: 5, max_limit: 20]
+		dataset db.recent [strip: "ms_", default_limit: 5, max_limit: 20]
 	}
 
 	// Default handlers (§default-handlers): every action is a query route over

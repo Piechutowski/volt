@@ -1,5 +1,5 @@
 // spec: §scope-loads, a scope load beneath another calls no function named as that load, whose value the shim holds under the name
-// want: scope load "user" calls account, the name of a load of this scope or one above it
+// want: scope load "user" calls account, the name of an earlier load of this scope or of a load of one above it
 package app
 
 import (

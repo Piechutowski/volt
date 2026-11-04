@@ -336,7 +336,7 @@ func (g *generator) clientParams() []lang.QueryParam {
 		case r.Query != nil:
 			for _, p := range r.Query.Params {
 				if p.Source == lang.FromQuery || p.Source == lang.FromList {
-					out = append(out, p)
+					out = append(out, clientParam(r, p))
 				}
 			}
 		default:
@@ -801,6 +801,7 @@ func (g *generator) clientEmit() error {
 		qs := clientQuery{path: pathNames}
 		var arg string
 		for _, p := range q.Params {
+			p = clientParam(r, p)
 			goType, name := p.Type(), ""
 			switch p.Source {
 			case lang.FromBody:
@@ -895,6 +896,16 @@ func (q *clientQuery) url(r *lang.RouteInfo) string {
 	return "volt.URL(" + pathExprNamed(r, q.path) + ", voltQ...)"
 }
 
+// clientParam is p as the client takes it (spec §generated-client): a
+// select's limit: parameter from the query string of a route with
+// default_limit: is optional, left out so that the default applies.
+func clientParam(r *lang.RouteInfo, p lang.QueryParam) lang.QueryParam {
+	if p.Limit && p.Source == lang.FromQuery && r.LimitDefault > 0 {
+		p.Optional = true
+	}
+	return p
+}
+
 // loadKeys are the query-string keys the loads of a controller route
 // bind (spec §route-loads, §generated-client), each once, in the order
 // the loads first read it, typed as its bindings, which the checker holds
@@ -907,6 +918,7 @@ func loadKeys(r *lang.RouteInfo) []lang.QueryParam {
 			if p.Source != lang.FromQuery && p.Source != lang.FromList {
 				continue
 			}
+			p = clientParam(r, p)
 			if i, seen := at[p.Name]; seen {
 				if out[i].Optional && !p.Optional {
 					out[i] = p
