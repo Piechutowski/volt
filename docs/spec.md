@@ -74,10 +74,10 @@ response value (§requests-and-responses): it holds no database, reads
 the clock from the request, and describes its effects for the
 generated shim to perform; the vet rules of `lint.md` hold it to that.
 An effect that uses an earlier effect's result carries a function, the
-`next` of `rt.Then` or the `f` of `rt.Map`
-(§generated-query-surface): that function is pure too, from a value to
-a description, the runner calls it between the statements, and nothing
-performs inside it.
+`next` of `rt.Then`, from a value to a description, or the `f` of
+`rt.Map`, from a value to a value (§generated-query-surface): that
+function is pure too, the runner calls it between the statements, and
+nothing performs inside it.
 
 ---
 
@@ -2272,9 +2272,13 @@ func (r Response) Rescue(on func(error) Response) Response
    headers, cookies and body, or continuations of the same effect;
    streams compare as the same). Functions cannot be compared, so a
    continuation compares by its effect alone, never by `next`, and an
-   effect that wraps others by what it wraps: an `rt.Then` by its first
-   effect, never by the one its `next` would make, and an `rt.Map` and
-   an `rt.Atomic` by their inner one (§generated-query-surface). An
+   effect that wraps others by its kind and what it wraps: an `rt.Then`
+   by being a `Then` and by its first effect, never by the one its
+   `next` would make, and an `rt.Map` and an `rt.Atomic` by their kind
+   and their inner one, so an `Atomic` over `e`, a `Map` over `e` and
+   `e` itself are three effects; an `rt.Pure` compares by its value as
+   `%v` prints it and an `rt.Fail` by its error's message, as a
+   `Fail(err)` response does (§generated-query-surface). An
    application's test calls it with its controllers and asserts an
    empty list.
 6. **What keeps a handler pure** is the generated interface, which
@@ -4914,6 +4918,11 @@ A generated query is a value (§values-and-effects): a function of
 `volt_queries.go`, `volt_dyn.go` or `volt_selects.go` with no receiver
 and no context returns an **effect** of `nao/rt`, and the runner
 `nao/run` performs it. Nothing runs when the function is called.
+`Effect[T]` is sealed: every method it requires is unexported, so a
+type of another package satisfies it only by embedding one of the
+kinds below, and then performs and describes as that kind; the runner
+performs an effect through `rt.Perform` or `rt.PerformAny`, the only
+functions that hand an effect an executor.
 
 ```go
 // nao/rt: the effects. Effect[T] is sealed; these are all of them.
@@ -4927,9 +4936,12 @@ func All(steps ...AnyEffect) Parallel     // at once, first error cancels, resul
 func Then[T, U any](e Effect[T], next func(T) Effect[U]) Effect[U]  // e, then the effect next makes of its result
 func Map[T, U any](e Effect[T], f func(T) U) Effect[U]              // f of e's result
 func Atomic[T any](e Effect[T]) Effect[T]                          // e and all it performs, all or nothing
-var ErrNoEffect error                     // a Then, Map or Atomic over no effect
+func Pure[T any](v T) Effect[T]                                    // v, performing nothing
+func Fail[T any](err error) Effect[T]                              // err, performing nothing
+var ErrNoEffect error                     // an effect built over nothing: a nil effect, next or f, a Fail of nil
 func Insert[M any](c Changeset[M]) Write[M]
 func Update[M any](c Changeset[M]) Write[M]
+func Perform[T any](ctx context.Context, x Executor, e Effect[T]) (T, error)  // e over the runner's executor
 
 // nao/run: the one stateful object and the one performer.
 type DB struct { /* the pool, the statement cache, the logger */ }
@@ -5011,10 +5023,15 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    effect: every statement is prepared through the statement cache,
    keyed by its text, so identical shapes prepare once; a
    `Transaction` runs its steps on one transaction that commits when
-   every step succeeded and rolls back on the first error, a
+   every step succeeded and rolls back on the first error or a panic, a
    `Transaction` inside one joins it; a `Parallel` runs its steps on
    their own goroutines and joins them, the first error cancelling the
-   rest; the context cancels any of them. The runner writes one
+   rest; the context cancels any of them. A step of a `Parallel` that
+   panics cancels the rest as well, and once every step has joined its
+   panic is raised again, carrying the step's stack, on the goroutine
+   that performs the `Parallel`: it ends what a panic there would end,
+   the request alone, which `net/http` recovers, and never the process,
+   and the transaction it ran in rolls back. The runner writes one
    structured log line per statement at debug level, with the text,
    the duration and the error, through the logger of `WithLogger`.
    `rt.Null[T]` marshals as the value or `null`.
@@ -5024,21 +5041,34 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    performs `e` and yields `f` of its result; `rt.Atomic(e)` performs
    `e`, and everything `e` performs, in one transaction that commits
    when all of it succeeds and rolls back on the first error, which it
-   returns. The three are effects like the others, values the runner
-   performs; their kinds are unexported, the constructors the one way
-   to build them, and the set stays sealed.
-   They nest, and `next` may return any effect: an `Atomic` over the
-   `Then` of `PostCreate(c)` whose `next` returns the `Transaction` of
-   the inserts that carry the new post's key writes the post and its
-   tags together or not at all.
-   - `next` and `f` are pure functions from a value to a description
-     (§values-and-effects): the runner calls them between the
-     statements, and nothing performs inside them; in a handler's file
-     the vet rules of `lint.md` hold them as they hold the handler.
-     Neither is called when the effect before it fails. A `next` that
-     returns no effect, a nil `Effect`, and a `Then`, a `Map` or an
-     `Atomic` built over none, yield `rt.ErrNoEffect`, which stops the
-     effect there as any other error does.
+   returns. `rt.Pure(v)` performs nothing and yields `v`, and
+   `rt.Fail(err)` performs nothing and fails with `err`: a `next`
+   returns the one when nothing is left to perform and the other when
+   it refuses what it read. The five are effects like the others,
+   values the runner performs, and their constructors are the one way
+   to build them. They nest, and `next` may return any effect: an
+   `Atomic` over the `Then` of `PostCreate(c)` whose `next` returns the
+   `Transaction` of the inserts that carry the new post's key writes
+   the post and its tags together or not at all, and an `Atomic` over
+   the `Then` of `PostGet(id)` whose `next` returns
+   `rt.Fail(volt.Error(409, ...))` for a post that is no draft, and its
+   update otherwise, publishes a draft and nothing else.
+   - `next` is a pure function from a value to a description and `f`
+     one from a value to a value (§values-and-effects): the runner
+     calls them between the statements, and nothing performs inside
+     them; in a handler's file the vet rules of `lint.md` hold them as
+     they hold the handler. Neither is called when the effect before it
+     fails. A panic inside either is the request's, as a handler's is:
+     `net/http` ends that request alone, inside a `Parallel` too,
+     which raises it again on the goroutine that performs it, and the
+     transaction it ran in rolls back.
+   - A nil is never an effect: a nil `Effect` where one is performed,
+     a `Transaction`'s or a `Parallel`'s step, the `e` of a `Then`, a
+     `Map` or an `Atomic` and the effect a `next` returns among them, a
+     nil `next` or `f`, and an `rt.Fail` of a nil error yield
+     `rt.ErrNoEffect`, which stops the effect there as any other error
+     does; a `Transaction`, a `Parallel`, a `Then` and a `Map` check
+     what they hold before they perform any of it.
    - A `Then` is not atomic by itself. Outside an `Atomic` and a
      `Transaction` its steps run one after another, each on its own, so
      when the effect `next` returns fails, what `e` wrote stays
@@ -5054,8 +5084,9 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
      `Atomic` performed.
    - An error comes back as the step reported it, unwrapped, so a
      refused write is still the `*rt.Invalid` the error handler answers
-     with 409 or 422 and a miss still `rt.ErrNotFound`, a 404
-     (§formats).
+     with 409 or 422, a miss still `rt.ErrNotFound`, a 404, and an
+     `rt.Fail` the error it carries, an `HTTPError` with its own status
+     among them (§formats).
 7. **Locals and helpers.** Every local a function of a data file
    declares, the parameters of a function literal included, is `volt`
    followed by an upper-case letter, with no underscore (`voltErr`,

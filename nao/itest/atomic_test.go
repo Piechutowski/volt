@@ -3,7 +3,10 @@ package itest
 import (
 	"context"
 	"errors"
+	"runtime"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/Piechutowski/volt/nao/rt"
 	"github.com/Piechutowski/volt/nao/run"
@@ -204,5 +207,94 @@ func TestParallelInsideAtomic(t *testing.T) {
 	invalidOf(t, err, "unique", "user_id", "tag")
 	if n := usersCount(t, db, "oli@example.com") + usersCount(t, db, "pat@example.com"); n != 0 || tagsCount(t, db) != 2 {
 		t.Errorf("a failed Parallel inside an Atomic left %d parents and %d tags; want 0 and the earlier 2", n, tagsCount(t, db))
+	}
+}
+
+// TestAtomicFailRollsBackWhatItWrote proves rt.Fail and rt.Pure in a
+// next (spec §generated-query-surface): a next that refuses what it
+// read rolls back what the Atomic wrote and fails with its own error,
+// unwrapped, and a next with nothing left to perform commits.
+func TestAtomicFailRollsBackWhatItWrote(t *testing.T) {
+	ctx := context.Background()
+	db := newDB(t)
+	refused := errors.New("too many tags")
+	tagged := func(email string, most int64) rt.Effect[User] {
+		return rt.Atomic(rt.Then(UserCreate(UserNew().EmailSet(email).NameSet("Ann")), func(u User) rt.Effect[User] {
+			return rt.Then(UserTagCreate(UserTagNew().UserIDSet(u.ID).TagSet("go")), func(UserTag) rt.Effect[User] {
+				return rt.Then(UserTagCount(UserTagUserID.Eq(u.ID)), func(n int64) rt.Effect[User] {
+					if n > most {
+						return rt.Fail[User](refused)
+					}
+					return rt.Pure(u)
+				})
+			})
+		}))
+	}
+	if _, err := run.Run(ctx, db, tagged("refused@example.com", 0)); err != refused {
+		t.Fatalf("an Atomic whose next refuses = %v; want its error unchanged", err)
+	}
+	if n := usersCount(t, db, "refused@example.com"); n != 0 || tagsCount(t, db) != 0 {
+		t.Errorf("a refused Atomic left %d users and %d tags; want none", n, tagsCount(t, db))
+	}
+	u, err := run.Run(ctx, db, tagged("kept@example.com", 1))
+	if err != nil || u.Email != "kept@example.com" || usersCount(t, db, "kept@example.com") != 1 || tagsCount(t, db) != 1 {
+		t.Errorf("an Atomic whose next yields its row = %+v, %v; want the user and its tag committed", u, err)
+	}
+}
+
+func firstOf(ids []int) int { return ids[0] }
+
+// TestParallelPanicInsideAtomic proves on SQLite what spec
+// §generated-query-surface says of a panic: a next that panics inside a Parallel inside
+// an Atomic raises its panic on the goroutine that performs the effect,
+// never ending the process, the transaction rolls back, and the one
+// connection is free for the next statement.
+func TestParallelPanicInsideAtomic(t *testing.T) {
+	ctx := context.Background()
+	db := newDB(t)
+	broken := rt.Then(UserCreate(UserNew().EmailSet("broken@example.com").NameSet("Bo")), func(u User) rt.Effect[User] {
+		return UserGet(firstOf(nil))
+	})
+	var raised any
+	func() {
+		defer func() { raised = recover() }()
+		_, _ = run.Run(ctx, db, rt.Atomic(rt.All(userTagsCreate("sibling@example.com", "go"), broken)))
+	}()
+	err, ok := raised.(error)
+	var re runtime.Error
+	if !ok || !errors.As(err, &re) || !strings.Contains(err.Error(), "itest.firstOf") {
+		t.Fatalf("a panicking next inside a Parallel raised %v; want the runtime error with its stack on this goroutine", raised)
+	}
+	bounded, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	n, err := run.Run(bounded, db, UserCount())
+	if err != nil || n != 0 || tagsCount(t, db) != 0 {
+		t.Errorf("after the panic the database holds %d users and %d tags, %v; want the transaction rolled back and the connection free", n, tagsCount(t, db), err)
+	}
+}
+
+type rogue struct{ rt.Exec }
+
+func (rogue) Perform(ctx context.Context, x rt.Executor) (int64, error) {
+	return x.Exec(ctx, "DELETE FROM users", nil)
+}
+
+// TestEffectSealedAgainstEmbedding proves the seal of spec
+// §generated-query-surface: a type of another package that embeds an
+// effect kind and declares a Perform of its own performs, and
+// describes, as the kind it embeds, so it never holds the executor.
+func TestEffectSealedAgainstEmbedding(t *testing.T) {
+	ctx := context.Background()
+	db := newDB(t)
+	seedUser(t, db, "stays@example.com")
+	e := rogue{rt.Exec{SQL: "UPDATE users SET name = name WHERE id = 0"}}
+	if n, err := run.Run(ctx, db, rt.Atomic[int64](e)); err != nil || n != 0 {
+		t.Fatalf("the embedding type = %d, %v; want the embedded Exec's 0 rows", n, err)
+	}
+	if n := usersCount(t, db, "stays@example.com"); n != 1 {
+		t.Errorf("%d users after the embedding type ran; want its own Perform never called", n)
+	}
+	if rt.Describe(e) != rt.Describe(e.Exec) {
+		t.Errorf("the embedding type describes as %q; want the Exec's %q", rt.Describe(e), rt.Describe(e.Exec))
 	}
 }

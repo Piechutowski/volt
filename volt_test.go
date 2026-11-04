@@ -295,7 +295,13 @@ func TestResponseValues(t *testing.T) {
 	}
 	count := func(n []int) int { return len(n) }
 	if !Same(Then(rt.Map(q, count), func(int) Response { return NoContent() }), Then(rt.Map(q, func([]int) int { return 0 }), func(int) Response { return NoContent() })) || Same(Then(rt.Map(q, count), func(int) Response { return NoContent() }), Then(q, next)) {
-		t.Error("Same disagrees on a Map: it compares by its inner effect")
+		t.Error("Same disagrees on a Map: it compares by its kind and its inner effect")
+	}
+	if !Same(Then(rt.Pure[int64](1), done), Then(rt.Pure[int64](1), done)) || Same(Then(rt.Pure[int64](1), done), Then(rt.Pure[int64](2), done)) {
+		t.Error("Same disagrees on a Pure: it compares by its value")
+	}
+	if !Same(Then(rt.Fail[int64](errors.New("full")), done), Then(rt.Fail[int64](errors.New("full")), done)) || Same(Then(rt.Fail[int64](errors.New("full")), done), Then(rt.Fail[int64](errors.New("closed")), done)) {
+		t.Error("Same disagrees on a Fail: it compares by its error's message")
 	}
 	rec := httptest.NewRecorder()
 	Handler("GET /x", func(Request) Response { return HTML([]byte("<p>hi</p>")) }, nil, nil).ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -33,6 +35,29 @@ func relinkHandler(email, next string) volt.HandlerFunc {
 		return volt.Then(rt.Atomic(rt.Then(db.UserCreate(db.UserNew().EmailSet(email)), func(db.User) rt.Effect[db.User] {
 			return db.UserCreate(db.UserNew().EmailSet(next))
 		})), func(u db.User) volt.Response { return volt.Created(u) })
+	}
+}
+
+func cappedSignupHandler(email string, most int64) volt.HandlerFunc {
+	return func(r volt.Request) volt.Response {
+		return volt.Then(rt.Atomic(rt.Then(db.UserCreate(db.UserNew().EmailSet(email)), func(u db.User) rt.Effect[db.User] {
+			return rt.Then(db.UserCount(), func(n int64) rt.Effect[db.User] {
+				if n > most {
+					return rt.Fail[db.User](volt.Error(http.StatusConflict, "the blog is full"))
+				}
+				return rt.Pure(u)
+			})
+		})), func(u db.User) volt.Response { return volt.Created(u) })
+	}
+}
+
+func firstOf(ids []int) int { return ids[0] }
+
+func brokenSignupHandler(email string) volt.HandlerFunc {
+	return func(r volt.Request) volt.Response {
+		return volt.Then(rt.Atomic(rt.All(rt.Then(db.UserCreate(db.UserNew().EmailSet(email)), func(db.User) rt.Effect[db.User] {
+			return db.UserGet(firstOf(nil))
+		}))), func([]any) volt.Response { return volt.NoContent() })
 	}
 }
 
@@ -95,5 +120,66 @@ func TestAtomicThroughTheShim(t *testing.T) {
 	}
 	if volt.Same(signupHandler("five@example.com", "a")(r), signupHandler("six@example.com", "a")(r)) {
 		t.Error("continuations over two first effects compare the same")
+	}
+}
+
+// TestAtomicRefusalAndPanicThroughTheShim proves rt.Fail, rt.Pure and a
+// panicking next through the shim (spec §generated-query-surface): a
+// next that refuses what it read answers its HTTPError's 409 through
+// the route's error handler with the user rolled back, one with nothing
+// left to perform commits, and a next that panics inside an rt.All
+// ends its request alone, the server serving the next one and nothing
+// of the panicking request stored.
+func TestAtomicRefusalAndPanicThroughTheShim(t *testing.T) {
+	ctx := context.Background()
+	dbh := fixtureDB()
+	defer dbh.Close()
+	stored := func(email string) bool {
+		t.Helper()
+		_, err := run.Run(ctx, dbh, db.UserGetByEmail(email))
+		if err != nil && !errors.Is(err, rt.ErrNotFound) {
+			t.Fatal(err)
+		}
+		return err == nil
+	}
+	mux := http.NewServeMux()
+	for pattern, h := range map[string]volt.HandlerFunc{
+		"POST /full":   cappedSignupHandler("full@example.com", 1),
+		"POST /room":   cappedSignupHandler("room@example.com", 2),
+		"POST /broken": brokenSignupHandler("broken@example.com"),
+	} {
+		mux.Handle(pattern, volt.Handler(pattern, h, app.Errors, run.Performer(dbh)))
+	}
+	srv := httptest.NewUnstartedServer(mux)
+	srv.Config.ErrorLog = log.New(io.Discard, "", 0)
+	srv.Start()
+	defer srv.Close()
+	post := func(path string) (*http.Response, error) {
+		resp, err := srv.Client().Post(srv.URL+path, "application/json", nil)
+		if err == nil {
+			resp.Body.Close()
+		}
+		return resp, err
+	}
+
+	resp, err := post("/full")
+	if err != nil || resp.StatusCode != http.StatusConflict || resp.Header.Get("X-Error-Handler") != "app" {
+		t.Fatalf("a refusing next = %v, %v; want 409 through the error handler", resp, err)
+	}
+	if stored("full@example.com") {
+		t.Error("the user stayed after its next refused")
+	}
+	if resp, err := post("/room"); err != nil || resp.StatusCode != http.StatusCreated || !stored("room@example.com") {
+		t.Fatalf("a next with nothing left to perform = %v, %v; want 201 with the user stored", resp, err)
+	}
+
+	if resp, err := post("/broken"); err == nil {
+		t.Fatalf("a next panicking inside an rt.All answered %d; want its request ended", resp.StatusCode)
+	}
+	if stored("broken@example.com") {
+		t.Error("the panicking request's user stayed")
+	}
+	if resp, err := post("/full"); err != nil || resp.StatusCode != http.StatusConflict {
+		t.Fatalf("the server after a panic = %v, %v; want it serving the next request", resp, err)
 	}
 }

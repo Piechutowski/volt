@@ -77,7 +77,7 @@ Go idioms chosen, one per need, so the code stays uniform:
 | Immutable records | Structs with unexported fields, exported constructors, `With*` methods on value receivers. |
 | Copy on write | `slices.Clone` before appending to a slice that came from outside; never `append` to an argument. |
 | Optional values | `rt.Null[T]`; never a pointer in a public API. |
-| Effects | A small set of effect types, each implementing a sealed `Effect[T]` with one `run` method the runner calls. |
+| Effects | A small set of effect kinds in `nao/rt`, each implementing a sealed `Effect[T]` whose methods are unexported, so a type of another package can only embed a kind and then performs as it; the runner performs one through `rt.Perform`, `rt.Describe` is the one switch over the kinds, and a test holds the kinds to it. |
 
 ### What Go cannot check, and how Volt closes it
 
@@ -121,11 +121,11 @@ A goroutine is an effect, owned by whoever owns a lifetime:
 | Kind | Owner |
 |---|---|
 | Serving requests in parallel | `net/http`, one goroutine per request; pure handlers make it lock-free |
-| Parallel effects inside one request | the shim, through `volt.All(e1, e2, ...)` over `errgroup` |
+| Parallel effects inside one request | the runner, through `rt.All(e1, e2, ...)` over `sync.WaitGroup.Go`, which joins every step and raises a step's panic again on the goroutine that performs it |
 | Work after the request | a job row written in the handler's transaction, run by the worker |
 | Periodic loops | `main`, through `volt.Every` |
 | Push to clients | the event broker; `volt.Publish` is an effect performed after commit |
-| CPU parallelism inside pure code | `rt.ParallelMap` over `sync.WaitGroup.Go`, which joins before returning |
+| CPU parallelism inside pure code | `rt.ParallelMap` over `sync.WaitGroup.Go`, which joins before returning and raises a panic of `f` again on the caller's goroutine |
 | Cancellation and timeouts | the shim's loop, which is the only holder of the context |
 
 Handlers own no lifetime, so they start nothing.

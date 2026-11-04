@@ -70,7 +70,7 @@ func (db DB) Close() error {
 // §values-and-effects): the one place a described effect meets the
 // database.
 func Run[T any](ctx context.Context, db DB, e rt.Effect[T]) (T, error) {
-	return e.Perform(ctx, poolExecutor{db})
+	return rt.Perform(ctx, poolExecutor{db}, e)
 }
 
 type poolExecutor struct{ db DB }
@@ -214,7 +214,7 @@ func (db DB) Statements() int { return db.cache.Len() }
 
 // Perform is Run for an effect of any result, as the shim holds one.
 func Perform(ctx context.Context, db DB, e rt.AnyEffect) (any, error) {
-	return e.PerformAny(ctx, poolExecutor{db})
+	return rt.PerformAny(ctx, poolExecutor{db}, e)
 }
 
 // Performer is the function the generated router hands the shim: Perform

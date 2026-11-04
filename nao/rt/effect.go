@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -13,8 +15,9 @@ import (
 // driver's no-rows error to it.
 var ErrNotFound = errors.New("rt: no row")
 
-// ErrNoEffect is what a Then, a Map or an Atomic over no effect yields,
-// and a Then whose next returns none (spec §generated-query-surface).
+// ErrNoEffect is what an effect built over nothing yields (spec
+// §generated-query-surface): a nil effect where one is performed, a nil
+// next or f, and a Fail of a nil error.
 var ErrNoEffect = errors.New("rt: no effect to perform")
 
 // Row is what a generated scan function reads: one row's columns.
@@ -46,23 +49,46 @@ type Executor interface {
 // Effect is a computation over the database described as a value and
 // performed by the runner (spec §values-and-effects): a Query, a
 // Lookup, a Write, an Exec, a With, a Transaction, an All, a Then, a
-// Map or an Atomic, nothing else, since effect is unexported. T is what
-// performing it yields.
+// Map, an Atomic, a Pure or a Fail. Its methods are unexported, so the
+// set is sealed: a type of another package satisfies it only by
+// embedding one of these, and then performs as that one (spec
+// §generated-query-surface). T is what performing it yields.
 type Effect[T any] interface {
-	Perform(ctx context.Context, x Executor) (T, error)
-	PerformAny(ctx context.Context, x Executor) (any, error)
-	effect()
+	perform(ctx context.Context, x Executor) (T, error)
+	performAny(ctx context.Context, x Executor) (any, error)
 }
 
 // AnyEffect is an Effect of any result, as Tx and All take them.
 type AnyEffect interface {
-	PerformAny(ctx context.Context, x Executor) (any, error)
-	effect()
+	performAny(ctx context.Context, x Executor) (any, error)
+}
+
+// Perform performs e over x and returns what it yields (spec
+// §generated-query-surface): with PerformAny, the only functions that
+// hand an effect an executor, which the runner calls. A nil e yields
+// ErrNoEffect.
+func Perform[T any](ctx context.Context, x Executor, e Effect[T]) (T, error) {
+	if e == nil {
+		var zero T
+		return zero, ErrNoEffect
+	}
+	return e.perform(ctx, x)
+}
+
+// PerformAny is Perform for an effect of any result, as the shim holds
+// one.
+func PerformAny(ctx context.Context, x Executor, e AnyEffect) (any, error) {
+	if e == nil {
+		return nil, ErrNoEffect
+	}
+	return e.performAny(ctx, x)
 }
 
 // Query is zero or more rows of T (spec §generated-query-surface): a
-// statement, its arguments and the scan of one row. A query that failed
-// to render carries its error in Err; one with no statement yields nil.
+// statement, its arguments and the scan of one row, every row scanned
+// into a slice that is empty, never nil, unless the query has no
+// statement, which yields nil. A query that failed to render carries
+// its error in Err.
 type Query[T any] struct {
 	SQL  string
 	Args []any
@@ -70,11 +96,7 @@ type Query[T any] struct {
 	Err  error
 }
 
-func (Query[T]) effect() {}
-
-// Perform runs the statement and scans every row; the result is an
-// empty slice, never nil, unless the query has no statement.
-func (q Query[T]) Perform(ctx context.Context, x Executor) ([]T, error) {
+func (q Query[T]) perform(ctx context.Context, x Executor) ([]T, error) {
 	if q.Err != nil {
 		return nil, q.Err
 	}
@@ -97,8 +119,7 @@ func (q Query[T]) Perform(ctx context.Context, x Executor) ([]T, error) {
 	return out, rows.Err()
 }
 
-// PerformAny is Perform with its result as any.
-func (q Query[T]) PerformAny(ctx context.Context, x Executor) (any, error) { return q.Perform(ctx, x) }
+func (q Query[T]) performAny(ctx context.Context, x Executor) (any, error) { return q.perform(ctx, x) }
 
 // Lookup is exactly one row of T, or ErrNotFound (spec
 // §generated-query-surface). A lookup that failed to render carries its
@@ -110,10 +131,7 @@ type Lookup[T any] struct {
 	Err  error
 }
 
-func (Lookup[T]) effect() {}
-
-// Perform runs the statement and scans its one row.
-func (l Lookup[T]) Perform(ctx context.Context, x Executor) (T, error) {
+func (l Lookup[T]) perform(ctx context.Context, x Executor) (T, error) {
 	if l.Err != nil {
 		var zero T
 		return zero, l.Err
@@ -121,8 +139,7 @@ func (l Lookup[T]) Perform(ctx context.Context, x Executor) (T, error) {
 	return l.Scan(x.QueryRow(ctx, l.SQL, l.Args))
 }
 
-// PerformAny is Perform with its result as any.
-func (l Lookup[T]) PerformAny(ctx context.Context, x Executor) (any, error) { return l.Perform(ctx, x) }
+func (l Lookup[T]) performAny(ctx context.Context, x Executor) (any, error) { return l.perform(ctx, x) }
 
 // Write is an insert or an update of a changeset's marks that returns
 // the stored row (spec §changesets): a Write built from an invalid
@@ -137,11 +154,7 @@ type Write[M any] struct {
 	Err  error
 }
 
-func (Write[M]) effect() {}
-
-// Perform runs the statement, when there is one, and scans the stored
-// row.
-func (w Write[M]) Perform(ctx context.Context, x Executor) (M, error) {
+func (w Write[M]) perform(ctx context.Context, x Executor) (M, error) {
 	if w.Err != nil {
 		var zero M
 		return zero, w.Err
@@ -152,8 +165,7 @@ func (w Write[M]) Perform(ctx context.Context, x Executor) (M, error) {
 	return w.Scan(x.QueryRow(ctx, w.SQL, w.Args))
 }
 
-// PerformAny is Perform with its result as any.
-func (w Write[M]) PerformAny(ctx context.Context, x Executor) (any, error) { return w.Perform(ctx, x) }
+func (w Write[M]) performAny(ctx context.Context, x Executor) (any, error) { return w.perform(ctx, x) }
 
 // Insert is the Write that inserts the marked columns of c, DEFAULT
 // VALUES when none, and returns the stored row (spec §changesets): an
@@ -196,10 +208,7 @@ type Exec struct {
 	Err   error
 }
 
-func (Exec) effect() {}
-
-// Perform runs the statement and reports the rows affected.
-func (e Exec) Perform(ctx context.Context, x Executor) (int64, error) {
+func (e Exec) perform(ctx context.Context, x Executor) (int64, error) {
 	if e.Err != nil {
 		return 0, e.Err
 	}
@@ -216,12 +225,13 @@ func (e Exec) Perform(ctx context.Context, x Executor) (int64, error) {
 	return n, nil
 }
 
-// PerformAny is Perform with its result as any.
-func (e Exec) PerformAny(ctx context.Context, x Executor) (any, error) { return e.Perform(ctx, x) }
+func (e Exec) performAny(ctx context.Context, x Executor) (any, error) { return e.perform(ctx, x) }
 
 // Transaction runs its steps in order inside one transaction, all or
 // nothing, and yields their results in order (spec
-// §generated-query-surface).
+// §generated-query-surface): the first error rolls back and is
+// returned, and a nil step yields ErrNoEffect before the transaction
+// opens.
 type Transaction struct {
 	Steps []AnyEffect
 }
@@ -229,15 +239,14 @@ type Transaction struct {
 // Tx is the Transaction of steps.
 func Tx(steps ...AnyEffect) Transaction { return Transaction{Steps: steps} }
 
-func (Transaction) effect() {}
-
-// Perform runs every step inside one transaction; the first error rolls
-// back and is returned.
-func (t Transaction) Perform(ctx context.Context, x Executor) ([]any, error) {
+func (t Transaction) perform(ctx context.Context, x Executor) ([]any, error) {
+	if slices.Contains(t.Steps, nil) {
+		return nil, ErrNoEffect
+	}
 	out := make([]any, len(t.Steps))
 	err := x.Transaction(ctx, func(tx Executor) error {
 		for i, s := range t.Steps {
-			v, err := s.PerformAny(ctx, tx)
+			v, err := s.performAny(ctx, tx)
 			if err != nil {
 				return err
 			}
@@ -251,14 +260,17 @@ func (t Transaction) Perform(ctx context.Context, x Executor) ([]any, error) {
 	return out, nil
 }
 
-// PerformAny is Perform with its result as any.
-func (t Transaction) PerformAny(ctx context.Context, x Executor) (any, error) {
-	return t.Perform(ctx, x)
+func (t Transaction) performAny(ctx context.Context, x Executor) (any, error) {
+	return t.perform(ctx, x)
 }
 
-// Parallel runs its steps at once, each on its own goroutine, and
-// yields their results in order (spec §values-and-effects); the first
-// error cancels the rest and is returned.
+// Parallel runs its steps at once, each on its own goroutine, joins
+// them and yields their results in order (spec
+// §generated-query-surface): the first error cancels the rest and is
+// returned. A step that panics cancels the rest too, and its panic is
+// raised again, with the step's stack, on the goroutine that performs
+// the Parallel once every step has joined, so it never ends the
+// process; a nil step yields ErrNoEffect before any step runs.
 type Parallel struct {
 	Steps []AnyEffect
 }
@@ -266,41 +278,80 @@ type Parallel struct {
 // All is the Parallel of steps.
 func All(steps ...AnyEffect) Parallel { return Parallel{Steps: steps} }
 
-func (Parallel) effect() {}
-
-// Perform runs every step at once and joins them before returning; the
-// error returned is the one that cancelled the rest.
-func (p Parallel) Perform(ctx context.Context, x Executor) ([]any, error) {
+func (p Parallel) perform(ctx context.Context, x Executor) ([]any, error) {
+	if slices.Contains(p.Steps, nil) {
+		return nil, ErrNoEffect
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	out := make([]any, len(p.Steps))
 	var mu sync.Mutex
 	var first error
-	var wg sync.WaitGroup
-	for i, s := range p.Steps {
-		wg.Go(func() {
-			v, err := s.PerformAny(ctx, x)
-			if err != nil {
-				mu.Lock()
-				if first == nil {
-					first = err
-				}
-				mu.Unlock()
-				cancel()
-				return
+	stepsJoin(len(p.Steps), cancel, func(i int) {
+		v, err := p.Steps[i].performAny(ctx, x)
+		if err != nil {
+			mu.Lock()
+			if first == nil {
+				first = err
 			}
-			out[i] = v
-		})
-	}
-	wg.Wait()
+			mu.Unlock()
+			cancel()
+			return
+		}
+		out[i] = v
+	})
 	if first != nil {
 		return nil, first
 	}
 	return out, nil
 }
 
-// PerformAny is Perform with its result as any.
-func (p Parallel) PerformAny(ctx context.Context, x Executor) (any, error) { return p.Perform(ctx, x) }
+func (p Parallel) performAny(ctx context.Context, x Executor) (any, error) { return p.perform(ctx, x) }
+
+func stepsJoin(n int, cancel func(), step func(i int)) {
+	var mu sync.Mutex
+	var raised *stepPanic
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Go(func() {
+			defer func() {
+				v := recover()
+				if v == nil {
+					return
+				}
+				p, ok := v.(*stepPanic)
+				if !ok {
+					p = &stepPanic{value: v, stack: debug.Stack()}
+				}
+				mu.Lock()
+				if raised == nil {
+					raised = p
+				}
+				mu.Unlock()
+				cancel()
+			}()
+			step(i)
+		})
+	}
+	wg.Wait()
+	if raised != nil {
+		panic(raised)
+	}
+}
+
+type stepPanic struct {
+	value any
+	stack []byte
+}
+
+func (p *stepPanic) Error() string {
+	return fmt.Sprintf("%v\n\nraised again from the goroutine of a parallel step:\n%s", p.value, p.stack)
+}
+
+func (p *stepPanic) Unwrap() error {
+	err, _ := p.value.(error)
+	return err
+}
 
 type thenEffect[T, U any] struct {
 	first Effect[T]
@@ -309,22 +360,19 @@ type thenEffect[T, U any] struct {
 
 // Then is e and then the effect next makes of its result, performed on
 // the same executor (spec §generated-query-surface): one step after the
-// other, atomic only inside an Atomic or a Transaction. next is pure: it
-// turns a value into a description and performs nothing.
+// other, the first error stopping it, atomic only inside an Atomic or a
+// Transaction. next is pure: it turns a value into a description and
+// performs nothing.
 func Then[T, U any](e Effect[T], next func(T) Effect[U]) Effect[U] {
 	return thenEffect[T, U]{first: e, next: next}
 }
 
-func (thenEffect[T, U]) effect() {}
-
-// Perform performs the first effect, calls next with its result and
-// performs what next returns; the first error stops it and is returned.
-func (t thenEffect[T, U]) Perform(ctx context.Context, x Executor) (U, error) {
+func (t thenEffect[T, U]) perform(ctx context.Context, x Executor) (U, error) {
 	var zero U
-	if t.first == nil {
+	if t.first == nil || t.next == nil {
 		return zero, ErrNoEffect
 	}
-	v, err := t.first.Perform(ctx, x)
+	v, err := t.first.perform(ctx, x)
 	if err != nil {
 		return zero, err
 	}
@@ -332,12 +380,11 @@ func (t thenEffect[T, U]) Perform(ctx context.Context, x Executor) (U, error) {
 	if e == nil {
 		return zero, ErrNoEffect
 	}
-	return e.Perform(ctx, x)
+	return e.perform(ctx, x)
 }
 
-// PerformAny is Perform with its result as any.
-func (t thenEffect[T, U]) PerformAny(ctx context.Context, x Executor) (any, error) {
-	return t.Perform(ctx, x)
+func (t thenEffect[T, U]) performAny(ctx context.Context, x Executor) (any, error) {
+	return t.perform(ctx, x)
 }
 
 type mapEffect[T, U any] struct {
@@ -346,29 +393,25 @@ type mapEffect[T, U any] struct {
 }
 
 // Map is e with its result through f (spec §generated-query-surface); f
-// is pure.
+// is pure, from a value to a value.
 func Map[T, U any](e Effect[T], f func(T) U) Effect[U] {
 	return mapEffect[T, U]{inner: e, f: f}
 }
 
-func (mapEffect[T, U]) effect() {}
-
-// Perform performs the inner effect and yields f of its result.
-func (m mapEffect[T, U]) Perform(ctx context.Context, x Executor) (U, error) {
+func (m mapEffect[T, U]) perform(ctx context.Context, x Executor) (U, error) {
 	var zero U
-	if m.inner == nil {
+	if m.inner == nil || m.f == nil {
 		return zero, ErrNoEffect
 	}
-	v, err := m.inner.Perform(ctx, x)
+	v, err := m.inner.perform(ctx, x)
 	if err != nil {
 		return zero, err
 	}
 	return m.f(v), nil
 }
 
-// PerformAny is Perform with its result as any.
-func (m mapEffect[T, U]) PerformAny(ctx context.Context, x Executor) (any, error) {
-	return m.Perform(ctx, x)
+func (m mapEffect[T, U]) performAny(ctx context.Context, x Executor) (any, error) {
+	return m.perform(ctx, x)
 }
 
 type atomicEffect[T any] struct {
@@ -381,16 +424,13 @@ type atomicEffect[T any] struct {
 // joins the transaction already open.
 func Atomic[T any](e Effect[T]) Effect[T] { return atomicEffect[T]{inner: e} }
 
-func (atomicEffect[T]) effect() {}
-
-// Perform performs the inner effect over the executor's transaction.
-func (a atomicEffect[T]) Perform(ctx context.Context, x Executor) (T, error) {
+func (a atomicEffect[T]) perform(ctx context.Context, x Executor) (T, error) {
 	var out T
 	if a.inner == nil {
 		return out, ErrNoEffect
 	}
 	err := x.Transaction(ctx, func(tx Executor) error {
-		v, err := a.inner.Perform(ctx, tx)
+		v, err := a.inner.perform(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -404,21 +444,55 @@ func (a atomicEffect[T]) Perform(ctx context.Context, x Executor) (T, error) {
 	return out, nil
 }
 
-// PerformAny is Perform with its result as any.
-func (a atomicEffect[T]) PerformAny(ctx context.Context, x Executor) (any, error) {
-	return a.Perform(ctx, x)
+func (a atomicEffect[T]) performAny(ctx context.Context, x Executor) (any, error) {
+	return a.perform(ctx, x)
+}
+
+type pureEffect[T any] struct {
+	v T
+}
+
+// Pure is the effect that performs nothing and yields v (spec
+// §generated-query-surface), what a next returns when nothing is left
+// to perform.
+func Pure[T any](v T) Effect[T] { return pureEffect[T]{v: v} }
+
+func (p pureEffect[T]) perform(context.Context, Executor) (T, error) { return p.v, nil }
+
+func (p pureEffect[T]) performAny(ctx context.Context, x Executor) (any, error) {
+	return p.perform(ctx, x)
+}
+
+type failEffect[T any] struct {
+	err error
+}
+
+// Fail is the effect that performs nothing and fails with err (spec
+// §generated-query-surface), what a next returns when it refuses what
+// it read; inside an Atomic it rolls back what the Atomic performed. A
+// Fail of a nil err yields ErrNoEffect.
+func Fail[T any](err error) Effect[T] { return failEffect[T]{err: err} }
+
+func (f failEffect[T]) perform(context.Context, Executor) (T, error) {
+	var zero T
+	if f.err == nil {
+		return zero, ErrNoEffect
+	}
+	return zero, f.err
+}
+
+func (f failEffect[T]) performAny(ctx context.Context, x Executor) (any, error) {
+	return f.perform(ctx, x)
 }
 
 // ParallelMap applies f to every element of xs at once, one goroutine
 // per element, and joins them before returning the results in order
-// (spec §values-and-effects): CPU parallelism inside pure code.
+// (spec §values-and-effects): CPU parallelism inside pure code. A panic
+// of f is raised again, with its goroutine's stack, on the caller's
+// once every element has joined, as a Parallel's step's is.
 func ParallelMap[A, B any](xs []A, f func(A) B) []B {
 	out := make([]B, len(xs))
-	var wg sync.WaitGroup
-	for i, x := range xs {
-		wg.Go(func() { out[i] = f(x) })
-	}
-	wg.Wait()
+	stepsJoin(len(xs), func() {}, func(i int) { out[i] = f(xs[i]) })
 	return out
 }
 
@@ -433,8 +507,9 @@ func ScanOne[T any](r Row) (T, error) {
 // Describe spells an effect for comparison and logs (spec
 // §requests-and-responses): its kind, statement and arguments, a
 // transaction's or a parallel's steps in order, an error it carries, a
-// Then by its first effect and a Map or an Atomic by its inner one,
-// since a function cannot be spelled.
+// Then by its kind and its first effect and a Map or an Atomic by its
+// kind and its inner one, since a function cannot be spelled, a Pure
+// by its value and a Fail by its error.
 func Describe(e AnyEffect) string {
 	switch e := e.(type) {
 	case describer:
@@ -472,3 +547,5 @@ func (e Exec) describe() string      { return describeStatement("exec", e.SQL, e
 func (t thenEffect[T, U]) describe() string { return "then(" + Describe(t.first) + ")" }
 func (m mapEffect[T, U]) describe() string  { return "map(" + Describe(m.inner) + ")" }
 func (a atomicEffect[T]) describe() string  { return "atomic(" + Describe(a.inner) + ")" }
+func (p pureEffect[T]) describe() string    { return fmt.Sprintf("pure %v", p.v) }
+func (f failEffect[T]) describe() string    { return fmt.Sprintf("fail %v", f.err) }
