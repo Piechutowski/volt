@@ -25,10 +25,16 @@ func UserLatest(limit int) rt.Query[User] {
 	return rt.Query[User]{SQL: voltUserLatestSQL, Args: []any{limit}, Scan: voltUserScan, Err: rt.LimitCheck(limit)}
 }
 
-const voltUserDescribedSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE ((? IS NULL OR EXISTS (SELECT 1 FROM "profiles" AS "profiles" WHERE "profiles"."user_id" = "users"."id" AND ("profiles"."bio" LIKE ?))) AND (? IS NULL OR "id" >= ?)) ORDER BY "id" ASC`
+const voltUserDescribedSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE ((? IS NULL OR EXISTS (SELECT 1 FROM "profiles" AS "profiles" WHERE "profiles"."user_id" = "users"."id" AND (? IS NULL OR "profiles"."bio" LIKE ?))) AND (? IS NULL OR "id" >= ?)) ORDER BY "id" ASC`
 
 func UserDescribed(bio rt.Null[string], from rt.Null[int]) rt.Query[User] {
-	return rt.Query[User]{SQL: voltUserDescribedSQL, Args: []any{bio, bio, from, from}, Scan: voltUserScan}
+	return rt.Query[User]{SQL: voltUserDescribedSQL, Args: []any{bio, bio, bio, from, from}, Scan: voltUserScan}
+}
+
+const voltUserChosenSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE (? IS NULL OR "id" IN (SELECT value FROM json_each(?))) ORDER BY "id" ASC`
+
+func UserChosen(ids rt.Null[[]int]) rt.Query[User] {
+	return rt.Query[User]{SQL: voltUserChosenSQL, Args: []any{rt.JSONListOptional(ids), rt.JSONListOptional(ids)}, Scan: voltUserScan}
 }
 
 const voltMsRevenueBrowseSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "year" = ? ORDER BY "id" ASC`

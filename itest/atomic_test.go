@@ -1,16 +1,19 @@
 package itest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -207,23 +210,12 @@ func slowSignupHandler(email string, mapped bool) volt.HandlerFunc {
 // and before its commit (spec §generated-query-surface, the runner, and
 // §route-loads): the transaction fails with the context's error, which
 // the shim answers with a 504 through the error handler, and nothing
-// commits. The database is a file, since database/sql drops the
-// connection of a transaction its context ended, and with it an
-// in-memory database.
+// commits. The database is in memory, which lives as long as the one
+// connection run.Open pins, so the test proves that a transaction its
+// context ended keeps that connection.
 func TestAtomicTimeoutAnswers504(t *testing.T) {
 	ctx := context.Background()
-	dbh, err := run.Open("sqlite3", filepath.Join(t.TempDir(), "blog.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer dbh.Close()
-	ddl, err := os.ReadFile(filepath.Join("blog", "db", "volt_schema.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := dbh.Pool().Exec(string(ddl)); err != nil {
-		t.Fatal(err)
-	}
+	dbh := memoryBlog(t)
 	for _, mapped := range []bool{true, false} {
 		email := fmt.Sprintf("slow-%t@example.com", mapped)
 		rec := httptest.NewRecorder()
@@ -234,5 +226,54 @@ func TestAtomicTimeoutAnswers504(t *testing.T) {
 		if _, err := run.Run(ctx, dbh, db.UserGetByEmail(email)); !errors.Is(err, rt.ErrNotFound) {
 			t.Errorf("the user of the timed-out Atomic (Map %t): %v; want it never committed", mapped, err)
 		}
+	}
+}
+
+func memoryBlog(t *testing.T) run.DB {
+	t.Helper()
+	dbh, err := run.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { dbh.Close() })
+	ddl, err := os.ReadFile(filepath.Join("blog", "db", "volt_schema.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dbh.Pool().Exec(string(ddl)); err != nil {
+		t.Fatal(err)
+	}
+	return dbh
+}
+
+// TestClientLeavingMidAtomicAnswers499 proves a request whose client
+// closed it while an Atomic ran (spec §requests-and-responses): the
+// transaction rolls back, the shim answers 499 through the error
+// handler, which logs no handler error, and the database keeps the
+// connection, its rows and its foreign keys.
+func TestClientLeavingMidAtomicAnswers499(t *testing.T) {
+	ctx := context.Background()
+	dbh := memoryBlog(t)
+	var logged bytes.Buffer
+	defer slog.SetDefault(slog.Default())
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+	hctx, cancel := context.WithCancel(ctx)
+	time.AfterFunc(20*time.Millisecond, cancel)
+	rec := httptest.NewRecorder()
+	volt.Handler("POST /slow", slowSignupHandler("left@example.com", false), app.Errors, run.Performer(dbh)).ServeHTTP(rec, httptest.NewRequestWithContext(hctx, "POST", "/slow", nil))
+	if rec.Code != 499 || rec.Header().Get("X-Error-Handler") != "app" {
+		t.Errorf("a request its client left mid-Atomic = %d via %q %s; want 499 through the error handler", rec.Code, rec.Header().Get("X-Error-Handler"), rec.Body.String())
+	}
+	if strings.Contains(logged.String(), "level=ERROR") {
+		t.Errorf("a client leaving was logged as an error:\n%s", logged.String())
+	}
+	if _, err := run.Run(ctx, dbh, db.UserGetByEmail("left@example.com")); !errors.Is(err, rt.ErrNotFound) {
+		t.Errorf("the user of the Atomic its client left: %v; want it never committed", err)
+	}
+	if _, err := run.Run(ctx, dbh, db.ProfileCreate(db.ProfileNew().UserIDSet(999).BioSet("x"))); err == nil {
+		t.Error("a profile of a user that does not exist was stored after the client left; want foreign_keys = ON to refuse it")
+	}
+	if _, err := run.Run(ctx, dbh, db.UserCreate(db.UserNew().EmailSet("after@example.com"))); err != nil {
+		t.Errorf("the in-memory database after the client left: %v; want it serving", err)
 	}
 }

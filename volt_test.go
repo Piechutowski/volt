@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -268,6 +269,8 @@ func TestLoadRescue(t *testing.T) {
 	}
 }
 
+func done0(int) Response { return NoContent() }
+
 func TestResponseValues(t *testing.T) {
 	a := Render(1).WithHeader("X-A", "1").WithCookie(http.Cookie{Name: "c", Value: "v"})
 	b := a.WithStatus(202)
@@ -284,6 +287,15 @@ func TestResponseValues(t *testing.T) {
 	}
 	if !Same(Fail(errors.New("x")), Fail(errors.New("x"))) || Same(Then(q, next), Render(1)) {
 		t.Error("Same disagrees on failures")
+	}
+	if Same(Fail(Error(409, "taken")), Fail(Error(422, "taken"))) || Same(Then(rt.Fail[int](Error(409, "taken")), done0), Then(rt.Fail[int](Error(422, "taken")), done0)) {
+		t.Error("Same calls two failures of one message and two statuses the same")
+	}
+	if nan := math.NaN(); !Same(Render(nan), Render(nan)) || !Same(Render([]float64{nan}), Render([]float64{nan})) {
+		t.Error("Same tells a body holding a NaN apart from itself")
+	}
+	if Same(Then(rt.Query[int]{SQL: "q", Args: []any{"a b", "c"}}, next), Then(rt.Query[int]{SQL: "q", Args: []any{"a", "b c"}}, next)) {
+		t.Error("Same compares arguments as they print, not as they are")
 	}
 	done := func(int64) Response { return NoContent() }
 	write := func(sql string) func([]int) rt.Effect[int64] {

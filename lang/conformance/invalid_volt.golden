@@ -312,14 +312,14 @@ app/routes.volt:12:16: error: spec/scopes-and-routes: parameter "id" of db.Autho
 app/routes.volt:13:21: error: spec/query-routes: db.AuthorUpdate loads the row to update by "id", which must be a path parameter of the route (§query-routes)
 app/routes.volt:15:3: error: spec/scopes-and-routes: route GET /api/ranked conflicts with the route at app/routes.volt:14:3: identical method and path shape (§route-conflicts)
 app/routes.volt:16:3: error: spec/scopes-and-routes: reverse-URL helper or client method "AuthorRanked" already produced by the route at app/routes.volt:14:3 (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name
-app/routes.volt:17:44: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name, timeout, body, only
+app/routes.volt:17:44: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name, timeout, body, only, limit, max_limit
 app/routes.volt:19:17: error: spec/scopes-and-routes: path parameter "zzz" is not a parameter of db.AuthorShown (§query-routes)
 app/routes.volt:20:29: error: spec/datasets: only: "posts" is not a member of select "ranked"'s target (§dataset-settings)
 app/routes.volt:20:37: error: spec/settings-whitelists: setting "colour" is not valid on a dataset (§settings-whitelists); valid: strip, only, except
 app/routes.volt:21:19: error: spec/scopes-and-routes: no generated query db.AuthorMissing in package "db" — a query route names a select function or a default CRUD function (Get, List, Create, Update, Delete) (§query-routes)
 app/routes.volt:22:14: error: spec/datasets: no select "missing" in package "db" (§dataset-declaration)
 app/routes.volt:23:14: error: spec/scopes-and-routes: path parameter "nope" is not a parameter of db.AuthorRanked (§query-routes)
-app/routes.volt:24:39: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name, timeout, body, only
+app/routes.volt:24:39: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name, timeout, body, only, limit, max_limit
 app/routes.volt:25:3: error: spec/scopes-and-routes: route GET /api/authors/:id(int) conflicts with the route at app/routes.volt:24:3: identical method and path shape (§route-conflicts)
 app/routes.volt:29:34: error: spec/settings-whitelists: setting "colour" is not valid on resources (§settings-whitelists); valid: api, only, except, param, singular, default
 app/routes.volt:29:67: error: spec/resources: unknown action "bogus" (§the-action-table); valid: index, new, create, show, edit, update, delete
@@ -353,7 +353,7 @@ db/i235_migration_key_null.volt:16:17: error: spec/columns: column "id" carries 
 db/i235_migration_key_null.volt:20:25: error: spec/columns: column "tag" carries pk and null: a key column is never NULL (§columns)
 
 ## i23_route_setting.volt
-app/i23_route_setting.volt:5:14: error: spec/settings-whitelists: setting "pipe" is not valid on a route (§settings-whitelists); valid: name, timeout, body, only
+app/i23_route_setting.volt:5:14: error: spec/settings-whitelists: setting "pipe" is not valid on a route (§settings-whitelists); valid: name, timeout, body, only, limit, max_limit
 
 ## i243_group_takes_table_name.volt
 db/i243_group_takes_table_name.volt:13:7: error: spec/groups: group "users" takes the name of a table: tables and groups share one namespace (§groups)
@@ -609,10 +609,9 @@ app/i361_group_name_case.volt:13:14: error: spec/selects-over-groups: unknown se
 db/schema.volt:10:5: error: spec/validators: validator emailShape must be exported: a validator is part of the package's API, so declare func EmailShape(string) error (§validators)
 
 ## i366_param_named_like_select_local.volt
-app/i366_param_named_like_select_local.volt:10:44: error: spec/selects-over-groups: parameter name "q" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i366_param_named_like_select_local.volt:11:44: error: spec/selects-over-groups: parameter name "rt" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i366_param_named_like_select_local.volt:12:44: error: spec/selects-over-groups: parameter name "voltRows" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i366_param_named_like_select_local.volt:13:45: error: spec/selects-over-groups: parameter name "voltErr" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i366_param_named_like_select_local.volt:10:44: error: spec/selects-over-groups: parameter name "rt" does not work as a Go parameter: it is a name the generated signatures use (ctx, rt, w, r, opts, volt, cs, c, body) (§predicates)
+app/i366_param_named_like_select_local.volt:11:44: error: spec/selects-over-groups: parameter name "voltRows" does not work as a Go parameter: it has the form of the generated locals, volt followed by an upper-case letter and no underscore (§predicates)
+app/i366_param_named_like_select_local.volt:12:45: error: spec/selects-over-groups: parameter name "voltErr" does not work as a Go parameter: it has the form of the generated locals, volt followed by an upper-case letter and no underscore (§predicates)
 
 ## i369_compare_columns_go_type.volt
 app/i369_compare_columns_go_type.volt:11:41: error: spec/selects-over-groups: cannot compare column "hits" (int) with column "score" (float64) (§predicates)
@@ -628,8 +627,8 @@ app/i370_comparison_without_column.volt:11:38: error: spec/selects-over-groups: 
 app/i371_pred_redeclared.volt:11:6: error: spec/predicates: predicate "busy" redeclared (§predicates)
 
 ## i372_param_named_like_builtin.volt
-app/i372_param_named_like_builtin.volt:11:42: error: spec/selects-over-groups: parameter name "nil" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i372_param_named_like_builtin.volt:12:43: error: spec/selects-over-groups: parameter name "append" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i372_param_named_like_builtin.volt:11:42: error: spec/selects-over-groups: parameter name "nil" does not work as a Go parameter: it is nil, append, any or true, which the generated functions use (§predicates)
+app/i372_param_named_like_builtin.volt:12:43: error: spec/selects-over-groups: parameter name "append" does not work as a Go parameter: it is nil, append, any or true, which the generated functions use (§predicates)
 
 ## i373_load_on_query_route
 app/routes.volt:11:3: error: spec/route-loads: a load block belongs to a controller route; db.MetricList is a query route, whose handler is generated (§route-loads)
@@ -650,7 +649,7 @@ app/routes.volt:16:28: error: spec/route-loads: list parameter "ids" of db.Metri
 
 ## i378_load_name_taken
 app/routes.volt:13:3: error: spec/route-loads: load "id" takes the name of a path parameter of the route (§route-loads)
-app/routes.volt:14:3: error: spec/route-loads: load "r" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§route-loads, §route-paths)
+app/routes.volt:14:3: error: spec/route-loads: load "r" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), and not shaped like a generated local (§route-loads, §route-paths)
 app/routes.volt:16:3: error: spec/route-loads: load "metric" is declared twice (first at app/routes.volt:15:3) (§route-loads)
 
 ## i379_timeout_not_seconds
@@ -697,7 +696,7 @@ app/i38_trailing_slash.volt:5:12: error: syntax: '/' must be followed by a path 
 app/routes.volt:7:2: error: spec/scopes-and-routes: Session.Login is reached by routes with different signatures (§handler-references, §scope-loads, §request-bodies, §route-loads): () {} vs () [body: LoginForm] {} (first at app/routes.volt:6:2)
 
 ## i391_load_named_body
-app/routes.volt:12:3: error: spec/route-loads: load "body" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§route-loads, §route-paths)
+app/routes.volt:12:3: error: spec/route-loads: load "body" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), and not shaped like a generated local (§route-loads, §route-paths)
 
 ## i392_param_named_body
 app/routes.volt:11:15: error: spec/scopes-and-routes: path parameter "body" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body
@@ -828,7 +827,7 @@ app/routes.volt:10:12: error: spec/scope-loads: Plain is not a scope load: found
 
 ## i430_scope_load_reserved_name
 app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§imports)
-app/routes.volt:10:7: error: spec/scope-loads: load "body" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§scope-loads, §route-paths)
+app/routes.volt:10:7: error: spec/scope-loads: load "body" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), and not shaped like a generated local (§scope-loads, §route-paths)
 
 ## i431_scope_load_path_param
 app/routes.volt:11:6: error: spec/scope-loads: path parameter "user" takes the name of a scope load above the route (§scope-loads, §route-paths)
@@ -868,7 +867,7 @@ db/i440_alias_names_joined_column.volt:19:40: error: spec/selects-over-groups: a
 db/i441_with_nullable_key.volt:15:30: error: spec/selects-over-groups: with visits matches the parent's "code", which carries null; a NULL key matches no child, so the key is a column that is never NULL (§selects-over-groups)
 
 ## i443_load_named_err
-app/routes.volt:12:3: error: spec/route-loads: load "err" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§route-loads, §route-paths)
+app/routes.volt:12:3: error: spec/route-loads: load "err" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), and not shaped like a generated local (§route-loads, §route-paths)
 
 ## i444_load_named_like_import
 app/routes.volt:12:3: error: spec/route-loads: load "db" takes the name of a package the generated code refers to (§route-loads, §imports)
@@ -948,7 +947,7 @@ db/i474_limit_overflow.volt:10:63: error: spec/selects-over-groups: limit: 92233
 db/i475_limit_param_shared.volt:10:80: error: spec/selects-over-groups: parameter :n is the limit and a parameter of the select besides; a limit takes a parameter of its own (§selects-over-groups)
 
 ## i476_limit_param_name.volt
-db/i476_limit_param_name.volt:10:64: error: spec/selects-over-groups: parameter name "ctx" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+db/i476_limit_param_name.volt:10:64: error: spec/selects-over-groups: parameter name "ctx" does not work as a Go parameter: it is a name the generated signatures use (ctx, rt, w, r, opts, volt, cs, c, body) (§predicates)
 
 ## i477_param_value_elsewhere.volt
 db/i477_param_value_elsewhere.volt:11:28: error: spec/route-loads: timeout: takes a positive integer of seconds (§route-loads)
@@ -969,10 +968,10 @@ db/i480_limit_order_nullable_unique.volt:10:46: error: spec/selects-over-groups:
 db/i481_limit_order_ties_member.volt:21:53: error: spec/selects-over-groups: select "first" takes limit: over an order that leaves ties: order: names no key of link_clicks, so two rows can tie and the ones kept at the cut would be arbitrary; end it in the primary key, (..., ref asc) (§selects-over-groups)
 
 ## i482_param_blank.volt
-db/i482_param_blank.volt:10:42: error: spec/selects-over-groups: parameter name "_" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+db/i482_param_blank.volt:10:42: error: spec/selects-over-groups: parameter name "_" does not work as a Go parameter: it is the blank identifier _, which no expression reads (§predicates)
 
 ## i483_limit_param_blank.volt
-db/i483_limit_param_blank.volt:10:64: error: spec/selects-over-groups: parameter name "_" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+db/i483_limit_param_blank.volt:10:64: error: spec/selects-over-groups: parameter name "_" does not work as a Go parameter: it is the blank identifier _, which no expression reads (§predicates)
 
 ## i484_load_limit_literal.volt
 app/i484_load_limit_literal.volt:14:18: error: spec/route-loads: argument 1 of PostTop is its limit, at least 1, not 0, or every request would be refused (§route-loads, §selects-over-groups)
@@ -1029,26 +1028,11 @@ db/i500_exists_group.volt:22:41: error: spec/predicates: exists needs a table: "
 ## i501_exists_keyword.volt
 db/i501_exists_keyword.volt:10:28: error: syntax: "exists" is a keyword inside a predicate and names no column there (§predicates)
 
-## i502_optional_path_param
-app/routes.volt:10:12: error: spec/query-routes: parameter "tag" of db.PostFeed is optional, and a path segment is always present; pass it in the query string (§query-routes)
-
-## i503_optional_list_route
-app/routes.volt:10:17: error: spec/query-routes: db.PostPicked takes the optional list parameter "ids", which a route cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§query-routes)
-
-## i504_load_optional_literal
-app/routes.volt:11:20: error: spec/route-loads: argument 1 of db.PostFeed binds the optional parameter "tag", which a literal, always present, cannot bind; name a query-string key (§route-loads)
-
-## i505_load_optional_path
-app/routes.volt:11:20: error: spec/route-loads: argument 1 of db.PostFeed binds the optional parameter "tag", which a path parameter, always present, cannot bind; name a query-string key (§route-loads)
-
-## i506_load_optional_list
-app/routes.volt:11:23: error: spec/route-loads: argument 1 of db.PostPicked binds the optional list parameter "ids", which a load cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§route-loads, §query-routes)
-
 ## i507_exists_ambiguous_relation.volt
 db/i507_exists_ambiguous_relation.volt:16:40: error: spec/predicates: relation "posts" of table "members" is ambiguous, read as SQLite reads an alias, without regard to case: it is the reverse relation to "posts" (at db/i507_exists_ambiguous_relation.volt:12:18; name it with [reverse: name] on a ref element) and the reverse relation to "posts" (at db/i507_exists_ambiguous_relation.volt:13:24; name it with [reverse: name] on a ref element) (§relationships-ref, §predicates)
 
 ## i508_exists_nested_pred.volt
-db/i508_exists_nested_pred.volt:21:18: error: spec/predicates: exists comments stands inside exists posts: exists does not nest, the depth is one (§predicates)
+db/i508_exists_nested_pred.volt:23:45: error: spec/predicates: select busy reads pred discussed here, where at db/i508_exists_nested_pred.volt:21:18: exists comments stands inside exists posts: exists does not nest, the depth is one (§predicates)
 
 ## i509_load_declared_type
 app/routes.volt:11:26: error: spec/route-loads: parameter "price" of db.ProductCosting is money.Money, which no load binds: the query string cannot carry it, and neither a path parameter nor a literal spells it (§route-loads)
@@ -1059,14 +1043,6 @@ db/i50_group_unknown.volt:11:3: error: spec/groups: unknown group term "ms_reven
 ## i510_load_optional_declared_type
 app/routes.volt:11:26: error: spec/route-loads: parameter "price" of db.ProductCosting is rt.Null[money.Money], which no load binds: the query string cannot carry it, and neither a path parameter nor a literal spells it (§route-loads)
 app/routes.volt:14:26: error: spec/route-loads: parameter "price" of db.ProductCosting is rt.Null[money.Money], which no load binds: the query string cannot carry it, and neither a path parameter nor a literal spells it (§route-loads)
-
-## i511_dataset_optional_prefix
-app/routes.volt:10:2: error: spec/query-routes: parameter "year" of db.MsRevenueBrowse is optional, and a path segment is always present; pass it in the query string (§query-routes)
-app/routes.volt:10:2: error: spec/query-routes: parameter "year" of db.MsUsageBrowse is optional, and a path segment is always present; pass it in the query string (§query-routes)
-
-## i512_dataset_optional_list
-app/routes.volt:10:13: error: spec/query-routes: db.MsRevenuePicked takes the optional list parameter "ids", which a route cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§query-routes)
-app/routes.volt:10:13: error: spec/query-routes: db.MsUsagePicked takes the optional list parameter "ids", which a route cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§query-routes)
 
 ## i513_keyword_relation.volt
 db/i513_keyword_relation.volt:16:38: error: syntax: "like" is a keyword inside a predicate and names no relation there (§predicates)
@@ -1082,8 +1058,29 @@ app/routes.volt:10:18: error: spec/query-routes: parameter "price" of db.Product
 app/routes.volt:6:2: error: spec/imports: import qualifier "rt" is the name the generated route files and client import the data runtime nao/rt under (§imports); alias the import: rtdb rt
 app/routes.volt:7:2: error: spec/imports: import qualifier "run" is the name the generated route files and client import the runner nao/run under (§imports); alias the import: rundb db
 
+## i517_load_arg_scope_load
+app/routes.volt:12:18: error: spec/route-loads: argument 1 of db.UserGet names "user", a scope load above the route, whose value no load binds: a name that is no path parameter reads the query string by that name, so the client would choose it; name the key otherwise, or load in the handler with Then (§route-loads)
+
+## i518_load_arg_route_load
+app/routes.volt:12:20: error: spec/route-loads: argument 1 of db.UserGet names "first", a load of the route before it, whose value no load binds: a name that is no path parameter reads the query string by that name, so the client would choose it; name the key otherwise, or load in the handler with Then (§route-loads)
+
+## i519_scope_load_import_name
+app/routes.volt:10:7: error: spec/scope-loads: load "time" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), and not shaped like a generated local (§scope-loads, §route-paths)
+
 ## i51_group_readd.volt
 db/i51_group_readd.volt:12:23: error: spec/groups: table "ms_revenue" is already a member (§groups)
+
+## i520_route_limit_unbound
+app/routes.volt:10:36: error: spec/route-loads: limit: sets a limit the route binds from the query string, and the route binds none: no query of it takes a select's limit: parameter from a query key (§route-loads)
+
+## i521_route_limit_above_max
+app/routes.volt:10:25: error: spec/route-loads: limit: 60 is above max_limit: 50, so the default would be refused (§route-loads)
+
+## i522_route_limit_zero
+app/routes.volt:10:25: error: spec/route-loads: max_limit: takes a positive integer of rows (§route-loads)
+
+## i523_pred_fault_at_use.volt
+db/i523_pred_fault_at_use.volt:22:33: error: spec/predicates: select quiet reads pred tagged here, where at db/i523_pred_fault_at_use.volt:19:22: table "comments" has no relation "post_tags" for exists to reach; its relations: post (§predicates, §relationships-ref)
 
 ## i52_group_cycle.volt
 db/i52_group_cycle.volt:8:7: error: spec/groups: group "a" is part of a reference cycle (§groups)

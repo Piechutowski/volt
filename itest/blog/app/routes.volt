@@ -43,6 +43,9 @@ scope / [pipe: api, error_handler: Errors] {
 		latest    db.UserLatest(count)
 		described db.UserDescribed(bio, count)
 	}
+	get /users/:id(int)/from Users.From [name: from] {
+		profiled db.UserDescribed("%", id)
+	}
 	patch /users/:id(int)/email Users.ChangeEmail [name: change_email, body: db.UserUpdate(id), only: (email)]
 	post  /login                Session.Login     [name: login, body: LoginForm]
 	get /files/:path...          Files.Serve
@@ -76,6 +79,8 @@ scope / [pipe: api, error_handler: Errors] {
 		get    /since            db.UserSince
 		get    /latest           db.UserLatest
 		get    /described        db.UserDescribed
+		get    /chosen           db.UserChosen
+		get    /recent           db.UserLatest [name: recent, limit: 2, max_limit: 3]
 	}
 
 	// A dataset (§datasets): one query route per member of the group select.

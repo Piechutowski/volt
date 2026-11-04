@@ -166,6 +166,11 @@ func (d *Document) Rename(pos protocol.Position, newName string) (*protocol.Work
 	if !validIdentifier(newName) {
 		return nil, fmt.Errorf("%q is not a valid Volt identifier", newName)
 	}
+	if occ := d.Index.At(d.FromLSP(pos)); occ != nil {
+		if col := d.Index.RelationColumn(occ.ID); col != "" {
+			return nil, fmt.Errorf("relation %s takes its name from the column %s; give its ref as: to name it otherwise (§relationships-ref)", occ.ID.Name, col)
+		}
+	}
 	if edit, ok := d.voltRename(pos, newName); ok {
 		return edit, nil
 	}

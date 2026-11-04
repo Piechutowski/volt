@@ -337,9 +337,11 @@ seen.
 
 ### handlerimports
 
-**What it does.** Reports a handler file that imports a package that
-touches the world: the runner `nao/run`, `database/sql`, `net`, `os`,
-`os/exec`, `math/rand`, `math/rand/v2` or `crypto/rand`.
+**What it does.** Reports a file that declares a handler or a
+scope-load function (spec §scope-loads), which is pure like a handler,
+and imports a package that touches the world: the runner `nao/run`,
+`database/sql`, `net`, `os`, `os/exec`, `math/rand`, `math/rand/v2` or
+`crypto/rand`.
 
 **Why.** A handler describes its effects as values and the shim
 performs them; a handler that could open a socket or read a file is
@@ -349,12 +351,13 @@ through it is among what the spec lists as not caught.
 
 **Examples.** [testdata/handlerimports.go](../lang/vet/testdata/handlerimports.go):
 `database/sql`, `os` and `nao/run` warn at their import lines;
-`net/http` and the runtime do not.
+`net/http` and the runtime do not. [testdata/scopeload.go](../lang/vet/testdata/scopeload.go):
+a file that declares a scope load and no handler, `os` warning there.
 
 ### handlerclock
 
 **What it does.** Reports `time.Now`, `time.Since` and `time.Until` in a
-handler file.
+file that declares a handler or a scope-load function.
 
 **Why.** The shim captures the time once and the handler reads
 `r.Now()`, so two calls with the same request see the same clock and a
@@ -364,7 +367,9 @@ test fixes it.
 arithmetic on `r.Now()` passes; `time.Now()` and `time.Since` warn, and
 so does `time.Since` inside the `next` of an `rt.Then`, which the
 runner calls and which is pure like the handler (spec
-§values-and-effects).
+§values-and-effects). In [testdata/scopeload.go](../lang/vet/testdata/scopeload.go)
+`time.Now` inside the `next` of the effect a scope load performs warns,
+in a file that declares no handler.
 
 ### packagestate
 

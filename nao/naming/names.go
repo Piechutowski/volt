@@ -116,7 +116,7 @@ func ArgName(exported string) string {
 		}
 	}
 	s := string(runes)
-	if goKeywords[s] || s == "ctx" || s == "arg" || s == "q" {
+	if goKeywords[s] || s == "ctx" || s == "arg" {
 		s += "_"
 	}
 	return s

@@ -31,7 +31,7 @@ var immutableVars = map[string]bool{
 	module + "/lang.crudMethodSuffixes":        true,
 	module + "/lang.compareSQL":                true,
 	module + "/lang.goKeywords":                true,
-	module + "/lang.selectMethodNames":         true,
+	module + "/lang.generatedImportNames":      true,
 	module + "/lang.resourceActions":           true,
 	module + "/lang.queryMethods":              true,
 	module + "/lang.actionByLower":             true,

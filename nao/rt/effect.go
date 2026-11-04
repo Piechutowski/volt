@@ -531,63 +531,193 @@ func Describe(e AnyEffect) string { return effectDescribe(e).String() }
 
 // Same reports whether a and b are the same effect, as volt.Same
 // compares two continuations (spec §requests-and-responses): the same
-// kinds, statements, arguments and errors, as Describe spells them, and
-// the same Pure values, compared with reflect.DeepEqual.
-func Same(a, b AnyEffect) bool { return reflect.DeepEqual(effectDescribe(a), effectDescribe(b)) }
+// kinds and statements, an Exec's One and Model, a Write's Row when it
+// has no statement, and the same arguments, Pure values and errors,
+// compared with Equal.
+func Same(a, b AnyEffect) bool { return descriptionSame(effectDescribe(a), effectDescribe(b)) }
 
 type description struct {
-	text  string
-	value any
-	parts []description
+	kind    string
+	values  []any
+	parts   []description
+	spelled string
 }
 
 func (d description) String() string {
-	switch {
-	case d.parts != nil:
-		parts := make([]string, len(d.parts))
-		for i, p := range d.parts {
-			parts[i] = p.String()
-		}
-		return d.text + "(" + strings.Join(parts, "; ") + ")"
-	case d.text == "pure":
-		return fmt.Sprintf("pure %v", d.value)
+	if d.parts == nil {
+		return d.spelled
 	}
-	return d.text
+	parts := make([]string, len(d.parts))
+	for i, p := range d.parts {
+		parts[i] = p.String()
+	}
+	return d.kind + "(" + strings.Join(parts, "; ") + ")"
+}
+
+func descriptionSame(a, b description) bool {
+	if a.kind != b.kind || len(a.values) != len(b.values) || len(a.parts) != len(b.parts) || (a.parts == nil) != (b.parts == nil) {
+		return false
+	}
+	for i := range a.values {
+		if !Equal(a.values[i], b.values[i]) {
+			return false
+		}
+	}
+	for i := range a.parts {
+		if !descriptionSame(a.parts[i], b.parts[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func effectDescribe(e AnyEffect) description {
 	if e == nil {
-		return description{text: "<nil>"}
+		return description{kind: "<nil>", spelled: "<nil>"}
 	}
 	return e.describe()
 }
 
-func effectsDescribe(text string, effects ...AnyEffect) description {
+func effectsDescribe(kind string, effects ...AnyEffect) description {
 	parts := make([]description, len(effects))
 	for i, e := range effects {
 		parts[i] = effectDescribe(e)
 	}
-	return description{text: text, parts: parts}
+	return description{kind: kind, parts: parts}
 }
 
 func statementDescribe(kind, sql string, args []any, err error) description {
 	if err != nil {
-		return description{text: kind + " error: " + err.Error()}
+		return description{kind: kind + " error", values: []any{err}, spelled: kind + " error: " + err.Error()}
 	}
-	return description{text: fmt.Sprintf("%s %s %v", kind, sql, args)}
+	return description{kind: kind + " " + sql, values: []any{args}, spelled: fmt.Sprintf("%s %s %v", kind, sql, args)}
 }
 
-func (q Query[T]) describe() description    { return statementDescribe("query", q.SQL, q.Args, q.Err) }
-func (l Lookup[T]) describe() description   { return statementDescribe("lookup", l.SQL, l.Args, l.Err) }
-func (w Write[M]) describe() description    { return statementDescribe("write", w.SQL, w.Args, w.Err) }
-func (e Exec) describe() description        { return statementDescribe("exec", e.SQL, e.Args, e.Err) }
+func (q Query[T]) describe() description  { return statementDescribe("query", q.SQL, q.Args, q.Err) }
+func (l Lookup[T]) describe() description { return statementDescribe("lookup", l.SQL, l.Args, l.Err) }
+
+func (w Write[M]) describe() description {
+	d := statementDescribe("write", w.SQL, w.Args, w.Err)
+	if w.Err == nil && w.SQL == "" {
+		d.values = append(d.values, w.Row)
+		d.spelled += fmt.Sprintf(" row %v", w.Row)
+	}
+	return d
+}
+
+func (e Exec) describe() description {
+	kind := "exec"
+	if e.One {
+		kind += " one"
+	}
+	if e.Model != "" {
+		kind += " of " + e.Model
+	}
+	return statementDescribe(kind, e.SQL, e.Args, e.Err)
+}
+
 func (t Transaction) describe() description { return effectsDescribe("tx", t.Steps...) }
 func (p Parallel) describe() description    { return effectsDescribe("all", p.Steps...) }
 
 func (t thenEffect[T, U]) describe() description { return effectsDescribe("then", t.first) }
 func (m mapEffect[T, U]) describe() description  { return effectsDescribe("map", m.inner) }
 func (a atomicEffect[T]) describe() description  { return effectsDescribe("atomic", a.inner) }
-func (p pureEffect[T]) describe() description    { return description{text: "pure", value: p.v} }
+
+func (p pureEffect[T]) describe() description {
+	return description{kind: "pure", values: []any{p.v}, spelled: fmt.Sprintf("pure %v", p.v)}
+}
+
 func (f failEffect[T]) describe() description {
-	return description{text: fmt.Sprintf("fail %v", f.err)}
+	return description{kind: "fail", values: []any{f.err}, spelled: fmt.Sprintf("fail %v", f.err)}
+}
+
+// Equal reports whether a and b are deeply equal as reflect.DeepEqual
+// reports, except that a floating-point NaN equals a NaN, so that a
+// value that holds no function is always equal to itself: how Same
+// compares the values an effect carries and volt.Same a response's
+// body (spec §requests-and-responses).
+func Equal(a, b any) bool {
+	return valuesEqual(reflect.ValueOf(a), reflect.ValueOf(b), map[visit]bool{})
+}
+
+type visit struct {
+	a, b uintptr
+	t    reflect.Type
+}
+
+func floatEqual(x, y float64) bool { return x == y || (x != x && y != y) }
+
+func valuesEqual(a, b reflect.Value, seen map[visit]bool) bool {
+	if !a.IsValid() || !b.IsValid() {
+		return a.IsValid() == b.IsValid()
+	}
+	if a.Type() != b.Type() {
+		return false
+	}
+	switch a.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice:
+		if a.IsNil() || b.IsNil() {
+			return a.IsNil() == b.IsNil()
+		}
+		v := visit{a.Pointer(), b.Pointer(), a.Type()}
+		if seen[v] {
+			return true
+		}
+		seen[v] = true
+	}
+	switch a.Kind() {
+	case reflect.Bool:
+		return a.Bool() == b.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return a.Int() == b.Int()
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return a.Uint() == b.Uint()
+	case reflect.Float32, reflect.Float64:
+		return floatEqual(a.Float(), b.Float())
+	case reflect.Complex64, reflect.Complex128:
+		x, y := a.Complex(), b.Complex()
+		return floatEqual(real(x), real(y)) && floatEqual(imag(x), imag(y))
+	case reflect.String:
+		return a.String() == b.String()
+	case reflect.Chan, reflect.UnsafePointer:
+		return a.Pointer() == b.Pointer()
+	case reflect.Func:
+		return a.IsNil() && b.IsNil()
+	case reflect.Interface:
+		if a.IsNil() || b.IsNil() {
+			return a.IsNil() == b.IsNil()
+		}
+		return valuesEqual(a.Elem(), b.Elem(), seen)
+	case reflect.Pointer:
+		return valuesEqual(a.Elem(), b.Elem(), seen)
+	case reflect.Array, reflect.Slice:
+		if a.Len() != b.Len() {
+			return false
+		}
+		for i := range a.Len() {
+			if !valuesEqual(a.Index(i), b.Index(i), seen) {
+				return false
+			}
+		}
+		return true
+	case reflect.Map:
+		if a.Len() != b.Len() {
+			return false
+		}
+		for _, k := range a.MapKeys() {
+			bv := b.MapIndex(k)
+			if !bv.IsValid() || !valuesEqual(a.MapIndex(k), bv, seen) {
+				return false
+			}
+		}
+		return true
+	case reflect.Struct:
+		for i := range a.NumField() {
+			if !valuesEqual(a.Field(i), b.Field(i), seen) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }

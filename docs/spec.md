@@ -474,7 +474,7 @@ then reads it as that keyword, so the error is reported once.
 |---|---|---|
 | element and block words | `table`, `table_partial`, `type`, `ref`, `records`, `group`, `pred`, `select`, `migration`, `pipeline`, `scope`, `indexes`, `validators` | §program-structure, §indexes, §validators |
 | package words | `package`, `import` | §projects-and-packages, §imports |
-| setting names | `pk`, `null`, `unique`, `index`, `autoincrement`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `group`, `limit`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
+| setting names | `pk`, `null`, `unique`, `index`, `autoincrement`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `group`, `limit`, `max_limit`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
 | referential actions | `cascade`, `restrict`, `set_null`, `set_default` | §relationships-ref |
 | resource actions | `index`, `new`, `create`, `show`, `edit`, `update`, `delete` | §the-action-table |
 | order directions | `asc`, `desc` | §selects-over-groups |
@@ -2265,7 +2265,12 @@ func (r Response) Rescue(on func(error) Response) Response
    goes on through the shim as `next`'s would, a `Fail(err)` to the
    error handler; a step `next` returns is rescued only by a `Rescue`
    of its own. A scope load's `Rescue` does the same for the load's
-   effect (§scope-loads).
+   effect (§scope-loads). An effect that fails because the request's
+   context was cancelled, the client having closed the request, fails
+   with a 499 the same way, the status proxies log for it, since no
+   standard status says it: the error handler answers it as an
+   `HTTPError`, logging nothing as a handler error, and nobody reads
+   the answer.
    `Reject` is a Problem body of the handler's own, with `WithDetails`
    for the field errors of a changeset it judged.
 4. **Bodies.** `Render` and `RenderStatus` write a value in the
@@ -2292,10 +2297,15 @@ func (r Response) Rescue(on func(error) Response) Response
    its first effect, never by the one its `next` would make, and an
    `rt.Map` and an `rt.Atomic` by their kind and their inner one, so an
    `Atomic` over `e`, a `Map` over `e` and `e` itself are three effects;
-   a statement compares by its kind, text and arguments as `%v` prints
-   them, an `rt.Pure` by its value as a done response's body does, with
-   `reflect.DeepEqual`, and an `rt.Fail` by its error's message, as a
-   `Fail(err)` response does (§generated-query-surface). The rule
+   a statement compares by its kind, text and arguments, an `Exec` by
+   its `One` and `Model` as well and a `Write` with no statement by the
+   `Row` it yields, an `rt.Pure` by its value as a done response's body
+   does, and an `rt.Fail` by its error, as a `Fail(err)` response does
+   (§generated-query-surface). Every value, an argument, a row, a body
+   and an error among them, compares with `rt.Equal`, which is
+   `reflect.DeepEqual` except that a NaN equals a NaN, so a value that
+   holds no function is always the same as itself and `1` is not
+   `"1"`; two errors of one message and two statuses are two. The rule
    compares spellings, not what they perform: two spellings of one
    computation, a `Map` and a `Then` whose `next` returns an `rt.Pure`
    among them, are two effects, which never misleads the check, since
@@ -2305,7 +2315,8 @@ func (r Response) Rescue(on func(error) Response) Response
 6. **What keeps a handler pure** is the generated interface, which
    fixes every parameter, and the vet rules of `lint.md`:
    a controller is an empty struct (`handlerreceiver`), a file that
-   declares a handler imports neither the runner nor `database/sql`,
+   declares a handler or a scope-load function (§scope-loads) imports
+   neither the runner nor `database/sql`,
    `net`, `os`, `os/exec` nor a random source (`handlerimports`), it
    reads no clock but `r.Now()` (`handlerclock`), a routes package holds
    no package state and starts no goroutine (`packagestate`,
@@ -2417,7 +2428,10 @@ parameters, so the handler reads them and never asks for them.
    name that is no generated query. The load's name is the parameter
    the handler receives the value under: a lower-case Go identifier
    that is not a reserved name (§route-paths), not `err` or `ok`,
-   which the shim declares beside it, not shaped like a generated
+   which the shim declares beside it, not a name the route files
+   import a package under (`context`, `http`, `rt`, `run`, `time`,
+   `volt`; §imports), which the shim's closure taking the value would
+   shadow, not shaped like a generated
    local (`volt` and an upper-case letter), not the package's name or
    an import qualifier (§imports), not a path parameter of the route
    and not another load of it or of a scope above (§scope-loads).
@@ -2425,7 +2439,13 @@ parameters, so the handler reads them and never asks for them.
    name or a literal. A name that is a path parameter of the route
    binds it, and the parameter's type MUST spell the function's Go
    type, as for a query route; a wildcard cannot bind one, nor can a
-   path parameter bind a list parameter. Any other name binds from the
+   path parameter bind a list parameter. A name that is a load the
+   route declares before this one or a scope load above it
+   (§scope-loads), and no path parameter, is an error: no load binds another load's value, and the
+   name, read from the query string as any other name is, would let the
+   client choose the value, the signed-in user's id among them; a
+   handler that needs a row keyed by a loaded value reads it with
+   `Then`. Any other name binds from the
    query string by that name, a list parameter from the repeated key,
    with the types the query string carries (§query-routes); a missing
    or unparseable value is a 400 naming the key, before any of the
@@ -2433,11 +2453,11 @@ parameters, so the handler reads them and never asks for them.
    or of several, and each binds by its own parameter's type and rule,
    so a missing key that one of them requires is a 400 whatever else
    it binds. An optional parameter (§predicates) binds from
-   the query string only, absent when the key is missing, as a query
-   route binds it; a path parameter or a literal, which is always
-   present, cannot bind it, and an optional list parameter cannot be
-   loaded at all, for the reason a query route cannot route one
-   (§query-routes). A literal MUST spell the parameter's Go type: a
+   the query string absent when the key is missing, an optional list
+   from the repeated key, as a query route binds them (§query-routes),
+   and from a path parameter or a literal present, since either is
+   always present: `feed db.PostFeed("go", at, id, 20)` loads the feed
+   of one tag through the select that serves every tag. A literal MUST spell the parameter's Go type: a
    string literal a `string`, a number an `int` when it is whole and
    a `float64` otherwise, `true` or `false` a `bool`. A parameter of a
    type the query string cannot carry, a declared type (§types) among
@@ -2468,14 +2488,30 @@ parameters, so the handler reads them and never asks for them.
    the handler would (§requests-and-responses): a missing row is a 404,
    and the handler never sees it. A route that must decide on a miss
    loads nothing and uses `Then` with `Rescue`.
-5. **`timeout`.** A route setting, a positive integer of seconds,
+5. **`limit` and `max_limit`.** Route settings, each a positive
+   integer of rows, over a select's `limit:` parameter the route binds
+   from the query string, a query route's or a load's
+   (§selects-over-groups, §query-routes): `limit:` is the limit a
+   request that leaves the key out gets, where it is otherwise a 400
+   naming the key, and `max_limit:` the most a request may ask, a
+   larger value a 400 naming the key where it binds, as a value below
+   1 is, before any query runs. `get /feed db.PostFeed [limit: 10,
+   max_limit: 50]` serves ten rows to a bare `GET /feed` and refuses
+   `limit=51`. Either on a route that binds no such parameter from the
+   query string is an error, since it would govern nothing, and so is
+   a `limit:` above the route's `max_limit:`, whose every bare request
+   would be refused. A limit from a path parameter or a literal is
+   always present and the route's author's own, so neither setting
+   reads it. The generated client still sends the limit it is given
+   (§generated-client).
+6. **`timeout`.** A route setting, a positive integer of seconds,
    bounds the whole chain, loads and the handler's own effects, with
    one deadline from the request's arrival; an effect the deadline
    cuts off fails with a 504, which goes to the error spine unless a
    rescue answers for that effect (§requests-and-responses,
    §scope-loads). A query route takes it too; an event route, whose
    stream the runtime serves, takes none.
-6. A load block on a query route or an event route is an error: their
+7. A load block on a query route or an event route is an error: their
    handlers are generated.
 
 ### Scope loads
@@ -2626,14 +2662,17 @@ scope /api [pipe: api] {
      `patch` (clause 1);
    - a **list parameter** (§predicates) binds from the **repeated query
      key** of its name; absent means the empty list;
-   - an **optional parameter** (§predicates) binds from the **query
-     string** by name as `rt.Null[T]`: absent when the key is missing,
-     present with the parsed value otherwise, and an unparseable value
-     is a 400 that names the parameter. A path segment is always
-     present, so a path parameter of its name is an error. An optional
-     list parameter is not routable: the query string has no spelling
-     for a present empty list, which matches no row where an absent
-     list matches every row, so a route to its select is an error;
+   - an **optional parameter** (§predicates) binds as `rt.Null[T]`:
+     from a path parameter of its name present, since a path segment
+     always is, else from the **query string** by name, absent when
+     the key is missing and present with the parsed value otherwise, an
+     unparseable value a 400 that names the parameter. An optional list
+     parameter binds from the repeated key, absent when the key is
+     missing and present with its values otherwise, so `tag in :tags?`
+     filters by the tags a request names and by none when it names
+     none. A request therefore never presents an empty list, which
+     matches no row (§predicates); only a Go caller spells one, and the
+     generated client refuses to send it (§generated-client);
    - every other parameter binds from the **query string** by name,
      parsed to its type; a missing or unparseable value is a 400 that
      names the parameter.
@@ -2643,6 +2682,8 @@ scope /api [pipe: api] {
    SQLite reads a negative limit as none: from a path parameter once
    the path parameters parse, before the scope loads (§scope-loads),
    and from the query string where it binds, before the query runs.
+   The route's `limit:` and `max_limit:` settings give one from the
+   query string a default and a most (§route-loads).
    A parameter binds from the query string only when its type is
    `string`, `bool`, `int`, `float64` or `time.Time`, a slice of one
    of those (a list parameter), or an `rt.Null` of one of those (an
@@ -2778,8 +2819,8 @@ the routes through typed methods instead of hand-built requests.
 
 1. The package is named `client` and imports only the standard
    library, the root `volt` package, the data packages the routes go
-   through and, when a method takes an optional parameter (rule 3),
-   the data runtime `nao/rt` for its `rt.Null[T]`, never the runner
+   through and, when a method takes an optional parameter (rules 3 and
+   4), the data runtime `nao/rt` for its `rt.Null[T]`, never the runner
    `nao/run` and never the routing package, so a caller links no
    server code. The one exception is a package
    that routes its own tables (§query-routes): its client imports it for the
@@ -2821,6 +2862,11 @@ the routes through typed methods instead of hand-built requests.
    repeated key, an optional parameter (§predicates) as the
    `rt.Null[T]` the query takes, left out of the query string when
    absent, `APIPostFeed(ctx, tag rt.Null[string]) ([]db.Post, error)`,
+   an optional list the same way, a present empty list being an error
+   the method returns before it sends anything, since the route would
+   read the missing key as absent and match every row where the empty
+   list matches none, an optional parameter a path parameter binds as
+   the path parameter's own type,
    a changeset as the body: `APIUserCreate(ctx, cs
    db.UserChangeset) (db.User, error)`, `APIUserUpdate(ctx, id int, cs
    db.UserChangeset) (db.User, error)`, sent as `cs.Params()`
@@ -2832,8 +2878,16 @@ the routes through typed methods instead of hand-built requests.
    `APIUserUpdate(ctx, id, db.UserNew().EmailSet(e))` sets one column
    of row `id`.
 4. **Every named controller route** is one raw method with the
-   route's path parameters and, when the route binds a body
-   (§request-bodies), the body last: a changeset `cs db.UserChangeset`
+   route's path parameters, then every query-string key its loads bind
+   (§route-loads), once each, in the order the loads first read it and
+   typed and sent as a query route's parameter is (rule 3), required
+   when any load requires it, named as the key with `_` appended when
+   that is a Go keyword or a name the method uses (`ctx`, `c`, `cs`,
+   `body`, `volt`, `http`, `context`, `rt`, `time`, `nil`, `append`,
+   `any`, `error`) or has the form of a generated local, so a route
+   that loads through a `limit:` select sends its limit:
+   `Mine(ctx, at rt.Null[time.Time], limit int)`, and, when the route
+   binds a body (§request-bodies), the body last: a changeset `cs db.UserChangeset`
    sent as `cs.Params()`, or `body any` for a struct body, encoded in
    the client's format. It returns `*http.Response` for the caller to
    read and close: Volt does not know what a hand-written action
@@ -3198,12 +3252,10 @@ scope /ms [pipe: api] {
    member's select function (`<Model><SelectName>`). Every parameter of
    the select binds as §query-routes binds it: from a scope prefix
    parameter of the same name, else from the query string, a list
-   parameter as a repeated key, and an optional one (§predicates) from
-   the query string alone, absent when the key is missing; a prefix
-   parameter the select does not take is an error, and so is one that
-   names an optional parameter, since a path segment is always
-   present, and a select with an optional list parameter, which no
-   route carries, makes the dataset an error. The helper and client
+   parameter as a repeated key, and an optional one (§predicates) as
+   §query-routes binds it, present from a prefix parameter and absent
+   from the query string when the key is missing; a prefix
+   parameter the select does not take is an error. The helper and client
    method names are the scope name prefixes followed by the function
    name (§query-routes).
 3. Expanded routes obey every rule of routes: conflicts (§route-conflicts), one
@@ -3234,7 +3286,7 @@ an element is an error on that element):
 | Element | Settings |
 |---|---|
 | `scope` | `pipe`, `name`, `error_handler` |
-| route | `name`, `timeout`, `body`, `only` |
+| route | `name`, `timeout`, `body`, `only`, `limit`, `max_limit` |
 | resources | `api`, `only`, `except`, `param`, `singular`, `default` |
 | dataset | `strip`, `only`, `except` |
 | Select | `order`, `group`, `limit` |
@@ -3385,7 +3437,10 @@ pred tagged  { exists tags (tag = :tag?) }
    package; references must exist and be acyclic. `pred` names are unique
    in the package; redeclaring one is an error.
 3. A `pred` is typed **at each use site** (§selects-over-groups), where a target binds
-   its column names. The rules:
+   its column names, so a fault a `pred` has over one select and not
+   over another is the select's: it is reported where that select
+   names the `pred`, naming the select, the `pred`s it went through and
+   where in them the fault stands. The rules:
    - a comparison MUST name a column on at least one side; a parameter
      or literal on each side is an error;
    - a `column ref` must resolve in the target's environment
@@ -3423,12 +3478,14 @@ pred tagged  { exists tags (tag = :tag?) }
      types. A parameter name MUST be an ASCII Go identifier that is
      neither a Go keyword, nor `_`, the blank identifier, which no
      generated expression can read, nor a name the generated signatures use
-     (`ctx`, `q`, `rt`, `w`, `r`, `opts`, `volt`, `cs`, `c`), nor `nil`,
+     (`ctx`, `rt`, `w`, `r`, `opts`, `volt`, `cs`, `c`, `body`), nor `nil`,
      `append`, `any` or `true`, the predeclared names a generated
      function uses, and
      MUST NOT have the form of the generated locals and helpers,
      `volt`, an upper-case letter and no underscore
-     (§generated-query-surface).
+     (§generated-query-surface); the error names the one rule a name
+     breaks. `q`, the usual search term, is a parameter like any other:
+     `title like :q?`.
 4. `[]byte` (rule 3) is the one column type predicates refuse: every
    other column, a column of a declared type among them, compares
    under rule 5.
@@ -3457,19 +3514,24 @@ pred tagged  { exists tags (tag = :tag?) }
      both uses. An optional parameter stands in a predicate term only:
      in a projection's arithmetic or as the value of `limit:`
      (§selects-over-groups) it is an error.
-   - **The vanishing rule.** A *term* is a comparison, a membership, a
-     pattern or an exists term (rule 7). A term reads the parameters it
-     names, and an exists term reads those of its inner predicate. A
-     term that reads an absent optional parameter is true. So
-     `published_at < :at? or (published_at = :at? and id < :id?)` is
-     true when both are absent, which makes the first page of a keyset
-     over `order: (published_at desc, id desc)` the same select as
-     every later page, and `exists tags (tag = :tag?)` is true when
-     `:tag` is absent, so every row passes. A term that reads no absent
-     parameter means what it says. An exists term vanishes as a whole:
-     a term inside it never vanishes on its own, since whenever every
-     parameter the exists term reads is present, so is every parameter
-     of each term inside it.
+   - **The vanishing rule.** A *term* is a comparison, a membership or
+     a pattern. A term reads the parameters it names, and a term that
+     reads an absent optional parameter is **taken out** of the
+     predicate, as if it were not written: it is the identity of the
+     connective it stands in, true under `and` and false under `or`, so
+     what stands beside it is filtered as written. An `and`, an `or` or
+     an exists term (rule 7) all of whose terms are taken out is taken
+     out itself, the same way, and a `where` all of whose terms are
+     taken out keeps every row. So `author_id = :by? or exists tags
+     (tag = :tag?)` keeps the posts of `:by` when `:tag` is absent,
+     those tagged `:tag` when `:by` is, and every post when both are;
+     `exists comments (author_id = :by? and body like :text?)` keeps
+     the posts `:by` commented on when `:text` is absent, and every post
+     when both are; and `published_at < :at? or (published_at = :at?
+     and id < :id?)` keeps every row when both are absent, which makes
+     the first page of a keyset over `order: (published_at desc, id
+     desc)` the same select as every later page. A term that reads no
+     absent parameter means what it says.
    - **Absent is what binds NULL.** A guard (below) reads the value the
      parameter binds, so the parameter is absent whenever that value
      binds as NULL: the zero `rt.Null[T]`, and a present value whose
@@ -3488,8 +3550,9 @@ pred tagged  { exists tags (tag = :tag?) }
      never NULL. Its cursor is the last row's values of those columns,
      and a comparison never matches NULL, so no page after the first
      reaches a row whose column is NULL; worse, a cursor taken from a
-     row whose column is NULL is absent (above), so the terms vanish
-     and the page after that row is the first page again, without end.
+     row whose column is NULL is absent (above), so the terms that read
+     it are taken out, and the page after that row reads by the key
+     alone, again reading rows earlier pages read.
      The keyset above therefore takes `published_at` to be declared
      without `[null]`; over a nullable column, the `where` keeps the NULLs out,
      `published_at is not null and (published_at < :at? or …)`, or the
@@ -3500,21 +3563,26 @@ pred tagged  { exists tags (tag = :tag?) }
      empty one.
    - An optional parameter MUST NOT stand under `not`, written there or
      reached through a `pred` reference, inside an exists term
-     included: a vanished term is true, and `not` would make it false,
+     included: `not` would turn a term taken out into its opposite,
      which is not what absent means. The error names the `not`.
    - The statement stays one constant text whatever is present: a term
      that reads optional parameters renders behind one guard per
-     optional parameter it reads, `(? IS NULL OR <term>)`, the guards in
-     first-appearance order, and every placeholder of the parameter, its
-     guard's and the term's own, binds the parameter's `rt.Null`, which
-     binds NULL when absent (rule 8). An optional list parameter binds
+     optional parameter it reads, the guards in first-appearance order,
+     `(? IS NULL OR <term>)` under `and` and `(? IS NOT NULL AND
+     <term>)` under `or`; an `or` under `and`, an `and` under `or` and an
+     exists term, each of which every term of can be taken out, render
+     behind the condition that all of them are, `((? IS NULL AND ? IS
+     NULL) OR <it>)` under `and` and `(NOT (? IS NULL AND ? IS NULL) AND
+     <it>)` under `or`, each parameter once; and every placeholder of
+     the parameter, a guard's and the term's own, binds the parameter's
+     `rt.Null`, which binds NULL when absent (rule 8). An optional list parameter binds
      as `rt.JSONListOptional(tags)`: NULL when absent, the JSON array of
      rule 3 when present. The one text costs an index: SQLite plans the
      statement once for whatever it binds, so a guarded term finds no
      row through an index, even when the parameter is present. `"site"
      = ?` searches an index on `site`; `(? IS NULL OR "site" = ?)`
-     reads every row. An exists term's subquery is planned as it is
-     without the guard, which stands outside it. Where a filter should
+     reads every row, and so does an exists term's subquery for the
+     guards inside it. Where a filter should
      search an index, write it with a required parameter, in a select
      of its own.
 7. **`exists`.** `exists rel (x)` is true for a row when at least one
@@ -3588,10 +3656,15 @@ pred tagged  { exists tags (tag = :tag?) }
      x qualified by the relation's name; the parentheses of x serve
      when it brings its own, as under `not`;
    - a term that reads optional parameters (rule 6) is `(? IS NULL OR
-     <term>)`, one `? IS NULL OR ` per optional parameter it reads, in
-     first-appearance order: `(? IS NULL OR "published_at" < ?)`,
-     `(? IS NULL OR EXISTS (SELECT 1 FROM …))`; each guard binds its
-     parameter's value, as every placeholder of the term does;
+     <term>)` under `and` and `(? IS NOT NULL AND <term>)` under `or`,
+     one guard per optional parameter it reads, in first-appearance
+     order: `(? IS NULL OR "published_at" < ?)`; an `or` under `and`,
+     an `and` under `or` and an exists term every term of which reads
+     an optional parameter are `(<all absent> OR <it>)` and `(NOT <all
+     absent> AND <it>)`, `<all absent>` the parameters' `? IS NULL`
+     joined by ` AND `, each once: `((? IS NULL AND ? IS NULL) OR
+     EXISTS (SELECT 1 FROM …))`; each guard binds its parameter's
+     value, as every placeholder of the term does;
    - a value is always an argument behind a positional `?`, in
      left-to-right order of the text: a literal written in a Volt
      predicate is bound by the generated method like a parameter, the
@@ -3878,7 +3951,7 @@ the optional projection narrows the emitted columns.
     one parent row type share it, and a parent field of the child
     field's name is an error. The function yields `rt.With[Parent, Child, Key,
     Row]`, an effect of `[]Row` (§generated-query-surface), performed
-    as two statements in one deferred transaction, so both read one
+    as two statements in one transaction, so both read one
     snapshot: the parent statement as any select's, then the child
     table's rows `WHERE "<key>" IN (SELECT value FROM json_each(?))`
     over the parent keys, ordered by the child's primary key, grouped
@@ -5117,7 +5190,11 @@ tag, assembled in this order:
 
 A struct derivative (§selects-over-groups) copies each kept field's assembled tag
 unchanged; an explicit-list shared row type (§selects-over-groups) carries the
-default `db`/`json` pair only.
+default `db`/`json` pair only. The children field of a `with` row type
+(§selects-over-groups) is no column and carries `json:"<relation
+name>"` alone, so the children travel under the relation's name as
+written, `"points"` for `MetricWithPoints`'s `Points`, as every other
+key is a name the schema spells.
 
 ### Generated query surface
 
@@ -5154,6 +5231,7 @@ func Update[M any](c Changeset[M]) Write[M]
 func Perform[T any](ctx context.Context, x Executor, e Effect[T]) (T, error)  // e over the runner's executor
 func Describe(e AnyEffect) string         // its kinds, statements and values, for a person to read
 func Same(a, b AnyEffect) bool            // the same effect, as volt.Same compares continuations
+func Equal(a, b any) bool                 // reflect.DeepEqual, a NaN equal to a NaN: how Same compares values
 
 // nao/run: the one stateful object and the one performer.
 type DB struct { /* the pool, the statement cache, the logger */ }
@@ -5232,20 +5310,33 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    generation by `volt vet`, as a wrapper's collision is (`lint.md`,
    `dynname`).
 5. **The runner.** `run.Open(driver, dsn)` pins one connection and sets
-   WAL, `busy_timeout = 5000` and `foreign_keys = ON`; `run.Wrap` takes
-   a pool the application opened. `run.Run(ctx, db, e)` performs one
+   WAL, `busy_timeout = 5000` and `foreign_keys = ON` on every
+   connection the pool opens, since SQLite keeps each setting per
+   connection; `run.Wrap` takes a pool the application opened, with
+   the settings it gave it. `run.Run(ctx, db, e)` performs one
    effect: every statement is prepared through the statement cache,
    keyed by its text, so identical shapes prepare once; a
    `Transaction` runs its steps on one transaction that commits when
    every step succeeded and rolls back on the first error or a panic, a
-   `Transaction` inside one joins it; a `Parallel` runs its steps on
+   `Transaction` inside one joins it. A transaction begins immediately
+   (`BEGIN IMMEDIATE`), taking SQLite's write lock at its start, so one
+   that reads and then writes, the check of rule 6 among them, waits
+   for the lock under the busy timeout while another connection of a
+   pool holds it, where a deferred one would fail at its first write
+   with `database is locked`; with the one connection `run.Open` pins
+   the transactions run one after another either way. A `Parallel`
+   runs its steps on
    their own goroutines and joins them, the first error cancelling the
    rest, except inside a transaction, where it runs them in order on
    that transaction and the first error stops it before the next step
    starts; the context cancels any of them, and a transaction the
-   context ends, between two statements or before the commit, fails
-   with the context's error, which the shim answers with a 504 when the
-   route's timeout expired (§route-loads). Inside a transaction the
+   context ends, between two statements, inside one or before the
+   commit, rolls back and fails with the context's error, which the
+   shim answers with a 504 when the route's timeout expired
+   (§route-loads) and a 499 when the client closed the request
+   (§requests-and-responses). The transaction keeps its connection
+   either way, so an in-memory database, which lives as long as its
+   one connection, and the connection's settings outlive it. Inside a transaction the
    steps run in order because a transaction holds one connection,
    which runs one statement at a time anyway, and because SQLite rolls
    the whole transaction back when a write inside it is interrupted, as
@@ -5339,7 +5430,7 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    key column takes in `Get`, `GetMany`, `GetBy*` and `Delete` is its
    Go field name (§names) with the leading initialism or letter lowered
    (`UserID` is `userID`), with `_` appended when that is a Go keyword,
-   `ctx`, `arg`, `q` or `rt`, `nil`, `append`, `any` or `true` (the predeclared names a
+   `ctx`, `arg` or `rt`, `nil`, `append`, `any` or `true` (the predeclared names a
    generated method uses), a name the route files' signatures take
    (`w`, `r`, `opts`, `volt`, `cs`, `c`), which a query route's path
    parameter, named after the key parameter, may not take

@@ -324,9 +324,11 @@ func TestSelectDroppedTermsNameTheirParams(t *testing.T) {
 	}
 }
 
-// An optional parameter guards every term that reads it, an exists term
-// renders as a subquery over its relation, and both bind in the order of
-// the text (spec §predicates, rendering). The typed handles have neither,
+// An optional parameter guards every term that reads it, true under and
+// and false under or when absent, a connective or an exists term all of
+// whose terms vanished vanishing with them, an exists term renders as a
+// subquery over its relation, and all of it binds in the order of the
+// text (spec §predicates, rendering). The typed handles have neither,
 // so the spelling is pinned here.
 func TestSelectRenderOptionalAndExists(t *testing.T) {
 	pr, diags := project(t, map[string]string{
@@ -354,11 +356,11 @@ func TestSelectRenderOptionalAndExists(t *testing.T) {
 		binds  []string
 		params []SelectParam
 	}{
-		{"keyset", `((? IS NULL OR "at" < ?) OR ((? IS NULL OR "at" = ?) AND (? IS NULL OR "id" < ?)))`,
-			[]string{"at", "at", "at", "at", "id", "id"},
+		{"keyset", `((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "at" < ?) OR (NOT (? IS NULL AND ? IS NULL) AND ((? IS NULL OR "at" = ?) AND (? IS NULL OR "id" < ?)))))`,
+			[]string{"at", "id", "at", "at", "at", "id", "at", "at", "id", "id"},
 			[]SelectParam{{GoName: "at", GoType: "time.Time", Optional: true}, {GoName: "id", GoType: "int", Optional: true}}},
-		{"tagged", `((? IS NULL OR ? IS NULL OR EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ("tags"."tag" = ? AND "tags"."kind" = ?))) AND "id" > ?)`,
-			[]string{"tag", "kind", "tag", "kind", "0"},
+		{"tagged", `(((? IS NULL AND ? IS NULL) OR EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ((? IS NULL OR "tags"."tag" = ?) AND (? IS NULL OR "tags"."kind" = ?)))) AND "id" > ?)`,
+			[]string{"tag", "kind", "tag", "tag", "kind", "kind", "0"},
 			[]SelectParam{{GoName: "tag", GoType: "string", Optional: true}, {GoName: "kind", GoType: "string", Optional: true}}},
 		{"listed", `(? IS NULL OR "id" IN (SELECT value FROM json_each(?)))`,
 			[]string{"rt.JSONListOptional(ids)", "rt.JSONListOptional(ids)"},

@@ -255,6 +255,34 @@ func TestQueryRouteLimitParam(t *testing.T) {
 	}
 }
 
+// TestQueryRouteLimitSettings (§route-loads): a route's limit: is the
+// limit a request that leaves the key out gets, and its max_limit: the
+// most one may ask, a larger value a 400 naming the key that runs no
+// statement.
+func TestQueryRouteLimitSettings(t *testing.T) {
+	h, ran := countedHandler()
+	for _, email := range []string{"two@example.com", "three@example.com", "four@example.com"} {
+		call(h, "POST", "/api/users", strings.NewReader(`{"email":"`+email+`"}`))
+	}
+	for path, want := range map[string]int{app.PathAPIRecent(): 2, app.PathAPIRecent(volt.Query("limit", "3")): 3, app.PathAPIRecent(volt.Query("limit", "1")): 1} {
+		var rows []db.User
+		if rec := call(h, "GET", path, nil); rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &rows) != nil || len(rows) != want {
+			t.Errorf("%s: %d %s, want %d rows", path, rec.Code, rec.Body.String(), want)
+		}
+	}
+	for _, q := range []string{"limit=4", "limit=0"} {
+		var p volt.Problem
+		before := ran.Load()
+		rec := call(h, "GET", "/api/recent?"+q, nil)
+		if rec.Code != 400 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || !strings.Contains(p.Message, "parameter limit") {
+			t.Errorf("%s: %d %q, want a 400 naming the parameter limit", q, rec.Code, rec.Body.String())
+		}
+		if n := ran.Load() - before; n != 0 {
+			t.Errorf("%s ran %d statements; want none", q, n)
+		}
+	}
+}
+
 // TestLoadLimitParam (§route-loads, §selects-over-groups): a load binds a
 // select's limit from a path parameter or the query string, and a value
 // below 1 from either is a 400 naming its key before any load runs, the
@@ -382,8 +410,8 @@ func TestQueryRouteTable(t *testing.T) {
 			t.Errorf("%s %s: helper %q — only GET query routes have one", r.Method, r.Spelled, r.Helper)
 		}
 	}
-	if seen != 28 {
-		t.Errorf("query rows = %d, want 28 (nine query routes, two under a scope load, two dataset members, fifteen resources [default] routes)", seen)
+	if seen != 30 {
+		t.Errorf("query rows = %d, want 30 (eleven query routes, two under a scope load, two dataset members, fifteen resources [default] routes)", seen)
 	}
 }
 

@@ -3,6 +3,7 @@ package run
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -24,25 +25,81 @@ type DB struct {
 
 // Open opens a SQLite database via the named database/sql driver and
 // applies the pragmas the generated code is designed for (spec
-// §generated-query-surface): WAL, a busy timeout of five seconds and
-// foreign keys on. It pins the pool to a single connection.
-func Open(driver, dsn string) (DB, error) {
-	pool, err := sql.Open(driver, dsn)
+// §generated-query-surface) to every connection the pool opens: WAL, a
+// busy timeout of five seconds and foreign keys on. It pins the pool to
+// a single connection.
+func Open(driverName, dsn string) (DB, error) {
+	probe, err := sql.Open(driverName, dsn)
 	if err != nil {
 		return DB{}, err
 	}
-	pool.SetMaxOpenConns(1)
-	for _, pragma := range []string{
-		"PRAGMA journal_mode = WAL",
-		"PRAGMA busy_timeout = 5000",
-		"PRAGMA foreign_keys = ON",
-	} {
-		if _, err := pool.Exec(pragma); err != nil {
-			_ = pool.Close()
-			return DB{}, fmt.Errorf("run.Open: %s: %w", pragma, err)
+	d := probe.Driver()
+	_ = probe.Close()
+	var c driver.Connector = dsnConnector{driver: d, dsn: dsn}
+	if dc, ok := d.(driver.DriverContext); ok {
+		if c, err = dc.OpenConnector(dsn); err != nil {
+			return DB{}, err
 		}
 	}
+	pool := sql.OpenDB(pragmaConnector{c})
+	pool.SetMaxOpenConns(1)
+	if err := pool.Ping(); err != nil {
+		_ = pool.Close()
+		return DB{}, fmt.Errorf("run.Open: %w", err)
+	}
 	return Wrap(pool), nil
+}
+
+var pragmas = []string{
+	"PRAGMA journal_mode = WAL",
+	"PRAGMA busy_timeout = 5000",
+	"PRAGMA foreign_keys = ON",
+}
+
+type dsnConnector struct {
+	driver driver.Driver
+	dsn    string
+}
+
+func (c dsnConnector) Connect(context.Context) (driver.Conn, error) { return c.driver.Open(c.dsn) }
+func (c dsnConnector) Driver() driver.Driver                        { return c.driver }
+
+type pragmaConnector struct{ inner driver.Connector }
+
+func (c pragmaConnector) Driver() driver.Driver { return c.inner.Driver() }
+
+func (c pragmaConnector) Connect(ctx context.Context) (driver.Conn, error) {
+	conn, err := c.inner.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, pragma := range pragmas {
+		if err := driverExec(ctx, conn, pragma); err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("%s: %w", pragma, err)
+		}
+	}
+	return conn, nil
+}
+
+func driverExec(ctx context.Context, conn driver.Conn, query string) error {
+	if e, ok := conn.(driver.ExecerContext); ok {
+		_, err := e.ExecContext(ctx, query, nil)
+		if !errors.Is(err, driver.ErrSkip) {
+			return err
+		}
+	}
+	stmt, err := conn.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	if s, ok := stmt.(driver.StmtExecContext); ok {
+		_, err = s.ExecContext(ctx, nil)
+	} else {
+		_, err = stmt.Exec(nil)
+	}
+	return err
 }
 
 // Wrap is a DB over a pool the caller opened, with its own pragmas, a
@@ -128,61 +185,90 @@ func (x poolExecutor) Exec(ctx context.Context, query string, args []any) (int64
 }
 
 func (x poolExecutor) Transaction(ctx context.Context, fn func(rt.Executor) error) error {
-	tx, err := x.db.pool.BeginTx(ctx, nil)
+	conn, err := x.db.pool.Conn(ctx)
 	if err != nil {
 		return err
 	}
-	done := false
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return err
+	}
+	open := true
 	defer func() {
-		if !done {
-			_ = tx.Rollback()
+		if open {
+			rollback(conn)
 		}
 	}()
-	err = fn(txExecutor{db: x.db, tx: tx})
-	if err == nil {
-		done = true
-		err = tx.Commit()
+	if err := fn(txExecutor{db: x.db, conn: conn}); err != nil {
+		return err
 	}
-	if errors.Is(err, sql.ErrTxDone) && ctx.Err() != nil {
-		return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	return err
+	if _, err := conn.ExecContext(context.WithoutCancel(ctx), "COMMIT"); err != nil {
+		return err
+	}
+	open = false
+	return nil
+}
+
+func rollback(conn *sql.Conn) {
+	ctx := context.Background()
+	if _, err := conn.ExecContext(ctx, "ROLLBACK"); err == nil {
+		return
+	}
+	if _, err := conn.ExecContext(ctx, "BEGIN"); err != nil {
+		_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+		return
+	}
+	if _, err := conn.ExecContext(ctx, "ROLLBACK"); err != nil {
+		_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+	}
 }
 
 type txExecutor struct {
-	db DB
-	tx *sql.Tx
+	db   DB
+	conn *sql.Conn
 }
 
 func (x txExecutor) Query(ctx context.Context, query string, args []any) (rt.Rows, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	bound, err := rt.ArgsBound(args)
 	if err != nil {
 		return nil, err
 	}
 	start := time.Now()
-	rows, err := x.tx.QueryContext(ctx, query, bound...)
+	rows, err := x.conn.QueryContext(ctx, query, bound...)
 	x.db.logged(query, start, err)
 	return rows, err
 }
 
 func (x txExecutor) QueryRow(ctx context.Context, query string, args []any) rt.Row {
+	if err := ctx.Err(); err != nil {
+		return errRow{err}
+	}
 	bound, err := rt.ArgsBound(args)
 	if err != nil {
 		return errRow{err}
 	}
 	start := time.Now()
-	r := x.tx.QueryRowContext(ctx, query, bound...)
+	r := x.conn.QueryRowContext(ctx, query, bound...)
 	x.db.logged(query, start, r.Err())
 	return row{r}
 }
 
 func (x txExecutor) Exec(ctx context.Context, query string, args []any) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	bound, err := rt.ArgsBound(args)
 	if err != nil {
 		return 0, err
 	}
 	start := time.Now()
-	res, err := x.tx.ExecContext(ctx, query, bound...)
+	res, err := x.conn.ExecContext(ctx, query, bound...)
 	x.db.logged(query, start, err)
 	if err != nil {
 		return 0, err

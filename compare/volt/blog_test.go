@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -109,11 +110,17 @@ func TestCreateIsAtomic(t *testing.T) {
 	}
 }
 
-// TestRulesHoldConcurrently proves that Publish and the comment limit
-// read what they check in the transaction that writes (spec
+// TestRulesHoldConcurrently proves that Publish, Edit and the comment
+// limit read what they check in the transaction that writes (spec
 // §generated-query-surface): twenty publishes of one draft at once
-// publish it once with one audit entry, and ten comments at once by one
-// member store three, every other call refused with 409 or 429.
+// publish it once with one audit entry, ten comments at once by one
+// member store three, every other call refused with 409 or 429, and
+// sixteen edits to a short body racing four publishes of a draft never
+// leave a published post under 100 characters. A check made before the
+// transaction loses a round only when the requests interleave so, about
+// one round in four for publishing and one in fifteen for editing, so the
+// test runs forty and a hundred and fifty rounds, which such a check
+// passes about once in thirty thousand runs.
 func TestRulesHoldConcurrently(t *testing.T) {
 	h, err := Handler(filepath.Join(t.TempDir(), "blog.db"))
 	if err != nil {
@@ -123,13 +130,14 @@ func TestRulesHoldConcurrently(t *testing.T) {
 	defer srv.Close()
 	ctx := context.Background()
 	ada, grace := blogclient.New(srv.URL, 1), blogclient.New(srv.URL, 2)
-	for round := range 10 {
-		p, err := ada.PostCreate(ctx, app.PostForm{Slug: fmt.Sprintf("race-%d", round), Title: "Race", Body: strings.Repeat("x", 120)})
+	long, short := strings.Repeat("x", 120), "short"
+	for round := range 40 {
+		p, err := ada.PostCreate(ctx, app.PostForm{Slug: fmt.Sprintf("race-%d", round), Title: "Race", Body: long})
 		if err != nil {
 			t.Fatal(err)
 		}
-		published := concurrently(t, 20, 409, func() error { _, err := ada.Publish(ctx, p.ID); return err })
-		stored := concurrently(t, 10, 429, func() error { _, err := grace.CommentCreate(ctx, p.ID, "Nice"); return err })
+		published := concurrently(t, 20, func(int) error { _, err := ada.Publish(ctx, p.ID); return err }, 409)
+		stored := concurrently(t, 10, func(int) error { _, err := grace.CommentCreate(ctx, p.ID, "Nice"); return err }, 429)
 		trail, err := ada.Audit(ctx, p.ID)
 		if err != nil {
 			t.Fatal(err)
@@ -138,14 +146,35 @@ func TestRulesHoldConcurrently(t *testing.T) {
 			t.Errorf("round %d: %d publishes succeeded with %d audit entries and %d comments were stored, want 1, 1 and 3", round, published, len(trail), stored)
 		}
 	}
+	for round := range 150 {
+		q, err := ada.PostCreate(ctx, app.PostForm{Slug: fmt.Sprintf("edit-race-%d", round), Title: "Edit race", Body: long})
+		if err != nil {
+			t.Fatal(err)
+		}
+		concurrently(t, 20, func(i int) error {
+			if i%5 == 4 {
+				_, err := ada.Publish(ctx, q.ID)
+				return err
+			}
+			_, err := ada.PostEdit(ctx, q.ID, app.PostEdit{Body: &short})
+			return err
+		}, 409, 422)
+		after, err := ada.Post(ctx, q.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if after.State == "published" && len(after.Body) < 100 {
+			t.Errorf("round %d: an edit racing a publish left a published post with the body %q", round, after.Body)
+		}
+	}
 }
 
-func concurrently(t *testing.T, n, refusal int, call func() error) int {
+func concurrently(t *testing.T, n int, call func(i int) error, refusals ...int) int {
 	t.Helper()
 	errs := make([]error, n)
 	var wg sync.WaitGroup
 	for i := range n {
-		wg.Go(func() { errs[i] = call() })
+		wg.Go(func() { errs[i] = call(i) })
 	}
 	wg.Wait()
 	succeeded := 0
@@ -154,8 +183,8 @@ func concurrently(t *testing.T, n, refusal int, call func() error) int {
 		switch {
 		case err == nil:
 			succeeded++
-		case !errors.As(err, &pe) || pe.Status != refusal:
-			t.Errorf("a concurrent call = %v, want success or %d", err, refusal)
+		case !errors.As(err, &pe) || !slices.Contains(refusals, pe.Status):
+			t.Errorf("a concurrent call = %v, want success or one of %v", err, refusals)
 		}
 	}
 	return succeeded

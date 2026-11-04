@@ -6,6 +6,7 @@ package itest
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/Piechutowski/volt/nao/run"
@@ -31,6 +32,10 @@ func TestNestedResults(t *testing.T) {
 	alone, err := run.Run(ctx, db, UserCarts(bob.ID))
 	if err != nil || len(alone) != 1 || alone[0].Name != "Bob" || alone[0].Orders == nil || len(alone[0].Orders) != 0 {
 		t.Fatalf("carts of a user without orders = %+v, %v; want Bob with an empty slice", alone, err)
+	}
+	var wire map[string]any
+	if b, err := json.Marshal(alone[0]); err != nil || json.Unmarshal(b, &wire) != nil || wire["orders"] == nil || wire["Orders"] != nil || wire["email"] != "bob@example.com" {
+		t.Errorf("a nested row on the wire = %v, %v; want its children under the relation's name, orders, beside the columns' names (spec §struct-tags)", wire, err)
 	}
 
 	const many = 1000

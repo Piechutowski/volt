@@ -18,6 +18,22 @@ func PathAdminStats(opts ...volt.URLOption) string {
 	return volt.URL("/admin/stats", opts...)
 }
 
+func PathAdminChosen(email string, opts ...volt.URLOption) string {
+	return volt.URL("/admin/chosen/"+volt.Seg(email), opts...)
+}
+
+func PathAdminPickedBy(email string, opts ...volt.URLOption) string {
+	return volt.URL("/admin/picked/"+volt.Seg(email), opts...)
+}
+
+func PathAdminNewest(opts ...volt.URLOption) string {
+	return volt.URL("/admin/newest", opts...)
+}
+
+func PathAdminNewestPage(opts ...volt.URLOption) string {
+	return volt.URL("/admin/newest/page", opts...)
+}
+
 func PathAdminTop(n int, opts ...volt.URLOption) string {
 	return volt.URL("/admin/top/"+volt.SegInt(n), opts...)
 }

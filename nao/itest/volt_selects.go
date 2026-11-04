@@ -262,7 +262,7 @@ func UserCarts(id int) rt.With[User, Order, int, UserWithOrders] {
 
 type UserWithOrders struct {
 	User
-	Orders []Order
+	Orders []Order `json:"orders"`
 }
 
 const voltUserCartsChildrenSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "user_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
@@ -359,27 +359,27 @@ func BatchTrail() rt.With[Batch, BatchItem, time.Time, BatchWithBatchItems] {
 
 type BatchWithBatchItems struct {
 	Batch
-	BatchItems []BatchItem
+	BatchItems []BatchItem `json:"batch_items"`
 }
 
 const voltBatchTrailChildrenSQL = `SELECT "id", "opened_at" FROM "batch_items" WHERE "opened_at" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
-const voltPageViewKeysetSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE ((? IS NULL OR "day" < ?) OR ((? IS NULL OR "day" = ?) AND (? IS NULL OR "id" < ?))) ORDER BY "day" DESC, "id" DESC LIMIT ?`
+const voltPageViewKeysetSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE ((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "day" < ?) OR (NOT (? IS NULL AND ? IS NULL) AND ((? IS NULL OR "day" = ?) AND (? IS NULL OR "id" < ?))))) ORDER BY "day" DESC, "id" DESC LIMIT ?`
 
 func PageViewKeyset(day rt.Null[int], id rt.Null[int], limit int) rt.Query[PageView] {
-	return rt.Query[PageView]{SQL: voltPageViewKeysetSQL, Args: []any{day, day, day, day, id, id, limit}, Scan: voltPageViewScan, Err: rt.LimitCheck(limit)}
+	return rt.Query[PageView]{SQL: voltPageViewKeysetSQL, Args: []any{day, id, day, day, day, id, day, day, id, id, limit}, Scan: voltPageViewScan, Err: rt.LimitCheck(limit)}
 }
 
-const voltOrderPlacedKeysetSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ("placed_at" IS NOT NULL AND ((? IS NULL OR "placed_at" < ?) OR ((? IS NULL OR "placed_at" = ?) AND (? IS NULL OR "id" < ?)))) ORDER BY "placed_at" DESC, "id" DESC LIMIT ?`
+const voltOrderPlacedKeysetSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ("placed_at" IS NOT NULL AND ((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "placed_at" < ?) OR (NOT (? IS NULL AND ? IS NULL) AND ((? IS NULL OR "placed_at" = ?) AND (? IS NULL OR "id" < ?)))))) ORDER BY "placed_at" DESC, "id" DESC LIMIT ?`
 
 func OrderPlacedKeyset(at rt.Null[time.Time], id rt.Null[int], limit int) rt.Query[Order] {
-	return rt.Query[Order]{SQL: voltOrderPlacedKeysetSQL, Args: []any{at, at, at, at, id, id, limit}, Scan: voltOrderScan, Err: rt.LimitCheck(limit)}
+	return rt.Query[Order]{SQL: voltOrderPlacedKeysetSQL, Args: []any{at, id, at, at, at, id, at, at, id, id, limit}, Scan: voltOrderScan, Err: rt.LimitCheck(limit)}
 }
 
-const voltOrderPlacedKeysetLooseSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ((? IS NULL OR "placed_at" < ?) OR ((? IS NULL OR "placed_at" = ?) AND (? IS NULL OR "id" < ?))) ORDER BY "placed_at" DESC, "id" DESC LIMIT ?`
+const voltOrderPlacedKeysetLooseSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "placed_at" < ?) OR (NOT (? IS NULL AND ? IS NULL) AND ((? IS NULL OR "placed_at" = ?) AND (? IS NULL OR "id" < ?))))) ORDER BY "placed_at" DESC, "id" DESC LIMIT ?`
 
 func OrderPlacedKeysetLoose(at rt.Null[time.Time], id rt.Null[int], limit int) rt.Query[Order] {
-	return rt.Query[Order]{SQL: voltOrderPlacedKeysetLooseSQL, Args: []any{at, at, at, at, id, id, limit}, Scan: voltOrderScan, Err: rt.LimitCheck(limit)}
+	return rt.Query[Order]{SQL: voltOrderPlacedKeysetLooseSQL, Args: []any{at, id, at, at, at, id, at, at, id, id, limit}, Scan: voltOrderScan, Err: rt.LimitCheck(limit)}
 }
 
 const voltPageViewPickedSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE ((? IS NULL OR "site" = ?) AND (? IS NULL OR "hits" >= ?)) ORDER BY "id" ASC`
@@ -406,16 +406,28 @@ func OrderCosting(min rt.Null[float64]) rt.Query[Order] {
 	return rt.Query[Order]{SQL: voltOrderCostingSQL, Args: []any{min, min}, Scan: voltOrderScan}
 }
 
-const voltUserTaggedSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE (? IS NULL OR EXISTS (SELECT 1 FROM "user_tags" AS "user_tags" WHERE "user_tags"."user_id" = "users"."id" AND ("user_tags"."tag" = ?))) ORDER BY "id" ASC`
+const voltUserTaggedSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE (? IS NULL OR EXISTS (SELECT 1 FROM "user_tags" AS "user_tags" WHERE "user_tags"."user_id" = "users"."id" AND (? IS NULL OR "user_tags"."tag" = ?))) ORDER BY "id" ASC`
 
 func UserTagged(tag rt.Null[string]) rt.Query[User] {
-	return rt.Query[User]{SQL: voltUserTaggedSQL, Args: []any{tag, tag}, Scan: voltUserScan}
+	return rt.Query[User]{SQL: voltUserTaggedSQL, Args: []any{tag, tag, tag}, Scan: voltUserScan}
 }
 
 const voltOrderBoughtBySQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE EXISTS (SELECT 1 FROM "users" AS "user" WHERE "user"."id" = "orders"."user_id" AND ("user"."name" = ?)) ORDER BY "id" ASC`
 
 func OrderBoughtBy(name string) rt.Query[Order] {
 	return rt.Query[Order]{SQL: voltOrderBoughtBySQL, Args: []any{name}, Scan: voltOrderScan}
+}
+
+const voltOrderEitherSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "user_id" = ?) OR (? IS NOT NULL AND "total" > ?))) ORDER BY "id" ASC`
+
+func OrderEither(buyer rt.Null[int], over rt.Null[float64]) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderEitherSQL, Args: []any{buyer, over, buyer, buyer, over, over}, Scan: voltOrderScan}
+}
+
+const voltUserSpendersSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE ((? IS NULL AND ? IS NULL) OR EXISTS (SELECT 1 FROM "orders" AS "orders" WHERE "orders"."user_id" = "users"."id" AND ((? IS NULL OR "orders"."status" = ?) AND (? IS NULL OR "orders"."total" > ?)))) ORDER BY "id" ASC`
+
+func UserSpenders(state rt.Null[OrderState], above rt.Null[float64]) rt.Query[User] {
+	return rt.Query[User]{SQL: voltUserSpendersSQL, Args: []any{state, above, state, state, above, above}, Scan: voltUserScan}
 }
 
 type OrderCounts struct {

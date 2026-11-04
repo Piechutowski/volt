@@ -62,6 +62,10 @@ func PathBoth(id int, opts ...volt.URLOption) string {
 	return volt.URL("/users/"+volt.SegInt(id)+"/both", opts...)
 }
 
+func PathFrom(id int, opts ...volt.URLOption) string {
+	return volt.URL("/users/"+volt.SegInt(id)+"/from", opts...)
+}
+
 func PathChangeEmail(id int, opts ...volt.URLOption) string {
 	return volt.URL("/users/"+volt.SegInt(id)+"/email", opts...)
 }
@@ -124,6 +128,14 @@ func PathAPIUserLatest(opts ...volt.URLOption) string {
 
 func PathAPIUserDescribed(opts ...volt.URLOption) string {
 	return volt.URL("/api/described", opts...)
+}
+
+func PathAPIUserChosen(opts ...volt.URLOption) string {
+	return volt.URL("/api/chosen", opts...)
+}
+
+func PathAPIRecent(opts ...volt.URLOption) string {
+	return volt.URL("/api/recent", opts...)
 }
 
 func PathMsRevenueBrowse(opts ...volt.URLOption) string {

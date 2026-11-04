@@ -234,7 +234,8 @@ layer:
   `pred` names and `exists` where a predicate term starts, after
   `where`, `and`, `or`, `not`, a pred's `{` or a predicate's `(` (not
   a projection's, a list's or a setting's), `exists` left out inside
-  an exists term, which does not nest, and the relations of the
+  an exists term, which does not nest, and the `pred`s there those
+  whose every column is a column of the relation's table, and the relations of the
   select's table after `exists` (§predicates),
   settings per construct and none on a construct that takes none
   (§settings-lists, §settings-whitelists), and `true`/`false` after
@@ -249,8 +250,16 @@ layer:
   migrations in name order ("migration 2 of 3") and whether it runs
   backward (§migrations); the project index answers it, so a
   migration alone in its own file counts its siblings.
-- A select hovers as its row types, its rendered `WHERE`, `ORDER BY`
-  and `LIMIT` with what each binds, and its method signatures. A select kept unresolved by a column
+- A select hovers as its row types, the nested row type of a `with`
+  select, its rendered `WHERE`, `ORDER BY` and `LIMIT` with what each
+  binds, and its method signatures, each with the effect it yields:
+  `rt.Query`, `rt.Lookup` for one row of aggregates, `rt.With` for a
+  `with` select (§selects-over-groups). A parameter the select names
+  in its `where` or as its `limit:`, `:at?` and `:limit` among them,
+  hovers as the Go parameter its functions take, saying whether it is
+  optional or the limit; one a `pred` names is typed at each use and
+  hovers as none, and no parameter renames, since a `pred` may name it
+  too. A select kept unresolved by a column
   of unknown type (§columns) hovers as its header, its row types with
   that field, nullable or not, spelled in its declared type and marked
   unknown, and one line naming the unknown columns; never an empty Go
@@ -351,8 +360,9 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
 
 A `.volt` file names Go by rule only in the containing package's own
 Go files (§projects-and-packages): pipeline plugs (§pipelines),
-validators (§validators), error handlers (§scopes) and bare declared
-types (§types). The server resolves plugs and validators with the
+validators (§validators), scope-load functions (§scope-loads), error
+handlers (§scopes) and bare declared types (§types). The server
+resolves plugs, validators and scope-load functions with the
 standard library's Go parser
 over the package directory's non-test `*.go` files (no gopls, no
 build): go-to-definition lands on the `func`, hover shows its signature

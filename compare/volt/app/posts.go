@@ -86,25 +86,27 @@ func (Posts) Show(r volt.Request, member db.Member, id int, p db.Post) volt.Resp
 	return postRender(200, p)
 }
 
-// Edit changes the title or body of the author's own draft.
-func (Posts) Edit(r volt.Request, member db.Member, id int, body PostEdit, p db.Post) volt.Response {
-	switch {
-	case p.AuthorID != member.ID:
-		return volt.Reject(403, "only the author edits a post")
-	case p.State != "draft":
-		return volt.Reject(409, "only a draft is edited")
-	}
-	cs := p.Changeset()
-	if body.Title != nil {
-		cs = cs.TitleSet(*body.Title)
-	}
-	if body.Body != nil {
-		cs = cs.BodySet(*body.Body)
-	}
-	if cs = cs.Validate(); !cs.Valid() {
-		return volt.Fail(cs.Err())
-	}
-	return volt.Then(db.PostUpdate(cs), func(p db.Post) volt.Response { return postRender(200, p) })
+// Edit changes the title or body of the author's own draft, reading the
+// post in the transaction that writes it (§generated-query-surface), so
+// an edit that races a publish finds the published post and is refused.
+func (Posts) Edit(r volt.Request, member db.Member, id int, body PostEdit) volt.Response {
+	edit := rt.Then(db.PostGet(id), func(p db.Post) rt.Effect[db.Post] {
+		switch {
+		case p.AuthorID != member.ID:
+			return rt.Fail[db.Post](volt.Error(403, "only the author edits a post"))
+		case p.State != "draft":
+			return rt.Fail[db.Post](volt.Error(409, "only a draft is edited"))
+		}
+		cs := p.Changeset()
+		if body.Title != nil {
+			cs = cs.TitleSet(*body.Title)
+		}
+		if body.Body != nil {
+			cs = cs.BodySet(*body.Body)
+		}
+		return db.PostUpdate(cs)
+	})
+	return volt.Then(rt.Atomic(edit), func(p db.Post) volt.Response { return postRender(200, p) })
 }
 
 // Publish turns the author's draft into a published post and audits it,

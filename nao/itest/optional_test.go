@@ -7,6 +7,7 @@ package itest
 import (
 	"context"
 	"math"
+	"slices"
 	"testing"
 	"time"
 
@@ -196,8 +197,8 @@ func TestOptionalKeysetFirstPage(t *testing.T) {
 
 // A keyset over a nullable column pages soundly once the where keeps its
 // NULLs out; without that, a page that ends on a NULL hands the next page
-// an absent cursor, and the next page is the first again (spec
-// §predicates).
+// an absent time, its terms vanish and the id's alone stays, and the next
+// page reads again rows an earlier page read (spec §predicates).
 func TestOptionalKeysetNullableColumn(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -249,8 +250,8 @@ func TestOptionalKeysetNullableColumn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !idsSame(orderIDs(again), orderIDs(first)) {
-		t.Errorf("the page after a NULL cursor is %v, want the first page %v again", orderIDs(again), orderIDs(first))
+	if !slices.ContainsFunc(orderIDs(again), func(id int) bool { return slices.Contains(orderIDs(first), id) && id != last.ID }) {
+		t.Errorf("the page after a NULL cursor is %v, want it to read again a row of the first page %v", orderIDs(again), orderIDs(first))
 	}
 }
 
@@ -308,8 +309,8 @@ func TestExistsReverseRelationKeepsCounts(t *testing.T) {
 	}
 }
 
-// An exists term that reads an absent optional parameter is true for every
-// row, those the relation reaches nothing from included.
+// An exists term whose every optional parameter is absent is taken out,
+// true for every row, those the relation reaches nothing from included.
 func TestExistsOptionalVanishesWhole(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -344,6 +345,67 @@ func TestExistsOptionalVanishesWhole(t *testing.T) {
 	}
 	if len(nobody) != 0 {
 		t.Errorf("an unused tag keeps %+v, want nobody", nobody)
+	}
+}
+
+// A term that reads an absent optional parameter is taken out of the
+// predicate, so an or keeps the operand whose parameter is present and an
+// exists term the inner term whose parameter is present, and either is
+// taken out whole only when every parameter it reads is absent (spec
+// §predicates).
+func TestOptionalAbsentTakesTheTermOut(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	ann := seedUser(t, db, "ann@blog.test")
+	bob := seedUser(t, db, "bob@blog.test")
+	cy := seedUser(t, db, "cy@blog.test")
+	var o []Order
+	for _, row := range []struct {
+		user  int
+		total float64
+		state OrderState
+	}{{ann.ID, 5, OrderStatePending}, {bob.ID, 50, OrderStateShipped}, {bob.ID, 1, OrderStatePending}} {
+		made, err := run.Run(ctx, db, OrderCreate(OrderNew().UserIDSet(row.user).TotalSet(row.total).FeeSet(1).StatusSet(row.state)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		o = append(o, made)
+	}
+	for _, tc := range []struct {
+		name  string
+		buyer rt.Null[int]
+		over  rt.Null[float64]
+		want  []int
+	}{
+		{"both absent", rt.Null[int]{}, rt.Null[float64]{}, []int{o[0].ID, o[1].ID, o[2].ID}},
+		{"buyer alone", rt.Some(ann.ID), rt.Null[float64]{}, []int{o[0].ID}},
+		{"over alone", rt.Null[int]{}, rt.Some(10.0), []int{o[1].ID}},
+		{"both", rt.Some(ann.ID), rt.Some(10.0), []int{o[0].ID, o[1].ID}},
+	} {
+		rows, err := run.Run(ctx, db, OrderEither(tc.buyer, tc.over))
+		if err != nil || !idsSame(orderIDs(rows), tc.want) {
+			t.Errorf("either, %s: %v, %v; want %v", tc.name, orderIDs(rows), err, tc.want)
+		}
+	}
+	for _, tc := range []struct {
+		name  string
+		state rt.Null[OrderState]
+		above rt.Null[float64]
+		want  []int
+	}{
+		{"both absent", rt.Null[OrderState]{}, rt.Null[float64]{}, []int{ann.ID, bob.ID, cy.ID}},
+		{"state alone", rt.Some(OrderStateShipped), rt.Null[float64]{}, []int{bob.ID}},
+		{"above alone", rt.Null[OrderState]{}, rt.Some(2.0), []int{ann.ID, bob.ID}},
+		{"both, on one order", rt.Some(OrderStatePending), rt.Some(2.0), []int{ann.ID}},
+	} {
+		rows, err := run.Run(ctx, db, UserSpenders(tc.state, tc.above))
+		got := make([]int, len(rows))
+		for i, u := range rows {
+			got[i] = u.ID
+		}
+		if err != nil || !idsSame(got, tc.want) {
+			t.Errorf("spenders, %s: %v, %v; want %v", tc.name, got, err, tc.want)
+		}
 	}
 }
 

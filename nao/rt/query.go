@@ -184,6 +184,8 @@ const (
 	predNot
 	predExists
 	predOptional
+	predNullSlot
+	predVanish
 )
 
 // And is the conjunction of the given predicates. Empty predicates are
@@ -297,12 +299,40 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 		}
 		b.WriteString(")")
 	case predOptional:
-		b.WriteString("(")
+		guard, sep := "? IS NULL OR ", ""
+		if p.not {
+			guard, sep = "? IS NOT NULL AND ", ""
+		}
+		b.WriteString("(" + sep)
 		for _, v := range p.vals {
-			b.WriteString("? IS NULL OR ")
+			b.WriteString(guard)
 			*args = argsAppend(*args, v)
 		}
 		if err := p.kids[0].render(b, args); err != nil {
+			return err
+		}
+		b.WriteString(")")
+	case predNullSlot:
+		b.WriteString("? IS NULL")
+		*args = argsAppend(*args, p.vals[0])
+	case predVanish:
+		b.WriteString("(")
+		var err error
+		if p.not {
+			b.WriteString("NOT ")
+			err = p.kids[0].parenRender(b, args)
+		} else {
+			err = p.kids[0].render(b, args)
+		}
+		if err != nil {
+			return err
+		}
+		if p.not {
+			b.WriteString(" AND ")
+		} else {
+			b.WriteString(" OR ")
+		}
+		if err := p.kids[1].render(b, args); err != nil {
 			return err
 		}
 		b.WriteString(")")
@@ -313,7 +343,7 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 }
 
 func (p Pred[M]) parenRender(b *strings.Builder, args *[]any) error {
-	if p.kind == predAnd || p.kind == predOr || p.kind == predRaw {
+	if p.kind == predAnd || p.kind == predOr || p.kind == predRaw || p.kind == predOptional || p.kind == predVanish {
 		return p.render(b, args)
 	}
 	b.WriteString("(")

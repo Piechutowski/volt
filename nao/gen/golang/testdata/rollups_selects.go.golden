@@ -225,7 +225,7 @@ func HostBoard(from int) rt.With[HostBoardRow, Visit, int, HostBoardRowWithVisit
 
 type HostBoardRowWithVisits struct {
 	HostBoardRow
-	Visits []Visit
+	Visits []Visit `json:"visits"`
 }
 
 const voltHostBoardChildrenSQL = `SELECT "id", "host_id", "owner_id", "day" FROM "visits" WHERE "host_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
@@ -247,7 +247,7 @@ func HostLineup() rt.With[Host, Visit, int, HostWithVisits] {
 
 type HostWithVisits struct {
 	Host
-	Visits []Visit
+	Visits []Visit `json:"visits"`
 }
 
 const voltHostLineupChildrenSQL = `SELECT "id", "host_id", "owner_id", "day" FROM "visits" WHERE "host_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
@@ -321,10 +321,10 @@ func HostNewest(limit int) rt.With[Host, Visit, int, HostWithVisits] {
 
 const voltHostNewestChildrenSQL = `SELECT "id", "host_id", "owner_id", "day" FROM "visits" WHERE "host_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
-const voltVisitKeysetSQL = `SELECT "id", "host_id", "owner_id", "day" FROM "visits" WHERE ((? IS NULL OR "day" < ?) OR ((? IS NULL OR "day" = ?) AND (? IS NULL OR "id" < ?))) ORDER BY "day" DESC, "id" DESC LIMIT ?`
+const voltVisitKeysetSQL = `SELECT "id", "host_id", "owner_id", "day" FROM "visits" WHERE ((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "day" < ?) OR (NOT (? IS NULL AND ? IS NULL) AND ((? IS NULL OR "day" = ?) AND (? IS NULL OR "id" < ?))))) ORDER BY "day" DESC, "id" DESC LIMIT ?`
 
 func VisitKeyset(day rt.Null[int], id rt.Null[int], limit int) rt.Query[Visit] {
-	return rt.Query[Visit]{SQL: voltVisitKeysetSQL, Args: []any{day, day, day, day, id, id, limit}, Scan: voltVisitScan, Err: rt.LimitCheck(limit)}
+	return rt.Query[Visit]{SQL: voltVisitKeysetSQL, Args: []any{day, id, day, day, day, id, day, day, id, id, limit}, Scan: voltVisitScan, Err: rt.LimitCheck(limit)}
 }
 
 const voltPageViewPickedSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" WHERE ((? IS NULL OR "id" IN (SELECT value FROM json_each(?))) AND (? IS NULL OR "site" LIKE ?)) ORDER BY "id" ASC`
@@ -333,10 +333,10 @@ func PageViewPicked(ids rt.Null[[]int], site rt.Null[string]) rt.Query[PageView]
 	return rt.Query[PageView]{SQL: voltPageViewPickedSQL, Args: []any{rt.JSONListOptional(ids), rt.JSONListOptional(ids), site, site}, Scan: voltPageViewScan}
 }
 
-const voltHostVisitedSQL = `SELECT "id", "name" FROM "hosts" WHERE ((? IS NULL OR EXISTS (SELECT 1 FROM "visits" AS "visits" WHERE "visits"."host_id" = "hosts"."id" AND ("visits"."day" >= ?))) AND NOT (EXISTS (SELECT 1 FROM "visits" AS "owned" WHERE "owned"."owner_id" = "hosts"."id" AND ("owned"."day" = ?)))) ORDER BY "id" ASC`
+const voltHostVisitedSQL = `SELECT "id", "name" FROM "hosts" WHERE ((? IS NULL OR EXISTS (SELECT 1 FROM "visits" AS "visits" WHERE "visits"."host_id" = "hosts"."id" AND (? IS NULL OR "visits"."day" >= ?))) AND NOT (EXISTS (SELECT 1 FROM "visits" AS "owned" WHERE "owned"."owner_id" = "hosts"."id" AND ("owned"."day" = ?)))) ORDER BY "id" ASC`
 
 func HostVisited(from rt.Null[int]) rt.Query[Host] {
-	return rt.Query[Host]{SQL: voltHostVisitedSQL, Args: []any{from, from, 0}, Scan: voltHostScan}
+	return rt.Query[Host]{SQL: voltHostVisitedSQL, Args: []any{from, from, from, 0}, Scan: voltHostScan}
 }
 
 type ByHost struct {

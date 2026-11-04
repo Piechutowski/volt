@@ -1,7 +1,9 @@
 package lsp
 
 import (
+	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -398,8 +400,9 @@ func existsDocument(t *testing.T, text string) *Document {
 	return d
 }
 
-// An exists term's relation and the columns inside it resolve against
-// the table the relation leads to (spec §predicates).
+// An exists term's columns resolve against the table the relation leads
+// to, and its relation to the reverse: that names it (spec §predicates,
+// §relationships-ref).
 func TestVoltExistsResolvesTheRelatedTable(t *testing.T) {
 	d := existsDocument(t, existsSchema)
 	loc := d.Definition(posOf(t, existsSchema, "tag =", 0))
@@ -410,8 +413,42 @@ func TestVoltExistsResolvesTheRelatedTable(t *testing.T) {
 		t.Errorf("the column inside exists resolves to line %d, want post_tags.tag on line %d", loc.Range.Start.Line, want.Line)
 	}
 	rel := d.Definition(posOf(t, existsSchema, "tags (", 0))
-	if rel == nil || rel.Range.Start.Line != posOf(t, existsSchema, "post_tags {", 0).Line {
-		t.Errorf("the relation of exists resolves to %v, want the table post_tags", rel)
+	if want := posOf(t, existsSchema, "tags]", 0); rel == nil || rel.Range.Start != want {
+		t.Errorf("the relation of exists resolves to %v, want the reverse: tags of its ref at %v", rel, want)
+	}
+}
+
+// A rename at a relation's use renames the as: or reverse: that names it
+// and every use, and leaves the table it leads to alone; a relation whose
+// name a column gives renames only by giving its ref as: (spec
+// §relationships-ref).
+func TestVoltRenameRelation(t *testing.T) {
+	text := existsSchema + "select counted (id, count(tags.tag) as n) for posts join tags [group: (id)]\n" +
+		"table notes {\n\tid int [pk]\n\tpost_id int [ref: posts.id]\n}\n" +
+		"select noted for notes join post [order: (id asc)]\n"
+	d := existsDocument(t, text)
+	edit, err := d.Rename(posOf(t, text, "tags (", 0), "labels")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, edits := range edit.Changes {
+		for _, e := range edits {
+			got = append(got, fmt.Sprintf("%d:%d", e.Range.Start.Line, e.Range.Start.Character))
+		}
+	}
+	want := []protocol.Position{posOf(t, text, "tags]", 0), posOf(t, text, "tags (", 0), posOf(t, text, "tags.tag", 0), posOf(t, text, "join tags", 0)}
+	want[3].Character += uint32(len("join "))
+	if len(got) != len(want) {
+		t.Fatalf("renaming the relation tags edits %v, want its reverse: and its three uses", got)
+	}
+	for _, w := range want {
+		if !slices.Contains(got, fmt.Sprintf("%d:%d", w.Line, w.Character)) {
+			t.Errorf("renaming the relation tags edits %v, missing %d:%d", got, w.Line, w.Character)
+		}
+	}
+	if _, err := d.Rename(posOf(t, text, "post [", 0), "entry"); err == nil || !strings.Contains(err.Error(), "post_id") {
+		t.Errorf("renaming a relation a column names = %v; want a refusal naming the column post_id", err)
 	}
 }
 
@@ -491,7 +528,8 @@ func TestVoltExistsPredReference(t *testing.T) {
 
 // A predicate term starts after a predicate's parenthesis too, where
 // completion offers the preds and exists; inside an exists term, which
-// does not nest, it offers the preds alone, and a projection's
+// does not nest, it offers the preds that type over the relation's
+// table alone, recent over posts not among them, and a projection's
 // parenthesis is no predicate (spec §predicates).
 func TestVoltCompletePredicateParens(t *testing.T) {
 	schema := strings.Replace(existsSchema, "select tagged", "pred recent { id > 0 }\n\nselect tagged", 1)
@@ -505,7 +543,7 @@ func TestVoltCompletePredicateParens(t *testing.T) {
 		{"select feed for posts where ((re", false, true},
 		{"select feed for posts where title != \"\" or (ex", true, false},
 		{"select feed for posts where not (", true, true},
-		{"select feed for posts where exists tags (", false, true},
+		{"select feed for posts where exists tags (", false, false},
 		{"select feed for posts where exists tags (tag = \"go\" and ex", false, false},
 		{"select feed for posts where exists tags (tag = \"go\") and (ex", true, false},
 		{"pred fresh { (", true, true},
@@ -524,5 +562,40 @@ func TestVoltCompletePredicateParens(t *testing.T) {
 		if labels["exists "] != tc.exists || labels["recent"] != tc.recent {
 			t.Errorf("completion after %q = %v, want exists %v and recent %v", tc.line, labels, tc.exists, tc.recent)
 		}
+	}
+}
+
+// Inside an exists completion offers the preds that type over the table
+// the relation leads to, and none over the select's own (spec
+// §predicates).
+func TestVoltCompletePredsInsideExists(t *testing.T) {
+	schema := existsSchema + "pred popular { title like \"%go%\" }\npred named { tag != \"\" }\n"
+	text := strings.Replace(schema, "where exists tags (tag = :tag?)", "where exists tags (", 1)
+	root := voltProject(t, map[string]string{"go.mod": "module lsptest\n", "db/schema.volt": schema})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
+	pos := posOf(t, text, "exists tags (", 0)
+	pos.Character += uint32(len("exists tags ("))
+	labels := map[string]bool{}
+	for _, it := range d.Complete(pos) {
+		labels[it.Label] = true
+	}
+	if !labels["named"] || labels["popular"] {
+		t.Errorf("completion inside exists tags ( = %v, want the pred over post_tags and not the one over posts", labels)
+	}
+}
+
+// A scope load's function navigates into Go as a plug does (spec
+// §scope-loads).
+func TestVoltScopeLoadNavigates(t *testing.T) {
+	routes := "package app\n\nimport (\n\tdb\n)\n\nscope / {\n\tload me CurrentMember\n\tget /me Me.Show\n}\n"
+	goSrc := "package app\n\nimport (\n\t\"github.com/Piechutowski/volt\"\n)\n\n// CurrentMember is the member a request names.\nfunc CurrentMember(r volt.Request) volt.Load[int] { return volt.Halt[int](volt.NoContent()) }\n"
+	root := voltProject(t, map[string]string{"go.mod": "module lsptest\n", "db/schema.volt": navSchema, "app/routes.volt": routes, "app/loads.go": goSrc})
+	d := NewDocument("file://"+filepath.Join(root, "app", "routes.volt"), routes)
+	pos := posOf(t, routes, "CurrentMember", 0)
+	if loc := d.Definition(pos); loc == nil || !strings.HasSuffix(string(loc.URI), "loads.go") {
+		t.Errorf("definition of a scope load's function = %v, want app/loads.go", loc)
+	}
+	if h := d.Hover(pos); h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, "the member a request names") {
+		t.Errorf("hover of a scope load's function = %v, want its signature and doc comment", h)
 	}
 }

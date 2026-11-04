@@ -69,6 +69,9 @@ func (w With[P, C, K, R]) performAny(ctx context.Context, x Executor) (any, erro
 }
 
 func (w With[P, C, K, R]) describe() description {
-	parent := statementDescribe("with", w.Parent.SQL, w.Parent.Args, w.Parent.Err)
-	return description{text: parent.text + "; " + statementDescribe("children", w.Child, nil, nil).text}
+	d := statementDescribe("with", w.Parent.SQL, w.Parent.Args, w.Parent.Err)
+	children := statementDescribe("children", w.Child, nil, nil)
+	d.kind += "; " + children.kind
+	d.spelled += "; " + children.spelled
+	return d
 }

@@ -2,7 +2,7 @@ check:
 dup/schema.volt:8:1: error: spec/namespaces-and-uniqueness: duplicate table name "t"
 vet:
 data/schema.volt:4:15: warning: vet/redundantindex: unique on "id" is redundant; the column is the primary key, which is unique and indexed already
-app/handlers.go:5:2: warning: vet/handlerimports: a file that declares a handler imports os; a handler describes its effects and the shim performs them (§requests-and-responses)
+app/handlers.go:5:2: warning: vet/handlerimports: a file that declares a handler or a scope load imports os; a handler describes its effects and the shim performs them (§requests-and-responses, §scope-loads)
 dup/schema.volt:6:3: warning: vet/casecollision: column names total and Total differ only in case
 data/more.volt:9:1: warning: vet/reftype: relationship joins comments.author_id (string) to users.id (int); the types differ
 data/schema.volt:9:3: warning: vet/dynname: table users (constructor UserNew) and table users column "new" (handle UserNew) both generate the Go name UserNew; rename one (e.g. with [model: "..."])

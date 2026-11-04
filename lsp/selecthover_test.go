@@ -237,3 +237,59 @@ func TestSelectHoverBytesFieldTypes(t *testing.T) {
 		}
 	}
 }
+
+// A select hovers with the effect its function yields (spec
+// §selects-over-groups): rt.Lookup for one row of aggregates, and rt.With
+// with the nested row type for a with select.
+func TestSelectHoverEffectKinds(t *testing.T) {
+	schema := "package db\n\n" +
+		"table posts {\n\tid int [pk]\n\tscore int\n}\n\n" +
+		"table comments {\n\tid int [pk]\n\tpost_id int [ref: posts.id]\n\tbody string\n}\n\n" +
+		"select total (count() as n) for posts where score > :min?\n" +
+		"select nested for posts with comments [order: (id asc), limit: :limit]\n"
+	root := voltProject(t, map[string]string{"go.mod": "module proj\n", "db/schema.volt": schema})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), schema)
+	for name, wants := range map[string][]string{
+		"total":  {"func PostTotal(min rt.Null[int]) rt.Lookup[Total]"},
+		"nested": {"func PostNested(limit int) rt.With[Post, Comment, int, PostWithComments]", "type PostWithComments struct {\n\tPost\n\tComments []Comment `json:\"comments\"`\n}"},
+	} {
+		h := d.Hover(posOf(t, schema, name+" ", 0))
+		if h == nil {
+			t.Fatalf("no hover for %s", name)
+		}
+		md := h.Contents.(protocol.MarkupContent).Value
+		for _, want := range wants {
+			if !strings.Contains(md, want) {
+				t.Errorf("hover of %s missing %q:\n%s", name, want, md)
+			}
+		}
+		if strings.Contains(md, "rt.Query[") {
+			t.Errorf("hover of %s says rt.Query:\n%s", name, md)
+		}
+	}
+}
+
+// A parameter a select names hovers as the Go parameter its functions
+// take, optional or the limit (spec §predicates, §selects-over-groups).
+func TestSelectParamHover(t *testing.T) {
+	schema := "package db\n\n" +
+		"table posts {\n\tid int [pk]\n\tscore int\n}\n\n" +
+		"select page for posts where score > :min? and id < :before [order: (id desc), limit: :limit]\n"
+	root := voltProject(t, map[string]string{"go.mod": "module proj\n", "db/schema.volt": schema})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), schema)
+	for at, want := range map[string]string{
+		":min?":   "min rt.Null[int]\n```\nan optional parameter",
+		":before": "before int\n```\na parameter",
+		":limit":  "limit int\n```\nthe limit:",
+	} {
+		pos := posOf(t, schema, at, 0)
+		pos.Character++
+		h := d.Hover(pos)
+		if h == nil {
+			t.Fatalf("no hover at %s", at)
+		}
+		if md := h.Contents.(protocol.MarkupContent).Value; !strings.Contains(md, want) {
+			t.Errorf("hover at %s = %q, want %q", at, md, want)
+		}
+	}
+}

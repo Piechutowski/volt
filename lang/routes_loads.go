@@ -29,11 +29,18 @@ func (l *routeLowering) loads(r *ast.Route, params []Param, inh inherited) (load
 		byName[p.Name] = p
 	}
 	seen := map[string]token.Position{}
-	for _, ld := range r.Loads {
+	values := map[string]string{}
+	for _, sl := range inh.loads {
+		values[sl.Name] = "a scope load above the route"
+	}
+	for i, ld := range r.Loads {
+		if i > 0 {
+			values[r.Loads[i-1].Name.Name()] = "a load of the route before it"
+		}
 		name := ld.Name.Name()
 		switch {
 		case !loadNameOK(name):
-			l.errorf(ld.Name.Pos(), "route-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§route-loads, §route-paths)", name)
+			l.errorf(ld.Name.Pos(), "route-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), and not shaped like a generated local (§route-loads, §route-paths)", name)
 			ok = false
 			continue
 		case loadNameQualifier(name, l.facts.pkgName, l.facts.imports):
@@ -55,7 +62,7 @@ func (l *routeLowering) loads(r *ast.Route, params []Param, inh inherited) (load
 			continue
 		}
 		seen[name] = ld.Name.Pos()
-		q := l.loadQuery(ld, byName)
+		q := l.callQuery(name, ld.Call, byName, values)
 		if q == nil {
 			ok = false
 			continue
@@ -66,11 +73,12 @@ func (l *routeLowering) loads(r *ast.Route, params []Param, inh inherited) (load
 }
 
 // loadNameOK reports whether a load may be named so (spec §route-loads,
-// §scope-loads): a lower-case Go identifier that is neither reserved
-// nor err or ok, which the shim declares beside it, nor shaped like a
-// generated local.
+// §scope-loads): a lower-case Go identifier that is neither reserved,
+// nor err or ok, which the shim declares beside it, nor a name the
+// route files import a package under, which the shim's closures would
+// shadow, nor shaped like a generated local.
 func loadNameOK(name string) bool {
-	if naming.RouteSignatureName(name) || name == "_" || name == "err" || name == "ok" || naming.LocalName(name) || !exportedIdentOK(strings.ToUpper(name[:1])+name[1:]) {
+	if naming.RouteSignatureName(name) || name == "_" || name == "err" || name == "ok" || generatedImportNames[name] != "" || naming.LocalName(name) || !exportedIdentOK(strings.ToUpper(name[:1])+name[1:]) {
 		return false
 	}
 	return name[0] >= 'a' && name[0] <= 'z'
@@ -86,11 +94,7 @@ func loadNameQualifier(name, pkgName string, imports map[string]string) bool {
 	return ok
 }
 
-func (l *routeLowering) loadQuery(ld *ast.Load, byName map[string]Param) *QueryRef {
-	return l.callQuery(ld.Name.Name(), ld.Call, byName)
-}
-
-func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[string]Param) *QueryRef {
+func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[string]Param, values map[string]string) *QueryRef {
 	parts := call.Ref.Parts
 	last := parts[len(parts)-1]
 	name := last.Name()
@@ -173,6 +177,13 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 	ok := true
 	for i, arg := range call.Args {
 		sp := sig[i]
+		if a, isName := arg.(*ast.Ident); isName && byName[a.Name()].Name == "" {
+			if what := values[a.Name()]; what != "" {
+				l.errorf(a.Pos(), "route-loads", "argument %d of %s names %q, %s, whose value no load binds: a name that is no path parameter reads the query string by that name, so the client would choose it; name the key otherwise, or load in the handler with Then (§route-loads)", i+1, ref, a.Name(), what)
+				ok = false
+				continue
+			}
+		}
 		qp := QueryParam{Name: sp.name, GoType: sp.goType, Limit: sp.limits}
 		if sp.goType == "" {
 			qr.Unresolved = true
@@ -184,28 +195,6 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 		if !queryValueTypes[strings.TrimPrefix(sp.goType, "[]")] {
 			l.errorf(arg.Pos(), "route-loads", "parameter %q of %s is %s, which no load binds: the query string cannot carry it, and neither a path parameter nor a literal spells it (§route-loads)", sp.name, ref, qp.Type())
 			ok = false
-			qr.Params = append(qr.Params, qp)
-			continue
-		}
-		if sp.optional {
-			a, isName := arg.(*ast.Ident)
-			inPath := false
-			if isName {
-				_, inPath = byName[a.Name()]
-			}
-			switch {
-			case !isName || a.Name() == "true" || a.Name() == "false":
-				l.errorf(arg.Pos(), "route-loads", "argument %d of %s binds the optional parameter %q, which a literal, always present, cannot bind; name a query-string key (§route-loads)", i+1, ref, sp.name)
-				ok = false
-			case inPath:
-				l.errorf(a.Pos(), "route-loads", "argument %d of %s binds the optional parameter %q, which a path parameter, always present, cannot bind; name a query-string key (§route-loads)", i+1, ref, sp.name)
-				ok = false
-			case list:
-				l.errorf(a.Pos(), "route-loads", "argument %d of %s binds the optional list parameter %q, which a load cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§route-loads, §query-routes)", i+1, ref, sp.name)
-				ok = false
-			default:
-				qp.Source, qp.Name = FromQuery, a.Name()
-			}
 			qr.Params = append(qr.Params, qp)
 			continue
 		}
@@ -296,6 +285,19 @@ func numberLiteral(lit, goType string) string {
 		return ""
 	}
 	return s
+}
+
+// limitSetting reads a route's limit: or max_limit: setting (spec
+// §route-loads): a positive integer of rows that fits an int.
+func (l *routeLowering) limitSetting(s *ast.Setting) (int, bool) {
+	lit, ok := s.Value.(*ast.BasicLit)
+	if ok && lit.Tok.Kind == token.NUMBER {
+		if n, err := strconv.ParseInt(lit.Tok.Val, 10, 32); err == nil && n > 0 {
+			return int(n), true
+		}
+	}
+	l.errorf(s.Pos(), "route-loads", "%s: takes a positive integer of rows (§route-loads)", s.Name)
+	return 0, false
 }
 
 // timeout reads a route's timeout: setting (spec §route-loads): a

@@ -10,12 +10,14 @@ package router
 
 import (
 	"fmt"
+	"go/token"
 	"sort"
 	"strings"
 
 	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 const (
@@ -323,15 +325,40 @@ func (g *generator) timeParams() bool {
 	return false
 }
 
-func (g *generator) queryOptionalParams() bool {
+// clientParams are the parameters the client's methods take in the
+// query string (spec §generated-client): a query route's and the keys
+// the loads of a controller route bind.
+func (g *generator) clientParams() []lang.QueryParam {
+	var out []lang.QueryParam
 	for _, r := range g.pkg.Routes {
-		if r.Query == nil || r.ClientName == "" {
-			continue
-		}
-		for _, p := range r.Query.Params {
-			if p.Optional {
-				return true
+		switch {
+		case r.ClientName == "" || r.Events:
+		case r.Query != nil:
+			for _, p := range r.Query.Params {
+				if p.Source == lang.FromQuery || p.Source == lang.FromList {
+					out = append(out, p)
+				}
 			}
+		default:
+			out = append(out, loadKeys(r)...)
+		}
+	}
+	return out
+}
+
+func (g *generator) queryOptionalParams() bool {
+	for _, p := range g.clientParams() {
+		if p.Optional {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *generator) clientTimeParams() bool {
+	for _, p := range g.clientParams() {
+		if strings.TrimPrefix(p.GoType, "[]") == "time.Time" {
+			return true
 		}
 	}
 	return false
@@ -459,13 +486,12 @@ func (g *generator) queryShimBody(r *lang.RouteInfo, parsed map[string]string) {
 	for _, p := range q.Params {
 		switch p.Source {
 		case lang.FromPath:
-			args = append(args, parsed[p.Name])
+			args = append(args, present(p, parsed[p.Name]))
 		case lang.FromQuery:
-			g.pf("\t\tvolt%s, err := volt.%s[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", p.Name, queryBinder(p), p.GoType, p.Name)
-			g.limitCheckEmit(p, "volt"+p.Name, "\t\t")
+			g.queryBindEmit(r, p, "volt"+p.Name, "\t\t")
 			args = append(args, "volt"+p.Name)
 		case lang.FromList:
-			g.pf("\t\tvolt%s, err := volt.QueryParams[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", p.Name, strings.TrimPrefix(p.GoType, "[]"), p.Name)
+			g.pf("\t\tvolt%s, err := volt.%s[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", p.Name, listBinder(p), strings.TrimPrefix(p.GoType, "[]"), p.Name)
 			args = append(args, "volt"+p.Name)
 		case lang.FromBody:
 			cb := q.Changeset
@@ -701,7 +727,7 @@ func (g *generator) clientEmit() error {
 	if rawMethod {
 		imports = append(imports, "net/http")
 	}
-	if g.queryTimeParams() {
+	if g.clientTimeParams() {
 		imports = append(imports, "time")
 	}
 	imports = append(imports, "", voltImport)
@@ -738,45 +764,39 @@ func (g *generator) clientEmit() error {
 			continue
 		}
 		if r.Query == nil {
-			sig, in := sigParams(r.Params), "nil"
+			var keys strings.Builder
+			qs := clientQuery{}
+			for _, p := range loadKeys(r) {
+				name := clientParamName(p.Name)
+				fmt.Fprintf(&keys, ", %s %s", name, p.Type())
+				qs.add(p, name)
+			}
+			sig, in := sigParams(r.Params)+keys.String(), "nil"
 			if b := r.Body; b != nil && b.Kind == lang.BodyChangeset {
 				sig, in = sig+", cs "+g.clientType(b.Query, b.Query.Changeset.Type), "cs.Params()"
 			} else if b != nil {
 				sig, in = sig+", body any", "body"
 			}
 			g.pf("func (c *Client) %s(ctx context.Context%s) (*http.Response, error) {\n", r.ClientName, sig)
-			g.pf("\treturn c.Raw(ctx, %q, volt.URL(%s), %s)\n}\n\n", method, pathExpr(r), in)
+			g.pf("%s", qs.body("nil, "))
+			g.pf("\treturn c.Raw(ctx, %q, %s, %s)\n}\n\n", method, qs.url(r), in)
 			continue
 		}
 		q := r.Query
-		var sig, body strings.Builder
-		var opts []string
+		var sig strings.Builder
+		qs := clientQuery{}
 		var arg string
 		for _, p := range q.Params {
 			goType := p.Type()
-			if p.Source == lang.FromBody {
+			switch p.Source {
+			case lang.FromBody:
 				goType = g.clientType(q, strings.TrimPrefix(goType, q.Qualifier+"."))
+				arg = p.Name
+			case lang.FromPath:
+				goType = p.GoType
 			}
 			fmt.Fprintf(&sig, ", %s %s", p.Name, goType)
-			switch p.Source {
-			case lang.FromQuery:
-				if p.Optional {
-					fmt.Fprintf(&body, "\tif %s.Valid {\n\t\tvoltQ = append(voltQ, volt.Query(%q, volt.FormatQuery(%s.V)))\n\t}\n", p.Name, p.Name, p.Name)
-					break
-				}
-				opts = append(opts, fmt.Sprintf("volt.Query(%q, volt.FormatQuery(%s))", p.Name, p.Name))
-			case lang.FromList:
-				fmt.Fprintf(&body, "\tfor _, voltV := range %s {\n\t\tvoltQ = append(voltQ, volt.Query(%q, volt.FormatQuery(voltV)))\n\t}\n", p.Name, p.Name)
-			case lang.FromBody:
-				arg = p.Name
-			}
-		}
-		url := "volt.URL(" + pathExpr(r) + ")"
-		if len(opts) > 0 || body.Len() > 0 {
-			loops := body.String()
-			body.Reset()
-			fmt.Fprintf(&body, "\tvoltQ := []volt.URLOption{%s}\n%s", strings.Join(opts, ", "), loops)
-			url = "volt.URL(" + pathExpr(r) + ", voltQ...)"
+			qs.add(p, p.Name)
 		}
 		in := "nil"
 		if arg != "" {
@@ -791,17 +811,109 @@ func (g *generator) clientEmit() error {
 		}
 		if result == "" {
 			g.pf("func (c *Client) %s(ctx context.Context%s) error {\n", r.ClientName, sig.String())
-			g.pf("%s", body.String())
-			g.pf("\treturn c.Do(ctx, %q, %s, %s, nil)\n}\n\n", method, url, in)
+			g.pf("%s", qs.body(""))
+			g.pf("\treturn c.Do(ctx, %q, %s, %s, nil)\n}\n\n", method, qs.url(r), in)
 			continue
 		}
 		g.pf("func (c *Client) %s(ctx context.Context%s) (%s, error) {\n", r.ClientName, sig.String(), result)
-		g.pf("%s", body.String())
-		g.pf("\tvar voltOut %s\n", result)
-		g.pf("\tvoltErr := c.Do(ctx, %q, %s, %s, &voltOut)\n\treturn voltOut, voltErr\n}\n\n", method, url, in)
+		if qs.lists > 0 {
+			g.pf("\tvar voltOut %s\n", result)
+			g.pf("%s", qs.body("voltOut, "))
+		} else {
+			g.pf("%s", qs.body(""))
+			g.pf("\tvar voltOut %s\n", result)
+		}
+		g.pf("\tvoltErr := c.Do(ctx, %q, %s, %s, &voltOut)\n\treturn voltOut, voltErr\n}\n\n", method, qs.url(r), in)
 	}
 	return nil
 }
+
+// clientQuery collects what a client method sends in the query string
+// (spec §generated-client): the options of required values, and the
+// statements that add the optional ones and the lists.
+type clientQuery struct {
+	opts  []string
+	steps []string
+	lists int
+}
+
+func (q *clientQuery) add(p lang.QueryParam, name string) {
+	switch p.Source {
+	case lang.FromQuery:
+		if p.Optional {
+			q.steps = append(q.steps, fmt.Sprintf("\tif %s.Valid {\n\t\tvoltQ = append(voltQ, volt.Query(%q, volt.FormatQuery(%s.V)))\n\t}\n", name, p.Name, name))
+			return
+		}
+		q.opts = append(q.opts, fmt.Sprintf("volt.Query(%q, volt.FormatQuery(%s))", p.Name, name))
+	case lang.FromList:
+		if p.Optional {
+			q.steps = append(q.steps, fmt.Sprintf("\tvoltL%d, voltE%d := volt.QueryListOptional(%q, %s)\n\tif voltE%d != nil {\n\t\treturn %%svoltE%d\n\t}\n\tvoltQ = append(voltQ, voltL%d...)\n", q.lists, q.lists, p.Name, name, q.lists, q.lists, q.lists))
+			q.lists++
+			return
+		}
+		q.steps = append(q.steps, fmt.Sprintf("\tfor _, voltV := range %s {\n\t\tvoltQ = append(voltQ, volt.Query(%q, volt.FormatQuery(voltV)))\n\t}\n", name, p.Name))
+	}
+}
+
+func (q *clientQuery) body(failed string) string {
+	if len(q.opts) == 0 && len(q.steps) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "\tvoltQ := []volt.URLOption{%s}\n", strings.Join(q.opts, ", "))
+	for _, st := range q.steps {
+		if strings.Contains(st, "%s") {
+			st = fmt.Sprintf(st, failed)
+		}
+		b.WriteString(st)
+	}
+	return b.String()
+}
+
+func (q *clientQuery) url(r *lang.RouteInfo) string {
+	if len(q.opts) == 0 && len(q.steps) == 0 {
+		return "volt.URL(" + pathExpr(r) + ")"
+	}
+	return "volt.URL(" + pathExpr(r) + ", voltQ...)"
+}
+
+// loadKeys are the query-string keys the loads of a controller route
+// bind (spec §route-loads, §generated-client), each once, in the order
+// the loads first read it, typed as its first binding, or as a required
+// one when any binding of the key requires it.
+func loadKeys(r *lang.RouteInfo) []lang.QueryParam {
+	var out []lang.QueryParam
+	at := map[string]int{}
+	for _, ld := range r.Loads {
+		for _, p := range ld.Query.Params {
+			if p.Source != lang.FromQuery && p.Source != lang.FromList {
+				continue
+			}
+			if i, seen := at[p.Name]; seen {
+				if out[i].Optional && !p.Optional {
+					out[i] = p
+				}
+				continue
+			}
+			at[p.Name] = len(out)
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// clientParamName is the Go parameter a client method takes a load's
+// query key under: the key, with _ appended when it is a Go keyword, a
+// name the method's own code uses or one of the generated locals' form.
+func clientParamName(key string) string {
+	switch {
+	case token.IsKeyword(key), clientMethodNames[key], naming.LocalName(key):
+		return key + "_"
+	}
+	return key
+}
+
+var clientMethodNames = map[string]bool{"ctx": true, "c": true, "cs": true, "body": true, "volt": true, "http": true, "context": true, "rt": true, "time": true, "nil": true, "append": true, "any": true, "error": true}
 
 // clientOwnImports are the names the client imports a package of the
 // standard library or the runtime under (spec §generated-client).
@@ -919,17 +1031,16 @@ func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call,
 		for j, p := range ld.Query.Params {
 			switch p.Source {
 			case lang.FromPath:
-				argsOf[i][j] = parsed[p.Name]
+				argsOf[i][j] = present(p, parsed[p.Name])
 			case lang.FromLiteral:
-				argsOf[i][j] = p.Literal
+				argsOf[i][j] = present(p, p.Literal)
 			case lang.FromList:
 				v := fmt.Sprintf("voltLoad%dArg%d", i, j)
-				g.pf("%s%s, err := volt.QueryParams[%s](r, %q)\n%sif err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, v, strings.TrimPrefix(p.GoType, "[]"), p.Name, indent, indent, indent)
+				g.pf("%s%s, err := volt.%s[%s](r, %q)\n%sif err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, v, listBinder(p), strings.TrimPrefix(p.GoType, "[]"), p.Name, indent, indent, indent)
 				argsOf[i][j] = v
 			default:
 				v := fmt.Sprintf("voltLoad%dArg%d", i, j)
-				g.pf("%s%s, err := volt.%s[%s](r, %q)\n%sif err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, v, queryBinder(p), p.GoType, p.Name, indent, indent, indent)
-				g.limitCheckEmit(p, v, indent)
+				g.queryBindEmit(r, p, v, indent)
 				argsOf[i][j] = v
 			}
 		}
@@ -957,6 +1068,36 @@ func queryBinder(p lang.QueryParam) string {
 		return "QueryParamOptional"
 	}
 	return "QueryParam"
+}
+
+func listBinder(p lang.QueryParam) string {
+	if p.Optional {
+		return "QueryParamsOptional"
+	}
+	return "QueryParams"
+}
+
+// present is the Go expression v binds an argument with: v itself, or v
+// present when the parameter is optional, since a path parameter and a
+// literal are always present (spec §route-loads, §query-routes).
+func present(p lang.QueryParam, v string) string {
+	if p.Optional {
+		return "volt.Present(" + v + ")"
+	}
+	return v
+}
+
+// queryBindEmit binds the query-string parameter p under the local v
+// (spec §query-routes, §route-loads): a select's limit: parameter under
+// the route's limit: and max_limit: settings when it sets either, and
+// every other one, and a limit without them, by its binder.
+func (g *generator) queryBindEmit(r *lang.RouteInfo, p lang.QueryParam, v, indent string) {
+	if p.Limit && (r.LimitDefault > 0 || r.LimitMost > 0) {
+		g.pf("%s%s, err := volt.QueryLimit(r, %q, %d, %d)\n%sif err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, v, p.Name, r.LimitDefault, r.LimitMost, indent, indent, indent)
+		return
+	}
+	g.pf("%s%s, err := volt.%s[%s](r, %q)\n%sif err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, v, queryBinder(p), p.GoType, p.Name, indent, indent, indent)
+	g.limitCheckEmit(p, v, indent)
 }
 
 // limitCheckEmit refuses the value v of a select's limit: parameter

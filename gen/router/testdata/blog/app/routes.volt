@@ -21,6 +21,15 @@ scope / [pipe: api, error_handler: Errors] {
 			ten    db.UserLatest(010)
 			written db.UserWritten(title, after)
 		}
+		get /chosen/:email Admin.Chosen {
+			chosen db.UserChosen(ids, email)
+			wrote  db.UserWritten("draft", after)
+		}
+		get /picked/:email db.UserChosen [name: picked_by]
+		get /newest db.UserLatest [name: newest, limit: 10, max_limit: 50]
+		get /newest/page Admin.Newest [name: newest_page, max_limit: 20] {
+			rows db.UserLatest(size)
+		}
 		get /top/:n(int) Admin.Top {
 			top db.UserLatest(n)
 		}

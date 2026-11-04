@@ -210,7 +210,7 @@ func withEmit(b *strings.Builder, pl *naming.Plan, t *naming.Table, fn naming.Se
 	}
 	if !done[w.RowType] {
 		done[w.RowType] = true
-		fmt.Fprintf(b, "type %s struct {\n\t%s\n\t%s []%s\n}\n\n", w.RowType, row, w.Field, child.Model)
+		fmt.Fprintf(b, "type %s struct {\n\t%s\n\t%s []%s `json:%q`\n}\n\n", w.RowType, row, w.Field, child.Model, w.Name)
 	}
 	sql, err := pl.WithChildSQL(fn)
 	if err != nil {

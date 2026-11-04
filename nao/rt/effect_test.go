@@ -8,6 +8,7 @@ import (
 	"go/parser"
 	"go/token"
 	"maps"
+	"math"
 	"os"
 	"reflect"
 	"runtime"
@@ -292,6 +293,61 @@ func TestDescribeComposedEffects(t *testing.T) {
 	}
 }
 
+type statusError struct {
+	code int
+	msg  string
+}
+
+func (e *statusError) Error() string { return e.msg }
+
+// TestSameComparesValues proves rt.Same over what each kind carries
+// (spec §requests-and-responses): arguments by value and type, never
+// as %v prints them, an Exec's One and Model, a Write's Row when it has
+// no statement, a Fail's error whole, and a NaN as the same as itself.
+func TestSameComparesValues(t *testing.T) {
+	nan := math.NaN()
+	same := map[string][2]AnyEffect{
+		"equal pointers":   {Pure(&statusError{1, "a"}), Pure(&statusError{1, "a"})},
+		"a NaN":            {Pure(nan), Pure(nan)},
+		"a NaN argument":   {Query[int]{SQL: "q", Args: []any{nan}}, Query[int]{SQL: "q", Args: []any{nan}}},
+		"equal rows":       {Write[[]int]{Row: []int{1}}, Write[[]int]{Row: []int{1}}},
+		"equal errors":     {Fail[int](&statusError{409, "taken"}), Fail[int](&statusError{409, "taken"})},
+		"a nested NaN":     {Tx(Pure(map[string]float64{"x": nan})), Tx(Pure(map[string]float64{"x": nan}))},
+		"a statement once": {Exec{SQL: "d", Args: []any{1}, One: true, Model: "User"}, Exec{SQL: "d", Args: []any{1}, One: true, Model: "User"}},
+	}
+	for name, pair := range same {
+		if !Same(pair[0], pair[1]) {
+			t.Errorf("%s: %q and %q are not Same; want them Same", name, Describe(pair[0]), Describe(pair[1]))
+		}
+	}
+	different := map[string][2]AnyEffect{
+		"arguments split by a space": {Query[int]{SQL: "q", Args: []any{"Ann Lee", "x"}}, Query[int]{SQL: "q", Args: []any{"Ann", "Lee x"}}},
+		"an int and a text argument": {Query[int]{SQL: "q", Args: []any{1}}, Query[int]{SQL: "q", Args: []any{"1"}}},
+		"One and bulk":               {Exec{SQL: "d", Args: []any{1}, One: true}, Exec{SQL: "d", Args: []any{1}}},
+		"two Models":                 {Exec{SQL: "d", Model: "User"}, Exec{SQL: "d", Model: "Post"}},
+		"two rows, nothing marked":   {Write[int]{Row: 1}, Write[int]{Row: 2}},
+		"two statuses, one message":  {Fail[int](&statusError{409, "taken"}), Fail[int](&statusError{422, "taken"})},
+		"two Pure types":             {Pure(1), Pure(int64(1))},
+	}
+	for name, pair := range different {
+		if Same(pair[0], pair[1]) {
+			t.Errorf("%s: %q and %q are Same; want them told apart", name, Describe(pair[0]), Describe(pair[1]))
+		}
+	}
+	if got := Describe(Exec{SQL: "d", Args: []any{1}, One: true, Model: "User"}); got != "exec one of User d [1]" {
+		t.Errorf("an Exec of one row describes as %q", got)
+	}
+	if got := Describe(Write[int]{Row: 3}); got != "write  [] row 3" {
+		t.Errorf("a Write with no statement describes as %q; want the row it yields", got)
+	}
+	type node struct{ next *node }
+	a, b := &node{}, &node{}
+	a.next, b.next = a, b
+	if !Equal(a, b) || Equal(func() {}, func() {}) || !Equal(nil, nil) || Equal(nil, 0) {
+		t.Error("Equal disagrees with reflect.DeepEqual away from NaN")
+	}
+}
+
 func TestPureAndFailEffects(t *testing.T) {
 	ctx := context.Background()
 	idle := &fakeExecutor{}
@@ -441,8 +497,10 @@ func TestParallelPanicRaisedOnTheCaller(t *testing.T) {
 
 // TestEffectKindsDescribed holds the sealed set of effects to its
 // samples (spec §generated-query-surface): every type of the package
-// that declares perform, the unexported method that seals Effect, has a
-// sample here, and each sample describes by its kind.
+// that declares a method of the sealed set, perform, performAny or
+// describe, on a value or a pointer receiver, has a sample here, so a
+// kind that is only an AnyEffect, or one that embeds another and
+// describes itself, is caught, and each sample describes by its kind.
 func TestEffectKindsDescribed(t *testing.T) {
 	samples := map[string]struct {
 		e    AnyEffect
@@ -465,6 +523,7 @@ func TestEffectKindsDescribed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sealed := map[string]bool{"perform": true, "performAny": true, "describe": true}
 	fset := token.NewFileSet()
 	var declared []string
 	for _, en := range entries {
@@ -477,20 +536,28 @@ func TestEffectKindsDescribed(t *testing.T) {
 		}
 		for _, d := range f.Decls {
 			fd, ok := d.(*ast.FuncDecl)
-			if !ok || fd.Recv == nil || fd.Name.Name != "perform" {
+			if !ok || fd.Recv == nil || !sealed[fd.Name.Name] {
 				continue
 			}
 			recv := fd.Recv.List[0].Type
+			if r, ok := recv.(*ast.StarExpr); ok {
+				recv = r.X
+			}
 			switch r := recv.(type) {
 			case *ast.IndexExpr:
 				recv = r.X
 			case *ast.IndexListExpr:
 				recv = r.X
 			}
-			declared = append(declared, recv.(*ast.Ident).Name)
+			id, ok := recv.(*ast.Ident)
+			if !ok {
+				t.Fatalf("%s: the receiver of %s is %T, which the test cannot name", fset.Position(fd.Pos()), fd.Name.Name, recv)
+			}
+			declared = append(declared, id.Name)
 		}
 	}
 	slices.Sort(declared)
+	declared = slices.Compact(declared)
 	if want := slices.Sorted(maps.Keys(samples)); !slices.Equal(declared, want) {
 		t.Fatalf("the package declares the effects %v; the samples cover %v", declared, want)
 	}

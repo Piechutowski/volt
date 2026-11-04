@@ -60,7 +60,7 @@ func TestParamNamesAvoidLocals(t *testing.T) {
 		{"volt_post_scan", "voltPostScan_"},
 		{"voltage", "voltage"},
 		{"volt", "volt_"},
-		{"q", "q_"},
+		{"q", "q"},
 		{"nil", "nil_"},
 		{"append", "append_"},
 		{"len", "len"},

@@ -409,8 +409,10 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	}
 	timeout := 0
 	var bodyS, onlyS *ast.Setting
+	var limitS, mostS *ast.Setting
+	limitDefault, limitMost := 0, 0
 	if r.Settings != nil {
-		_, dupDiags := settingsRepeated(r.Settings, "name", "timeout", "body", "only")
+		_, dupDiags := settingsRepeated(r.Settings, "name", "timeout", "body", "only", "limit", "max_limit")
 		l.diags = append(l.diags, dupDiags...)
 		for _, s := range r.Settings.Settings {
 			switch s.Name {
@@ -425,8 +427,14 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 				bodyS = s
 			case "only":
 				onlyS = s
+			case "limit":
+				limitS = s
+				limitDefault, _ = l.limitSetting(s)
+			case "max_limit":
+				mostS = s
+				limitMost, _ = l.limitSetting(s)
 			default:
-				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a route (§settings-whitelists); valid: name, timeout, body, only", s.Name)
+				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a route (§settings-whitelists); valid: name, timeout, body, only, limit, max_limit", s.Name)
 			}
 		}
 	}
@@ -453,6 +461,21 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		}
 		var ok bool
 		if loads, ok = l.loads(r, params, inh); !ok {
+			return nil
+		}
+	}
+
+	if limitS != nil || mostS != nil {
+		s := limitS
+		if s == nil {
+			s = mostS
+		}
+		if !limitBound(query, loads) {
+			l.errorf(s.Pos(), "route-loads", "%s: sets a limit the route binds from the query string, and the route binds none: no query of it takes a select's limit: parameter from a query key (§route-loads)", s.Name)
+			return nil
+		}
+		if limitDefault > 0 && limitMost > 0 && limitDefault > limitMost {
+			l.errorf(limitS.Pos(), "route-loads", "limit: %d is above max_limit: %d, so the default would be refused (§route-loads)", limitDefault, limitMost)
 			return nil
 		}
 	}
@@ -487,8 +510,31 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		ScopeLoads:   inh.loads,
 		Loads:        loads,
 		Timeout:      timeout,
+		LimitDefault: limitDefault,
+		LimitMost:    limitMost,
 		Pos:          r.Pos(),
 	}
+}
+
+// limitBound reports whether a route binds a select's limit: parameter
+// from the query string (spec §route-loads), which its limit: and
+// max_limit: settings govern.
+func limitBound(query *QueryRef, loads []LoadInfo) bool {
+	refs := []*QueryRef{query}
+	for _, ld := range loads {
+		refs = append(refs, ld.Query)
+	}
+	for _, q := range refs {
+		if q == nil {
+			continue
+		}
+		for _, p := range q.Params {
+			if p.Limit && p.Source == FromQuery {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func routeKindArticled(query *QueryRef, events bool) string {
@@ -683,21 +729,6 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		switch {
 		case sp.body:
 			qp.Source = FromBody
-		case sp.optional:
-			qp.Source = FromQuery
-			if pp, inPath := byName[sp.name]; inPath {
-				bound[sp.name] = true
-				l.errorf(segAt.pos(pp.Name), "query-routes", "parameter %q of %s is optional, and a path segment is always present; pass it in the query string (§query-routes)", sp.name, ref)
-				ok = false
-			}
-			switch {
-			case strings.HasPrefix(sp.goType, "[]"):
-				l.errorf(pos, "query-routes", "%s takes the optional list parameter %q, which a route cannot carry: the query string has no spelling for a present empty list, which matches no row where an absent one matches every row (§query-routes)", ref, sp.name)
-				ok = false
-			case !queryValueTypes[sp.goType]:
-				l.errorf(pos, "query-routes", "parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, qp.Type())
-				ok = false
-			}
 		case strings.HasPrefix(sp.goType, "[]"):
 			qp.Source = FromList
 			if pp, inPath := byName[sp.name]; inPath {
@@ -705,7 +736,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 				ok = false
 			}
 			if !queryValueTypes[strings.TrimPrefix(sp.goType, "[]")] {
-				l.errorf(pos, "query-routes", "list parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, sp.goType)
+				l.errorf(pos, "query-routes", "list parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, qp.Type())
 				ok = false
 			}
 		default:
@@ -733,7 +764,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 			} else {
 				qp.Source = FromQuery
 				if !queryValueTypes[sp.goType] {
-					l.errorf(pos, "query-routes", "parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, sp.goType)
+					l.errorf(pos, "query-routes", "parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, qp.Type())
 					ok = false
 				}
 			}

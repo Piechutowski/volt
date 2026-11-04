@@ -744,7 +744,7 @@ func (l *selectLowering) check() *SelectInfo {
 
 	var where rt.GenPred
 	if sel.Where != nil {
-		where = env.exprLower(sel.Where, map[string]bool{})
+		where = rt.PredVanish(env.exprLower(sel.Where, map[string]bool{}))
 	}
 	si.droppedParams = env.dropped
 
@@ -1768,20 +1768,46 @@ type selectEnv struct {
 	paramList []SelectParam
 	failed    bool
 	dropped   map[string]bool
-	scope     *existsScope     // the exists term being lowered, nil outside one (§predicates)
-	reads     []string         // the optional parameters the term being lowered reads, in first-appearance order
-	nots      []token.Position // the nots the expression being lowered stands under, outermost first
+	scope     *existsScope // the exists term being lowered, nil outside one (§predicates)
+	reads     []string     // the optional parameters the term being lowered reads, in first-appearance order
+	nots      []notAt      // the nots the expression being lowered stands under, outermost first
 	notsSaid  map[token.Position]bool
+	via       []*ast.PredRef // the pred references being expanded, the select's own first
 }
 
 func (e *selectEnv) errorf(pos token.Position, format string, args ...any) {
 	e.failed = true
+	pos, format, args = e.viaSite(pos, format, args)
 	e.l.errorf(pos, format, args...)
 }
 
 func (e *selectEnv) predErrorf(pos token.Position, format string, args ...any) {
 	e.failed = true
+	pos, format, args = e.viaSite(pos, format, args)
 	e.l.diags = append(e.l.diags, diag.Errorf(pos, "spec/predicates", format, args...))
+}
+
+// notAt is a not the expression being lowered stands under and how many
+// pred references deep it stands.
+type notAt struct {
+	pos   token.Position
+	depth int
+}
+
+// viaSite moves a fault found inside a pred to where the select names
+// the pred (spec §predicates): a pred is typed at each use site, so the
+// select is what the fault is about, and the message names the select,
+// the preds it went through and where in them the fault stands.
+func (e *selectEnv) viaSite(pos token.Position, format string, args []any) (token.Position, string, []any) {
+	if len(e.via) == 0 {
+		return pos, format, args
+	}
+	names := make([]string, len(e.via))
+	for i, r := range e.via {
+		names[i] = r.Name.Name()
+	}
+	prefix := fmt.Sprintf("select %s reads pred %s here, where at %s: ", e.sel.Name.Name(), strings.Join(names, " through pred "), pos)
+	return e.via[0].Name.Pos(), strings.ReplaceAll(prefix, "%", "%%") + format, args
 }
 
 func (e *selectEnv) join(name string) *JoinInfo {
@@ -1982,8 +2008,8 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 		e.paramRead(p)
 		return name
 	}
-	if !goParamOK(name) {
-		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)", name)
+	if why := goParamWhy(name); why != "" {
+		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: %s (§predicates)", name, why)
 		return name
 	}
 	sp := SelectParam{GoName: name, GoType: goType, Optional: p.Optional}
@@ -1999,12 +2025,16 @@ func (e *selectEnv) paramRead(p *ast.Param) {
 		return
 	}
 	if len(e.nots) > 0 {
-		at := e.nots[len(e.nots)-1]
+		n := e.nots[len(e.nots)-1]
+		at := n.pos
 		if !e.notsSaid[at] {
 			if e.notsSaid == nil {
 				e.notsSaid = map[token.Position]bool{}
 			}
 			e.notsSaid[at] = true
+			via := e.via
+			e.via = e.via[:n.depth]
+			defer func() { e.via = via }()
 			e.predErrorf(at, "not stands over the optional parameter %s: a term that reads an absent optional parameter is true, and not would make it false; write the parameter without ? or the predicate without not (§predicates)", p.String())
 		}
 	}
@@ -2032,9 +2062,6 @@ func (e *selectEnv) listSlot(name string, optional bool) string {
 }
 
 func (e *selectEnv) termBegin() bool {
-	if e.scope != nil {
-		return false
-	}
 	e.reads = nil
 	return true
 }
@@ -2077,7 +2104,6 @@ func (e *selectEnv) existsLower(x *ast.PredExists, preds map[string]bool) rt.Gen
 		return rt.GenPred{}
 	}
 	rel := et.rel
-	own := e.termBegin()
 	e.scope = &existsScope{name: name, table: rel.Table}
 	inner := e.exprLower(x.X, preds)
 	e.scope = nil
@@ -2085,17 +2111,30 @@ func (e *selectEnv) existsLower(x *ast.PredExists, preds map[string]bool) rt.Gen
 	for i, pair := range rel.On {
 		on[i] = [2]string{name + "." + pair[1], target + "." + pair[0]}
 	}
-	return e.termEnd(own, rt.PredExists(rel.Table.Key, name, on, inner))
+	return rt.PredExists(rel.Table.Key, name, on, inner)
 }
 
-func goParamOK(name string) bool {
-	if name == "" || name == "_" || goKeywords[name] || naming.RouteSignatureName(name) || naming.BodyBuiltin(name) || selectMethodNames[name] || naming.LocalName(name) {
-		return false
+func goParamOK(name string) bool { return goParamWhy(name) == "" }
+
+// goParamWhy is the one reason a select parameter cannot take name as
+// its Go name (spec §predicates), "" when it can.
+func goParamWhy(name string) string {
+	switch {
+	case name == "_":
+		return "it is the blank identifier _, which no expression reads"
+	case goKeywords[name]:
+		return "it is a Go keyword"
+	case !goIdentOK(name):
+		return "it is not an ASCII identifier"
+	case naming.RouteSignatureName(name) || name == "rt":
+		return "it is a name the generated signatures use (ctx, rt, w, r, opts, volt, cs, c, body)"
+	case naming.BodyBuiltin(name):
+		return "it is nil, append, any or true, which the generated functions use"
+	case naming.LocalName(name):
+		return "it has the form of the generated locals, volt followed by an upper-case letter and no underscore"
 	}
-	return goIdentOK(name)
+	return ""
 }
-
-var selectMethodNames = map[string]bool{"q": true, "rt": true}
 
 func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred {
 	switch x := x.(type) {
@@ -2106,7 +2145,7 @@ func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred 
 		}
 		return rt.And(operands...)
 	case *ast.PredNot:
-		e.nots = append(e.nots, x.NotPos)
+		e.nots = append(e.nots, notAt{x.NotPos, len(e.via)})
 		p := rt.Not(e.exprLower(x.X, preds))
 		e.nots = e.nots[:len(e.nots)-1]
 		return p
@@ -2125,7 +2164,9 @@ func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred 
 			return rt.GenPred{}
 		}
 		preds[name] = true
+		e.via = append(e.via, x)
 		p := e.exprLower(d.X, preds)
+		e.via = e.via[:len(e.via)-1]
 		delete(preds, name)
 		return p
 	case *ast.PredCompare:

@@ -70,7 +70,7 @@ are neither blank nor comments, tests left out; `go run
 
 | Stack | Server Go | Client Go | Contract and schema | Hand-written total | Generated | Third-party modules |
 |---|---:|---:|---:|---:|---:|---:|
-| Volt | 294 | 66 | 117 | 477 | 1354 | 2 |
+| Volt | 294 | 66 | 117 | 477 | 1352 | 2 |
 | Gin + GORM | 707 | 124 | 0 | 831 | 0 | 24 |
 | chi + sqlc + goose | 636 | 120 | 99 | 855 | 440 | 7 |
 | Echo + sqlx + goose | 671 | 168 | 43 | 882 | 0 | 23 |
@@ -82,17 +82,18 @@ and 54 percent of the 882 of Echo + sqlx + goose, chi + sqlc + goose's
 percent of the 1162 of oapi-codegen + Ent, 59 percent fewer; not the 97
 percent fewer of a pure CRUD table (`examples/byhand`): the rules are
 handlers either way. Writing the Volt version found five gaps, which
-cost it lines and, in two of its rules, correctness under concurrency;
-four are closed now, the blog rewritten onto them. A scope load could
-not answer its own miss, so every handler checked the member;
-`Load.Rescue` answers it with 401 in the load. An effect could not use
-what an earlier one read or assigned inside one transaction, so a
-post's tags were written in a second one and a refused tag left the
-post, and publishing and the comment limit checked what they read
-before the transaction that wrote, so concurrent requests could
-publish a draft twice or store a fourth comment; `rt.Atomic` over
-`rt.Then` writes the post and its tags in one and makes both checks
-inside the transaction that writes. A select had no limit, so the feed
+cost it lines and, in three of its rules, correctness under
+concurrency; four are closed now, the blog rewritten onto them. A
+scope load could not answer its own miss, so every handler checked the
+member; `Load.Rescue` answers it with 401 in the load. An effect could
+not use what an earlier one read or assigned inside one transaction,
+so a post's tags were written in a second one and a refused tag left
+the post, and publishing, editing and the comment limit checked what
+they read before the transaction that wrote, so concurrent requests
+could publish a draft twice, write a short body into a post a publish
+had just published, or store a fourth comment; `rt.Atomic` over
+`rt.Then` writes the post and its tags in one and makes the three
+checks inside the transaction that writes. A select had no limit, so the feed
 read every post after the cursor and cut the page in Go; `limit:` cuts
 it in SQL. A select had no optional predicate, so the tag filter was a
 second select and the first page passed a sentinel cursor; optional
@@ -106,6 +107,21 @@ generated one. The rewrite took the blog from 523 hand-written lines
 to 477: 46 fewer of server Go and 2 fewer of `.volt`, while the typed
 client gained 2 by building on the generated client instead of the
 runtime's.
+
+The counts are of each stack as written, and `compare/suite` sends one
+request at a time, so it does not hold the rules under concurrency;
+Volt's own test does (`compare/volt`), and the other stacks have none.
+One probe of the five servers, thirty rounds of twenty publishes of
+one draft at once, ten comments by one member at once and sixteen
+edits to a short body racing four publishes of a draft, found each
+stack publishing a draft once, but Echo + sqlx + goose storing more
+than three comments in 18 rounds and leaving a published post with a
+short body in 15, Gin + GORM leaving one in 14 and answering some of
+the concurrent comments 500, `database is locked`, though it never
+stored a fourth, chi + sqlc + goose leaving one in 2, and
+oapi-codegen + Ent, like Volt, in none. The lines of those three leave
+out checks that Volt's 477 and Ent's 1162 make, so the percentages
+above compare programs that differ in that much.
 
 ## Crib sheet
 

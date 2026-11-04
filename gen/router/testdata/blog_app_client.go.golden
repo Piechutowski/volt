@@ -28,8 +28,52 @@ func (c *Client) About(ctx context.Context) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/about"), nil)
 }
 
-func (c *Client) AdminStats(ctx context.Context) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/admin/stats"), nil)
+func (c *Client) AdminStats(ctx context.Context, title rt.Null[string], after rt.Null[time.Time]) (*http.Response, error) {
+	voltQ := []volt.URLOption{}
+	if title.Valid {
+		voltQ = append(voltQ, volt.Query("title", volt.FormatQuery(title.V)))
+	}
+	if after.Valid {
+		voltQ = append(voltQ, volt.Query("after", volt.FormatQuery(after.V)))
+	}
+	return c.Raw(ctx, "GET", volt.URL("/admin/stats", voltQ...), nil)
+}
+
+func (c *Client) AdminChosen(ctx context.Context, email string, ids rt.Null[[]int], after rt.Null[time.Time]) (*http.Response, error) {
+	voltQ := []volt.URLOption{}
+	voltL0, voltE0 := volt.QueryListOptional("ids", ids)
+	if voltE0 != nil {
+		return nil, voltE0
+	}
+	voltQ = append(voltQ, voltL0...)
+	if after.Valid {
+		voltQ = append(voltQ, volt.Query("after", volt.FormatQuery(after.V)))
+	}
+	return c.Raw(ctx, "GET", volt.URL("/admin/chosen/"+volt.Seg(email), voltQ...), nil)
+}
+
+func (c *Client) AdminPickedBy(ctx context.Context, ids rt.Null[[]int], email string) ([]db.User, error) {
+	var voltOut []db.User
+	voltQ := []volt.URLOption{}
+	voltL0, voltE0 := volt.QueryListOptional("ids", ids)
+	if voltE0 != nil {
+		return voltOut, voltE0
+	}
+	voltQ = append(voltQ, voltL0...)
+	voltErr := c.Do(ctx, "GET", volt.URL("/admin/picked/"+volt.Seg(email), voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) AdminNewest(ctx context.Context, limit int) ([]db.User, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/admin/newest", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) AdminNewestPage(ctx context.Context, size int) (*http.Response, error) {
+	voltQ := []volt.URLOption{volt.Query("size", volt.FormatQuery(size))}
+	return c.Raw(ctx, "GET", volt.URL("/admin/newest/page", voltQ...), nil)
 }
 
 func (c *Client) AdminTop(ctx context.Context, n int) (*http.Response, error) {
@@ -52,8 +96,12 @@ func (c *Client) Avatar(ctx context.Context, id int) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/avatar"), nil)
 }
 
-func (c *Client) Profile(ctx context.Context, id int) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/profile"), nil)
+func (c *Client) Profile(ctx context.Context, id int, ids []int, since time.Time, count int) (*http.Response, error) {
+	voltQ := []volt.URLOption{volt.Query("since", volt.FormatQuery(since)), volt.Query("count", volt.FormatQuery(count))}
+	for _, voltV := range ids {
+		voltQ = append(voltQ, volt.Query("ids", volt.FormatQuery(voltV)))
+	}
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/profile", voltQ...), nil)
 }
 
 func (c *Client) ChangeEmail(ctx context.Context, id int, cs db.UserChangeset) (*http.Response, error) {

@@ -10,7 +10,7 @@ scope / [error_handler: Errors] {
 	post   /posts                              Posts.Create    [name: post_create, body: PostForm]
 	get    /posts                              Posts.Feed      [name: feed]
 	get    /posts/:id(int)                     Posts.Show      [name: post] { post db.PostGet(id) }
-	patch  /posts/:id(int)                     Posts.Edit      [name: post_edit, body: PostEdit] { post db.PostGet(id) }
+	patch  /posts/:id(int)                     Posts.Edit      [name: post_edit, body: PostEdit]
 	post   /posts/:id(int)/publish             Posts.Publish   [name: publish]
 	get    /posts/:id(int)/audit               Posts.Audit     [name: audit] {
 		post  db.PostGet(id)

@@ -12,6 +12,8 @@ import (
 
 type AdminController interface {
 	Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts, latest []db.User, ten []db.User, written []db.User) volt.Response
+	Chosen(r volt.Request, email string, chosen []db.User, wrote []db.User) volt.Response
+	Newest(r volt.Request, rows []db.User) volt.Response
 	Top(r volt.Request, n int, top []db.User) volt.Response
 }
 
@@ -65,6 +67,12 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	var voltOut []string
 	if !volt.Same(c.Admin.Stats(r, db.Totals{}, nil, nil, nil, nil), c.Admin.Stats(r, db.Totals{}, nil, nil, nil, nil)) {
 		voltOut = append(voltOut, "Admin.Stats")
+	}
+	if !volt.Same(c.Admin.Chosen(r, "", nil, nil), c.Admin.Chosen(r, "", nil, nil)) {
+		voltOut = append(voltOut, "Admin.Chosen")
+	}
+	if !volt.Same(c.Admin.Newest(r, nil), c.Admin.Newest(r, nil)) {
+		voltOut = append(voltOut, "Admin.Newest")
 	}
 	if !volt.Same(c.Admin.Top(r, 0, nil), c.Admin.Top(r, 0, nil)) {
 		voltOut = append(voltOut, "Admin.Top")

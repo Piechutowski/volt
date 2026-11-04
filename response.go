@@ -184,13 +184,14 @@ func (r Response) Rescue(on func(error) Response) Response {
 }
 
 // Same reports whether two responses are the same value: the same
-// status, headers, cookies and body, or continuations of the same
-// effect as rt.Same compares two, an rt.Then by its kind and its first
-// effect (spec §requests-and-responses). Streams compare as the same,
-// since neither what a function writes nor the function can be
-// compared; the generated ControllersDeterministic calls it.
+// status, headers, cookies and body, compared with rt.Equal, or
+// continuations of the same effect as rt.Same compares two, an rt.Then
+// by its kind and its first effect (spec §requests-and-responses).
+// Streams compare as the same, since neither what a function writes nor
+// the function can be compared; the generated ControllersDeterministic
+// calls it.
 func Same(a, b Response) bool {
-	if a.status != b.status || !reflect.DeepEqual(a.header, b.header) || !reflect.DeepEqual(a.cookies, b.cookies) {
+	if a.status != b.status || !rt.Equal(a.header, b.header) || !rt.Equal(a.cookies, b.cookies) {
 		return false
 	}
 	if (a.then == nil) != (b.then == nil) {
@@ -205,10 +206,12 @@ func Same(a, b Response) bool {
 		return ok
 	case failBody:
 		y, ok := b.body.(failBody)
-		return ok && x.err.Error() == y.err.Error()
+		return ok && rt.Equal(x.err, y.err)
 	}
-	return reflect.DeepEqual(a.body, b.body)
+	return rt.Equal(a.body, b.body)
 }
+
+const statusClientClosed = 499
 
 // Performer performs one effect for the shim (spec
 // §requests-and-responses): the runner's, handed in by the generated
@@ -227,8 +230,11 @@ func resolve(ctx context.Context, req Request, resp Response, eh ErrorHandler, p
 			}
 			v, err := perform(ctx, resp.then.effect)
 			if err != nil {
-				if errors.Is(err, context.DeadlineExceeded) {
+				switch {
+				case errors.Is(err, context.DeadlineExceeded):
 					err = Error(http.StatusGatewayTimeout, "the route's timeout expired")
+				case errors.Is(err, context.Canceled) && ctx.Err() != nil:
+					err = Error(statusClientClosed, "the client closed the request")
 				}
 				if on := resp.then.on; on != nil {
 					resp = on(err)

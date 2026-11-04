@@ -578,7 +578,7 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 func (c *checker) scopeLoad(ld *ast.ScopeLoad, above []ScopeLoad) (ScopeLoad, bool) {
 	name := ld.Name.Name()
 	if !loadNameOK(name) {
-		c.errorf(ld.Name.Pos(), "scope-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§scope-loads, §route-paths)", name)
+		c.errorf(ld.Name.Pos(), "scope-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), and not shaped like a generated local (§scope-loads, §route-paths)", name)
 		return ScopeLoad{}, false
 	}
 	if loadNameQualifier(name, c.pkg.Name, c.pkg.Imports) {

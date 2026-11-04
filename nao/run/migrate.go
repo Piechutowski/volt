@@ -6,7 +6,6 @@ package run
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"fmt"
 	"sort"
 	"time"
@@ -232,11 +231,8 @@ func migrationRun(ctx context.Context, conn *sql.Conn, m rt.Migration, direction
 	}
 	committed := false
 	defer func() {
-		if committed {
-			return
-		}
-		if _, e := conn.ExecContext(context.Background(), "ROLLBACK"); e != nil {
-			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+		if !committed {
+			rollback(conn)
 		}
 	}()
 	has, err := ledgerHas(ctx, conn, m.Name)

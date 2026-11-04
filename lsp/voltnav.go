@@ -127,6 +127,7 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 			d := si.Decl
 			ix.define(voltSym{"select", path, d.Name.Name()},
 				voltDef{span: spanOf(d.Name), md: hover(pkg, si)})
+			ix.paramRefs(path, si)
 		}
 		if info := pkg.Schema(); info != nil {
 			for i, mi := range info.Migrations {
@@ -158,18 +159,24 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 		}
 		single := NewIndexMemo(pkg.Merged(), info, im)
 		for _, occ := range single.Occs {
-			if occ.ID.Kind != SymTable {
-				continue
-			}
-			ti, ok := single.Tables[occ.ID.Name]
-			if !ok {
-				continue
-			}
 			sp := spanOf(occ.Ident)
 			if sp.file == "" {
 				continue
 			}
-			ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{"table", path, ti.Decl.Name.Name()}, occ.IsDecl, occ.Ident.Name()})
+			switch occ.ID.Kind {
+			case SymTable:
+				ti, ok := single.Tables[occ.ID.Name]
+				if !ok {
+					continue
+				}
+				ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{"table", path, ti.Decl.Name.Name()}, occ.IsDecl, occ.Ident.Name()})
+			case SymRelation:
+				sym := voltSym{"relation", path, occ.ID.Container + "." + occ.ID.Name}
+				if occ.IsDecl {
+					ix.define(sym, voltDef{span: sp})
+				}
+				ix.refs = append(ix.refs, voltRef{sp, sp, sym, occ.IsDecl, occ.Ident.Name()})
+			}
 		}
 	}
 
@@ -219,6 +226,71 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 		}
 	}
 	return ix
+}
+
+// paramRefs records every parameter a select names, in its where and as
+// its limit:, hovering as the Go parameter the select's functions take
+// (spec §predicates, §selects-over-groups).
+func (ix *voltIndex) paramRefs(path string, si *lang.SelectInfo) {
+	d := si.Decl
+	var params []*ast.Param
+	var walk func(x ast.PredExpr)
+	operand := func(o ast.Operand) {
+		if p, ok := o.(*ast.Param); ok {
+			params = append(params, p)
+		}
+	}
+	walk = func(x ast.PredExpr) {
+		switch x := x.(type) {
+		case *ast.PredBinary:
+			walk(x.X)
+			walk(x.Y)
+		case *ast.PredNot:
+			walk(x.X)
+		case *ast.PredParen:
+			walk(x.X)
+		case *ast.PredExists:
+			walk(x.X)
+		case *ast.PredCompare:
+			operand(x.X)
+			operand(x.Y)
+		case *ast.PredIn:
+			if x.List != nil {
+				params = append(params, x.List)
+			}
+		case *ast.PredLike:
+			operand(x.Pattern)
+		}
+	}
+	if d.Where != nil {
+		walk(d.Where)
+	}
+	if s := d.Settings.Get("limit"); s != nil {
+		if p, ok := s.Value.(*ast.Param); ok {
+			params = append(params, p)
+		}
+	}
+	for _, p := range params {
+		name := p.Name.Name()
+		for _, sp := range si.Params {
+			if sp.GoName != name {
+				continue
+			}
+			sym := voltSym{"param", path, d.Name.Name() + ":" + name}
+			if _, done := ix.defs[sym]; !done {
+				what := "a parameter"
+				switch {
+				case name == si.LimitParam:
+					what = "the limit: of the select, at least 1 (§selects-over-groups)"
+				case sp.Optional:
+					what = "an optional parameter: absent, the terms that read it are taken out of the predicate (§predicates)"
+				}
+				ix.defs[sym] = voltDef{md: fmt.Sprintf("```go\n%s %s\n```\n%s of select `%s`\n", name, sp.Type(), what, d.Name.Name())}
+			}
+			sp := spanOf(p)
+			ix.refs = append(ix.refs, voltRef{sp, sp, sym, false, name})
+		}
+	}
 }
 
 func (ix *voltIndex) validatorsRefs(pkg *lang.Package, path string, body []ast.TableItem) {
@@ -347,6 +419,8 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 			ix.settingRefs(pkg, path, it.Settings)
 		case *ast.Route:
 			ix.settingRefs(pkg, path, it.Settings)
+		case *ast.ScopeLoad:
+			ix.goRefAdd(pkg, path, it.Ref)
 		}
 	}
 }
@@ -472,7 +546,7 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 		md = groupHover(ref.sym, def, d.vindex)
 	case "pred":
 		md = predHover(ref.sym, def, d.vindex)
-	case "select", "gofunc", "migration":
+	case "select", "gofunc", "migration", "param":
 		md = def.md
 	}
 	if md == "" {
@@ -511,6 +585,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	if si.Unresolved {
 		b.WriteString("```volt\n" + selectHead(si.Decl) + "\n```\n")
 	}
+	keyType := map[string]string{}
 	for _, m := range shown {
 		row, fields, err := plan.SelectRowType(memberFn(m.Key))
 		if err != nil {
@@ -520,8 +595,24 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 		fmt.Fprintf(&b, "type %s struct {\n", row)
 		for _, f := range fields {
 			fmt.Fprintf(&b, "\t%s %s\n", f.Name, fieldTypeMD(m, f))
+			if si.With != nil && f.Col == si.With.ParentKey {
+				keyType[m.Key] = f.Type
+			}
 		}
 		b.WriteString("}\n```\n")
+	}
+	child := ""
+	if w := si.With; w != nil && w.Table != nil {
+		child = w.Table.Decl.Name.Name()
+		if mn, err := naming.ModelName(w.Table.Decl); err == nil {
+			child = mn
+		}
+		if len(shown) > 0 {
+			row, err := plan.SelectRowName(memberFn(shown[0].Key))
+			if err == nil {
+				fmt.Fprintf(&b, "```go\ntype %s struct {\n\t%s\n\t%s []%s `json:%q`\n}\n```\n", w.RowType, row, w.Field, child, w.Name)
+			}
+		}
 	}
 	if si.Shared == "" {
 		if n := len(si.Members) - len(shown); n > 0 {
@@ -564,8 +655,15 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 		if r, err := plan.SelectRowName(memberFn(m.Key)); err == nil {
 			row = r
 		}
-		fmt.Fprintf(&b, "func %s%s(%s) rt.Query[%s]\n",
-			model, si.MethodSuffix, strings.TrimPrefix(params.String(), ", "), row)
+		effect := "rt.Query[" + row + "]"
+		switch {
+		case si.Lookup:
+			effect = "rt.Lookup[" + row + "]"
+		case si.With != nil && child != "":
+			effect = fmt.Sprintf("rt.With[%s, %s, %s, %s]", row, child, strings.TrimPrefix(keyType[m.Key], "rt.Null["), si.With.RowType)
+		}
+		fmt.Fprintf(&b, "func %s%s(%s) %s\n",
+			model, si.MethodSuffix, strings.TrimPrefix(params.String(), ", "), effect)
 	}
 	b.WriteString("```\n")
 	return b.String()
@@ -802,7 +900,7 @@ func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.
 	if ref == nil {
 		return nil, false
 	}
-	if ref.sym.kind == "package" {
+	if ref.sym.kind == "package" || ref.sym.kind == "param" {
 		return nil, false
 	}
 
@@ -853,6 +951,9 @@ func (d *Document) voltComplete(prefix string) []protocol.CompletionItem {
 	}
 	if partial, ok := predTermAt(prefix); ok {
 		items := d.namedDefItems("pred", partial, protocol.CompletionItemKindFunction)
+		if inExists {
+			items = d.predsOver(d.existsTable(prefix), items)
+		}
 		if !inExists && strings.HasPrefix("exists", strings.ToLower(partial)) {
 			items = append(items, keywordItems([]string{"exists "})...)
 		}
@@ -905,6 +1006,85 @@ func predTermAt(prefix string) (string, bool) {
 		return "", false
 	}
 	return prefix[m[2]:m[3]], true
+}
+
+var voltForRE = regexp.MustCompile(`^\s*select\s+\w+.*?\bfor\s+([A-Za-z0-9_]+)\b`)
+
+// existsTable is the table the open exists of prefix leads to (spec
+// §predicates), nil when the line names no table and relation of it.
+func (d *Document) existsTable(prefix string) *check.TableInfo {
+	info := d.vpkg.Schema()
+	opens := voltExistsOpenRE.FindAllString(prefix, -1)
+	target := voltForRE.FindStringSubmatch(prefix)
+	if info == nil || len(opens) == 0 || target == nil {
+		return nil
+	}
+	rel := strings.Fields(strings.TrimSuffix(opens[len(opens)-1], "("))[1]
+	r, _ := info.Relation(target[1], rel)
+	if r == nil {
+		return nil
+	}
+	return r.Table
+}
+
+// predsOver keeps the preds of items that type over t inside an exists
+// (spec §predicates): every bare column they name is t's, and none of
+// them holds an exists, which does not nest.
+func (d *Document) predsOver(t *check.TableInfo, items []protocol.CompletionItem) []protocol.CompletionItem {
+	if t == nil {
+		return nil
+	}
+	var out []protocol.CompletionItem
+	for _, it := range items {
+		if d.predFits(it.Label, t, map[string]bool{}) {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+func (d *Document) predFits(name string, t *check.TableInfo, seen map[string]bool) bool {
+	def, ok := d.vindex.defs[voltSym{"pred", d.vpkg.Path, name}]
+	if !ok || def.pred == nil || seen[name] {
+		return false
+	}
+	seen[name] = true
+	fits := true
+	var walk func(x ast.PredExpr)
+	col := func(cr *ast.ColRef) {
+		if cr != nil && (cr.Qual != nil || t.Column(cr.Name.Name()) == nil) {
+			fits = false
+		}
+	}
+	walk = func(x ast.PredExpr) {
+		switch x := x.(type) {
+		case *ast.PredBinary:
+			walk(x.X)
+			walk(x.Y)
+		case *ast.PredNot:
+			walk(x.X)
+		case *ast.PredParen:
+			walk(x.X)
+		case *ast.PredExists:
+			fits = false
+		case *ast.PredRef:
+			fits = fits && d.predFits(x.Name.Name(), t, seen)
+		case *ast.PredCompare:
+			for _, side := range []ast.Operand{x.X, x.Y} {
+				if cr, ok := side.(*ast.ColRef); ok {
+					col(cr)
+				}
+			}
+		case *ast.PredIn:
+			col(x.Col)
+		case *ast.PredLike:
+			col(x.Col)
+		case *ast.PredNull:
+			col(x.Col)
+		}
+	}
+	walk(def.pred.X)
+	return fits
 }
 
 func existsOpen(prefix string) bool {

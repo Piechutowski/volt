@@ -31,8 +31,9 @@ type GoRule interface {
 }
 
 // GoFile is one parsed hand-written Go file with what the Go rules
-// read: whether it declares a handler, the package-level variables and
-// type declarations of the whole package, and a way to place a node.
+// read: whether it declares a handler or a scope-load function, which
+// the rules hold pure alike, the package-level variables and type
+// declarations of the whole package, and a way to place a node.
 type GoFile struct {
 	Name     string
 	File     *goast.File
@@ -130,11 +131,22 @@ func RunGo(dir string, srcs []GoSource, bodies []Body, analyzers ...Analyzer) []
 
 func declaresHandler(f *goast.File) bool {
 	for _, d := range f.Decls {
-		if fd, ok := d.(*goast.FuncDecl); ok && handlerShaped(fd) {
+		if fd, ok := d.(*goast.FuncDecl); ok && (handlerShaped(fd) || scopeLoadShaped(fd)) {
 			return true
 		}
 	}
 	return false
+}
+
+// scopeLoadShaped reports whether fd is a function of the package of the
+// shape a scope load names (spec §scope-loads), func(volt.Request)
+// volt.Load[T], a pure function of the request like a handler.
+func scopeLoadShaped(fd *goast.FuncDecl) bool {
+	if fd.Recv != nil || fd.Type.Params.NumFields() != 1 || fd.Type.Results == nil || len(fd.Type.Results.List) != 1 {
+		return false
+	}
+	res, ok := fd.Type.Results.List[0].Type.(*goast.IndexExpr)
+	return ok && spelled(fd.Type.Params.List[0].Type) == "volt.Request" && spelled(res.X) == "volt.Load"
 }
 
 // handlerShaped reports whether fd is a method taking a volt.Request
@@ -214,7 +226,7 @@ type handlerImportsRule struct{ meta }
 
 var handlerImports = &handlerImportsRule{meta{
 	name: "handlerimports",
-	doc:  "reports a file that declares a handler and imports a package that touches the world: the runner, database/sql, net, os, os/exec or a random source",
+	doc:  "reports a file that declares a handler or a scope load and imports a package that touches the world: the runner, database/sql, net, os, os/exec or a random source",
 }}
 
 func (r *handlerImportsRule) Go(f *GoFile) []diag.Diagnostic {
@@ -226,7 +238,7 @@ func (r *handlerImportsRule) Go(f *GoFile) []diag.Diagnostic {
 		p := strings.Trim(imp.Path.Value, `"`)
 		for _, w := range worldImports {
 			if p == w {
-				out = append(out, r.warnf(f.Pos(imp), "a file that declares a handler imports %s; a handler describes its effects and the shim performs them (§requests-and-responses)", p))
+				out = append(out, r.warnf(f.Pos(imp), "a file that declares a handler or a scope load imports %s; a handler describes its effects and the shim performs them (§requests-and-responses, §scope-loads)", p))
 			}
 		}
 	}
@@ -237,7 +249,7 @@ type handlerClockRule struct{ meta }
 
 var handlerClock = &handlerClockRule{meta{
 	name: "handlerclock",
-	doc:  "reports time.Now, time.Since and time.Until in a file that declares a handler, which reads the clock from the request instead",
+	doc:  "reports time.Now, time.Since and time.Until in a file that declares a handler or a scope load, which reads the clock from the request instead",
 }}
 
 func (r *handlerClockRule) Go(f *GoFile) []diag.Diagnostic {
