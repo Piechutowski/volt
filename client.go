@@ -16,6 +16,7 @@ type Client struct {
 	Base   string       // server origin, e.g. "http://localhost:8888"; no trailing slash
 	HTTP   *http.Client // nil means http.DefaultClient
 	Format Format       // wire format for request bodies and Accept; FormatJSON by default
+	Header http.Header  // default headers of every request; Accept, Content-Type and Last-Event-ID stay the client's own
 }
 
 // Do issues one request. A non-nil in is encoded as the body; a non-nil
@@ -57,7 +58,7 @@ func (c *Client) send(ctx context.Context, method, url string, in any) (*http.Re
 		}
 		body = &buf
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.Base+url, body)
+	req, err := c.requestNew(ctx, method, url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -65,11 +66,31 @@ func (c *Client) send(ctx context.Context, method, url string, in any) (*http.Re
 		req.Header.Set("Content-Type", c.Format.MIME())
 	}
 	req.Header.Set("Accept", c.Format.MIME())
-	hc := c.HTTP
-	if hc == nil {
-		hc = http.DefaultClient
+	return c.httpClient().Do(req)
+}
+
+func (c *Client) requestNew(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.Base+url, body)
+	if err != nil {
+		return nil, err
 	}
-	return hc.Do(req)
+	for k, vs := range c.Header {
+		switch http.CanonicalHeaderKey(k) {
+		case "Accept", "Content-Type", "Last-Event-Id":
+			continue
+		}
+		for _, v := range vs {
+			req.Header.Add(k, v)
+		}
+	}
+	return req, nil
+}
+
+func (c *Client) httpClient() *http.Client {
+	if c.HTTP == nil {
+		return http.DefaultClient
+	}
+	return c.HTTP
 }
 
 func problemOf(resp *http.Response) error {

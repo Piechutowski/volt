@@ -905,6 +905,9 @@ db/i457_migration_shape_rowid_alias.volt:38:5: error: spec/migrations: rebuild t
 ## i45_model_setting_removed.volt
 app/i45_model_setting_removed.volt:10:19: error: spec/resources: model: is not a setting; name the table in the declaration itself — `resources <table>` (§declaration)
 
+## i463_client_method_header.volt
+app/i463_client_method_header.volt:6:2: error: spec/scopes-and-routes: client method "Header" would take the name of the embedded volt.Client's field Header (§generated-client); rename the route with [name:] or a scope name
+
 ## i46_table_case.volt
 app/i46_table_case.volt:10:12: error: spec/resources: no table "Posts" in package "app"; did you mean "posts"? names are case-sensitive (§declaration)
 

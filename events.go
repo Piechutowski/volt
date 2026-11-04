@@ -221,15 +221,18 @@ func writeEvent(w http.ResponseWriter, ev Event) error {
 // delivers every event on the returned channel, and on any drop
 // reconnects with exponential backoff (1s to 30s), sending back as
 // Last-Event-ID the ID of the last event it delivered, until ctx is
-// done, when the channel closes.
+// done, when the channel closes. It reads the client, Header among it,
+// once when called (spec §generated-client).
 func (c *Client) Stream(ctx context.Context, url string) <-chan Event {
+	snapshot := *c
+	snapshot.Header = c.Header.Clone()
 	out := make(chan Event, 64)
 	go func() {
 		defer close(out)
 		var last string
 		delay := time.Second
 		for {
-			ok := c.streamOnce(ctx, url, &last, out)
+			ok := snapshot.streamOnce(ctx, url, &last, out)
 			if ctx.Err() != nil {
 				return
 			}
@@ -250,7 +253,7 @@ func (c *Client) Stream(ctx context.Context, url string) <-chan Event {
 }
 
 func (c *Client) streamOnce(ctx context.Context, url string, last *string, out chan<- Event) bool {
-	req, err := http.NewRequestWithContext(ctx, "GET", c.Base+url, nil)
+	req, err := c.requestNew(ctx, "GET", url, nil)
 	if err != nil {
 		return false
 	}
@@ -258,11 +261,7 @@ func (c *Client) streamOnce(ctx context.Context, url string, last *string, out c
 	if *last != "" {
 		req.Header.Set("Last-Event-ID", *last)
 	}
-	hc := c.HTTP
-	if hc == nil {
-		hc = http.DefaultClient
-	}
-	resp, err := hc.Do(req)
+	resp, err := c.httpClient().Do(req)
 	if err != nil {
 		return false
 	}

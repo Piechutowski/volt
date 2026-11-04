@@ -188,3 +188,31 @@ func TestClientBodyRoutes(t *testing.T) {
 	}
 	resp.Body.Close()
 }
+
+// TestClientHeader proves the generated constructor starts the client
+// with an empty Header, so a header set on a fresh client reaches the
+// scope load of every route beneath, through the typed method of a
+// query route and the raw method of a controller route alike
+// (§generated-client, §scope-loads).
+func TestClientHeader(t *testing.T) {
+	srv := httptest.NewServer(handlerWithDB(t))
+	defer srv.Close()
+	ctx := context.Background()
+	c := client.New(srv.URL)
+	var he volt.HTTPError
+	if _, err := c.MeUserList(ctx); !errors.As(err, &he) || he.StatusCode() != 401 {
+		t.Fatalf("no X-User = %v, want the load's 401", err)
+	}
+	c.Header.Set("X-User", "1")
+	for _, f := range []volt.Format{volt.FormatJSON, volt.FormatGOB} {
+		c.Format = f
+		if peers, err := c.MeUserList(ctx); err != nil || len(peers) != 1 {
+			t.Fatalf("%v: X-User 1 on a query route = %+v, %v", f, peers, err)
+		}
+		resp, err := c.MeShow(ctx)
+		if err != nil || resp.StatusCode != 200 {
+			t.Fatalf("%v: X-User 1 on a controller route = %v, %v", f, resp, err)
+		}
+		resp.Body.Close()
+	}
+}

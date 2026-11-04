@@ -2666,7 +2666,19 @@ the routes through typed methods instead of hand-built requests.
    cannot import, no client is generated.
 2. `type Client struct { volt.Client }` and `New(base string)
    *Client`. The embedded runtime client carries the origin, the
-   `http.Client` and the wire format (§formats); a non-2xx reply comes
+   `http.Client`, the wire format (§formats) and `Header`, the default
+   headers of every request it sends, through `Do`, `Raw` and `Stream`
+   alike. `New` (`NewClient` beside the models, rule 6) sets `Header`
+   to an empty `http.Header`, so `c.Header.Set("X-User", "1")` on a
+   fresh client reaches every call that follows; a nil `Header` sends
+   none. The headers the client writes itself are its own and never
+   come from `Header`: `Accept`, the format's media type
+   (`text/event-stream` on a stream); `Content-Type`, the format's when
+   a body goes and absent otherwise; and a stream's `Last-Event-ID`.
+   `Stream` reads the client once, when it is called, so its
+   reconnections, which run on a goroutine of their own, send the
+   headers of that moment; a change to the client afterwards reaches
+   the next call, not a stream already open. A non-2xx reply comes
    back as an `HTTPError`: a `*volt.ProblemError` carrying the Problem's
    status, message and details when the body decodes as one (§formats),
    else the status and the body text, so
@@ -2700,9 +2712,10 @@ the routes through typed methods instead of hand-built requests.
 5. Client method names and reverse-URL helper names share one
    namespace per package (§route-names-and-reverse-urls); a collision is an error naming
    `name:`. The namespace also holds the names of the embedded runtime
-   client: `Client`, its fields `Base`, `HTTP` and `Format`, and its
-   methods `Do`, `Raw` and `Stream`, which the generated methods call.
-   A route that derives one of them is an error naming `name:`.
+   client: `Client`, its fields `Base`, `HTTP`, `Format` and `Header`,
+   and its methods `Do`, `Raw` and `Stream`, which the generated
+   methods call. A route that derives one of them is an error naming
+   `name:`.
 6. **Beside the models.** `volt gen -o DIR` (§projects-and-packages) writes the client
    as `DIR/volt_client.go` in the package `DIR` holds instead of as a
    subpackage, for a program that is the client — a desktop or browser

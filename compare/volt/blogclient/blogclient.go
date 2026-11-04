@@ -1,7 +1,7 @@
 // Package blogclient is the typed client of the Volt blog. The generated
 // client answers a controller route with a raw *http.Response, so this
-// layer names each route's reply type and sends X-User, which the
-// generated client has no option for.
+// layer names each route's reply type; X-User rides on the runtime
+// client's Header.
 package blogclient
 
 import (
@@ -19,17 +19,9 @@ type Client struct {
 	volt.Client
 }
 
-type member struct{ id int }
-
-func (m member) RoundTrip(r *http.Request) (*http.Response, error) {
-	r = r.Clone(r.Context())
-	r.Header.Set("X-User", strconv.Itoa(m.id))
-	return http.DefaultTransport.RoundTrip(r)
-}
-
 // New is a client of the blog at base acting as member id.
 func New(base string, id int) *Client {
-	return &Client{volt.Client{Base: base, HTTP: &http.Client{Transport: member{id}}}}
+	return &Client{volt.Client{Base: base, Header: http.Header{"X-User": {strconv.Itoa(id)}}}}
 }
 
 // CreatePost stores a draft.

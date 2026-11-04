@@ -667,22 +667,16 @@ func (g *generator) routesEmit() error {
 
 func (g *generator) clientEmit() error {
 	var imports []string
-	anyMethod, rawMethod := false, false
+	anyMethod := false
 	for _, r := range g.pkg.Routes {
-		if r.ClientName == "" {
-			continue
-		}
-		anyMethod = true
-		if r.Query == nil && !r.Events {
-			rawMethod = true
+		if r.ClientName != "" {
+			anyMethod = true
 		}
 	}
 	if anyMethod {
 		imports = append(imports, "context")
 	}
-	if rawMethod {
-		imports = append(imports, "net/http")
-	}
+	imports = append(imports, "net/http")
 	if g.queryTimeParams() {
 		imports = append(imports, "time")
 	}
@@ -701,7 +695,7 @@ func (g *generator) clientEmit() error {
 	}
 
 	g.pf("type Client struct {\n\tvolt.Client\n}\n\n")
-	g.pf("func %s(base string) *Client {\n\treturn &Client{volt.Client{Base: base}}\n}\n\n", ctor)
+	g.pf("func %s(base string) *Client {\n\treturn &Client{volt.Client{Base: base, Header: http.Header{}}}\n}\n\n", ctor)
 
 	for _, r := range g.pkg.Routes {
 		if r.ClientName == "" {

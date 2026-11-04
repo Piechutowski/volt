@@ -1107,6 +1107,7 @@ var voltClientNames = map[string]string{
 	"Base":   "field Base",
 	"HTTP":   "field HTTP",
 	"Format": "field Format",
+	"Header": "field Header",
 	"Do":     "method Do",
 	"Raw":    "method Raw",
 	"Stream": "method Stream",

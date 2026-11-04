@@ -70,7 +70,7 @@ are neither blank nor comments, tests left out; `go run
 
 | Stack | Server Go | Client Go | Contract and schema | Hand-written total | Generated | Third-party modules |
 |---|---:|---:|---:|---:|---:|---:|
-| Volt | 340 | 70 | 119 | 529 | 1377 | 2 |
+| Volt | 340 | 64 | 119 | 523 | 1377 | 2 |
 | Gin + GORM | 707 | 124 | 0 | 831 | 0 | 24 |
 | chi + sqlc + goose | 636 | 120 | 99 | 855 | 440 | 7 |
 | Echo + sqlx + goose | 671 | 168 | 43 | 882 | 0 | 23 |
@@ -84,8 +84,8 @@ every handler checks the member; a transaction cannot use an id an
 earlier step assigned, so a post's tags are not written atomically; a
 select has no limit, so the feed reads every post after the cursor; a
 select has no optional predicate, so the tag filter is a second
-select; and the generated client is untyped for controller routes and
-sends no default header, so the typed client is written by hand.
+select; and the generated client is untyped for controller routes, so
+the typed client is written by hand.
 
 ## Crib sheet
 
