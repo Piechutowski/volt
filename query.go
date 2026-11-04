@@ -90,16 +90,21 @@ func QueryListOptional[T QueryValue](name string, v rt.Null[[]T]) ([]URLOption, 
 	return out, nil
 }
 
-// LimitCheck is nil for a limit of at least 1 and otherwise the 400 naming
-// the request key it came from (§query-routes, §route-loads): a generated
-// route refuses a select's limit: parameter below 1 where it binds it, a
-// path parameter before the scope loads and a query key before the query
-// or the route's loads, since SQLite reads a negative limit as none.
-func LimitCheck(name string, n int) error {
-	if n >= 1 {
-		return nil
+// LimitCheck is nil for a limit of at least 1 and, when most is set, at
+// most most, and otherwise the 400 naming the request key it came from
+// (§query-routes, §route-loads): a generated route refuses a select's
+// limit: parameter below 1, or above the route's max_limit:, where it
+// binds it, a path parameter before the scope loads and a query key
+// before the query or the route's loads, since SQLite reads a negative
+// limit as none.
+func LimitCheck(name string, n, most int) error {
+	if n < 1 {
+		return Error(http.StatusBadRequest, fmt.Sprintf("parameter %s is a limit, at least 1, not %d", name, n))
 	}
-	return Error(http.StatusBadRequest, fmt.Sprintf("parameter %s is a limit, at least 1, not %d", name, n))
+	if most > 0 && n > most {
+		return Error(http.StatusBadRequest, fmt.Sprintf("parameter %s is a limit, at most %d, not %d", name, most, n))
+	}
+	return nil
 }
 
 // QueryLimit binds a select's limit: parameter from the query string under
@@ -115,11 +120,8 @@ func QueryLimit(r Request, name string, def, most int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if err := LimitCheck(name, n); err != nil {
+	if err := LimitCheck(name, n, most); err != nil {
 		return 0, err
-	}
-	if most > 0 && n > most {
-		return 0, Error(http.StatusBadRequest, fmt.Sprintf("parameter %s is a limit, at most %d, not %d", name, most, n))
 	}
 	return n, nil
 }

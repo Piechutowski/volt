@@ -229,14 +229,22 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 	for _, m := range si.Members {
 		members[m.Decl.Name.Name()] = true
 	}
+	var limitS, mostS *ast.Setting
+	limitDefault, limitMost := 0, 0
 	if ds.Settings != nil {
-		repeated, dupDiags := settingsRepeated(ds.Settings, "strip", "only", "except")
+		repeated, dupDiags := settingsRepeated(ds.Settings, "strip", "only", "except", "limit", "max_limit")
 		l.diags = append(l.diags, dupDiags...)
 		for _, s := range ds.Settings.Settings {
 			if repeated[s] {
 				continue
 			}
 			switch s.Name {
+			case "limit":
+				limitS = s
+				limitDefault, _ = l.limitSetting(s)
+			case "max_limit":
+				mostS = s
+				limitMost, _ = l.limitSetting(s)
 			case "strip":
 				lit, ok := s.Value.(*ast.BasicLit)
 				if !ok || lit.Tok.Kind != token.STRING {
@@ -267,7 +275,7 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 					except, exceptPos = set, s.Pos()
 				}
 			default:
-				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a dataset (§settings-whitelists); valid: strip, only, except", s.Name)
+				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a dataset (§settings-whitelists); valid: strip, only, except, limit, max_limit", s.Name)
 			}
 		}
 	}
@@ -311,6 +319,9 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 		if qr == nil {
 			continue
 		}
+		if !l.scopeLoadKeysRefuse(ds.Pos(), qr, inh.loads) || !l.limitSettingsCheck("datasets", "§dataset-settings, §route-loads", limitS, mostS, limitDefault, limitMost, qr, nil) {
+			return nil
+		}
 		helper := inh.namePrefix + method
 		out = append(out, &RouteInfo{
 			Method:       "GET",
@@ -325,6 +336,8 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 			Pos:          ds.Pos(),
 			FromDataset:  true,
 			ScopeLoads:   inh.loads,
+			LimitDefault: limitDefault,
+			LimitMost:    limitMost,
 		})
 	}
 	return out
@@ -375,7 +388,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		events = true
 	case controller == "":
 		query = l.queryRef(r, method, params, l.facts.pkgName, l.facts.pkgPath, true)
-		if query == nil {
+		if query == nil || !l.scopeLoadKeysRefuse(r.Handler.Pos(), query, inh.loads) {
 			return nil
 		}
 		controller, action = "", query.Method
@@ -385,7 +398,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	default:
 		if kind == qualImport {
 			query = l.queryRef(r, method, params, controller, target, false)
-			if query == nil {
+			if query == nil || !l.scopeLoadKeysRefuse(r.Handler.Pos(), query, inh.loads) {
 				return nil
 			}
 			controller, action = "", query.Method
@@ -465,19 +478,8 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		}
 	}
 
-	if limitS != nil || mostS != nil {
-		s := limitS
-		if s == nil {
-			s = mostS
-		}
-		if !limitBound(query, loads) {
-			l.errorf(s.Pos(), "route-loads", "%s: sets a limit the route binds from the query string, and the route binds none: no query of it takes a select's limit: parameter from a query key (§route-loads)", s.Name)
-			return nil
-		}
-		if limitDefault > 0 && limitMost > 0 && limitDefault > limitMost {
-			l.errorf(limitS.Pos(), "route-loads", "limit: %d is above max_limit: %d, so the default would be refused (§route-loads)", limitDefault, limitMost)
-			return nil
-		}
+	if !l.limitSettingsCheck("route-loads", "§route-loads", limitS, mostS, limitDefault, limitMost, query, loads) {
+		return nil
 	}
 
 	if query != nil {
@@ -516,10 +518,30 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	}
 }
 
+// limitSettingsCheck holds a route's or a dataset's limit: and
+// max_limit: settings to what they govern (spec §route-loads): limit: a
+// select's limit: parameter the route binds from the query string,
+// max_limit: one it binds from the query string or a path parameter,
+// and a limit: no larger than the max_limit:.
+func (l *routeLowering) limitSettingsCheck(code, cite string, limitS, mostS *ast.Setting, limitDefault, limitMost int, query *QueryRef, loads []LoadInfo) bool {
+	if limitS != nil && !limitBound(query, loads, FromQuery) {
+		l.errorf(limitS.Pos(), code, "limit: is the limit a request that leaves the key out gets, and the route binds no select's limit: parameter from the query string (%s)", cite)
+		return false
+	}
+	if mostS != nil && !limitBound(query, loads, FromQuery, FromPath) {
+		l.errorf(mostS.Pos(), code, "max_limit: is the most a request may ask, and the route binds no select's limit: parameter from the query string or a path parameter (%s)", cite)
+		return false
+	}
+	if limitDefault > 0 && limitMost > 0 && limitDefault > limitMost {
+		l.errorf(limitS.Pos(), code, "limit: %d is above max_limit: %d, so the default would be refused (%s)", limitDefault, limitMost, cite)
+		return false
+	}
+	return true
+}
+
 // limitBound reports whether a route binds a select's limit: parameter
-// from the query string (spec §route-loads), which its limit: and
-// max_limit: settings govern.
-func limitBound(query *QueryRef, loads []LoadInfo) bool {
+// from one of sources (spec §route-loads), for its query or a load.
+func limitBound(query *QueryRef, loads []LoadInfo, sources ...QuerySource) bool {
 	refs := []*QueryRef{query}
 	for _, ld := range loads {
 		refs = append(refs, ld.Query)
@@ -529,12 +551,28 @@ func limitBound(query *QueryRef, loads []LoadInfo) bool {
 			continue
 		}
 		for _, p := range q.Params {
-			if p.Limit && p.Source == FromQuery {
-				return true
+			for _, src := range sources {
+				if p.Limit && p.Source == src {
+					return true
+				}
 			}
 		}
 	}
 	return false
+}
+
+// scopeLoadKeysRefuse reports a parameter of a query route or a dataset
+// that binds from the query string by the name of a scope load above it
+// (spec §scope-loads): the route drops the load's value, so the client
+// would choose the value the name stands for.
+func (l *routeLowering) scopeLoadKeysRefuse(pos token.Position, q *QueryRef, loads []ScopeLoad) bool {
+	for _, p := range q.Params {
+		if (p.Source == FromQuery || p.Source == FromList) && scopeLoadNamed(loads, p.Name) {
+			l.errorf(pos, "scope-loads", "parameter %q of %s binds from the query string by the name of a scope load above the route, whose value a query route drops, so the client would choose it; name the parameter otherwise, or route through a controller that receives the load (§scope-loads, §query-routes)", p.Name, q.Method)
+			return false
+		}
+	}
+	return true
 }
 
 func routeKindArticled(query *QueryRef, events bool) string {

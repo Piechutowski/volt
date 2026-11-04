@@ -235,6 +235,7 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathAPIUserDescribed": {"GET", app.PathAPIUserDescribed()},
 		"PathAPIUserChosen":    {"GET", app.PathAPIUserChosen()},
 		"PathAPIRecent":        {"GET", app.PathAPIRecent()},
+		"PathAPITop":           {"GET", app.PathAPITop(2)},
 		"PathFrom":             {"GET", app.PathFrom(1)},
 		"PathMsRevenueBrowse":  {"GET", app.PathMsRevenueBrowse(volt.Query("year", "2024"))},
 		"PathMsUsageBrowse":    {"GET", app.PathMsUsageBrowse(volt.Query("year", "2024"))},

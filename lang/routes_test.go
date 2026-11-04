@@ -1,6 +1,7 @@
 package lang
 
 import (
+	"go/types"
 	"net/http"
 	"slices"
 	"strings"
@@ -216,6 +217,22 @@ func TestRoutesOverUnknownKeyKept(t *testing.T) {
 		}
 		if tc.keyed && (len(r.Params) != 1 || r.Params[0].Type != tUnresolved) {
 			t.Errorf("%s: Params %+v; want the one key, its type unresolved", tc.route, r.Params)
+		}
+	}
+}
+
+// TestPredeclaredNamesAreGoUniverse holds the names no load takes to
+// Go's universe block (spec §route-loads): each predeclared identifier
+// of the toolchain, and nothing else.
+func TestPredeclaredNamesAreGoUniverse(t *testing.T) {
+	for _, n := range types.Universe.Names() {
+		if !goPredeclared[n] {
+			t.Errorf("Go predeclares %s, which a load may still take", n)
+		}
+	}
+	for n := range goPredeclared {
+		if types.Universe.Lookup(n) == nil {
+			t.Errorf("%s is refused as a load name, and Go predeclares no such identifier", n)
 		}
 	}
 }

@@ -30,8 +30,12 @@ scope / [pipe: api, error_handler: Errors] {
 		get /newest/page Admin.Newest [name: newest_page, max_limit: 20] {
 			rows db.UserLatest(size)
 		}
-		get /top/:n(int) Admin.Top {
+		get /top/:n(int) Admin.Top [max_limit: 100] {
 			top db.UserLatest(n)
+		}
+		get /keys Admin.Keys {
+			a db.UserLatest(ctx)
+			b db.UserSince(ctx_)
 		}
 	}
 
@@ -72,6 +76,7 @@ scope / [pipe: api, error_handler: Errors] {
 		get    /feed             db.UserFeed
 		get    /latest           db.UserLatest
 		get    /written          db.UserWritten
+		get    /bydb             db.UserBydb
 		get    /roles/:userID(int)/:roleID(int) db.UserRoleGet
 		patch  /roles/:userID(int)/:roleID(int) db.UserRoleUpdate
 	}
@@ -79,6 +84,9 @@ scope / [pipe: api, error_handler: Errors] {
 	// A dataset (§datasets): one query route per member of the group select.
 	scope /ms {
 		dataset db.browse [strip: "ms_"]
+	}
+	scope /msr [name: msr] {
+		dataset db.recent [strip: "ms_", limit: 5, max_limit: 20]
 	}
 
 	// Default handlers (§default-handlers): every action is a query route over

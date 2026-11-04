@@ -1,6 +1,8 @@
 package lsp
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -567,6 +569,52 @@ func TestCompletionOffersTheOneSpelling(t *testing.T) {
 	for _, w := range []string{"Indexes", "Validators", "Records"} {
 		if slices.Contains(items, w) {
 			t.Errorf("table body completion %v offers %s, a spelling Volt refuses", items, w)
+		}
+	}
+}
+
+// TestSettingsCompleteTheWhitelist holds setting completion to the spec
+// (§settings-whitelists, §relationships-ref, editor.md section 5): every
+// construct of the whitelist table, and a ref element, completes exactly
+// the settings the spec lists for it.
+func TestSettingsCompleteTheWhitelist(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "docs", "spec.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := string(b)
+	start := strings.Index(spec, "\n## Settings whitelists\n")
+	end := strings.Index(spec[start+1:], "\n## ")
+	if start < 0 || end < 0 {
+		t.Fatal("no §settings-whitelists section in the spec")
+	}
+	contexts := map[string]string{"`scope`": "scope", "route": "route", "resources": "resources", "dataset": "dataset", "Select": "select", "`migration`": "migration"}
+	want := map[string][]string{"ref": {"as", "delete", "reverse", "update"}}
+	for _, line := range strings.Split(spec[start:start+1+end], "\n") {
+		cells := strings.Split(line, "|")
+		if len(cells) != 4 {
+			continue
+		}
+		ctx, ok := contexts[strings.TrimSpace(cells[1])]
+		if !ok {
+			continue
+		}
+		for _, name := range strings.Split(cells[2], ",") {
+			want[ctx] = append(want[ctx], strings.Trim(strings.TrimSpace(name), "`"))
+		}
+	}
+	if len(want) != len(contexts)+1 {
+		t.Fatalf("read the whitelist of %d constructs from the spec, want %d", len(want)-1, len(contexts))
+	}
+	for ctx, names := range want {
+		var got []string
+		for _, w := range settingsByContext[ctx] {
+			got = append(got, strings.TrimRight(w, " ({:"))
+		}
+		slices.Sort(got)
+		slices.Sort(names)
+		if !slices.Equal(got, names) {
+			t.Errorf("%s settings complete %v; the spec lists %v", ctx, got, names)
 		}
 	}
 }

@@ -2430,8 +2430,10 @@ parameters, so the handler reads them and never asks for them.
    that is not a reserved name (§route-paths), not `err` or `ok`,
    which the shim declares beside it, not a name the route files
    import a package under (`context`, `http`, `rt`, `run`, `time`,
-   `volt`; §imports), which the shim's closure taking the value would
-   shadow, not shaped like a generated
+   `volt`; §imports) and not a predeclared Go identifier (`string`,
+   `int`, `len`, `nil` and the rest of Go's universe block), either of
+   which the shim's closure taking the value would shadow, not shaped
+   like a generated
    local (`volt` and an upper-case letter), not the package's name or
    an import qualifier (§imports), not a path parameter of the route
    and not another load of it or of a scope above (§scope-loads).
@@ -2439,20 +2441,28 @@ parameters, so the handler reads them and never asks for them.
    name or a literal. A name that is a path parameter of the route
    binds it, and the parameter's type MUST spell the function's Go
    type, as for a query route; a wildcard cannot bind one, nor can a
-   path parameter bind a list parameter. A name that is a load the
-   route declares before this one or a scope load above it
-   (§scope-loads), and no path parameter, is an error: no load binds another load's value, and the
+   path parameter bind a list parameter. A name that is another load
+   the route declares, before this one or after it, or a scope load
+   above it (§scope-loads), and no path parameter, is an error: no load
+   binds another load's value, and the
    name, read from the query string as any other name is, would let the
    client choose the value, the signed-in user's id among them; a
    handler that needs a row keyed by a loaded value reads it with
-   `Then`. Any other name binds from the
+   `Then`. The load's own name is no other load's, so an argument may
+   share it and binds the query key of that name: `title
+   db.PostTitled(title)`. Any other name binds from the
    query string by that name, a list parameter from the repeated key,
    with the types the query string carries (§query-routes); a missing
    or unparseable value is a 400 naming the key, before any of the
    route's loads runs. One key may bind several arguments, of one load
-   or of several, and each binds by its own parameter's type and rule,
-   so a missing key that one of them requires is a 400 whatever else
-   it binds. An optional parameter (§predicates) binds from
+   or of several, and each binds by its own parameter's rule, so a
+   missing key that one of them requires is a 400 whatever else it
+   binds; every argument a key binds has one Go type, the one the
+   generated client sends it as (§generated-client), so a key two
+   arguments bind as two types is an error, and so is a list key one
+   argument requires and another takes optional, a missing key being an
+   empty list to the one and absent to the other, which no one argument
+   of the client tells apart. An optional parameter (§predicates) binds from
    the query string absent when the key is missing, an optional list
    from the repeated key, as a query route binds them (§query-routes),
    and from a path parameter or a literal present, since either is
@@ -2489,21 +2499,27 @@ parameters, so the handler reads them and never asks for them.
    and the handler never sees it. A route that must decide on a miss
    loads nothing and uses `Then` with `Rescue`.
 5. **`limit` and `max_limit`.** Route settings, each a positive
-   integer of rows, over a select's `limit:` parameter the route binds
-   from the query string, a query route's or a load's
-   (§selects-over-groups, §query-routes): `limit:` is the limit a
-   request that leaves the key out gets, where it is otherwise a 400
-   naming the key, and `max_limit:` the most a request may ask, a
-   larger value a 400 naming the key where it binds, as a value below
-   1 is, before any query runs. `get /feed db.PostFeed [limit: 10,
+   integer of rows that fits `int64`, over a select's `limit:`
+   parameter the route binds from the request, a query route's or a
+   load's (§selects-over-groups, §query-routes): `limit:` is the limit
+   a request that leaves the query key out gets, where it is otherwise
+   a 400 naming the key, and `max_limit:` the most a request may ask,
+   from the query string or a path parameter, a larger value a 400
+   naming the key where it binds, as a value below 1 is: a path
+   parameter once the path parameters parse, before the scope loads
+   (§scope-loads), and a query key after them, before the route's query
+   or any of its loads runs. `get /feed db.PostFeed [limit: 10,
    max_limit: 50]` serves ten rows to a bare `GET /feed` and refuses
-   `limit=51`. Either on a route that binds no such parameter from the
-   query string is an error, since it would govern nothing, and so is
-   a `limit:` above the route's `max_limit:`, whose every bare request
-   would be refused. A limit from a path parameter or a literal is
-   always present and the route's author's own, so neither setting
-   reads it. The generated client still sends the limit it is given
-   (§generated-client).
+   `limit=51`, and `get /top/:limit(int) db.PostFeed [max_limit: 50]`
+   refuses `GET /top/51`. `limit:` on a route that binds no such
+   parameter from the query string, a path parameter being always
+   present, and `max_limit:` on one that binds none from either, are
+   errors, since they would govern nothing, and so is a `limit:` above
+   the route's `max_limit:`, whose every bare request would be refused.
+   A limit from a literal is the route's author's own, so neither
+   setting reads it. A dataset takes both settings for its member routes
+   (§dataset-settings). The generated client still sends the limit it
+   is given (§generated-client).
 6. **`timeout`.** A route setting, a positive integer of seconds,
    bounds the whole chain, loads and the handler's own effects, with
    one deadline from the request's arrival; an effect the deadline
@@ -2565,8 +2581,14 @@ routes need and whether the request goes on.
    qualifier is an import of this package (§imports), which the
    generated handlers file imports under the same qualifier. The
    load's name obeys the rules of a route load's (§route-loads), and
-   no route beneath uses it for a path parameter, a route load or
-   another scope load.
+   no route beneath uses it for a path parameter, a route load, another
+   scope load, or a parameter a query route or a dataset beneath binds
+   from the query string (§query-routes, §datasets): such a route drops
+   the load's value (rule 3), so the key would let the client choose
+   the value the name stands for, the signed-in user's id among them.
+   The function a scope load names is not the name of a load of its
+   scope or one above it, which holds that load's value where the shim
+   calls the function.
 3. **Order and the shim.** `scope` loads run for every route beneath
    the scope, controller and query routes alike, outermost scope
    first and in declaration order within a scope, after the path
@@ -2682,8 +2704,9 @@ scope /api [pipe: api] {
    SQLite reads a negative limit as none: from a path parameter once
    the path parameters parse, before the scope loads (§scope-loads),
    and from the query string where it binds, before the query runs.
-   The route's `limit:` and `max_limit:` settings give one from the
-   query string a default and a most (§route-loads).
+   The route's `limit:` setting gives one from the query string a
+   default, and its `max_limit:` gives one from either a most
+   (§route-loads).
    A parameter binds from the query string only when its type is
    `string`, `bool`, `int`, `float64` or `time.Time`, a slice of one
    of those (a list parameter), or an `rt.Null` of one of those (an
@@ -2877,14 +2900,21 @@ the routes through typed methods instead of hand-built requests.
    update needs no row in hand:
    `APIUserUpdate(ctx, id, db.UserNew().EmailSet(e))` sets one column
    of row `id`.
+   A method's Go parameters are named as the path parameters, the
+   query's parameters or the query keys they carry, with `_` appended
+   while the name is a Go keyword, a name the method uses (`ctx`, `c`,
+   `cs`, `body`, `volt`, `http`, `context`, `rt`, `time`, `nil`,
+   `append`, `any`, `error`), a qualifier the client imports a data
+   package under (`db`), of the form of a generated local, or a name an
+   earlier parameter of the method took: a select parameter `:db` is
+   `db_`, and the keys `ctx` and `ctx_` are `ctx_` and `ctx__`. The
+   changeset is always `cs`, a name no other parameter takes.
 4. **Every named controller route** is one raw method with the
    route's path parameters, then every query-string key its loads bind
    (§route-loads), once each, in the order the loads first read it and
-   typed and sent as a query route's parameter is (rule 3), required
-   when any load requires it, named as the key with `_` appended when
-   that is a Go keyword or a name the method uses (`ctx`, `c`, `cs`,
-   `body`, `volt`, `http`, `context`, `rt`, `time`, `nil`, `append`,
-   `any`, `error`) or has the form of a generated local, so a route
+   typed and sent as a query route's parameter is (rule 3), in the one
+   type every load binds it as, required when any load requires it,
+   named as rule 3 names parameters, so a route
    that loads through a `limit:` select sends its limit:
    `Mine(ctx, at rt.Null[time.Time], limit int)`, and, when the route
    binds a body (§request-bodies), the body last: a changeset `cs db.UserChangeset`
@@ -3270,6 +3300,8 @@ scope /ms [pipe: api] {
 | `strip` | string | prefix removed from each member's table name to form its segment |
 | `only` | table list `(ms_revenue, ms_usage)` | keep only these members |
 | `except` | table list | drop these members |
+| `limit` | positive integer | every member route's limit when the request leaves the key out (§route-loads) |
+| `max_limit` | positive integer | the most limit every member route serves (§route-loads) |
 
 1. `strip:` MUST be a prefix of every kept member's name, and what
    remains MUST be a usable segment (§route-paths); otherwise an error
@@ -3277,6 +3309,10 @@ scope /ms [pipe: api] {
 2. Names in `only`/`except` are members of the select's target,
    spelled exactly; an unknown name is an error. `only` and `except`
    MUST NOT be combined.
+3. `limit:` and `max_limit:` govern the select's `limit:` parameter
+   on every member route as they do on a route (§route-loads): a
+   dataset over a select with no `limit:` parameter, or whose limit a
+   prefix parameter binds and that sets `limit:`, is an error.
 
 ## Settings whitelists
 
@@ -3288,7 +3324,7 @@ an element is an error on that element):
 | `scope` | `pipe`, `name`, `error_handler` |
 | route | `name`, `timeout`, `body`, `only`, `limit`, `max_limit` |
 | resources | `api`, `only`, `except`, `param`, `singular`, `default` |
-| dataset | `strip`, `only`, `except` |
+| dataset | `strip`, `only`, `except`, `limit`, `max_limit` |
 | Select | `order`, `group`, `limit` |
 | `migration` | `irreversible`, `no_transaction` |
 
@@ -3573,7 +3609,11 @@ pred tagged  { exists tags (tag = :tag?) }
      exists term, each of which every term of can be taken out, render
      behind the condition that all of them are, `((? IS NULL AND ? IS
      NULL) OR <it>)` under `and` and `(NOT (? IS NULL AND ? IS NULL) AND
-     <it>)` under `or`, each parameter once; and every placeholder of
+     <it>)` under `or`, each parameter once. The predicate of a `where`
+     and the one inside an exists term stand under `and`: at the top of
+     either a term renders behind its `and` guard and an `or` behind
+     the `and` form of its condition, so either is true when every term
+     of it is taken out. Every placeholder of
      the parameter, a guard's and the term's own, binds the parameter's
      `rt.Null`, which binds NULL when absent (rule 8). An optional list parameter binds
      as `rt.JSONListOptional(tags)`: NULL when absent, the JSON array of
@@ -3663,8 +3703,11 @@ pred tagged  { exists tags (tag = :tag?) }
      an optional parameter are `(<all absent> OR <it>)` and `(NOT <all
      absent> AND <it>)`, `<all absent>` the parameters' `? IS NULL`
      joined by ` AND `, each once: `((? IS NULL AND ? IS NULL) OR
-     EXISTS (SELECT 1 FROM …))`; each guard binds its parameter's
-     value, as every placeholder of the term does;
+     EXISTS (SELECT 1 FROM …))`; the predicate of a `where` and the one
+     inside an exists term stand under `and`, so an `or` at the top of
+     either is `(<all absent> OR <it>)`: `((? IS NULL AND ? IS NULL) OR
+     ((? IS NOT NULL AND "published_at" < ?) OR …))`; each guard binds
+     its parameter's value, as every placeholder of the term does;
    - a value is always an argument behind a positional `?`, in
      left-to-right order of the text: a literal written in a Volt
      predicate is bound by the generated method like a parameter, the
@@ -5271,10 +5314,14 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    gives none (§indexes). `<Model>List` and `<Model>Create` always
    exist; a table without a key gets List, Create, GetBy and the
    dynamic layer.
-2. A `Lookup` yields `rt.ErrNotFound` on a miss, which the runner
-   returns for the driver's no-rows error, and so does an `Update`
-   whose row vanished and a keyed `Delete`, an `Exec` with `One` set,
-   when nothing was affected. A `Query` yields an empty slice, never
+2. A `Lookup` yields `rt.ErrNotFound` on a miss, a statement that
+   returned no row, and so does an `Update` whose row vanished and a
+   keyed `Delete`, an `Exec` with `One` set, when nothing was affected.
+   A `Lookup` and a `Write` read the first row their statement returns
+   through their `Scan`, which receives the statement's error too, so
+   that it can map a refusal; the statement is released when the
+   `Scan` returns, whether it read the row, refused it unread or
+   panicked. A `Query` yields an empty slice, never
    nil, unless it has no statement.
 3. Every statement is rendered by the runtime (§predicates, rendering):
    `Get`, `GetBy*`, `List`, `Delete` and the select functions carry
@@ -5314,17 +5361,33 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    connection the pool opens, since SQLite keeps each setting per
    connection; `run.Wrap` takes a pool the application opened, with
    the settings it gave it. `run.Run(ctx, db, e)` performs one
-   effect: every statement is prepared through the statement cache,
-   keyed by its text, so identical shapes prepare once; a
+   effect: every statement outside a transaction is prepared through
+   the statement cache, keyed by its text, so identical shapes prepare
+   once; a statement inside one runs on the transaction's connection
+   and is prepared there each time, since a cached statement belongs
+   to the pool and not to one connection. A
    `Transaction` runs its steps on one transaction that commits when
    every step succeeded and rolls back on the first error or a panic, a
-   `Transaction` inside one joins it. A transaction begins immediately
-   (`BEGIN IMMEDIATE`), taking SQLite's write lock at its start, so one
-   that reads and then writes, the check of rule 6 among them, waits
-   for the lock under the busy timeout while another connection of a
-   pool holds it, where a deferred one would fail at its first write
-   with `database is locked`; with the one connection `run.Open` pins
-   the transactions run one after another either way. A `Parallel`
+   `Transaction` inside one joins it. A transaction that can write
+   begins immediately (`BEGIN IMMEDIATE`), taking SQLite's write lock
+   at its start, so one that reads and then writes, the check of rule
+   6 among them, waits for the lock while another connection of a pool
+   holds it, where a deferred one would fail at its first write with
+   `database is locked`. The runner waits for that lock itself, as
+   SQLite's busy handler would, for at most the connection's busy
+   timeout, and stops waiting when the context ends, failing with the
+   context's error: SQLite's own wait sees no context. A transaction
+   whose effects can only read, a `With`, and a `Transaction`, a
+   `Parallel`, a `Map` or an `Atomic` of `Query`, `Lookup`, `With`,
+   `Pure` and `Fail` alone, begins deferred (`BEGIN`): it takes one
+   snapshot at its first read and no lock, so under WAL it reads
+   beside a writer without waiting and beside other readers at once.
+   A `Then` counts as writing, since what its `next` returns is not
+   known before it runs. With the one connection `run.Open` pins the
+   transactions run one after another either way. A statement outside
+   a transaction that finds the write lock held, by another connection
+   or another process, waits under SQLite's own busy handler, which no
+   context interrupts. A `Parallel`
    runs its steps on
    their own goroutines and joins them, the first error cancelling the
    rest, except inside a transaction, where it runs them in order on
@@ -5432,10 +5495,11 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    (`UserID` is `userID`), with `_` appended when that is a Go keyword,
    `ctx`, `arg` or `rt`, `nil`, `append`, `any` or `true` (the predeclared names a
    generated method uses), a name the route files' signatures take
-   (`w`, `r`, `opts`, `volt`, `cs`, `c`), which a query route's path
-   parameter, named after the key parameter, may not take
+   (`w`, `r`, `opts`, `volt`, `cs`, `c`, `body`), which a query
+   route's path parameter, named after the key parameter, may not take
    (§route-paths), or of the locals' form: a column `volt_err` takes
-   `voltErr_` and a column `c` takes `c_`. `GetMany` takes that name
+   `voltErr_`, a column `c` takes `c_` and a column `body` takes
+   `body_`. `GetMany` takes that name
    with `s` added. A select parameter is refused where a key column's
    parameter takes `_`, `arg` aside (§predicates), so no column and no
    parameter shadows a local, a helper or a predeclared name a method

@@ -79,6 +79,11 @@ func (c *Client) AdminTop(ctx context.Context, n int) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/admin/top/"+volt.SegInt(n)), nil)
 }
 
+func (c *Client) AdminKeys(ctx context.Context, ctx_ int, ctx__ time.Time) (*http.Response, error) {
+	voltQ := []volt.URLOption{volt.Query("ctx", volt.FormatQuery(ctx_)), volt.Query("ctx_", volt.FormatQuery(ctx__))}
+	return c.Raw(ctx, "GET", volt.URL("/admin/keys", voltQ...), nil)
+}
+
 func (c *Client) Users(ctx context.Context) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/users"), nil)
 }
@@ -217,6 +222,13 @@ func (c *Client) APIUserWritten(ctx context.Context, title rt.Null[string], afte
 	return voltOut, voltErr
 }
 
+func (c *Client) APIUserBydb(ctx context.Context, db int) ([]User, error) {
+	voltQ := []volt.URLOption{volt.Query("db", volt.FormatQuery(db))}
+	var voltOut []User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/bydb", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
 func (c *Client) APIUserRoleGet(ctx context.Context, userID int, roleID int) (UserRole, error) {
 	var voltOut UserRole
 	voltErr := c.Do(ctx, "GET", volt.URL("/api/roles/"+volt.SegInt(userID)+"/"+volt.SegInt(roleID)), nil, &voltOut)
@@ -240,6 +252,20 @@ func (c *Client) MsUsageBrowse(ctx context.Context, year int) ([]MsUsage, error)
 	voltQ := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
 	var voltOut []MsUsage
 	voltErr := c.Do(ctx, "GET", volt.URL("/ms/usage", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) MsrMsRevenueRecent(ctx context.Context, limit int) ([]MsRevenue, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []MsRevenue
+	voltErr := c.Do(ctx, "GET", volt.URL("/msr/revenue", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) MsrMsUsageRecent(ctx context.Context, limit int) ([]MsUsage, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []MsUsage
+	voltErr := c.Do(ctx, "GET", volt.URL("/msr/usage", voltQ...), nil, &voltOut)
 	return voltOut, voltErr
 }
 

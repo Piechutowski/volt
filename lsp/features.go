@@ -160,40 +160,6 @@ func (d *Document) References(pos protocol.Position, includeDecl bool) []protoco
 	return out
 }
 
-// Rename renames the symbol at pos, rewriting every occurrence spelled like
-// the identifier under the cursor.
-func (d *Document) Rename(pos protocol.Position, newName string) (*protocol.WorkspaceEdit, error) {
-	if !validIdentifier(newName) {
-		return nil, fmt.Errorf("%q is not a valid Volt identifier", newName)
-	}
-	if occ := d.Index.At(d.FromLSP(pos)); occ != nil {
-		if col := d.Index.RelationColumn(occ.ID); col != "" {
-			return nil, fmt.Errorf("relation %s takes its name from the column %s; give its ref as: to name it otherwise (§relationships-ref)", occ.ID.Name, col)
-		}
-	}
-	if edit, ok := d.voltRename(pos, newName); ok {
-		return edit, nil
-	}
-	occ := d.Index.At(d.FromLSP(pos))
-	if occ == nil {
-		return nil, fmt.Errorf("nothing renameable at this position")
-	}
-	spelling := occ.Ident.Name()
-	var edits []protocol.TextEdit
-	for _, o := range d.Index.OccurrencesOf(occ.ID) {
-		if o.Ident.Name() != spelling {
-			continue
-		}
-		edits = append(edits, protocol.TextEdit{Range: d.tokenRange(o.Ident.Tok), NewText: newName})
-	}
-	if len(edits) == 0 {
-		return nil, fmt.Errorf("nothing renameable at this position")
-	}
-	return &protocol.WorkspaceEdit{
-		Changes: map[protocol.DocumentUri][]protocol.TextEdit{d.URI: edits},
-	}, nil
-}
-
 func validIdentifier(s string) bool {
 	for i, r := range s {
 		if r != '_' && !unicode.IsLetter(r) && (i == 0 || !unicode.IsDigit(r)) {

@@ -218,12 +218,31 @@ layer:
 
 - Rename rewrites exactly the identifier, never the `db.` qualifier
   (the hit-test span and the edit span are tracked separately), only
-  occurrences whose spelling matches the one under the cursor, and
-  validates the new name against the identifier grammar (§identifiers).
+  occurrences whose spelling matches the one under the cursor, each
+  once, and validates the new name against the identifier grammar
+  (§identifiers). It then checks what it would write: the project with
+  the edits applied (the file alone outside a project) must check with
+  no more errors than before, or the rename is refused naming the first
+  error it adds, so a name that makes a relation ambiguous, or that a
+  `pred` would no longer find, never lands (§relationships-ref). A
+  rename at a Go reference skips the check, since gopls renames the Go
+  side (section 7).
+- A relation is its own symbol (§relationships-ref): one a ref's `as:`
+  or `reverse:` names is declared there, and renames, at the setting
+  or at any use, with every use: a join, a column's qualifier, a
+  `with`, an exists term, and those of the `pred` bodies a select over
+  its table reads; one named after its foreign-key column refuses
+  rename from any file and renames with the column instead, which
+  rewrites its uses to the column's new name without `_id`; one named
+  after a table is that table's and renames with it. Definition at a
+  relation goes to its `as:` or `reverse:`, else to its column, else to
+  the table; it hovers as the relationship it walks and the table it
+  leads to.
 - Column identity is container-scoped; a column injected from a
   `table_partial` resolves into the partial, so renaming it updates the
   partial once plus every reference through every injecting table
-  (§tablepartial).
+  (§tablepartial). A column renames across every file of its package,
+  from its declaration or from any use.
 - Completion is textual-context + semantic-fill: where-am-I is
   answered by line-prefix regexes plus a `{`/`}`-balance scanner (the
   current line usually doesn't parse mid-keystroke); candidates come
@@ -393,9 +412,12 @@ the fresh one. Only saved files
 count: the Go buffers themselves belong to gopls, not to this server. Rename on a Go reference rewrites its Volt spellings only —
 the Go declaration is gopls' job, and the existence error then points
 at whichever side is still behind. Rename on a column follows it into
-the table's validators (their arguments); a column named through a
-group, in a `pred` body or a group select, is left alone, and the
-agreement error (§selects-over-groups) names what is now missing.
+the table's validators (their arguments), and a foreign-key column into
+the relation it names (section 4); a column named through a group, in
+a `pred` body or a group select, is left alone, and the rename's check
+refuses the rename when the agreement error (§selects-over-groups)
+would then name what is missing. A relation or a table a `pred` body
+names renames with it.
 
 ## 8. The verification checklist
 

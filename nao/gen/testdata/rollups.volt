@@ -98,7 +98,7 @@ select leading (site, sum(hits) as total) for page_views [group: (site), order: 
 select newest  for hosts with visits [order: (id desc), limit: :limit]
 
 // Optional parameters and exists (spec §predicates): a term that reads an
-// absent optional parameter is true behind its guard, an optional list
+// absent optional parameter is taken out behind its guard, an optional list
 // binds through JSONListOptional, and an exists term tests a forward or a
 // reverse relation without joining it, a composite key on every pair.
 select keyset  for visits where day < :day? or (day = :day? and id < :id?) [order: (day desc, id desc), limit: :limit]

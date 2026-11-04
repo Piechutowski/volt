@@ -630,7 +630,11 @@ func sigParamsLead(ps []lang.Param) string {
 	return b.String()
 }
 
-func pathExpr(r *lang.RouteInfo) string {
+func pathExpr(r *lang.RouteInfo) string { return pathExprNamed(r, nil) }
+
+// pathExprNamed is the path of r built from its parameters, each under
+// the Go name names gives it, its GoName when names has none.
+func pathExprNamed(r *lang.RouteInfo, names map[string]string) string {
 	if r.Pattern == "/{$}" {
 		return `"/"`
 	}
@@ -644,6 +648,9 @@ func pathExpr(r *lang.RouteInfo) string {
 	}
 	byName := map[string]lang.Param{}
 	for _, p := range r.Params {
+		if n := names[p.Name]; n != "" {
+			p.GoName = n
+		}
 		byName[p.Name] = p
 	}
 	for _, seg := range strings.Split(strings.TrimPrefix(r.Pattern, "/"), "/") {
@@ -758,20 +765,27 @@ func (g *generator) clientEmit() error {
 		if method == "" {
 			method = "GET"
 		}
+		names := g.clientNamesNew()
+		pathNames := map[string]string{}
+		var pathSig strings.Builder
+		for _, p := range r.Params {
+			pathNames[p.Name] = names.name(p.GoName)
+			fmt.Fprintf(&pathSig, ", %s %s", pathNames[p.Name], p.Type.GoType())
+		}
 		if r.Events {
-			g.pf("func (c *Client) %s(ctx context.Context%s) <-chan volt.Event {\n", r.ClientName, sigParams(r.Params))
-			g.pf("\treturn c.Stream(ctx, volt.URL(%s))\n}\n\n", pathExpr(r))
+			g.pf("func (c *Client) %s(ctx context.Context%s) <-chan volt.Event {\n", r.ClientName, pathSig.String())
+			g.pf("\treturn c.Stream(ctx, volt.URL(%s))\n}\n\n", pathExprNamed(r, pathNames))
 			continue
 		}
 		if r.Query == nil {
 			var keys strings.Builder
-			qs := clientQuery{}
+			qs := clientQuery{path: pathNames}
 			for _, p := range loadKeys(r) {
-				name := clientParamName(p.Name)
+				name := names.name(p.Name)
 				fmt.Fprintf(&keys, ", %s %s", name, p.Type())
 				qs.add(p, name)
 			}
-			sig, in := sigParams(r.Params)+keys.String(), "nil"
+			sig, in := pathSig.String()+keys.String(), "nil"
 			if b := r.Body; b != nil && b.Kind == lang.BodyChangeset {
 				sig, in = sig+", cs "+g.clientType(b.Query, b.Query.Changeset.Type), "cs.Params()"
 			} else if b != nil {
@@ -784,19 +798,22 @@ func (g *generator) clientEmit() error {
 		}
 		q := r.Query
 		var sig strings.Builder
-		qs := clientQuery{}
+		qs := clientQuery{path: pathNames}
 		var arg string
 		for _, p := range q.Params {
-			goType := p.Type()
+			goType, name := p.Type(), ""
 			switch p.Source {
 			case lang.FromBody:
 				goType = g.clientType(q, strings.TrimPrefix(goType, q.Qualifier+"."))
-				arg = p.Name
+				name, arg = p.Name, p.Name
+				names.taken[name] = true
 			case lang.FromPath:
-				goType = p.GoType
+				goType, name = p.GoType, pathNames[p.Name]
+			default:
+				name = names.name(p.Name)
 			}
-			fmt.Fprintf(&sig, ", %s %s", p.Name, goType)
-			qs.add(p, p.Name)
+			fmt.Fprintf(&sig, ", %s %s", name, goType)
+			qs.add(p, name)
 		}
 		in := "nil"
 		if arg != "" {
@@ -835,6 +852,7 @@ type clientQuery struct {
 	opts  []string
 	steps []string
 	lists int
+	path  map[string]string
 }
 
 func (q *clientQuery) add(p lang.QueryParam, name string) {
@@ -872,15 +890,15 @@ func (q *clientQuery) body(failed string) string {
 
 func (q *clientQuery) url(r *lang.RouteInfo) string {
 	if len(q.opts) == 0 && len(q.steps) == 0 {
-		return "volt.URL(" + pathExpr(r) + ")"
+		return "volt.URL(" + pathExprNamed(r, q.path) + ")"
 	}
-	return "volt.URL(" + pathExpr(r) + ", voltQ...)"
+	return "volt.URL(" + pathExprNamed(r, q.path) + ", voltQ...)"
 }
 
 // loadKeys are the query-string keys the loads of a controller route
 // bind (spec §route-loads, §generated-client), each once, in the order
-// the loads first read it, typed as its first binding, or as a required
-// one when any binding of the key requires it.
+// the loads first read it, typed as its bindings, which the checker holds
+// to one type, and required when any binding of the key requires it.
 func loadKeys(r *lang.RouteInfo) []lang.QueryParam {
 	var out []lang.QueryParam
 	at := map[string]int{}
@@ -902,15 +920,30 @@ func loadKeys(r *lang.RouteInfo) []lang.QueryParam {
 	return out
 }
 
-// clientParamName is the Go parameter a client method takes a load's
-// query key under: the key, with _ appended when it is a Go keyword, a
-// name the method's own code uses or one of the generated locals' form.
-func clientParamName(key string) string {
-	switch {
-	case token.IsKeyword(key), clientMethodNames[key], naming.LocalName(key):
-		return key + "_"
+// clientNames hands out the Go parameter names of one client method
+// (spec §generated-client): each name wanted, with _ appended while it
+// is a Go keyword, a name the method's own code uses, the qualifier the
+// client imports a data package under, one of the generated locals' form
+// or a name an earlier parameter of the method took.
+type clientNames struct{ taken map[string]bool }
+
+func (g *generator) clientNamesNew() clientNames {
+	taken := map[string]bool{}
+	if !g.opts.ClientBeside {
+		for _, q := range g.clientPackages() {
+			taken[clientQualifier(q)] = true
+		}
 	}
-	return key
+	return clientNames{taken}
+}
+
+func (n clientNames) name(want string) string {
+	name := want
+	for token.IsKeyword(name) || clientMethodNames[name] || naming.LocalName(name) || n.taken[name] {
+		name += "_"
+	}
+	n.taken[name] = true
+	return name
 }
 
 var clientMethodNames = map[string]bool{"ctx": true, "c": true, "cs": true, "body": true, "volt": true, "http": true, "context": true, "rt": true, "time": true, "nil": true, "append": true, "any": true, "error": true}
@@ -1097,23 +1130,23 @@ func (g *generator) queryBindEmit(r *lang.RouteInfo, p lang.QueryParam, v, inden
 		return
 	}
 	g.pf("%s%s, err := volt.%s[%s](r, %q)\n%sif err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, v, queryBinder(p), p.GoType, p.Name, indent, indent, indent)
-	g.limitCheckEmit(p, v, indent)
+	g.limitCheckEmit(p, v, 0, indent)
 }
 
 // limitCheckEmit refuses the value v of a select's limit: parameter
-// below 1 where the request binds it (spec §query-routes, §route-loads):
-// a 400 naming the key, from the query string before the query or any of
-// the route's loads runs.
-func (g *generator) limitCheckEmit(p lang.QueryParam, v, indent string) {
+// below 1, or above most when most is set, where the request binds it
+// (spec §query-routes, §route-loads): a 400 naming the key, from the
+// query string before the query or any of the route's loads runs.
+func (g *generator) limitCheckEmit(p lang.QueryParam, v string, most int, indent string) {
 	if p.Limit {
-		g.pf("%sif err := volt.LimitCheck(%q, %s); err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, p.Name, v, indent, indent)
+		g.pf("%sif err := volt.LimitCheck(%q, %s, %d); err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, p.Name, v, most, indent, indent)
 	}
 }
 
-// pathLimitsEmit refuses a path parameter below 1 that binds a select's
-// limit: parameter, for the query route or any load (spec §route-loads,
-// §scope-loads): a 400 naming the key once the path parameters parse,
-// before the scope loads run.
+// pathLimitsEmit refuses a path parameter below 1, or above the route's
+// max_limit:, that binds a select's limit: parameter, for the query route
+// or any load (spec §route-loads, §scope-loads): a 400 naming the key once
+// the path parameters parse, before the scope loads run.
 func (g *generator) pathLimitsEmit(r *lang.RouteInfo, parsed map[string]string) {
 	limits := map[string]bool{}
 	note := func(q *lang.QueryRef) {
@@ -1131,7 +1164,7 @@ func (g *generator) pathLimitsEmit(r *lang.RouteInfo, parsed map[string]string) 
 	}
 	for _, p := range r.Params {
 		if limits[p.Name] {
-			g.limitCheckEmit(lang.QueryParam{Name: p.Name, Limit: true}, parsed[p.Name], "\t\t")
+			g.limitCheckEmit(lang.QueryParam{Name: p.Name, Limit: true}, parsed[p.Name], r.LimitMost, "\t\t")
 		}
 	}
 }

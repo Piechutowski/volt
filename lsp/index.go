@@ -46,6 +46,7 @@ type Index struct {
 	Info     *check.Info
 
 	decls map[SymbolID]*ast.Ident
+	preds map[string]*ast.Pred
 
 	declTables map[string]*tableOccs
 	recording  *[]declEntry
@@ -128,6 +129,14 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		Partials: map[string]*check.PartialInfo{},
 		Info:     info,
 		decls:    map[SymbolID]*ast.Ident{},
+		preds:    map[string]*ast.Pred{},
+	}
+	for _, d := range f.Decls {
+		if p, ok := d.(*ast.Pred); ok && p.Name != nil {
+			if _, dup := ix.preds[p.Name.Name()]; !dup {
+				ix.preds[p.Name.Name()] = p
+			}
+		}
 	}
 	for _, ti := range info.Tables {
 		ix.Tables[ti.Key] = ti
@@ -411,6 +420,62 @@ func (ix *Index) walkPredCols(ti *check.TableInfo, partial string, x ast.PredExp
 		}
 		ix.addRelation(ti, x.Rel)
 		ix.walkPredCols(r.Table, "", x.X)
+	case *ast.PredRef:
+		ix.walkPredRelations(ti, x, map[string]bool{})
+	}
+}
+
+// walkPredRelations records the relations a pred body names where a
+// select over ti reads it (spec §predicates, §relationships-ref): the
+// relation of an exists term and the qualifier of a column, through the
+// preds it names in turn, each read once, so a rename of the relation,
+// or of the table that names it, renames them with it. The columns of a
+// pred body are left alone (editor.md section 7).
+func (ix *Index) walkPredRelations(ti *check.TableInfo, x ast.PredExpr, seen map[string]bool) {
+	if ti == nil || ix.Info == nil {
+		return
+	}
+	col := func(cr *ast.ColRef) {
+		if cr != nil && cr.Qual != nil {
+			if r, _ := ix.Info.Relation(ti.Key, cr.Qual.Name()); r != nil {
+				ix.addRelation(ti, cr.Qual)
+			}
+		}
+	}
+	switch x := x.(type) {
+	case *ast.PredBinary:
+		ix.walkPredRelations(ti, x.X, seen)
+		ix.walkPredRelations(ti, x.Y, seen)
+	case *ast.PredNot:
+		ix.walkPredRelations(ti, x.X, seen)
+	case *ast.PredParen:
+		ix.walkPredRelations(ti, x.X, seen)
+	case *ast.PredCompare:
+		for _, side := range []ast.Operand{x.X, x.Y} {
+			if cr, ok := side.(*ast.ColRef); ok {
+				col(cr)
+			}
+		}
+	case *ast.PredIn:
+		col(x.Col)
+	case *ast.PredLike:
+		col(x.Col)
+	case *ast.PredNull:
+		col(x.Col)
+	case *ast.PredExists:
+		r, _ := ix.Info.Relation(ti.Key, x.Rel.Name())
+		if r == nil {
+			return
+		}
+		ix.addRelation(ti, x.Rel)
+		ix.walkPredRelations(r.Table, x.X, seen)
+	case *ast.PredRef:
+		p := ix.preds[x.Name.Name()]
+		if p == nil || seen[p.Name.Name()] {
+			return
+		}
+		seen[p.Name.Name()] = true
+		ix.walkPredRelations(ti, p.X, seen)
 	}
 }
 

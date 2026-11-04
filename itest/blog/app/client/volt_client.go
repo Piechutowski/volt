@@ -214,6 +214,12 @@ func (c *Client) APIRecent(ctx context.Context, limit int) ([]db.User, error) {
 	return voltOut, voltErr
 }
 
+func (c *Client) APITop(ctx context.Context, limit int) ([]db.User, error) {
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/top/"+volt.SegInt(limit)), nil, &voltOut)
+	return voltOut, voltErr
+}
+
 func (c *Client) MsRevenueBrowse(ctx context.Context, year int) ([]db.MsRevenue, error) {
 	voltQ := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
 	var voltOut []db.MsRevenue

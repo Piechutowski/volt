@@ -46,6 +46,7 @@ var Table = []volt.Route{
 	{Method: "GET", Pattern: "/api/described", Spelled: "/api/described", Query: "db.UserDescribed", Helper: "PathAPIUserDescribed"},
 	{Method: "GET", Pattern: "/api/chosen", Spelled: "/api/chosen", Query: "db.UserChosen", Helper: "PathAPIUserChosen"},
 	{Method: "GET", Pattern: "/api/recent", Spelled: "/api/recent", Query: "db.UserLatest", Helper: "PathAPIRecent"},
+	{Method: "GET", Pattern: "/api/top/{limit}", Spelled: "/api/top/:limit(int)", Query: "db.UserLatest", Helper: "PathAPITop", Params: []volt.RouteParam{{Name: "limit", Type: "int"}}},
 	{Method: "GET", Pattern: "/ms/revenue", Spelled: "/ms/revenue", Query: "db.MsRevenueBrowse", Helper: "PathMsRevenueBrowse"},
 	{Method: "GET", Pattern: "/ms/usage", Spelled: "/ms/usage", Query: "db.MsUsageBrowse", Helper: "PathMsUsageBrowse"},
 	{Method: "GET", Pattern: "/ref/users", Spelled: "/ref/users", Query: "db.UserList", Helper: "PathRefUsers"},

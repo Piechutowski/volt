@@ -136,10 +136,10 @@ var routeSignatureNames = map[string]bool{
 
 // RouteSignatureName reports whether name is one a generated route file
 // declares in a handler or client method beside the route's own
-// parameters: w, r, opts, volt, cs, c or ctx (spec §route-paths). No path
-// parameter and no select parameter takes one, and a key column's
-// parameter, which a query route binds by name, takes a trailing
-// underscore instead (§generated-query-surface).
+// parameters: w, r, opts, volt, cs, c, ctx or body (spec §route-paths).
+// No path parameter and no select parameter takes one, and a key
+// column's parameter, which a query route binds by name, takes a
+// trailing underscore instead (§generated-query-surface).
 func RouteSignatureName(name string) bool { return routeSignatureNames[name] }
 
 // BodyBuiltin reports whether name is a predeclared Go identifier that a

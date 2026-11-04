@@ -81,6 +81,7 @@ scope / [pipe: api, error_handler: Errors] {
 		get    /described        db.UserDescribed
 		get    /chosen           db.UserChosen
 		get    /recent           db.UserLatest [name: recent, limit: 2, max_limit: 3]
+		get    /top/:limit(int)  db.UserLatest [name: top, max_limit: 3]
 	}
 
 	// A dataset (§datasets): one query route per member of the group select.

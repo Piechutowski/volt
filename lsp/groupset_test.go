@@ -121,13 +121,13 @@ func TestDatasetNavigatesToSelect(t *testing.T) {
 	if h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, "MsRevenueBrowse") {
 		t.Fatalf("dataset hover should list the select's methods: %+v", h)
 	}
-	edit, err := d.Rename(posOf(t, appText, "browse", 0), "list")
+	edit, err := d.Rename(posOf(t, appText, "browse", 0), "listing")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for uri, edits := range edit.Changes {
 		for _, e := range edits {
-			if strings.HasSuffix(string(uri), "routes.volt") && (e.Range.Start.Character != uint32(strings.Index("\tdataset db.browse", "browse")) || e.NewText != "list") {
+			if strings.HasSuffix(string(uri), "routes.volt") && (e.Range.Start.Character != uint32(strings.Index("\tdataset db.browse", "browse")) || e.NewText != "listing") {
 				t.Errorf("dataset rename edit = %+v, want only the name after the qualifier", e)
 			}
 		}

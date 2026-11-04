@@ -1,4 +1,4 @@
-// spec: §route-loads, one query key binds several arguments, optional and required, of one load or of several, and each binds by its own parameter's type and rule
+// spec: §route-loads, one query key binds several arguments, optional and required, of one load or of several, and each binds by its own parameter's rule, in one Go type
 package app
 
 import (

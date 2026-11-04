@@ -27,7 +27,7 @@ func (w With[P, C, K, R]) perform(ctx context.Context, x Executor) ([]R, error) 
 		return nil, nil
 	}
 	var out []R
-	err := txRun(ctx, x, func(tx Executor) error {
+	err := txRun(ctx, x, false, func(tx Executor) error {
 		parents, err := w.Parent.perform(ctx, tx)
 		if err != nil {
 			return err
@@ -67,6 +67,8 @@ func (w With[P, C, K, R]) perform(ctx context.Context, x Executor) ([]R, error) 
 func (w With[P, C, K, R]) performAny(ctx context.Context, x Executor) (any, error) {
 	return w.perform(ctx, x)
 }
+
+func (w With[P, C, K, R]) writes() bool { return false }
 
 func (w With[P, C, K, R]) describe() description {
 	d := statementDescribe("with", w.Parent.SQL, w.Parent.Args, w.Parent.Err)

@@ -43,6 +43,7 @@ group series {
 }
 
 select browse for series where year = :year [order: (id asc)]
+select recent for series [order: (id desc), limit: :limit]
 
 table posts {
   id      int    [pk]
@@ -55,3 +56,4 @@ select feed   for users with posts [order: (id asc)]
 select latest for users [order: (id desc), limit: :limit]
 select written for users where exists posts (title like :title?) and created_at > :after? [order: (id asc)]
 select chosen for users where id in :ids? and email = :email? [order: (id asc)]
+select bydb for users where id = :db [order: (id asc)]

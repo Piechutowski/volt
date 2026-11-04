@@ -19,8 +19,9 @@ import (
 )
 
 type fakeRows struct {
-	rows [][]any
-	i    int
+	rows   [][]any
+	i      int
+	closed *int
 }
 
 func (r *fakeRows) Next() bool {
@@ -35,21 +36,26 @@ func (r *fakeRows) Scan(dest ...any) error {
 	return nil
 }
 
-func (r *fakeRows) Err() error   { return nil }
-func (r *fakeRows) Close() error { return nil }
+func (r *fakeRows) Err() error { return nil }
 
-type fakeRow struct{ err error }
-
-func (r fakeRow) Scan(...any) error { return r.err }
+func (r *fakeRows) Close() error {
+	if r.closed != nil {
+		*r.closed++
+	}
+	r.i = len(r.rows)
+	return nil
+}
 
 type fakeExecutor struct {
 	mu       sync.Mutex
 	ran      []string
 	rows     [][]any
-	rowErr   error
+	queryErr error
 	execErr  error
 	affected int64
 	txs      int
+	writes   []bool
+	closed   int
 }
 
 func (x *fakeExecutor) note(sql string) {
@@ -60,12 +66,10 @@ func (x *fakeExecutor) note(sql string) {
 
 func (x *fakeExecutor) Query(ctx context.Context, sql string, args []any) (Rows, error) {
 	x.note(sql)
-	return &fakeRows{rows: x.rows}, nil
-}
-
-func (x *fakeExecutor) QueryRow(ctx context.Context, sql string, args []any) Row {
-	x.note(sql)
-	return fakeRow{x.rowErr}
+	if x.queryErr != nil {
+		return nil, x.queryErr
+	}
+	return &fakeRows{rows: x.rows, closed: &x.closed}, nil
 }
 
 func (x *fakeExecutor) Exec(ctx context.Context, sql string, args []any) (int64, error) {
@@ -76,9 +80,10 @@ func (x *fakeExecutor) Exec(ctx context.Context, sql string, args []any) (int64,
 	return x.affected, x.execErr
 }
 
-func (x *fakeExecutor) Transaction(ctx context.Context, fn func(Executor) error) error {
+func (x *fakeExecutor) Transaction(ctx context.Context, writes bool, fn func(Executor) error) error {
 	x.mu.Lock()
 	x.txs++
+	x.writes = append(x.writes, writes)
 	x.mu.Unlock()
 	return fn(x)
 }
@@ -110,9 +115,20 @@ func TestQueryEffect(t *testing.T) {
 
 func TestLookupAndWriteEffects(t *testing.T) {
 	ctx := context.Background()
-	miss := &fakeExecutor{rowErr: ErrNotFound}
+	miss := &fakeExecutor{}
 	if _, err := (Lookup[any]{SQL: "SELECT", Scan: scanAny}).perform(ctx, miss); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Lookup miss = %v", err)
+	}
+	hit := &fakeExecutor{rows: [][]any{{1}, {2}}}
+	if got, err := (Lookup[any]{SQL: "SELECT", Scan: scanAny}).perform(ctx, hit); err != nil || got != 1 {
+		t.Errorf("Lookup hit = %v, %v; want the first row", got, err)
+	}
+	refused := errors.New("prepare")
+	if _, err := (Write[any]{SQL: "INSERT", Scan: func(r Row) (any, error) {
+		_, err := scanAny(r)
+		return nil, fmt.Errorf("mapped: %w", err)
+	}}).perform(ctx, &fakeExecutor{queryErr: refused}); !errors.Is(err, refused) || !strings.HasPrefix(err.Error(), "mapped") {
+		t.Errorf("a Write whose statement failed = %v; want the error through its Scan, which maps refusals", err)
 	}
 	inv := &Invalid{Model: "Post"}
 	idle := &fakeExecutor{}
@@ -121,6 +137,58 @@ func TestLookupAndWriteEffects(t *testing.T) {
 	}
 	if got, err := (Write[any]{Row: "untouched"}).perform(ctx, miss); err != nil || got != "untouched" {
 		t.Errorf("a Write with nothing marked = %v, %v; want the row back", got, err)
+	}
+}
+
+// TestLookupAndWriteCloseTheirRows proves that a Lookup and a Write
+// release their statement whatever their Scan does (spec
+// §generated-query-surface, the runner): one that refuses before
+// reading the row, one that reads it and one that panics, a nil Scan
+// among them, each close the rows they were handed once.
+func TestLookupAndWriteCloseTheirRows(t *testing.T) {
+	ctx := context.Background()
+	refuse := errors.New("refused before reading")
+	for name, e := range map[string]AnyEffect{
+		"a Lookup that refuses before reading": Lookup[int]{SQL: "SELECT", Scan: func(Row) (int, error) { return 0, refuse }},
+		"a Write that refuses before reading":  Write[int]{SQL: "INSERT", Scan: func(Row) (int, error) { return 0, refuse }},
+		"a Lookup that reads":                  Lookup[any]{SQL: "SELECT", Scan: scanAny},
+		"a Lookup of no Scan":                  Lookup[int]{SQL: "SELECT"},
+		"a Write of no Scan":                   Write[int]{SQL: "INSERT"},
+	} {
+		x := &fakeExecutor{rows: [][]any{{1}}}
+		_ = panicRecovered(func() { _, _ = PerformAny(ctx, x, e) })
+		if x.closed == 0 {
+			t.Errorf("%s left its rows open", name)
+		}
+	}
+}
+
+// TestTransactionTakesTheWriteLockOnlyToWrite proves the mode a
+// transaction begins in (spec §generated-query-surface, the runner): a
+// With, and a Transaction or an Atomic of reads alone, begin deferred,
+// and one holding a Write, an Exec or a Then, whose next is not known
+// before it runs, takes the write lock at its start.
+func TestTransactionTakesTheWriteLockOnlyToWrite(t *testing.T) {
+	ctx := context.Background()
+	read := Query[any]{SQL: "SELECT", Scan: scanAny}
+	for name, c := range map[string]struct {
+		e      AnyEffect
+		writes bool
+	}{
+		"a With":                         {With[any, any, any, any]{Parent: read, Child: "c", ParentKey: func(p any) any { return p }, ChildKey: func(c any) any { return c }, ChildScan: scanAny, Build: func(p any, _ []any) any { return p }}, false},
+		"a Tx of reads":                  {Tx(read, Lookup[any]{SQL: "SELECT", Scan: scanAny}, All(read, Pure(1)), Map(read, func(v []any) int { return len(v) })), false},
+		"an Atomic of a read":            {Atomic(Map(read, func(v []any) int { return len(v) })), false},
+		"a Tx holding a Write":           {Tx(read, Write[any]{SQL: "INSERT", Scan: scanAny}), true},
+		"an Atomic of an Exec in an All": {Atomic(All(read, Exec{SQL: "DELETE"})), true},
+		"an Atomic of a Then of reads":   {Atomic(Then(read, func([]any) Effect[[]any] { return read })), true},
+	} {
+		x := &fakeExecutor{rows: [][]any{{1}}}
+		if _, err := PerformAny(ctx, x, c.e); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !slices.Equal(x.writes, []bool{c.writes}) {
+			t.Errorf("%s began transactions taking the write lock %v; want [%v]", name, x.writes, c.writes)
+		}
 	}
 }
 
@@ -173,7 +241,7 @@ func TestParallelEffect(t *testing.T) {
 
 type joinExecutor struct{ *fakeExecutor }
 
-func (x joinExecutor) Transaction(ctx context.Context, fn func(Executor) error) error {
+func (x joinExecutor) Transaction(ctx context.Context, _ bool, fn func(Executor) error) error {
 	x.mu.Lock()
 	x.txs++
 	x.mu.Unlock()
@@ -186,15 +254,11 @@ func (x inTx) Query(ctx context.Context, sql string, args []any) (Rows, error) {
 	return x.fakeExecutor.Query(ctx, "tx "+sql, args)
 }
 
-func (x inTx) QueryRow(ctx context.Context, sql string, args []any) Row {
-	return x.fakeExecutor.QueryRow(ctx, "tx "+sql, args)
-}
-
 func (x inTx) Exec(ctx context.Context, sql string, args []any) (int64, error) {
 	return x.fakeExecutor.Exec(ctx, "tx "+sql, args)
 }
 
-func (x inTx) Transaction(ctx context.Context, fn func(Executor) error) error { return fn(x) }
+func (x inTx) Transaction(ctx context.Context, _ bool, fn func(Executor) error) error { return fn(x) }
 
 func TestThenEffect(t *testing.T) {
 	ctx := context.Background()
@@ -497,8 +561,8 @@ func TestParallelPanicRaisedOnTheCaller(t *testing.T) {
 
 // TestEffectKindsDescribed holds the sealed set of effects to its
 // samples (spec §generated-query-surface): every type of the package
-// that declares a method of the sealed set, perform, performAny or
-// describe, on a value or a pointer receiver, has a sample here, so a
+// that declares a method of the sealed set, perform, performAny,
+// describe or writes, on a value or a pointer receiver, has a sample here, so a
 // kind that is only an AnyEffect, or one that embeds another and
 // describes itself, is caught, and each sample describes by its kind.
 func TestEffectKindsDescribed(t *testing.T) {
@@ -523,7 +587,7 @@ func TestEffectKindsDescribed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sealed := map[string]bool{"perform": true, "performAny": true, "describe": true}
+	sealed := map[string]bool{"perform": true, "performAny": true, "describe": true, "writes": true}
 	fset := token.NewFileSet()
 	var declared []string
 	for _, en := range entries {

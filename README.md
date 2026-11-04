@@ -111,17 +111,26 @@ runtime's.
 The counts are of each stack as written, and `compare/suite` sends one
 request at a time, so it does not hold the rules under concurrency;
 Volt's own test does (`compare/volt`), and the other stacks have none.
-One probe of the five servers, thirty rounds of twenty publishes of
-one draft at once, ten comments by one member at once and sixteen
-edits to a short body racing four publishes of a draft, found each
-stack publishing a draft once, but Echo + sqlx + goose storing more
-than three comments in 18 rounds and leaving a published post with a
-short body in 15, Gin + GORM leaving one in 14 and answering some of
-the concurrent comments 500, `database is locked`, though it never
-stored a fourth, chi + sqlc + goose leaving one in 2, and
-oapi-codegen + Ent, like Volt, in none. The lines of those three leave
-out checks that Volt's 477 and Ent's 1162 make, so the percentages
-above compare programs that differ in that much.
+`go run ./compare/race | grep '^|'` sends all five servers thirty
+rounds of twenty publishes of one draft at once, ten comments by one
+member at once and sixteen edits to a short body racing four publishes
+of a draft; GORM logs each write SQLite refuses, which the `grep`
+drops. The counts are races and move from run to run; over seven runs
+every stack published a draft once, Volt and oapi-codegen + Ent broke
+no rule, and the other three broke these, in rounds of thirty:
+
+| Stack | More than three comments | Published with a short body | Replies 500 |
+|---|---:|---:|---:|
+| Gin + GORM | 0 | 12 to 21 | 84 to 161 |
+| chi + sqlc + goose | 0 | 0 to 4 | 0 |
+| Echo + sqlx + goose | 12 to 25 | 4 to 11 | 0 |
+
+Gin + GORM's 500s are `database is locked`, mostly on the comments, and
+in up to five rounds a run they left a member fewer than the three
+comments the rules allow. Those three stacks make the checks Volt makes,
+but before writes that do not hold them, where Volt's 477 lines and
+Ent's 1162 make them inside the transaction that writes, so the
+percentages above compare programs that differ in that much.
 
 ## Crib sheet
 

@@ -39,12 +39,12 @@ type Rows interface {
 // §generated-query-surface): the runner's handle over one pool or one
 // transaction. nao/run implements it and nothing else does; an Exec
 // reports the rows affected, and a Transaction runs fn over an
-// executor that commits when fn returns nil and rolls back otherwise.
+// executor that commits when fn returns nil and rolls back otherwise,
+// taking the write lock at its start when writes is set.
 type Executor interface {
 	Query(ctx context.Context, sql string, args []any) (Rows, error)
-	QueryRow(ctx context.Context, sql string, args []any) Row
 	Exec(ctx context.Context, sql string, args []any) (int64, error)
-	Transaction(ctx context.Context, fn func(Executor) error) error
+	Transaction(ctx context.Context, writes bool, fn func(Executor) error) error
 }
 
 // Effect is a computation over the database that yields a T, described
@@ -58,12 +58,14 @@ type Effect[T any] interface {
 	perform(ctx context.Context, x Executor) (T, error)
 	performAny(ctx context.Context, x Executor) (any, error)
 	describe() description
+	writes() bool
 }
 
 // AnyEffect is an Effect of any result, as Tx and All take them.
 type AnyEffect interface {
 	performAny(ctx context.Context, x Executor) (any, error)
 	describe() description
+	writes() bool
 }
 
 // Perform performs e over x and returns what it yields (spec
@@ -139,7 +141,7 @@ func (l Lookup[T]) perform(ctx context.Context, x Executor) (T, error) {
 		var zero T
 		return zero, l.Err
 	}
-	return l.Scan(x.QueryRow(ctx, l.SQL, l.Args))
+	return rowPerform(ctx, x, l.SQL, l.Args, l.Scan)
 }
 
 func (l Lookup[T]) performAny(ctx context.Context, x Executor) (any, error) { return l.perform(ctx, x) }
@@ -165,7 +167,35 @@ func (w Write[M]) perform(ctx context.Context, x Executor) (M, error) {
 	if w.SQL == "" {
 		return w.Row, nil
 	}
-	return w.Scan(x.QueryRow(ctx, w.SQL, w.Args))
+	return rowPerform(ctx, x, w.SQL, w.Args, w.Scan)
+}
+
+func rowPerform[T any](ctx context.Context, x Executor, sql string, args []any, scan func(Row) (T, error)) (T, error) {
+	rows, err := x.Query(ctx, sql, args)
+	if err != nil {
+		return scan(errRow{err})
+	}
+	defer rows.Close()
+	return scan(firstRow{rows})
+}
+
+type errRow struct{ err error }
+
+func (r errRow) Scan(...any) error { return r.err }
+
+type firstRow struct{ rows Rows }
+
+func (r firstRow) Scan(dest ...any) error {
+	if !r.rows.Next() {
+		if err := r.rows.Err(); err != nil {
+			return err
+		}
+		return ErrNotFound
+	}
+	if err := r.rows.Scan(dest...); err != nil {
+		return err
+	}
+	return r.rows.Close()
 }
 
 func (w Write[M]) performAny(ctx context.Context, x Executor) (any, error) { return w.perform(ctx, x) }
@@ -232,8 +262,12 @@ func (e Exec) performAny(ctx context.Context, x Executor) (any, error) { return 
 
 type txExecutor struct{ Executor }
 
-func txRun(ctx context.Context, x Executor, fn func(Executor) error) error {
-	return x.Transaction(ctx, func(tx Executor) error { return fn(txExecutor{tx}) })
+func txRun(ctx context.Context, x Executor, writes bool, fn func(Executor) error) error {
+	return x.Transaction(ctx, writes, func(tx Executor) error { return fn(txExecutor{tx}) })
+}
+
+func stepsWrite(steps []AnyEffect) bool {
+	return slices.ContainsFunc(steps, func(s AnyEffect) bool { return s == nil || s.writes() })
 }
 
 func stepsPerform(ctx context.Context, x Executor, steps []AnyEffect) ([]any, error) {
@@ -265,7 +299,7 @@ func (t Transaction) perform(ctx context.Context, x Executor) ([]any, error) {
 		return nil, ErrNoEffect
 	}
 	var out []any
-	err := txRun(ctx, x, func(tx Executor) error {
+	err := txRun(ctx, x, stepsWrite(t.Steps), func(tx Executor) error {
 		var err error
 		out, err = stepsPerform(ctx, tx, t.Steps)
 		return err
@@ -448,7 +482,7 @@ func (a atomicEffect[T]) perform(ctx context.Context, x Executor) (T, error) {
 	if a.inner == nil {
 		return out, ErrNoEffect
 	}
-	err := txRun(ctx, x, func(tx Executor) error {
+	err := txRun(ctx, x, a.inner.writes(), func(tx Executor) error {
 		v, err := a.inner.perform(ctx, tx)
 		if err != nil {
 			return err
@@ -630,6 +664,18 @@ func (p pureEffect[T]) describe() description {
 func (f failEffect[T]) describe() description {
 	return description{kind: "fail", values: []any{f.err}, spelled: fmt.Sprintf("fail %v", f.err)}
 }
+
+func (q Query[T]) writes() bool         { return false }
+func (l Lookup[T]) writes() bool        { return false }
+func (w Write[M]) writes() bool         { return true }
+func (e Exec) writes() bool             { return true }
+func (t Transaction) writes() bool      { return stepsWrite(t.Steps) }
+func (p Parallel) writes() bool         { return stepsWrite(p.Steps) }
+func (t thenEffect[T, U]) writes() bool { return true }
+func (m mapEffect[T, U]) writes() bool  { return m.inner == nil || m.inner.writes() }
+func (a atomicEffect[T]) writes() bool  { return a.inner == nil || a.inner.writes() }
+func (p pureEffect[T]) writes() bool    { return false }
+func (f failEffect[T]) writes() bool    { return false }
 
 // Equal reports whether a and b are deeply equal as reflect.DeepEqual
 // reports, except that a floating-point NaN equals a NaN, so that a

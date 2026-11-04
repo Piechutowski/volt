@@ -38,6 +38,10 @@ func PathAdminTop(n int, opts ...volt.URLOption) string {
 	return volt.URL("/admin/top/"+volt.SegInt(n), opts...)
 }
 
+func PathAdminKeys(opts ...volt.URLOption) string {
+	return volt.URL("/admin/keys", opts...)
+}
+
 func PathUsers(opts ...volt.URLOption) string {
 	return volt.URL("/users", opts...)
 }
@@ -122,6 +126,10 @@ func PathAPIUserWritten(opts ...volt.URLOption) string {
 	return volt.URL("/api/written", opts...)
 }
 
+func PathAPIUserBydb(opts ...volt.URLOption) string {
+	return volt.URL("/api/bydb", opts...)
+}
+
 func PathAPIUserRoleGet(userID int, roleID int, opts ...volt.URLOption) string {
 	return volt.URL("/api/roles/"+volt.SegInt(userID)+"/"+volt.SegInt(roleID), opts...)
 }
@@ -132,6 +140,14 @@ func PathMsRevenueBrowse(opts ...volt.URLOption) string {
 
 func PathMsUsageBrowse(opts ...volt.URLOption) string {
 	return volt.URL("/ms/usage", opts...)
+}
+
+func PathMsrMsRevenueRecent(opts ...volt.URLOption) string {
+	return volt.URL("/msr/revenue", opts...)
+}
+
+func PathMsrMsUsageRecent(opts ...volt.URLOption) string {
+	return volt.URL("/msr/usage", opts...)
 }
 
 func PathRefUsers(opts ...volt.URLOption) string {

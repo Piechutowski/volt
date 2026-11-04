@@ -566,10 +566,11 @@ func TestVoltCompletePredicateParens(t *testing.T) {
 }
 
 // Inside an exists completion offers the preds that type over the table
-// the relation leads to, and none over the select's own (spec
-// §predicates).
+// the relation leads to, one naming a fitting pred twice among them, and
+// none over the select's own (spec §predicates).
 func TestVoltCompletePredsInsideExists(t *testing.T) {
-	schema := existsSchema + "pred popular { title like \"%go%\" }\npred named { tag != \"\" }\n"
+	schema := existsSchema + "pred popular { title like \"%go%\" }\npred named { tag != \"\" }\n" +
+		"pred twice { named and named }\npred short { tag != \"x\" }\npred both { named and short }\npred diamond { both and named }\n"
 	text := strings.Replace(schema, "where exists tags (tag = :tag?)", "where exists tags (", 1)
 	root := voltProject(t, map[string]string{"go.mod": "module lsptest\n", "db/schema.volt": schema})
 	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
@@ -581,6 +582,11 @@ func TestVoltCompletePredsInsideExists(t *testing.T) {
 	}
 	if !labels["named"] || labels["popular"] {
 		t.Errorf("completion inside exists tags ( = %v, want the pred over post_tags and not the one over posts", labels)
+	}
+	for _, name := range []string{"twice", "diamond"} {
+		if !labels[name] {
+			t.Errorf("completion inside exists tags ( = %v, want %s, which names a fitting pred twice", labels, name)
+		}
 	}
 }
 

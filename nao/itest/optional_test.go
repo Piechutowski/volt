@@ -1,6 +1,6 @@
 // Optional parameters and exists terms on a real SQLite (spec
-// §predicates): a term that reads an absent optional parameter is true, a
-// present one filters as written, an optional list present and empty
+// §predicates): a term that reads an absent optional parameter is taken
+// out, true under and and false under or, a present one filters as written, an optional list present and empty
 // matches no row, and exists tests a relation without repeating rows.
 package itest
 
@@ -91,8 +91,9 @@ func TestOptionalAbsentAndPresent(t *testing.T) {
 	}
 }
 
-// The term of an absent optional parameter is true even where the column
-// is NULL, and a present time binds as its stored form (spec §go-types).
+// The term of an absent optional parameter is taken out even where the
+// column is NULL, and a present time binds as its stored form (spec
+// §go-types).
 func TestOptionalTimeOverNullColumn(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()

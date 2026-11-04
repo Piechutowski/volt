@@ -258,6 +258,7 @@ func (stub) Create(r volt.Request) volt.Response { return volt.NoContent() }
 func (stub) Avatar(r volt.Request, id int) volt.Response { return volt.NoContent() }
 func (stub) Top(r volt.Request, n int, top []db.User) volt.Response { return volt.NoContent() }
 func (stub) Newest(r volt.Request, rows []db.User) volt.Response { return volt.NoContent() }
+func (stub) Keys(r volt.Request, a, b []db.User) volt.Response        { return volt.NoContent() }
 func (stub) Chosen(r volt.Request, email string, chosen, wrote []db.User) volt.Response {
 	return volt.NoContent()
 }

@@ -138,6 +138,10 @@ func PathAPIRecent(opts ...volt.URLOption) string {
 	return volt.URL("/api/recent", opts...)
 }
 
+func PathAPITop(limit int, opts ...volt.URLOption) string {
+	return volt.URL("/api/top/"+volt.SegInt(limit), opts...)
+}
+
 func PathMsRevenueBrowse(opts ...volt.URLOption) string {
 	return volt.URL("/ms/revenue", opts...)
 }

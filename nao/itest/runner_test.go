@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -183,6 +185,158 @@ func TestAtomicCheckUnderAPool(t *testing.T) {
 		wg.Wait()
 		if outcomes["shipped"] != 1 || outcomes["refused"] != 19 {
 			t.Fatalf("round %d: %v; want one shipped and 19 refused", round, outcomes)
+		}
+	}
+}
+
+func poolOpen(t *testing.T, conns int) run.DB {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "pool.db")
+	opened, err := run.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := opened.Close(); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := sql.Open("sqlite3", "file:"+path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool.SetMaxOpenConns(conns)
+	db := run.Wrap(pool)
+	t.Cleanup(func() { db.Close() })
+	ddlApply(t, db)
+	return db
+}
+
+func writeLockHold(t *testing.T, db run.DB) {
+	t.Helper()
+	conn, err := db.Pool().Conn(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.ExecContext(context.Background(), "BEGIN IMMEDIATE"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = conn.ExecContext(context.Background(), "ROLLBACK")
+		_ = conn.Close()
+	})
+}
+
+// TestReadTransactionBesideAWriter proves that a transaction of reads
+// alone begins deferred (spec §generated-query-surface, the runner): a
+// With, and an Atomic and a Transaction of reads, read their snapshot
+// at once while another connection of the pool holds the write lock,
+// where an immediate begin would wait for it and fail with database is
+// locked after the busy timeout.
+func TestReadTransactionBesideAWriter(t *testing.T) {
+	ctx := context.Background()
+	db := poolOpen(t, 4)
+	seedUser(t, db, "ann@example.com")
+	writeLockHold(t, db)
+	start := time.Now()
+	if got, err := run.Run(ctx, db, UserEveryone()); err != nil || len(got) != 1 {
+		t.Fatalf("a with select beside a writer = %v, %v", got, err)
+	}
+	if n, err := run.Run(ctx, db, rt.Atomic(UserCount())); err != nil || n != 1 {
+		t.Fatalf("an Atomic of a read beside a writer = %d, %v", n, err)
+	}
+	if out, err := run.Run(ctx, db, rt.Tx(UserCount(), UserList())); err != nil || len(out) != 2 {
+		t.Fatalf("a Tx of reads beside a writer = %v, %v", out, err)
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Fatalf("the reads beside a writer took %v; want them not to wait for its lock", d)
+	}
+}
+
+// TestWriteBeginEndsWithItsContext proves the wait of an immediate
+// begin (spec §generated-query-surface, the runner): while another
+// connection holds the write lock, a transaction that writes waits for
+// it until its context ends, then fails with the context's error at
+// the deadline or the cancellation, not database is locked after the
+// busy timeout, and once the lock is free it takes it.
+func TestWriteBeginEndsWithItsContext(t *testing.T) {
+	db := poolOpen(t, 2)
+	conn, err := db.Pool().Conn(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(context.Background(), "BEGIN IMMEDIATE"); err != nil {
+		t.Fatal(err)
+	}
+	create := func(email string) rt.Effect[User] {
+		return rt.Atomic(UserCreate(UserNew().EmailSet(email).NameSet("Ann")))
+	}
+	deadline, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, err := run.Run(deadline, db, create("a@example.com")); !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > time.Second {
+		t.Fatalf("a write under a 100ms deadline beside a writer = %v after %v; want the deadline at once", err, time.Since(start))
+	}
+	cancelled, stop := context.WithCancel(context.Background())
+	time.AfterFunc(50*time.Millisecond, stop)
+	start = time.Now()
+	if _, err := run.Run(cancelled, db, create("b@example.com")); !errors.Is(err, context.Canceled) || time.Since(start) > time.Second {
+		t.Fatalf("a write cancelled beside a writer = %v after %v; want the cancellation at once", err, time.Since(start))
+	}
+	time.AfterFunc(100*time.Millisecond, func() { _, _ = conn.ExecContext(context.Background(), "ROLLBACK") })
+	if _, err := run.Run(context.Background(), db, create("c@example.com")); err != nil {
+		t.Fatalf("a write once the lock is free = %v", err)
+	}
+	if got := pragmaRead(t, db, "busy_timeout"); got != 5000 {
+		t.Fatalf("busy_timeout after the waits = %d; want the pool's 5000 kept", got)
+	}
+}
+
+// TestUnreadRowKeepsNoConnection proves that a Lookup releases its
+// statement whatever its Scan does (spec §generated-query-surface, the
+// runner): on the one connection run.Open pins, a Scan that refuses
+// before reading the row and one that is nil and panics, inside a
+// transaction and outside one, leave the connection to the next
+// statement.
+func TestUnreadRowKeepsNoConnection(t *testing.T) {
+	db := newDB(t)
+	refuse := errors.New("refused before reading")
+	refusing := rt.Lookup[int]{SQL: "SELECT 1", Scan: func(rt.Row) (int, error) { return 0, refuse }}
+	scanless := rt.Lookup[int]{SQL: "SELECT 1"}
+	for name, e := range map[string]rt.Effect[int]{
+		"a refusing Scan outside a transaction": refusing,
+		"a refusing Scan inside an Atomic":      rt.Atomic(refusing),
+		"no Scan outside a transaction":         scanless,
+		"no Scan inside an Atomic":              rt.Atomic(scanless),
+	} {
+		done := make(chan any, 1)
+		go func() {
+			defer func() {
+				if v := recover(); v != nil {
+					done <- v
+				}
+			}()
+			_, err := run.Run(context.Background(), db, e)
+			done <- err
+		}()
+		select {
+		case got := <-done:
+			if err, _ := got.(error); !errors.Is(err, refuse) && strings.Contains(name, "refusing") {
+				t.Errorf("%s = %v; want its refusal", name, got)
+			}
+			if _, ok := got.(runtime.Error); !ok && strings.Contains(name, "no Scan") {
+				t.Errorf("%s = %v; want the nil function's panic", name, got)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("%s did not return in 3s", name)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		n, err := run.Run(ctx, db, UserCount())
+		cancel()
+		if err != nil || n != 0 {
+			t.Fatalf("after %s the next statement = %d, %v; want the connection free", name, n, err)
+		}
+		if s := db.Pool().Stats(); s.InUse != 0 {
+			t.Fatalf("after %s %d connections stay in use", name, s.InUse)
 		}
 	}
 }

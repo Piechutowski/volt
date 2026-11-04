@@ -40,14 +40,15 @@ type voltRef struct {
 }
 
 type voltDef struct {
-	span  voltSpan
-	table *ast.Table
-	pkg   *lang.Package
-	pipe  *ast.Pipeline
-	group *ast.Group
-	pred  *ast.Pred
-	gofn  *lang.GoFunc
-	md    string
+	span   voltSpan
+	table  *ast.Table
+	pkg    *lang.Package
+	pipe   *ast.Pipeline
+	group  *ast.Group
+	pred   *ast.Pred
+	gofn   *lang.GoFunc
+	md     string
+	column string
 }
 
 type voltIndex struct {
@@ -172,8 +173,8 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 				ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{"table", path, ti.Decl.Name.Name()}, occ.IsDecl, occ.Ident.Name()})
 			case SymRelation:
 				sym := voltSym{"relation", path, occ.ID.Container + "." + occ.ID.Name}
-				if occ.IsDecl {
-					ix.define(sym, voltDef{span: sp})
+				if _, done := ix.defs[sym]; !done {
+					ix.defs[sym] = ix.relationDef(path, single.Info, occ.ID)
 				}
 				ix.refs = append(ix.refs, voltRef{sp, sp, sym, occ.IsDecl, occ.Ident.Name()})
 			}
@@ -226,6 +227,50 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 		}
 	}
 	return ix
+}
+
+// relationDef is where a relation is declared and how it hovers (spec
+// §relationships-ref): at the as: or reverse: that names it, else at the
+// column its name derives from, which it remembers, and as the
+// relationship it walks followed by the table it leads to.
+func (ix *voltIndex) relationDef(path string, info *check.Info, id SymbolID) voltDef {
+	r, _ := info.Relation(id.Container, id.Name)
+	if r == nil {
+		return voltDef{}
+	}
+	var def voltDef
+	named, column := relationNaming(r)
+	switch {
+	case named != nil:
+		def.span = spanOf(named)
+	case column != "":
+		def.column = column
+		if cd := r.Ref.FK.Table.Column(column); cd != nil {
+			def.span = spanOf(cd.Col.Name)
+		}
+	}
+	var b strings.Builder
+	owner := id.Container
+	if t := info.Table(id.Container); t != nil {
+		owner = t.Decl.Name.Name()
+	}
+	target := r.Table.Decl.Name.Name()
+	fk := r.Ref.FK.Table.Decl.Name.Name() + "." + strings.Join(r.Ref.FK.Columns, ", ")
+	if r.Forward {
+		fmt.Fprintf(&b, "**relation `%s`** of `%s`: the one `%s` row `%s` references", r.Name, owner, target, fk)
+		if r.Optional {
+			b.WriteString(", or none")
+		}
+	} else {
+		fmt.Fprintf(&b, "**relation `%s`** of `%s`: the `%s` rows whose `%s` references it", r.Name, owner, target, fk)
+	}
+	if column != "" {
+		fmt.Fprintf(&b, "; named after the column `%s`", column)
+	}
+	b.WriteString(" (§relationships-ref)\n\n---\n")
+	b.WriteString(tableModelHover(voltSym{"table", path, target}, ix.defs[voltSym{"table", path, target}]))
+	def.md = b.String()
+	return def
 }
 
 // paramRefs records every parameter a select names, in its where and as
@@ -511,11 +556,15 @@ func (d *Document) voltReferences(pos protocol.Position, includeDecl bool) []pro
 		return nil
 	}
 	var out []protocol.Location
+	seen := map[protocol.Location]bool{}
 	for _, r := range d.vindex.refs {
 		if r.sym != ref.sym || (r.decl && !includeDecl) {
 			continue
 		}
-		out = append(out, *d.vindex.location(r.span))
+		if loc := *d.vindex.location(r.span); !seen[loc] {
+			seen[loc] = true
+			out = append(out, loc)
+		}
 	}
 	return out
 }
@@ -546,7 +595,7 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 		md = groupHover(ref.sym, def, d.vindex)
 	case "pred":
 		md = predHover(ref.sym, def, d.vindex)
-	case "select", "gofunc", "migration", "param":
+	case "select", "gofunc", "migration", "param", "relation":
 		md = def.md
 	}
 	if md == "" {
@@ -892,40 +941,6 @@ func tableKey(pkg *lang.Package, d *ast.Table) []*ast.Column {
 	return out
 }
 
-func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.WorkspaceEdit, bool) {
-	if d.vindex == nil {
-		return nil, false
-	}
-	ref := d.vindex.at(pathFromURI(d.URI), d.FromLSP(pos))
-	if ref == nil {
-		return nil, false
-	}
-	if ref.sym.kind == "package" || ref.sym.kind == "param" {
-		return nil, false
-	}
-
-	spelling := ref.text
-	changes := map[protocol.DocumentUri][]protocol.TextEdit{}
-	seen := map[string]bool{}
-	for _, r := range d.vindex.refs {
-		if r.sym != ref.sym || r.text != spelling {
-			continue
-		}
-		key := fmt.Sprintf("%s:%d", r.edit.file, r.edit.pos.Offset())
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		loc := d.vindex.location(r.edit)
-		changes[protocol.DocumentUri(loc.URI)] = append(changes[protocol.DocumentUri(loc.URI)],
-			protocol.TextEdit{Range: loc.Range, NewText: newName})
-	}
-	if len(changes) == 0 {
-		return nil, false
-	}
-	return &protocol.WorkspaceEdit{Changes: changes}, true
-}
-
 var voltQualRefRE = regexp.MustCompile(`([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z0-9_]*)$`)
 
 var voltResourcesRE = regexp.MustCompile(`^\s*resources\s+([A-Za-z0-9_]*)$`)
@@ -1035,20 +1050,29 @@ func (d *Document) predsOver(t *check.TableInfo, items []protocol.CompletionItem
 		return nil
 	}
 	var out []protocol.CompletionItem
+	fitting := map[string]bool{}
 	for _, it := range items {
-		if d.predFits(it.Label, t, map[string]bool{}) {
+		if d.predFits(it.Label, t, fitting, map[string]bool{}) {
 			out = append(out, it)
 		}
 	}
 	return out
 }
 
-func (d *Document) predFits(name string, t *check.TableInfo, seen map[string]bool) bool {
+// predFits reports whether the pred name types over t inside an exists,
+// remembering each pred's answer in fitting, so a pred named twice,
+// directly or through two others, is read once and fits as it did;
+// visiting holds the preds being read, which a cycle reaches again.
+func (d *Document) predFits(name string, t *check.TableInfo, fitting, visiting map[string]bool) bool {
+	if fits, known := fitting[name]; known {
+		return fits
+	}
 	def, ok := d.vindex.defs[voltSym{"pred", d.vpkg.Path, name}]
-	if !ok || def.pred == nil || seen[name] {
+	if !ok || def.pred == nil || visiting[name] {
 		return false
 	}
-	seen[name] = true
+	visiting[name] = true
+	defer delete(visiting, name)
 	fits := true
 	var walk func(x ast.PredExpr)
 	col := func(cr *ast.ColRef) {
@@ -1068,7 +1092,7 @@ func (d *Document) predFits(name string, t *check.TableInfo, seen map[string]boo
 		case *ast.PredExists:
 			fits = false
 		case *ast.PredRef:
-			fits = fits && d.predFits(x.Name.Name(), t, seen)
+			fits = fits && d.predFits(x.Name.Name(), t, fitting, visiting)
 		case *ast.PredCompare:
 			for _, side := range []ast.Operand{x.X, x.Y} {
 				if cr, ok := side.(*ast.ColRef); ok {
@@ -1084,6 +1108,7 @@ func (d *Document) predFits(name string, t *check.TableInfo, seen map[string]boo
 		}
 	}
 	walk(def.pred.X)
+	fitting[name] = fits
 	return fits
 }
 

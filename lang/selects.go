@@ -415,7 +415,29 @@ type selectLowering struct {
 }
 
 func (l *selectLowering) errorf(pos token.Position, format string, args ...any) {
-	l.diags = append(l.diags, diag.Errorf(pos, "spec/selects-over-groups", format, args...))
+	msg := fmt.Sprintf(format, args...)
+	l.diags = append(l.diags, diag.Errorf(pos, "spec/"+sectionEnforced(msg, "selects-over-groups"), "%s", msg))
+}
+
+// sectionEnforced is the anchor a diagnostic's code names (spec
+// §conformance-and-the-proof-chain): fallback when the message cites it
+// or cites nothing, else the first section its closing citation names.
+func sectionEnforced(msg, fallback string) string {
+	i := strings.LastIndex(msg, "(§")
+	if i < 0 || !strings.HasSuffix(msg, ")") {
+		return fallback
+	}
+	var first string
+	for _, c := range strings.Split(msg[i+1:len(msg)-1], ",") {
+		anchor := strings.TrimPrefix(strings.TrimSpace(c), "§")
+		if anchor == fallback {
+			return fallback
+		}
+		if first == "" {
+			first = anchor
+		}
+	}
+	return first
 }
 
 func (l *selectLowering) lookup(name string) (string, bool) {
@@ -548,25 +570,29 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 
 func (c *checker) nameMiss(id *ast.Ident, info *check.Info, section, what string) {
 	want := id.Name()
+	cite := "(§groups)"
+	if section != "groups" {
+		cite = "(§" + section + ", §groups)"
+	}
 	for _, ti := range info.Tables {
 		if strings.EqualFold(ti.Decl.Name.Name(), want) {
-			c.errorf(id.Pos(), section, "unknown %s %q; did you mean %q? names are case-sensitive (§groups)", what, want, ti.Decl.Name.Name())
+			c.errorf(id.Pos(), section, "unknown %s %q; did you mean %q? names are case-sensitive %s", what, want, ti.Decl.Name.Name(), cite)
 			return
 		}
 	}
 	for _, d := range c.pkg.merged.Decls {
 		if g, ok := d.(*ast.Group); ok && strings.EqualFold(g.Name.Name(), want) {
-			c.errorf(id.Pos(), section, "unknown %s %q; did you mean the group %q? names are case-sensitive (§groups)", what, want, g.Name.Name())
+			c.errorf(id.Pos(), section, "unknown %s %q; did you mean the group %q? names are case-sensitive %s", what, want, g.Name.Name(), cite)
 			return
 		}
 	}
 	for _, ti := range info.Tables {
 		if m, err := naming.ModelName(ti.Decl); err == nil && m == want {
-			c.errorf(id.Pos(), section, "unknown %s %q; %q is the model of table %q: name the table (§groups)", what, want, want, ti.Decl.Name.Name())
+			c.errorf(id.Pos(), section, "unknown %s %q; %q is the model of table %q: name the table %s", what, want, want, ti.Decl.Name.Name(), cite)
 			return
 		}
 	}
-	c.errorf(id.Pos(), section, "unknown %s %q: no such table or group in package %q (§groups)", what, want, c.pkg.Path)
+	c.errorf(id.Pos(), section, "unknown %s %q: no such table or group in package %q %s", what, want, c.pkg.Path, cite)
 }
 
 func (c *checker) predRefCycles(pkg *Package) {
@@ -2035,7 +2061,7 @@ func (e *selectEnv) paramRead(p *ast.Param) {
 			via := e.via
 			e.via = e.via[:n.depth]
 			defer func() { e.via = via }()
-			e.predErrorf(at, "not stands over the optional parameter %s: a term that reads an absent optional parameter is true, and not would make it false; write the parameter without ? or the predicate without not (§predicates)", p.String())
+			e.predErrorf(at, "not stands over the optional parameter %s: a term that reads an absent optional parameter is taken out, and not would turn it into its opposite; write the parameter without ? or the predicate without not (§predicates)", p.String())
 		}
 	}
 	name := p.Name.Name()

@@ -15,6 +15,7 @@ type AdminController interface {
 	Chosen(r volt.Request, email string, chosen []db.User, wrote []db.User) volt.Response
 	Newest(r volt.Request, rows []db.User) volt.Response
 	Top(r volt.Request, n int, top []db.User) volt.Response
+	Keys(r volt.Request, a []db.User, b []db.User) volt.Response
 }
 
 type FilesController interface {
@@ -76,6 +77,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	}
 	if !volt.Same(c.Admin.Top(r, 0, nil), c.Admin.Top(r, 0, nil)) {
 		voltOut = append(voltOut, "Admin.Top")
+	}
+	if !volt.Same(c.Admin.Keys(r, nil, nil), c.Admin.Keys(r, nil, nil)) {
+		voltOut = append(voltOut, "Admin.Keys")
 	}
 	if !volt.Same(c.Files.Serve(r, ""), c.Files.Serve(r, "")) {
 		voltOut = append(voltOut, "Files.Serve")

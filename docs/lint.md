@@ -501,7 +501,7 @@ one file in `vet/` plus one testdata file.
 | `recordsdupkey` | duplicate primary-key values across record rows | belongs in `check` beside record value typing (§records-sample-data) |
 | `sqlkeyword` | names that are reserved words in common SQL dialects (`order`, `user`) | needs per-dialect wordlists and a target-dialect setting |
 | `namingstyle` | mixed naming conventions (snake_case vs camelCase) | pure style; needs configuration machinery first |
-| `nullkeyset` | a keyset over a nullable `order:` column whose `where` does not keep its NULLs out (`is not null`), told by an optional parameter compared with that column by `=` and by `<`, `<=`, `>` or `>=`; a NULL cursor is absent and restarts the pages (spec §predicates) | a rule over a select needs the checker's facts about its target's columns, and no rule reads a select's facts yet |
+| `nullkeyset` | a keyset over a nullable `order:` column whose `where` does not keep its NULLs out (`is not null`), told by an optional parameter compared with that column by `=` and by `<`, `<=`, `>` or `>=`; a NULL cursor is absent, so the next page reads by the key alone and reads again rows earlier pages read (spec §predicates) | a rule over a select needs the checker's facts about its target's columns, and no rule reads a select's facts yet |
 | `filterjoin` | a join of a reverse relation whose columns an aggregating select reads in its `where` alone, never projecting or ordering by them; the join repeats each row once per related row and inflates the aggregates, where an exists term filters without repeating (spec §selects-over-groups, §predicates) | as for `nullkeyset`: it needs the checker's facts about the select's joins |
 
 ---
