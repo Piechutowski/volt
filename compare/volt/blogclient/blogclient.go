@@ -26,10 +26,10 @@ func New(base string, id int) *Client {
 	return &Client{c}
 }
 
-// Create stores a draft.
-func (c *Client) Create(ctx context.Context, f app.PostForm) (app.PostView, error) {
+// PostCreate stores a draft.
+func (c *Client) PostCreate(ctx context.Context, f app.PostForm) (app.PostView, error) {
 	var p app.PostView
-	return p, c.Do(ctx, "POST", app.PathCreate(), f, &p)
+	return p, c.Do(ctx, "POST", app.PathPostCreate(), f, &p)
 }
 
 // Post reads a post.

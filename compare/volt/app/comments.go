@@ -5,13 +5,16 @@ import (
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/compare/volt/db"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // Comments are the comment routes.
 type Comments struct{}
 
 // Create stores a comment on a published post, at most three per
-// member per post in an hour.
+// member per post in an hour, counted in the transaction that stores it
+// (§generated-query-surface), so concurrent comments pass the count one
+// at a time.
 func (Comments) Create(r volt.Request, member db.Member, id int, body CommentForm, p db.Post) volt.Response {
 	if p.State != "published" {
 		return volt.Reject(409, "only a published post takes comments")
@@ -20,12 +23,13 @@ func (Comments) Create(r volt.Request, member db.Member, id int, body CommentFor
 	if !cs.Valid() {
 		return volt.Fail(cs.Err())
 	}
-	return volt.Then(db.CommentRecent(id, member.ID, r.Now().Add(-time.Hour)), func(recent db.Recent) volt.Response {
+	create := rt.Then(db.CommentRecent(id, member.ID, r.Now().Add(-time.Hour)), func(recent db.Recent) rt.Effect[db.Comment] {
 		if recent.N >= 3 {
-			return volt.Reject(429, "at most 3 comments on a post in an hour")
+			return rt.Fail[db.Comment](volt.Error(429, "at most 3 comments on a post in an hour"))
 		}
-		return volt.Then(db.CommentCreate(cs), func(c db.Comment) volt.Response { return volt.Created(c) })
+		return db.CommentCreate(cs)
 	})
+	return volt.Then(rt.Atomic(create), func(c db.Comment) volt.Response { return volt.Created(c) })
 }
 
 // List renders a post's comments, oldest first.

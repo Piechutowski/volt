@@ -7,11 +7,11 @@ import (
 scope / [error_handler: Errors] {
 	load member CurrentMember
 
-	post   /posts                              Posts.Create    [body: PostForm]
+	post   /posts                              Posts.Create    [name: post_create, body: PostForm]
 	get    /posts                              Posts.Feed      [name: feed]
 	get    /posts/:id(int)                     Posts.Show      [name: post] { post db.PostGet(id) }
 	patch  /posts/:id(int)                     Posts.Edit      [name: post_edit, body: PostEdit] { post db.PostGet(id) }
-	post   /posts/:id(int)/publish             Posts.Publish   [name: publish] { post db.PostGet(id) }
+	post   /posts/:id(int)/publish             Posts.Publish   [name: publish]
 	get    /posts/:id(int)/audit               Posts.Audit     [name: audit] {
 		post  db.PostGet(id)
 		trail db.AuditTrail(id)

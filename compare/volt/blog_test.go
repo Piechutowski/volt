@@ -3,9 +3,11 @@ package blog
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Piechutowski/volt"
@@ -39,7 +41,7 @@ func TestClient(t *testing.T) {
 	defer srv.Close()
 	ctx := context.Background()
 	ada, grace := blogclient.New(srv.URL, 1), blogclient.New(srv.URL, 2)
-	p, err := ada.Create(ctx, app.PostForm{Slug: "hello", Title: "Hello", Body: "Short.", Tags: []string{"go"}})
+	p, err := ada.PostCreate(ctx, app.PostForm{Slug: "hello", Title: "Hello", Body: "Short.", Tags: []string{"go"}})
 	if err != nil || p.State != "draft" {
 		t.Fatalf("create = %+v, %v", p, err)
 	}
@@ -91,7 +93,7 @@ func TestCreateIsAtomic(t *testing.T) {
 	ada := blogclient.New(srv.URL, 1)
 	form := app.PostForm{Slug: "half-written", Title: "Half written", Body: "x", Tags: []string{"refused", "go"}}
 	var pe *volt.ProblemError
-	if p, err := ada.Create(ctx, form); !errors.As(err, &pe) || pe.Status != 500 {
+	if p, err := ada.PostCreate(ctx, form); !errors.As(err, &pe) || pe.Status != 500 {
 		t.Fatalf("a create whose second tag is refused = %+v, %v; want the 500 of an unmapped refusal", p, err)
 	}
 	counts, err := run.Run(ctx, d, rt.Tx(db.PostCount(), db.PostTagCount()))
@@ -102,7 +104,59 @@ func TestCreateIsAtomic(t *testing.T) {
 		t.Errorf("the refused create left %v posts and %v tags, want none", counts[0], counts[1])
 	}
 	form.Tags = []string{"go"}
-	if p, err := ada.Create(ctx, form); err != nil || p.Slug != form.Slug {
+	if p, err := ada.PostCreate(ctx, form); err != nil || p.Slug != form.Slug {
 		t.Errorf("the create again without the refused tag = %+v, %v", p, err)
 	}
+}
+
+// TestRulesHoldConcurrently proves that Publish and the comment limit
+// read what they check in the transaction that writes (spec
+// §generated-query-surface): twenty publishes of one draft at once
+// publish it once with one audit entry, and ten comments at once by one
+// member store three, every other call refused with 409 or 429.
+func TestRulesHoldConcurrently(t *testing.T) {
+	h, err := Handler(filepath.Join(t.TempDir(), "blog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	ctx := context.Background()
+	ada, grace := blogclient.New(srv.URL, 1), blogclient.New(srv.URL, 2)
+	for round := range 10 {
+		p, err := ada.PostCreate(ctx, app.PostForm{Slug: fmt.Sprintf("race-%d", round), Title: "Race", Body: strings.Repeat("x", 120)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		published := concurrently(t, 20, 409, func() error { _, err := ada.Publish(ctx, p.ID); return err })
+		stored := concurrently(t, 10, 429, func() error { _, err := grace.CommentCreate(ctx, p.ID, "Nice"); return err })
+		trail, err := ada.Audit(ctx, p.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if published != 1 || len(trail) != 1 || stored != 3 {
+			t.Errorf("round %d: %d publishes succeeded with %d audit entries and %d comments were stored, want 1, 1 and 3", round, published, len(trail), stored)
+		}
+	}
+}
+
+func concurrently(t *testing.T, n, refusal int, call func() error) int {
+	t.Helper()
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Go(func() { errs[i] = call() })
+	}
+	wg.Wait()
+	succeeded := 0
+	for _, err := range errs {
+		var pe *volt.ProblemError
+		switch {
+		case err == nil:
+			succeeded++
+		case !errors.As(err, &pe) || pe.Status != refusal:
+			t.Errorf("a concurrent call = %v, want success or %d", err, refusal)
+		}
+	}
+	return succeeded
 }

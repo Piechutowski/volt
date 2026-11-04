@@ -108,21 +108,24 @@ func (Posts) Edit(r volt.Request, member db.Member, id int, body PostEdit, p db.
 }
 
 // Publish turns the author's draft into a published post and audits it,
-// both in one transaction.
-func (Posts) Publish(r volt.Request, member db.Member, id int, p db.Post) volt.Response {
-	switch {
-	case p.AuthorID != member.ID:
-		return volt.Reject(403, "only the author publishes a post")
-	case p.State != "draft":
-		return volt.Reject(409, "only a draft is published")
-	case utf8.RuneCountInString(p.Body) < 100:
-		return volt.Reject(422, "body: at least 100 characters to publish")
-	}
-	cs := p.Changeset().StateSet("published").PublishedAtSet(rt.Some(r.Now()))
-	audit := db.AuditNew().PostIDSet(p.ID).MemberIDSet(member.ID).ActionSet("publish").AtSet(r.Now())
-	return volt.Then(rt.Tx(db.PostUpdate(cs), db.AuditCreate(audit)), func(out []any) volt.Response {
-		return postRender(200, out[0].(db.Post))
+// reading the post in the transaction that writes both
+// (§generated-query-surface), so of two publishes of one draft only the
+// first finds a draft.
+func (Posts) Publish(r volt.Request, member db.Member, id int) volt.Response {
+	publish := rt.Then(db.PostGet(id), func(p db.Post) rt.Effect[db.Post] {
+		switch {
+		case p.AuthorID != member.ID:
+			return rt.Fail[db.Post](volt.Error(403, "only the author publishes a post"))
+		case p.State != "draft":
+			return rt.Fail[db.Post](volt.Error(409, "only a draft is published"))
+		case utf8.RuneCountInString(p.Body) < 100:
+			return rt.Fail[db.Post](volt.Error(422, "body: at least 100 characters to publish"))
+		}
+		cs := p.Changeset().StateSet("published").PublishedAtSet(rt.Some(r.Now()))
+		audit := db.AuditNew().PostIDSet(p.ID).MemberIDSet(member.ID).ActionSet("publish").AtSet(r.Now())
+		return rt.Map(rt.Tx(db.PostUpdate(cs), db.AuditCreate(audit)), func(out []any) db.Post { return out[0].(db.Post) })
 	})
+	return volt.Then(rt.Atomic(publish), func(p db.Post) volt.Response { return postRender(200, p) })
 }
 
 // Audit lists a post's audit entries to its author.
