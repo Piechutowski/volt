@@ -31,7 +31,7 @@ type CommentForm struct {
 }
 
 // CurrentMember loads the member X-User names (§scope-loads): a list,
-// empty when there is none, since a load cannot answer its own miss.
+// empty when there is none, which each handler checks.
 func CurrentMember(r volt.Request) volt.Load[[]db.Member] {
 	id, err := strconv.Atoi(r.Header().Get("X-User"))
 	if err != nil {

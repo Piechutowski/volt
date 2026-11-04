@@ -2235,8 +2235,13 @@ func (r Response) Rescue(on func(error) Response) Response
    own status, and 500 otherwise (§formats). `Rescue` on a continuation
    names the function that answers for its effect's failure instead,
    for a route that must decide on a miss; on a done response it does
-   nothing. `Reject` is a Problem body of the handler's own, with
-   `WithDetails` for the field errors of a changeset it judged.
+   nothing. It covers that one effect: the function receives the
+   error, and its response goes on through the shim as `next`'s would,
+   a `Fail(err)` to the error handler; a step `next` returns is rescued
+   only by a `Rescue` of its own. A scope load's `Rescue` does the same
+   for the load's effect (§scope-loads).
+   `Reject` is a Problem body of the handler's own, with `WithDetails`
+   for the field errors of a changeset it judged.
 4. **Bodies.** `Render` and `RenderStatus` write a value in the
    negotiated format, and a nil `v` writes the status and no body
    (§formats); `File` serves a file of an `fs.FS` as `net/http`
@@ -2421,12 +2426,22 @@ scope /me [pipe: app] {
 ```
 
 ```go
+type Load[T any] struct { /* unexported: an effect, or a halt */ }
+func LoadWith[T any](e rt.Effect[T]) Load[T]
+func Halt[T any](resp Response) Load[T]
+func (l Load[T]) Rescue(on func(error) Response) Load[T]
+
 func CurrentUser(r volt.Request) volt.Load[db.User] {
 	id, err := strconv.Atoi(r.Header().Get("X-User"))
 	if err != nil {
 		return volt.Halt[db.User](volt.Reject(401, "sign in"))
 	}
-	return volt.LoadWith(db.UserGet(id))
+	return volt.LoadWith(db.UserGet(id)).Rescue(func(err error) volt.Response {
+		if errors.Is(err, rt.ErrNotFound) {
+			return volt.Reject(401, "sign in")
+		}
+		return volt.Fail(err)
+	})
 }
 ```
 
@@ -2454,7 +2469,8 @@ routes need and whether the request goes on.
    first and in declaration order within a scope, after the path
    parameters parse and before the body (§request-bodies) and the
    route loads (§route-loads); a halt answers with its response, an
-   effect that fails goes to the error spine (§requests-and-responses).
+   effect that fails goes to the error spine (§requests-and-responses)
+   unless the load rescues it.
    A controller route's handler receives the values as its leading
    parameters, after `r` and before the route's parameters, nested
    scopes appending: `Show(r volt.Request, user db.User) volt.Response`.
@@ -2462,6 +2478,18 @@ routes need and whether the request goes on.
    (§handler-references). A query route runs them for the halt and
    drops the values. An event route (§event-routes) runs no load, so
    one beneath a scope load is an error.
+4. **Failure.** `l.Rescue(on)` is the load `l` with `on` answering for
+   its effect's failure instead of the error spine: `on` receives the
+   error, a timeout's 504 among them, nothing beneath runs, and the
+   response `on` returns answers the request, a `Fail(err)` going on to
+   the error handler. A load so answers a miss of its own, a 401 for a
+   user no row holds, and fails with every other error. The rescue
+   covers the load's effect alone: a later scope load, the body
+   (§request-bodies), the route's loads (§route-loads), a query route's
+   query and the handler's own continuations fail to the error spine as
+   they would without it. On a `Halt` and on the zero `Load` it does
+   nothing, as `Rescue` does nothing on a done response
+   (§requests-and-responses); a second `Rescue` replaces the first.
 
 ### Query routes
 

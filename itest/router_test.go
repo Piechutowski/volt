@@ -75,6 +75,12 @@ type me struct{}
 
 func (me) Show(r volt.Request, user db.User) volt.Response { return volt.Render(user) }
 
+type meNext struct{}
+
+func (meNext) Show(r volt.Request, user db.User) volt.Response {
+	return volt.Then(db.UserGet(user.ID+1), func(next db.User) volt.Response { return volt.Render(next) })
+}
+
 type files struct{}
 
 func (files) Serve(r volt.Request, path string) volt.Response { return echo(r, path) }
@@ -114,6 +120,11 @@ func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 	if t == nil {
 		t = &testing.T{}
 	}
+	broker := &volt.Broker{Heartbeat: 20 * time.Millisecond}
+	return app.NewRouter(fixtureControllers(fixtureDB(), broker)), broker
+}
+
+func fixtureDB() run.DB {
 	dbh, err := run.Open("sqlite3", ":memory:")
 	if err != nil {
 		panic(err)
@@ -134,13 +145,16 @@ func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 	if _, err := run.Run(context.Background(), dbh, db.ProfileCreate(db.ProfileNew().UserIDSet(1).BioSet("one"))); err != nil {
 		panic(err)
 	}
-	broker := &volt.Broker{Heartbeat: 20 * time.Millisecond}
-	return app.NewRouter(app.Controllers{
+	return dbh
+}
+
+func fixtureControllers(dbh run.DB, broker *volt.Broker) app.Controllers {
+	return app.Controllers{
 		Home: home{}, Users: users{}, Files: files{}, Admin: admin{},
 		Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{}, Session: session{}, Me: me{},
 		DB:     dbh,
 		Events: broker,
-	}), broker
+	}
 }
 
 func serve(t *testing.T, h http.Handler, method, target string) (*httptest.ResponseRecorder, map[string]any) {

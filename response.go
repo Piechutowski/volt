@@ -361,6 +361,7 @@ func bodyWrite(w http.ResponseWriter, status int, mime string, b []byte) error {
 type Load[T any] struct {
 	effect rt.Effect[T]
 	halt   *Response
+	on     func(error) Response
 }
 
 // LoadWith is the Load that performs e and hands its value on.
@@ -369,8 +370,20 @@ func LoadWith[T any](e rt.Effect[T]) Load[T] { return Load[T]{effect: e} }
 // Halt is the Load that answers with resp and runs nothing beneath.
 func Halt[T any](resp Response) Load[T] { return Load[T]{halt: &resp} }
 
+// Rescue is l with on answering for its effect's failure instead of the
+// error handler, nothing beneath running (spec §scope-loads); a Halt and
+// the zero Load are unchanged.
+func (l Load[T]) Rescue(on func(error) Response) Load[T] {
+	if l.effect == nil {
+		return l
+	}
+	l.on = on
+	return l
+}
+
 // Continue is a shim's step over a scope load (spec §scope-loads): the
-// halt's response, or the continuation over the effect's value.
+// halt's response, or the continuation over the effect's value, its
+// rescue covering that effect alone.
 func Continue[T any](l Load[T], next func(T) Response) Response {
 	if l.halt != nil {
 		return *l.halt
@@ -378,5 +391,5 @@ func Continue[T any](l Load[T], next func(T) Response) Response {
 	if l.effect == nil {
 		return Fail(errors.New("volt: a scope load decided nothing; a Load is built by LoadWith or Halt"))
 	}
-	return Then(l.effect, next)
+	return Then(l.effect, next).Rescue(l.on)
 }
