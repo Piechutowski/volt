@@ -313,8 +313,9 @@ function (spec §requests-and-responses, §values-and-effects). A
 *handler file* is one that declares a method taking a `volt.Request`
 first and returning a `volt.Response`. Generated files are never read.
 Not caught, by the spec's own account: reflection, `unsafe`, cgo, a
-package imported under another name, and a call through a function
-value.
+package imported under another name, a call through a function value,
+and a write a function the runner calls makes through a method or a
+function it calls.
 
 ### handlerreceiver
 
@@ -393,6 +394,38 @@ handler owns none: parallel effects go through `rt.All`, work after the
 request to a job, periodic work to `main`.
 
 **Examples.** [testdata/goroutine.go](../lang/vet/testdata/goroutine.go).
+
+### capturedwrite
+
+**What it does.** Reports, in any hand-written file of a routes
+package, a function the runner calls, the `next` of an `rt.Then` or
+the `f` of an `rt.Map` or an `rt.ParallelMap`, that assigns to or
+increments a variable it captures: a local or a parameter of a
+function around it, or what such a variable points at, indexes or
+selects. The function is a literal in the call or a name a literal is
+bound to in the same declaration.
+
+**Why.** A function the runner calls is pure (spec
+§values-and-effects): it turns a value into a description or a value.
+A write to a captured variable makes the effect perform differently
+the second time it is performed, and inside an `rt.All` outside a
+transaction or an `rt.ParallelMap`, whose steps run at once on their
+own goroutines, the writes race. Return the value instead and combine
+the results where a `next` receives them.
+
+**Examples.** [testdata/capturedwrite.go](../lang/vet/testdata/capturedwrite.go):
+`Tally` adds to a total its two steps share, `Seen` marks a captured
+map from a function bound to a name, and `Squares` counts the calls of
+a `ParallelMap`'s `f`, so all three warn; `Sum` adds into a local of
+its own `f`, and `Last` writes a local from a helper the handler calls
+itself, so both pass.
+
+**Limitations.** Without type information the rule reads names: a
+write through a method (`counter.Add(1)`) or through a function the
+literal calls is not seen, nor a function declared elsewhere and
+passed by name, and a name declared anywhere inside the literal is
+taken as its own, even where an inner block's declaration shadows it
+only there. A write to a package-level var is `packagestate`'s.
 
 ### streamcount
 

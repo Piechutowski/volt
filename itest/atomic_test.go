@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -181,5 +184,55 @@ func TestAtomicRefusalAndPanicThroughTheShim(t *testing.T) {
 	}
 	if resp, err := post("/full"); err != nil || resp.StatusCode != http.StatusConflict {
 		t.Fatalf("the server after a panic = %v, %v; want it serving the next request", resp, err)
+	}
+}
+
+func slowSignupHandler(email string, mapped bool) volt.HandlerFunc {
+	slow := func(u db.User) db.User {
+		time.Sleep(150 * time.Millisecond)
+		return u
+	}
+	return func(r volt.Request) volt.Response {
+		create := db.UserCreate(db.UserNew().EmailSet(email))
+		e := rt.Atomic(rt.Then(create, func(u db.User) rt.Effect[db.User] { return rt.Pure(slow(u)) }))
+		if mapped {
+			e = rt.Atomic(rt.Map(create, slow))
+		}
+		return volt.Then(e, func(u db.User) volt.Response { return volt.Created(u) })
+	}
+}
+
+// TestAtomicTimeoutAnswers504 proves a route's timeout that expires
+// while an Atomic's f or its last next runs, after its last statement
+// and before its commit (spec §generated-query-surface, the runner, and
+// §route-loads): the transaction fails with the context's error, which
+// the shim answers with a 504 through the error handler, and nothing
+// commits. The database is a file, since database/sql drops the
+// connection of a transaction its context ended, and with it an
+// in-memory database.
+func TestAtomicTimeoutAnswers504(t *testing.T) {
+	ctx := context.Background()
+	dbh, err := run.Open("sqlite3", filepath.Join(t.TempDir(), "blog.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dbh.Close()
+	ddl, err := os.ReadFile(filepath.Join("blog", "db", "volt_schema.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dbh.Pool().Exec(string(ddl)); err != nil {
+		t.Fatal(err)
+	}
+	for _, mapped := range []bool{true, false} {
+		email := fmt.Sprintf("slow-%t@example.com", mapped)
+		rec := httptest.NewRecorder()
+		volt.Handler("POST /slow", slowSignupHandler(email, mapped), app.Errors, run.Performer(dbh), volt.Timeout(50*time.Millisecond)).ServeHTTP(rec, httptest.NewRequest("POST", "/slow", nil))
+		if rec.Code != http.StatusGatewayTimeout || rec.Header().Get("X-Error-Handler") != "app" {
+			t.Errorf("an Atomic whose pure step outlives the timeout (Map %t) = %d via %q %s; want 504 through the error handler", mapped, rec.Code, rec.Header().Get("X-Error-Handler"), rec.Body.String())
+		}
+		if _, err := run.Run(ctx, dbh, db.UserGetByEmail(email)); !errors.Is(err, rt.ErrNotFound) {
+			t.Errorf("the user of the timed-out Atomic (Map %t): %v; want it never committed", mapped, err)
+		}
 	}
 }

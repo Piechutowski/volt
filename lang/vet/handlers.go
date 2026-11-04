@@ -370,6 +370,170 @@ func (r *goroutineRule) Go(f *GoFile) []diag.Diagnostic {
 	return out
 }
 
+type capturedWriteRule struct{ meta }
+
+var capturedWrite = &capturedWriteRule{meta{
+	name: "capturedwrite",
+	doc:  "reports a function the runner calls, the next of an rt.Then or the f of an rt.Map or an rt.ParallelMap, that writes a variable it captures",
+}}
+
+var runnerCalled = map[string]string{
+	"rt.Then":        "the next of rt.Then",
+	"rt.Map":         "the f of rt.Map",
+	"rt.ParallelMap": "the f of rt.ParallelMap",
+}
+
+func (r *capturedWriteRule) Go(f *GoFile) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	for _, d := range f.File.Decls {
+		fd, ok := d.(*goast.FuncDecl)
+		if !ok || fd.Body == nil {
+			continue
+		}
+		bound := map[string]*goast.FuncLit{}
+		goast.Inspect(fd.Body, func(n goast.Node) bool {
+			switch s := n.(type) {
+			case *goast.AssignStmt:
+				for i, rhs := range s.Rhs {
+					if lit, ok := rhs.(*goast.FuncLit); ok && i < len(s.Lhs) {
+						if id, ok := s.Lhs[i].(*goast.Ident); ok {
+							bound[id.Name] = lit
+						}
+					}
+				}
+			case *goast.ValueSpec:
+				for i, v := range s.Values {
+					if lit, ok := v.(*goast.FuncLit); ok && i < len(s.Names) {
+						bound[s.Names[i].Name] = lit
+					}
+				}
+			}
+			return true
+		})
+		seen := map[gotoken.Pos]bool{}
+		goast.Inspect(fd.Body, func(n goast.Node) bool {
+			call, ok := n.(*goast.CallExpr)
+			if !ok || len(call.Args) != 2 {
+				return true
+			}
+			role, ok := runnerCalled[spelled(calleeGeneric(call.Fun))]
+			if !ok {
+				return true
+			}
+			lit := funcLitBound(call.Args[1], bound)
+			if lit == nil {
+				return true
+			}
+			for _, w := range capturedWrites(lit, f.Vars) {
+				if seen[w.at.Pos()] {
+					continue
+				}
+				seen[w.at.Pos()] = true
+				out = append(out, r.warnf(f.Pos(w.at), "%s writes %s, a variable it captures; a function the runner calls is pure, so performing its effect twice gives the same result and the steps of an rt.All never race on it (§values-and-effects)", role, w.name))
+			}
+			return true
+		})
+	}
+	return out
+}
+
+func calleeGeneric(e goast.Expr) goast.Expr {
+	switch x := e.(type) {
+	case *goast.IndexExpr:
+		return x.X
+	case *goast.IndexListExpr:
+		return x.X
+	}
+	return e
+}
+
+func funcLitBound(e goast.Expr, bound map[string]*goast.FuncLit) *goast.FuncLit {
+	for {
+		p, ok := e.(*goast.ParenExpr)
+		if !ok {
+			break
+		}
+		e = p.X
+	}
+	switch x := e.(type) {
+	case *goast.FuncLit:
+		return x
+	case *goast.Ident:
+		return bound[x.Name]
+	}
+	return nil
+}
+
+type capturedWriteAt struct {
+	at   goast.Node
+	name string
+}
+
+func capturedWrites(lit *goast.FuncLit, pkgVars map[string]bool) []capturedWriteAt {
+	own := map[string]bool{}
+	fields := func(fl *goast.FieldList) {
+		if fl == nil {
+			return
+		}
+		for _, field := range fl.List {
+			for _, id := range field.Names {
+				own[id.Name] = true
+			}
+		}
+	}
+	goast.Inspect(lit, func(n goast.Node) bool {
+		switch s := n.(type) {
+		case *goast.FuncLit:
+			fields(s.Type.Params)
+			fields(s.Type.Results)
+		case *goast.AssignStmt:
+			if s.Tok == gotoken.DEFINE {
+				for _, l := range s.Lhs {
+					if id, ok := l.(*goast.Ident); ok {
+						own[id.Name] = true
+					}
+				}
+			}
+		case *goast.RangeStmt:
+			if s.Tok == gotoken.DEFINE {
+				for _, e := range []goast.Expr{s.Key, s.Value} {
+					if id, ok := e.(*goast.Ident); ok {
+						own[id.Name] = true
+					}
+				}
+			}
+		case *goast.ValueSpec:
+			for _, id := range s.Names {
+				own[id.Name] = true
+			}
+		}
+		return true
+	})
+	var out []capturedWriteAt
+	written := func(at goast.Node, target goast.Expr) {
+		name := rootIdent(target)
+		if name == "" || name == "_" || own[name] || pkgVars[name] {
+			return
+		}
+		out = append(out, capturedWriteAt{at, name})
+	}
+	goast.Inspect(lit.Body, func(n goast.Node) bool {
+		switch s := n.(type) {
+		case *goast.AssignStmt:
+			if s.Tok == gotoken.DEFINE {
+				return true
+			}
+			for _, l := range s.Lhs {
+				written(s, l)
+			}
+		case *goast.IncDecStmt:
+			written(s, s.X)
+		}
+		return true
+	})
+	return out
+}
+
 type streamCountRule struct{ meta }
 
 var streamCount = &streamCountRule{meta{

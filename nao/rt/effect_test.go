@@ -253,8 +253,8 @@ func TestAtomicEffect(t *testing.T) {
 		t.Errorf("Atomic with a failing step = %d, %v; want the step's *Invalid unwrapped", got, err)
 	}
 	parallel := joinExecutor{&fakeExecutor{affected: 1}}
-	if _, err := Atomic(All(Exec{SQL: "a"}, Exec{SQL: "b"})).perform(ctx, parallel); err != nil || parallel.txs != 1 || !slices.Equal(slices.Sorted(slices.Values(parallel.ran)), []string{"tx a", "tx b"}) {
-		t.Errorf("a Parallel inside an Atomic = %v after %v in %d transactions; want both steps on the one transaction", err, parallel.ran, parallel.txs)
+	if _, err := Atomic(All(Exec{SQL: "a"}, Exec{SQL: "b"})).perform(ctx, parallel); err != nil || parallel.txs != 1 || !slices.Equal(parallel.ran, []string{"tx a", "tx b"}) {
+		t.Errorf("a Parallel inside an Atomic = %v after %v in %d transactions; want both steps in order on the one transaction", err, parallel.ran, parallel.txs)
 	}
 	if _, err := Atomic[int](nil).perform(ctx, x); !errors.Is(err, ErrNoEffect) {
 		t.Errorf("Atomic over no effect = %v; want ErrNoEffect", err)
@@ -279,6 +279,13 @@ func TestDescribeComposedEffects(t *testing.T) {
 	}
 	if got := Describe(Pure(7)); got != "pure 7" || Describe(Pure(8)) == got {
 		t.Errorf("Pure describes as %q; want its value", got)
+	}
+	n, m := 1, 1
+	if !Same(Pure(&n), Pure(&m)) || Same(Pure(&n), Pure(new(int))) || !Same(Tx(Pure([]*int{&n})), Tx(Pure([]*int{&m}))) {
+		t.Error("Same tells Pures apart by where their values point; want reflect.DeepEqual over the values")
+	}
+	if !Same(one, other) || Same(one, Atomic(one)) || !Same(nil, nil) || Same(nil, one) {
+		t.Error("Same disagrees with the descriptions it compares")
 	}
 	if got := Describe(Fail[int](errors.New("refused"))); got != "fail refused" || Describe(Fail[int](errors.New("other"))) == got {
 		t.Errorf("Fail describes as %q; want its error", got)
@@ -339,6 +346,45 @@ func TestNothingYieldsErrNoEffect(t *testing.T) {
 	}
 }
 
+// TestParallelInsideTransactionRunsInOrder proves what spec
+// §generated-query-surface says of the runner: inside a Transaction or
+// an Atomic a Parallel runs its steps in order on the one transaction,
+// the first error stopping it before the next step starts, nested
+// Parallels too, and a step's panic is raised as it is, on the
+// goroutine performing it.
+func TestParallelInsideTransactionRunsInOrder(t *testing.T) {
+	ctx := context.Background()
+	boom := errors.New("boom")
+	steps := func() []AnyEffect {
+		return []AnyEffect{Exec{SQL: "a"}, All(Exec{SQL: "b"}, Exec{SQL: "c"}), Exec{SQL: "d"}}
+	}
+	for name, e := range map[string]AnyEffect{
+		"a Transaction": Tx(All(steps()...)),
+		"an Atomic":     Atomic(All(steps()...)),
+		"a Then":        Atomic(Then(Exec{SQL: "a"}, func(int64) Effect[[]any] { return All(steps()[1:]...) })),
+	} {
+		x := joinExecutor{&fakeExecutor{affected: 1}}
+		if _, err := PerformAny(ctx, x, e); err != nil || !slices.Equal(x.ran, []string{"tx a", "tx b", "tx c", "tx d"}) {
+			t.Errorf("a Parallel inside %s = %v after %v; want every step in order", name, err, x.ran)
+		}
+	}
+	x := joinExecutor{&fakeExecutor{affected: 1}}
+	failing := []AnyEffect{Exec{SQL: "a"}, All(Exec{SQL: "b"}, Exec{Err: boom}, Exec{SQL: "c"}), Exec{SQL: "d"}}
+	if _, err := Atomic(All(failing...)).perform(ctx, x); !errors.Is(err, boom) || !slices.Equal(x.ran, []string{"tx a", "tx b"}) {
+		t.Errorf("a failing Parallel inside an Atomic = %v after %v; want the error with no step after it started", err, x.ran)
+	}
+	x = joinExecutor{&fakeExecutor{affected: 1}}
+	broken := Then(Exec{SQL: "a"}, func(int64) Effect[int64] { return Exec{SQL: fmt.Sprint(firstOf(nil))} })
+	raised := panicRecovered(func() { _, _ = PerformAny(ctx, x, Atomic(All(broken, Exec{SQL: "c"}))) })
+	if _, ok := raised.(runtime.Error); !ok || !slices.Equal(x.ran, []string{"tx a"}) {
+		t.Errorf("a panicking step of a Parallel inside an Atomic raised %T after %v; want the runtime error itself, no later step run", raised, x.ran)
+	}
+	pool := &fakeExecutor{affected: 1}
+	if _, err := All(Exec{SQL: "a"}, Exec{SQL: "b"}).perform(ctx, pool); err != nil || pool.txs != 0 || len(pool.ran) != 2 {
+		t.Errorf("a Parallel outside a transaction = %v after %v in %d transactions", err, pool.ran, pool.txs)
+	}
+}
+
 type waitExecutor struct{ *fakeExecutor }
 
 func (x waitExecutor) Exec(ctx context.Context, sql string, args []any) (int64, error) {
@@ -393,25 +439,27 @@ func TestParallelPanicRaisedOnTheCaller(t *testing.T) {
 	}
 }
 
-// TestEffectKindsDescribed holds the sealed set of effects to Describe,
-// the one switch that walks them (spec §generated-query-surface): every
-// type of the package that declares perform, the unexported method that
-// seals Effect, has a sample here, and each sample describes by its
-// kind, never by its Go type's name.
+// TestEffectKindsDescribed holds the sealed set of effects to its
+// samples (spec §generated-query-surface): every type of the package
+// that declares perform, the unexported method that seals Effect, has a
+// sample here, and each sample describes by its kind.
 func TestEffectKindsDescribed(t *testing.T) {
-	samples := map[string]AnyEffect{
-		"Query":        Query[int]{SQL: "q"},
-		"Lookup":       Lookup[int]{SQL: "l"},
-		"Write":        Write[int]{SQL: "w"},
-		"Exec":         Exec{SQL: "e"},
-		"With":         With[int, int, int, int]{Parent: Query[int]{SQL: "p"}, Child: "c"},
-		"Transaction":  Tx(Exec{SQL: "e"}),
-		"Parallel":     All(Exec{SQL: "e"}),
-		"thenEffect":   Then(Exec{SQL: "e"}, func(int64) Effect[int64] { return Exec{SQL: "f"} }),
-		"mapEffect":    Map(Exec{SQL: "e"}, func(n int64) int64 { return n }),
-		"atomicEffect": Atomic(Exec{SQL: "e"}),
-		"pureEffect":   Pure(7),
-		"failEffect":   Fail[int](errors.New("refused")),
+	samples := map[string]struct {
+		e    AnyEffect
+		want string
+	}{
+		"Query":        {Query[int]{SQL: "q"}, "query q []"},
+		"Lookup":       {Lookup[int]{SQL: "l"}, "lookup l []"},
+		"Write":        {Write[int]{SQL: "w"}, "write w []"},
+		"Exec":         {Exec{SQL: "e"}, "exec e []"},
+		"With":         {With[int, int, int, int]{Parent: Query[int]{SQL: "p"}, Child: "c"}, "with p []; children c []"},
+		"Transaction":  {Tx(Exec{SQL: "e"}), "tx(exec e [])"},
+		"Parallel":     {All(Exec{SQL: "e"}), "all(exec e [])"},
+		"thenEffect":   {Then(Exec{SQL: "e"}, func(int64) Effect[int64] { return Exec{SQL: "f"} }), "then(exec e [])"},
+		"mapEffect":    {Map(Exec{SQL: "e"}, func(n int64) int64 { return n }), "map(exec e [])"},
+		"atomicEffect": {Atomic(Exec{SQL: "e"}), "atomic(exec e [])"},
+		"pureEffect":   {Pure(7), "pure 7"},
+		"failEffect":   {Fail[int](errors.New("refused")), "fail refused"},
 	}
 	entries, err := os.ReadDir(".")
 	if err != nil {
@@ -446,9 +494,9 @@ func TestEffectKindsDescribed(t *testing.T) {
 	if want := slices.Sorted(maps.Keys(samples)); !slices.Equal(declared, want) {
 		t.Fatalf("the package declares the effects %v; the samples cover %v", declared, want)
 	}
-	for kind, e := range samples {
-		if got := Describe(e); got == fmt.Sprintf("%T", e) || strings.Contains(got, "%!") {
-			t.Errorf("%s describes as %q, its Go type", kind, got)
+	for kind, sample := range samples {
+		if got := Describe(sample.e); got != sample.want {
+			t.Errorf("%s describes as %q; want %q", kind, got, sample.want)
 		}
 	}
 }

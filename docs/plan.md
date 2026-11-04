@@ -77,7 +77,7 @@ Go idioms chosen, one per need, so the code stays uniform:
 | Immutable records | Structs with unexported fields, exported constructors, `With*` methods on value receivers. |
 | Copy on write | `slices.Clone` before appending to a slice that came from outside; never `append` to an argument. |
 | Optional values | `rt.Null[T]`; never a pointer in a public API. |
-| Effects | A small set of effect kinds in `nao/rt`, each implementing a sealed `Effect[T]` whose methods are unexported, so a type of another package can only embed a kind and then performs as it; the runner performs one through `rt.Perform`, `rt.Describe` is the one switch over the kinds, and a test holds the kinds to it. |
+| Effects | A small set of effect kinds in `nao/rt`, each implementing a sealed `Effect[T]` whose methods are unexported, so a type of another package can only embed a kind or an `Effect` and is then the effect it embeds; the runner performs one through `rt.Perform`, each kind describes itself for `rt.Describe` and `rt.Same`, and a test holds the kinds to their descriptions. |
 
 ### What Go cannot check, and how Volt closes it
 
@@ -103,7 +103,8 @@ hand-written code never holds one.
 4. **No package state, no goroutines in routes packages.** Vet flags a
    package-level `var` that is not a constant table, an assignment or `++`
    whose target resolves to a package-level object, an `init` function,
-   and a `go` statement.
+   and a `go` statement, and a `next` or `f` the runner calls that writes
+   a variable it captures, which an `rt.All` would run at once.
 5. **A determinism test, generated.** For every handler, a test helper
    calls it twice with the same inputs and compares the response values.
 6. **The pure path is the easy path.** Loads, bodies, the session, the
@@ -121,7 +122,7 @@ A goroutine is an effect, owned by whoever owns a lifetime:
 | Kind | Owner |
 |---|---|
 | Serving requests in parallel | `net/http`, one goroutine per request; pure handlers make it lock-free |
-| Parallel effects inside one request | the runner, through `rt.All(e1, e2, ...)` over `sync.WaitGroup.Go`, which joins every step and raises a step's panic again on the goroutine that performs it |
+| Parallel effects inside one request | the runner, through `rt.All(e1, e2, ...)` over `sync.WaitGroup.Go`, which joins every step and raises a step's panic again on the goroutine that performs it; inside a transaction the steps run in order on its one connection, so a failure never leaves a sibling writing outside it |
 | Work after the request | a job row written in the handler's transaction, run by the worker |
 | Periodic loops | `main`, through `volt.Every` |
 | Push to clients | the event broker; `volt.Publish` is an effect performed after commit |

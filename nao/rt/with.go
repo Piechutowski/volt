@@ -6,11 +6,10 @@ import "context"
 // reverse relation leads to (spec §selects-over-groups): two statements
 // in one transaction, so both read one snapshot, the children grouped
 // by key in memory, in parent order, and each parent built into R with
-// its children. Child is the child statement with one placeholder, the
-// JSON array of the parent keys; no child statement runs for no
-// parents, and a parent without children is built with an empty slice.
-// The result is an empty slice, never nil, unless the parent query has
-// no statement.
+// its children, an empty slice for none. Child is the child statement,
+// run only when there are parents, with one placeholder, the JSON array
+// of their keys; the result is an empty slice, never nil, unless the
+// parent query has no statement.
 type With[P, C any, K comparable, R any] struct {
 	Parent    Query[P]
 	Child     string
@@ -28,7 +27,7 @@ func (w With[P, C, K, R]) perform(ctx context.Context, x Executor) ([]R, error) 
 		return nil, nil
 	}
 	var out []R
-	err := x.Transaction(ctx, func(tx Executor) error {
+	err := txRun(ctx, x, func(tx Executor) error {
 		parents, err := w.Parent.perform(ctx, tx)
 		if err != nil {
 			return err
@@ -69,6 +68,7 @@ func (w With[P, C, K, R]) performAny(ctx context.Context, x Executor) (any, erro
 	return w.perform(ctx, x)
 }
 
-func (w With[P, C, K, R]) describe() string {
-	return describeStatement("with", w.Parent.SQL, w.Parent.Args, w.Parent.Err) + "; " + describeStatement("children", w.Child, nil, nil)
+func (w With[P, C, K, R]) describe() description {
+	parent := statementDescribe("with", w.Parent.SQL, w.Parent.Args, w.Parent.Err)
+	return description{text: parent.text + "; " + statementDescribe("children", w.Child, nil, nil).text}
 }

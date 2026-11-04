@@ -3,6 +3,7 @@ package itest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"strings"
 	"testing"
@@ -192,10 +193,13 @@ func TestNestedAtomicJoinsTheOuter(t *testing.T) {
 	}
 }
 
-// TestParallelInsideAtomic proves a Parallel inside an Atomic does what
-// it does inside a Transaction (spec §generated-query-surface): its
-// steps run on the one transaction, and the first error rolls back
-// every step's writes.
+// TestParallelInsideAtomic proves a Parallel inside an Atomic or a
+// Transaction runs its steps in order on the one transaction (spec
+// §generated-query-surface, the runner): every step's writes commit
+// together, and a step that fails among many rolls back every other
+// step's writes, round after round, where steps run at once on the one
+// connection let a sibling go on in autocommit after the failure
+// interrupted the transaction.
 func TestParallelInsideAtomic(t *testing.T) {
 	ctx := context.Background()
 	db := newDB(t)
@@ -203,10 +207,27 @@ func TestParallelInsideAtomic(t *testing.T) {
 	if err != nil || len(out) != 2 || tagsCount(t, db) != 2 {
 		t.Fatalf("a Parallel inside an Atomic = %v, %v; want both parents and their tags", out, err)
 	}
-	_, err = run.Run(ctx, db, rt.Atomic(rt.All(userTagsCreate("oli@example.com", "go"), userTagsCreate("pat@example.com", "go", "go"))))
-	invalidOf(t, err, "unique", "user_id", "tag")
-	if n := usersCount(t, db, "oli@example.com") + usersCount(t, db, "pat@example.com"); n != 0 || tagsCount(t, db) != 2 {
-		t.Errorf("a failed Parallel inside an Atomic left %d parents and %d tags; want 0 and the earlier 2", n, tagsCount(t, db))
+	seedUser(t, db, "taken@example.com")
+	for _, wrap := range []struct {
+		name string
+		e    func(...rt.AnyEffect) rt.AnyEffect
+	}{
+		{"an Atomic", func(steps ...rt.AnyEffect) rt.AnyEffect { return rt.Atomic(rt.All(steps...)) }},
+		{"a Transaction", func(steps ...rt.AnyEffect) rt.AnyEffect { return rt.Tx(rt.All(steps...)) }},
+	} {
+		for round := range 50 {
+			steps := make([]rt.AnyEffect, 16)
+			for i := range steps {
+				steps[i] = userTagsCreate(fmt.Sprintf("r%d-%d@example.com", round, i), "go", "sql")
+			}
+			steps[9] = userTagsCreate(fmt.Sprintf("r%d-dup@example.com", round), "go", "go")
+			steps[12] = UserCreate(UserNew().EmailSet("taken@example.com").NameSet("Dup"))
+			_, err := run.Perform(ctx, db, wrap.e(steps...))
+			invalidOf(t, err, "unique", "user_id", "tag")
+			if n, err := run.Run(ctx, db, UserCount()); err != nil || n != 3 || tagsCount(t, db) != 2 {
+				t.Fatalf("round %d: a failed Parallel inside %s left %d users and %d tags, %v; want the 3 and 2 from before", round, wrap.name, n, tagsCount(t, db), err)
+			}
+		}
 	}
 }
 
@@ -245,25 +266,26 @@ func TestAtomicFailRollsBackWhatItWrote(t *testing.T) {
 func firstOf(ids []int) int { return ids[0] }
 
 // TestParallelPanicInsideAtomic proves on SQLite what spec
-// §generated-query-surface says of a panic: a next that panics inside a Parallel inside
-// an Atomic raises its panic on the goroutine that performs the effect,
-// never ending the process, the transaction rolls back, and the one
-// connection is free for the next statement.
+// §generated-query-surface says of a panic: a next that panics inside a
+// Parallel inside an Atomic raises its panic on the goroutine that
+// performs the effect, never ending the process, the transaction rolls
+// back with every sibling's writes, and the one connection is free for
+// the next statement; outside a transaction the panic carries the
+// stack of the step's goroutine.
 func TestParallelPanicInsideAtomic(t *testing.T) {
 	ctx := context.Background()
 	db := newDB(t)
 	broken := rt.Then(UserCreate(UserNew().EmailSet("broken@example.com").NameSet("Bo")), func(u User) rt.Effect[User] {
 		return UserGet(firstOf(nil))
 	})
-	var raised any
-	func() {
-		defer func() { raised = recover() }()
-		_, _ = run.Run(ctx, db, rt.Atomic(rt.All(userTagsCreate("sibling@example.com", "go"), broken)))
-	}()
-	err, ok := raised.(error)
-	var re runtime.Error
-	if !ok || !errors.As(err, &re) || !strings.Contains(err.Error(), "itest.firstOf") {
-		t.Fatalf("a panicking next inside a Parallel raised %v; want the runtime error with its stack on this goroutine", raised)
+	steps := []rt.AnyEffect{userTagsCreate("sibling@example.com", "go")}
+	for i := range 8 {
+		steps = append(steps, userTagsCreate(fmt.Sprintf("s%d@example.com", i), "go", "sql"))
+	}
+	steps = append(steps[:4], append([]rt.AnyEffect{broken}, steps[4:]...)...)
+	raised := panicked(func() { _, _ = run.Run(ctx, db, rt.Atomic(rt.All(steps...))) })
+	if _, ok := raised.(runtime.Error); !ok {
+		t.Fatalf("a panicking next inside a Parallel inside an Atomic raised %v; want the runtime error itself on this goroutine", raised)
 	}
 	bounded, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -271,6 +293,18 @@ func TestParallelPanicInsideAtomic(t *testing.T) {
 	if err != nil || n != 0 || tagsCount(t, db) != 0 {
 		t.Errorf("after the panic the database holds %d users and %d tags, %v; want the transaction rolled back and the connection free", n, tagsCount(t, db), err)
 	}
+	reading := rt.Then(UserCount(), func(int64) rt.Effect[User] { return UserGet(firstOf(nil)) })
+	err, ok := panicked(func() { _, _ = run.Run(ctx, db, rt.All(UserCount(), reading)) }).(error)
+	var re runtime.Error
+	if !ok || !errors.As(err, &re) || !strings.Contains(err.Error(), "itest.firstOf") {
+		t.Errorf("a panicking next inside a Parallel outside a transaction raised %v; want the runtime error with its goroutine's stack", err)
+	}
+}
+
+func panicked(f func()) (v any) {
+	defer func() { v = recover() }()
+	f()
+	return nil
 }
 
 type rogue struct{ rt.Exec }
@@ -279,10 +313,18 @@ func (rogue) Perform(ctx context.Context, x rt.Executor) (int64, error) {
 	return x.Exec(ctx, "DELETE FROM users", nil)
 }
 
+type batch struct{ rt.Transaction }
+
+type fanout struct{ rt.Parallel }
+
+type wrapped struct{ rt.Effect[int64] }
+
 // TestEffectSealedAgainstEmbedding proves the seal of spec
 // §generated-query-surface: a type of another package that embeds an
-// effect kind and declares a Perform of its own performs, and
-// describes, as the kind it embeds, so it never holds the executor.
+// effect kind, a Transaction and a Parallel among them, or an Effect is
+// the effect it embeds, performing, describing and comparing as that
+// one, so a Perform of its own never holds the executor; one that
+// embeds a nil Effect panics, as a method of a nil interface does.
 func TestEffectSealedAgainstEmbedding(t *testing.T) {
 	ctx := context.Background()
 	db := newDB(t)
@@ -294,7 +336,30 @@ func TestEffectSealedAgainstEmbedding(t *testing.T) {
 	if n := usersCount(t, db, "stays@example.com"); n != 1 {
 		t.Errorf("%d users after the embedding type ran; want its own Perform never called", n)
 	}
-	if rt.Describe(e) != rt.Describe(e.Exec) {
-		t.Errorf("the embedding type describes as %q; want the Exec's %q", rt.Describe(e), rt.Describe(e.Exec))
+	touch := rt.Exec{SQL: "UPDATE users SET name = 'Ann' WHERE id = 1"}
+	drop := rt.Exec{SQL: "DELETE FROM users WHERE id = 0"}
+	for _, c := range []struct {
+		name              string
+		one, other, inner rt.AnyEffect
+	}{
+		{"an Exec", e, rogue{drop}, e.Exec},
+		{"a Transaction", batch{rt.Tx(touch)}, batch{rt.Tx(drop)}, rt.Tx(touch)},
+		{"a Parallel", fanout{rt.All(touch)}, fanout{rt.All(drop)}, rt.All(touch)},
+		{"an Effect", wrapped{touch}, wrapped{drop}, touch},
+	} {
+		if rt.Describe(c.one) != rt.Describe(c.inner) || !rt.Same(c.one, c.inner) || rt.Same(c.one, c.other) {
+			t.Errorf("a type embedding %s describes as %q beside %q; want it described and compared as the effect it embeds", c.name, rt.Describe(c.one), rt.Describe(c.other))
+		}
+	}
+	_, err := run.Run(ctx, db, batch{rt.Tx(UserCreate(UserNew().EmailSet("batch@example.com").NameSet("Bat")), UserCreate(UserNew().EmailSet("stays@example.com").NameSet("Dup")))})
+	invalidOf(t, err, "unique", "email")
+	if n := usersCount(t, db, "batch@example.com"); n != 0 {
+		t.Errorf("a type embedding a Transaction left %d rows of its failed steps; want it performed as the Transaction", n)
+	}
+	if n, err := run.Run(ctx, db, wrapped{UserCount()}); err != nil || n != 1 {
+		t.Errorf("a type embedding an Effect = %d, %v; want the count it embeds", n, err)
+	}
+	if panicked(func() { _, _ = run.Run(ctx, db, wrapped{}) }) == nil || panicked(func() { rt.Describe(wrapped{}) }) == nil {
+		t.Error("a type embedding a nil Effect performed or described; want the panic of a nil interface's method")
 	}
 }

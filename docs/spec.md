@@ -76,8 +76,8 @@ generated shim to perform; the vet rules of `lint.md` hold it to that.
 An effect that uses an earlier effect's result carries a function, the
 `next` of `rt.Then`, from a value to a description, or the `f` of
 `rt.Map`, from a value to a value (§generated-query-surface): that
-function is pure too, the runner calls it between the statements, and
-nothing performs inside it.
+function is pure too, the runner calls it between the statements,
+nothing performs inside it, and it writes no variable it captures.
 
 ---
 
@@ -2271,14 +2271,20 @@ func (r Response) Rescue(on func(error) Response) Response
    names the ones whose responses differ (`volt.Same`: the same status,
    headers, cookies and body, or continuations of the same effect;
    streams compare as the same). Functions cannot be compared, so a
-   continuation compares by its effect alone, never by `next`, and an
-   effect that wraps others by its kind and what it wraps: an `rt.Then`
-   by being a `Then` and by its first effect, never by the one its
-   `next` would make, and an `rt.Map` and an `rt.Atomic` by their kind
-   and their inner one, so an `Atomic` over `e`, a `Map` over `e` and
-   `e` itself are three effects; an `rt.Pure` compares by its value as
-   `%v` prints it and an `rt.Fail` by its error's message, as a
-   `Fail(err)` response does (§generated-query-surface). An
+   continuation compares by its effect alone, never by `next`, as
+   `rt.Same` compares two effects, and an effect that wraps others by
+   its kind and what it wraps: an `rt.Then` by being a `Then` and by
+   its first effect, never by the one its `next` would make, and an
+   `rt.Map` and an `rt.Atomic` by their kind and their inner one, so an
+   `Atomic` over `e`, a `Map` over `e` and `e` itself are three effects;
+   a statement compares by its kind, text and arguments as `%v` prints
+   them, an `rt.Pure` by its value as a done response's body does, with
+   `reflect.DeepEqual`, and an `rt.Fail` by its error's message, as a
+   `Fail(err)` response does (§generated-query-surface). The rule
+   compares spellings, not what they perform: two spellings of one
+   computation, a `Map` and a `Then` whose `next` returns an `rt.Pure`
+   among them, are two effects, which never misleads the check, since
+   a handler called twice spells its effect the same way both times. An
    application's test calls it with its controllers and asserts an
    empty list.
 6. **What keeps a handler pure** is the generated interface, which
@@ -2288,9 +2294,13 @@ func (r Response) Rescue(on func(error) Response) Response
    `net`, `os`, `os/exec` nor a random source (`handlerimports`), it
    reads no clock but `r.Now()` (`handlerclock`), a routes package holds
    no package state and starts no goroutine (`packagestate`,
-   `goroutine`), and every `Stream` is reported (`streamcount`). Not
-   caught: reflection, `unsafe`, cgo, and a package imported under
-   another name.
+   `goroutine`), a function the runner calls, the `next` of an
+   `rt.Then` and the `f` of an `rt.Map` or an `rt.ParallelMap`, writes
+   no variable it captures (`capturedwrite`), and every `Stream` is
+   reported (`streamcount`). Not caught: reflection, `unsafe`, cgo, a
+   package imported under another name, a call through a function
+   value, and a write such a function makes through a method or a
+   function it calls.
 
 ### Request bodies
 
@@ -4920,9 +4930,12 @@ and no context returns an **effect** of `nao/rt`, and the runner
 `nao/run` performs it. Nothing runs when the function is called.
 `Effect[T]` is sealed: every method it requires is unexported, so a
 type of another package satisfies it only by embedding one of the
-kinds below, and then performs and describes as that kind; the runner
-performs an effect through `rt.Perform` or `rt.PerformAny`, the only
-functions that hand an effect an executor.
+kinds below or an `Effect` itself, and is then the effect it embeds: it
+performs, describes and compares as that one, and one that embeds a
+nil `Effect` panics when it is performed or described, as a method of
+a nil interface does. The runner performs an effect through
+`rt.Perform` or `rt.PerformAny`, the only functions that hand an effect
+an executor.
 
 ```go
 // nao/rt: the effects. Effect[T] is sealed; these are all of them.
@@ -4932,7 +4945,7 @@ type Write[M any]  struct { SQL string; Args []any; Scan func(Row) (M, error); R
 type Exec          struct { SQL string; Args []any; Model string; One bool; Err error }    // rows affected
 type With[P, C any, K comparable, R any] struct { Parent Query[P]; Child string; ChildScan func(Row) (C, error); ParentKey func(P) K; ChildKey func(C) K; Build func(P, []C) R }  // parents with their children, []R
 func Tx(steps ...AnyEffect) Transaction   // all or nothing, results in order
-func All(steps ...AnyEffect) Parallel     // at once, first error cancels, results in order
+func All(steps ...AnyEffect) Parallel     // at once, in order inside a transaction, first error stops, results in order
 func Then[T, U any](e Effect[T], next func(T) Effect[U]) Effect[U]  // e, then the effect next makes of its result
 func Map[T, U any](e Effect[T], f func(T) U) Effect[U]              // f of e's result
 func Atomic[T any](e Effect[T]) Effect[T]                          // e and all it performs, all or nothing
@@ -4942,6 +4955,8 @@ var ErrNoEffect error                     // an effect built over nothing: a nil
 func Insert[M any](c Changeset[M]) Write[M]
 func Update[M any](c Changeset[M]) Write[M]
 func Perform[T any](ctx context.Context, x Executor, e Effect[T]) (T, error)  // e over the runner's executor
+func Describe(e AnyEffect) string         // its kinds, statements and values, for a person to read
+func Same(a, b AnyEffect) bool            // the same effect, as volt.Same compares continuations
 
 // nao/run: the one stateful object and the one performer.
 type DB struct { /* the pool, the statement cache, the logger */ }
@@ -5026,12 +5041,25 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    every step succeeded and rolls back on the first error or a panic, a
    `Transaction` inside one joins it; a `Parallel` runs its steps on
    their own goroutines and joins them, the first error cancelling the
-   rest; the context cancels any of them. A step of a `Parallel` that
-   panics cancels the rest as well, and once every step has joined its
-   panic is raised again, carrying the step's stack, on the goroutine
-   that performs the `Parallel`: it ends what a panic there would end,
-   the request alone, which `net/http` recovers, and never the process,
-   and the transaction it ran in rolls back. The runner writes one
+   rest, except inside a transaction, where it runs them in order on
+   that transaction and the first error stops it before the next step
+   starts; the context cancels any of them, and a transaction the
+   context ends, between two statements or before the commit, fails
+   with the context's error, which the shim answers with a 504 when the
+   route's timeout expired (§route-loads). Inside a transaction the
+   steps run in order because a transaction holds one connection,
+   which runs one statement at a time anyway, and because SQLite rolls
+   the whole transaction back when a write inside it is interrupted, as
+   a cancelled context interrupts it, or fails as a full disk does,
+   leaving the connection in autocommit: a step that went on beside it
+   would write outside the transaction, each statement committing on
+   its own. A step of a `Parallel` outside a transaction that panics
+   cancels the rest as well, and once every step has joined its panic
+   is raised again, carrying the step's stack, on the goroutine that
+   performs the `Parallel`: it ends what a panic there would end, the
+   request alone, which `net/http` recovers, and never the process.
+   Inside a transaction a step runs on that goroutine already, and the
+   transaction rolls back. The runner writes one
    structured log line per statement at debug level, with the text,
    the duration and the error, through the logger of `WithLogger`.
    `rt.Null[T]` marshals as the value or `null`.
@@ -5056,12 +5084,16 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    - `next` is a pure function from a value to a description and `f`
      one from a value to a value (§values-and-effects): the runner
      calls them between the statements, and nothing performs inside
-     them; in a handler's file the vet rules of `lint.md` hold them as
-     they hold the handler. Neither is called when the effect before it
-     fails. A panic inside either is the request's, as a handler's is:
-     `net/http` ends that request alone, inside a `Parallel` too,
-     which raises it again on the goroutine that performs it, and the
-     transaction it ran in rolls back.
+     them, and they write no variable they capture, which would make
+     the effect perform differently each time and, inside a `Parallel`
+     outside a transaction, race with itself; in a routes package the
+     vet rules of `lint.md` hold them as they hold the handler, and
+     `capturedwrite` reports a write to a captured variable. Neither is
+     called when the effect before it fails. A panic inside either is
+     the request's, as a handler's is: `net/http` ends that request
+     alone, inside a `Parallel` too, which raises it again on the
+     goroutine that performs it, and the transaction it ran in rolls
+     back.
    - A nil is never an effect: a nil `Effect` where one is performed,
      a `Transaction`'s or a `Parallel`'s step, the `e` of a `Then`, a
      `Map` or an `Atomic` and the effect a `next` returns among them, a
@@ -5078,10 +5110,17 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
      nested `Transaction` does: its failure rolls back the whole of the
      outer one, and what it wrote commits only when the outer one does.
    - A `Parallel` inside an `Atomic` does what it does inside a
-     `Transaction`: its steps run at once on the one transaction,
-     interleaving on its one connection, every step joining it, and the
-     first error cancels the rest and rolls back everything the
+     `Transaction` (rule 5): it runs its steps in order on the one
+     transaction, every step joining it, and the first error stops it
+     before the next step starts and rolls back everything the
      `Atomic` performed.
+   - `rt.Map(e, f)` performs what an `rt.Then` over `e` does whose
+     `next` returns `rt.Pure(f(v))`, and `rt.Fail(err)` what a kind
+     whose `Err` is set does: `Map` is the short spelling of the
+     common case, and `Fail` is the refusal a `next` of any result
+     returns without building a statement it never runs. `volt.Same`
+     compares spellings, so each pair is two effects there
+     (§requests-and-responses).
    - An error comes back as the step reported it, unwrapped, so a
      refused write is still the `*rt.Invalid` the error handler answers
      with 409 or 422, a miss still `rt.ErrNotFound`, a 404, and an

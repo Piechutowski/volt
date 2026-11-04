@@ -300,6 +300,13 @@ func TestResponseValues(t *testing.T) {
 	if !Same(Then(rt.Pure[int64](1), done), Then(rt.Pure[int64](1), done)) || Same(Then(rt.Pure[int64](1), done), Then(rt.Pure[int64](2), done)) {
 		t.Error("Same disagrees on a Pure: it compares by its value")
 	}
+	type counted struct{ N *int }
+	pointed := func(n int) Response {
+		return Then(rt.All(rt.Pure(counted{&n})), func([]any) Response { return NoContent() })
+	}
+	if !Same(pointed(1), pointed(1)) || Same(pointed(1), pointed(2)) {
+		t.Error("Same disagrees on a Pure holding a pointer: it compares the value with reflect.DeepEqual, as a done response's body")
+	}
 	if !Same(Then(rt.Fail[int64](errors.New("full")), done), Then(rt.Fail[int64](errors.New("full")), done)) || Same(Then(rt.Fail[int64](errors.New("full")), done), Then(rt.Fail[int64](errors.New("closed")), done)) {
 		t.Error("Same disagrees on a Fail: it compares by its error's message")
 	}

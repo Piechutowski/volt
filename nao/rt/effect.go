@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -46,21 +47,23 @@ type Executor interface {
 	Transaction(ctx context.Context, fn func(Executor) error) error
 }
 
-// Effect is a computation over the database described as a value and
-// performed by the runner (spec §values-and-effects): a Query, a
-// Lookup, a Write, an Exec, a With, a Transaction, an All, a Then, a
-// Map, an Atomic, a Pure or a Fail. Its methods are unexported, so the
-// set is sealed: a type of another package satisfies it only by
-// embedding one of these, and then performs as that one (spec
-// §generated-query-surface). T is what performing it yields.
+// Effect is a computation over the database that yields a T, described
+// as a value and performed by the runner (spec §values-and-effects): a
+// Query, a Lookup, a Write, an Exec, a With, a Transaction, an All, a
+// Then, a Map, an Atomic, a Pure or a Fail. Its methods are unexported,
+// so the set is sealed: a type of another package that embeds one of
+// these or an Effect is the effect it embeds (spec
+// §generated-query-surface).
 type Effect[T any] interface {
 	perform(ctx context.Context, x Executor) (T, error)
 	performAny(ctx context.Context, x Executor) (any, error)
+	describe() description
 }
 
 // AnyEffect is an Effect of any result, as Tx and All take them.
 type AnyEffect interface {
 	performAny(ctx context.Context, x Executor) (any, error)
+	describe() description
 }
 
 // Perform performs e over x and returns what it yields (spec
@@ -227,6 +230,24 @@ func (e Exec) perform(ctx context.Context, x Executor) (int64, error) {
 
 func (e Exec) performAny(ctx context.Context, x Executor) (any, error) { return e.perform(ctx, x) }
 
+type txExecutor struct{ Executor }
+
+func txRun(ctx context.Context, x Executor, fn func(Executor) error) error {
+	return x.Transaction(ctx, func(tx Executor) error { return fn(txExecutor{tx}) })
+}
+
+func stepsPerform(ctx context.Context, x Executor, steps []AnyEffect) ([]any, error) {
+	out := make([]any, len(steps))
+	for i, s := range steps {
+		v, err := s.performAny(ctx, x)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = v
+	}
+	return out, nil
+}
+
 // Transaction runs its steps in order inside one transaction, all or
 // nothing, and yields their results in order (spec
 // §generated-query-surface): the first error rolls back and is
@@ -243,16 +264,11 @@ func (t Transaction) perform(ctx context.Context, x Executor) ([]any, error) {
 	if slices.Contains(t.Steps, nil) {
 		return nil, ErrNoEffect
 	}
-	out := make([]any, len(t.Steps))
-	err := x.Transaction(ctx, func(tx Executor) error {
-		for i, s := range t.Steps {
-			v, err := s.performAny(ctx, tx)
-			if err != nil {
-				return err
-			}
-			out[i] = v
-		}
-		return nil
+	var out []any
+	err := txRun(ctx, x, func(tx Executor) error {
+		var err error
+		out, err = stepsPerform(ctx, tx, t.Steps)
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -265,12 +281,12 @@ func (t Transaction) performAny(ctx context.Context, x Executor) (any, error) {
 }
 
 // Parallel runs its steps at once, each on its own goroutine, joins
-// them and yields their results in order (spec
-// §generated-query-surface): the first error cancels the rest and is
-// returned. A step that panics cancels the rest too, and its panic is
-// raised again, with the step's stack, on the goroutine that performs
-// the Parallel once every step has joined, so it never ends the
-// process; a nil step yields ErrNoEffect before any step runs.
+// them and yields their results in order, the first error cancelling
+// the rest, and inside a transaction runs them in order on it, the
+// first error stopping it (spec §generated-query-surface). A panic of a
+// step outside a transaction cancels the rest and is raised again, with
+// the step's stack, on the goroutine that performs the Parallel once
+// every step has joined; a nil step yields ErrNoEffect before any runs.
 type Parallel struct {
 	Steps []AnyEffect
 }
@@ -281,6 +297,9 @@ func All(steps ...AnyEffect) Parallel { return Parallel{Steps: steps} }
 func (p Parallel) perform(ctx context.Context, x Executor) ([]any, error) {
 	if slices.Contains(p.Steps, nil) {
 		return nil, ErrNoEffect
+	}
+	if _, ok := x.(txExecutor); ok {
+		return stepsPerform(ctx, x, p.Steps)
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -429,7 +448,7 @@ func (a atomicEffect[T]) perform(ctx context.Context, x Executor) (T, error) {
 	if a.inner == nil {
 		return out, ErrNoEffect
 	}
-	err := x.Transaction(ctx, func(tx Executor) error {
+	err := txRun(ctx, x, func(tx Executor) error {
 		v, err := a.inner.perform(ctx, tx)
 		if err != nil {
 			return err
@@ -504,48 +523,71 @@ func ScanOne[T any](r Row) (T, error) {
 	return v, err
 }
 
-// Describe spells an effect for comparison and logs (spec
-// §requests-and-responses): its kind, statement and arguments, a
-// transaction's or a parallel's steps in order, an error it carries, a
-// Then by its kind and its first effect and a Map or an Atomic by its
-// kind and its inner one, since a function cannot be spelled, a Pure
-// by its value and a Fail by its error.
-func Describe(e AnyEffect) string {
-	switch e := e.(type) {
-	case describer:
-		return e.describe()
-	case Transaction:
-		return "tx(" + describeAll(e.Steps) + ")"
-	case Parallel:
-		return "all(" + describeAll(e.Steps) + ")"
-	}
-	return fmt.Sprintf("%T", e)
+// Describe spells an effect for a person, in a test's message among
+// others (spec §requests-and-responses): its kind, statement and
+// arguments, a composed effect's kind and the effects it holds, a
+// Then's first one alone, a Pure's value and the error it carries.
+func Describe(e AnyEffect) string { return effectDescribe(e).String() }
+
+// Same reports whether a and b are the same effect, as volt.Same
+// compares two continuations (spec §requests-and-responses): the same
+// kinds, statements, arguments and errors, as Describe spells them, and
+// the same Pure values, compared with reflect.DeepEqual.
+func Same(a, b AnyEffect) bool { return reflect.DeepEqual(effectDescribe(a), effectDescribe(b)) }
+
+type description struct {
+	text  string
+	value any
+	parts []description
 }
 
-type describer interface{ describe() string }
-
-func describeAll(steps []AnyEffect) string {
-	parts := make([]string, len(steps))
-	for i, s := range steps {
-		parts[i] = Describe(s)
+func (d description) String() string {
+	switch {
+	case d.parts != nil:
+		parts := make([]string, len(d.parts))
+		for i, p := range d.parts {
+			parts[i] = p.String()
+		}
+		return d.text + "(" + strings.Join(parts, "; ") + ")"
+	case d.text == "pure":
+		return fmt.Sprintf("pure %v", d.value)
 	}
-	return strings.Join(parts, "; ")
+	return d.text
 }
 
-func describeStatement(kind, sql string, args []any, err error) string {
+func effectDescribe(e AnyEffect) description {
+	if e == nil {
+		return description{text: "<nil>"}
+	}
+	return e.describe()
+}
+
+func effectsDescribe(text string, effects ...AnyEffect) description {
+	parts := make([]description, len(effects))
+	for i, e := range effects {
+		parts[i] = effectDescribe(e)
+	}
+	return description{text: text, parts: parts}
+}
+
+func statementDescribe(kind, sql string, args []any, err error) description {
 	if err != nil {
-		return kind + " error: " + err.Error()
+		return description{text: kind + " error: " + err.Error()}
 	}
-	return fmt.Sprintf("%s %s %v", kind, sql, args)
+	return description{text: fmt.Sprintf("%s %s %v", kind, sql, args)}
 }
 
-func (q Query[T]) describe() string  { return describeStatement("query", q.SQL, q.Args, q.Err) }
-func (l Lookup[T]) describe() string { return describeStatement("lookup", l.SQL, l.Args, l.Err) }
-func (w Write[M]) describe() string  { return describeStatement("write", w.SQL, w.Args, w.Err) }
-func (e Exec) describe() string      { return describeStatement("exec", e.SQL, e.Args, e.Err) }
+func (q Query[T]) describe() description    { return statementDescribe("query", q.SQL, q.Args, q.Err) }
+func (l Lookup[T]) describe() description   { return statementDescribe("lookup", l.SQL, l.Args, l.Err) }
+func (w Write[M]) describe() description    { return statementDescribe("write", w.SQL, w.Args, w.Err) }
+func (e Exec) describe() description        { return statementDescribe("exec", e.SQL, e.Args, e.Err) }
+func (t Transaction) describe() description { return effectsDescribe("tx", t.Steps...) }
+func (p Parallel) describe() description    { return effectsDescribe("all", p.Steps...) }
 
-func (t thenEffect[T, U]) describe() string { return "then(" + Describe(t.first) + ")" }
-func (m mapEffect[T, U]) describe() string  { return "map(" + Describe(m.inner) + ")" }
-func (a atomicEffect[T]) describe() string  { return "atomic(" + Describe(a.inner) + ")" }
-func (p pureEffect[T]) describe() string    { return fmt.Sprintf("pure %v", p.v) }
-func (f failEffect[T]) describe() string    { return fmt.Sprintf("fail %v", f.err) }
+func (t thenEffect[T, U]) describe() description { return effectsDescribe("then", t.first) }
+func (m mapEffect[T, U]) describe() description  { return effectsDescribe("map", m.inner) }
+func (a atomicEffect[T]) describe() description  { return effectsDescribe("atomic", a.inner) }
+func (p pureEffect[T]) describe() description    { return description{text: "pure", value: p.v} }
+func (f failEffect[T]) describe() description {
+	return description{text: fmt.Sprintf("fail %v", f.err)}
+}

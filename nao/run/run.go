@@ -127,7 +127,7 @@ func (x poolExecutor) Exec(ctx context.Context, query string, args []any) (int64
 	return res.RowsAffected()
 }
 
-func (x poolExecutor) Transaction(ctx context.Context, fn func(rt.Executor) error) (err error) {
+func (x poolExecutor) Transaction(ctx context.Context, fn func(rt.Executor) error) error {
 	tx, err := x.db.pool.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -138,11 +138,15 @@ func (x poolExecutor) Transaction(ctx context.Context, fn func(rt.Executor) erro
 			_ = tx.Rollback()
 		}
 	}()
-	if err := fn(txExecutor{db: x.db, tx: tx}); err != nil {
-		return err
+	err = fn(txExecutor{db: x.db, tx: tx})
+	if err == nil {
+		done = true
+		err = tx.Commit()
 	}
-	done = true
-	return tx.Commit()
+	if errors.Is(err, sql.ErrTxDone) && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return err
 }
 
 type txExecutor struct {
