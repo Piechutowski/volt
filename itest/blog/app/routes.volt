@@ -34,6 +34,11 @@ scope / [pipe: api, error_handler: Errors] {
 		user db.UserGet(id)
 	}
 	get /users/:id(int)/card    Users.Card    [name: card]
+	get /users/:id(int)/peers/:n(int) Users.Peers [name: peers] {
+		user  db.UserGet(id)
+		peers db.UserLatest(n)
+		more  db.UserLatest(count)
+	}
 	patch /users/:id(int)/email Users.ChangeEmail [name: change_email, body: db.UserUpdate(id), only: (email)]
 	post  /login                Session.Login     [name: login, body: LoginForm]
 	get /files/:path...          Files.Serve

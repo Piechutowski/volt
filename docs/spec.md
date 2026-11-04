@@ -1868,8 +1868,8 @@ both.
 3. **The rule.** The network layer may use the data layer, never the
    reverse. The route files call a data package's queries and
    changesets, and the root `volt` package reads the data runtime's
-   errors, a refused write, a row miss and a refused limit, to choose
-   its status (§formats). No data file and no
+   errors, a refused write and a row miss, to choose its status
+   (§formats). No data file and no
    package under `nao/` reaches the root `volt` package, the route
    generator `gen/router`, the generation driver `gen/model`, the
    language server or the tool, and `nao/rt` imports the standard
@@ -2389,7 +2389,11 @@ parameters, so the handler reads them and never asks for them.
    A literal binds as itself and MUST spell the parameter's Go type: a
    string literal a `string`, a number an `int` when it is whole and
    a `float64` otherwise, `true` or `false` a `bool`; a type the
-   query string cannot carry takes a literal or nothing.
+   query string cannot carry takes a literal or nothing. A select's
+   `limit:` parameter (§selects-over-groups) takes a value of at least
+   1: a literal below 1 is an error, since every request would be
+   refused, and a value from the path or the query string below 1 is a
+   400 naming the key, before any load runs.
 3. **Order and the shim.** Loads run in declaration order before the
    handler, each a continuation of the shim (§requests-and-responses),
    and every argument is bound before the first runs. The handler's
@@ -2566,8 +2570,8 @@ scope /api [pipe: api] {
      names the parameter.
    A select's `limit:` parameter (§selects-over-groups) is an `int`
    and binds as one, from a path parameter of its name or the query
-   string; a value below 1 is refused by the query itself, a 400
-   (§formats).
+   string; a value below 1 is a 400 that names the parameter, before
+   the query runs, since SQLite reads a negative limit as none.
    A parameter binds from the query string only when its type is
    `string`, `bool`, `int`, `float64` or `time.Time`, or a slice of one
    of those (a list parameter); a select with a parameter of any other
@@ -2660,9 +2664,9 @@ for a format suffix.
    (§data-and-network-layers): an `HTTPError` keeps its own; a refused
    write, the data runtime's `*rt.Invalid` (§changesets), is 409 when a
    `unique` field error is among its fields and 422 otherwise; a query's
-   row miss is 404; a select's limit below 1 (`rt.ErrLimit`,
-   §selects-over-groups) is 400; any other error has none and is the
-   default handler's 500. A rendered value is encoded before anything is
+   row miss is 404; any other error has none and is the default
+   handler's 500, `rt.ErrLimit` among them, a limit below 1 the
+   application computed (§selects-over-groups). A rendered value is encoded before anything is
    written, and the response carries its `Content-Length`. A 406, and
    a value the negotiated format cannot carry, such as an infinite
    float in JSON, or whose encoder panics, are failures like any
@@ -3320,7 +3324,8 @@ pred chosen  { org in :orgs }
      type across the whole use site (a list and a scalar use of the
      same name disagree), or the later use is an error naming both
      types. A parameter name MUST be an ASCII Go identifier that is
-     neither a Go keyword, nor a name the generated signatures use
+     neither a Go keyword, nor `_`, the blank identifier, which no
+     generated expression can read, nor a name the generated signatures use
      (`ctx`, `q`, `rt`, `w`, `r`, `opts`, `volt`, `cs`, `c`), nor `nil`,
      `append`, `any` or `true`, the predeclared names a generated
      function uses, and
@@ -3470,7 +3475,7 @@ select hourly  (metric_id, ts / 3600 * 3600 as hour, avg(value) as mean, count()
 select totals  (count() as n, max(value) as top) for points
 select board   for metrics with points where unit = :unit [order: (name asc)]
 select latest  for points where ts >= :since [order: (ts desc, id desc), limit: :limit]
-select peaks   (metric_id, max(value) as peak) for points [group: (metric_id), order: (peak desc), limit: 10]
+select peaks   (metric_id, max(value) as peak) for points [group: (metric_id), order: (peak desc, metric_id asc), limit: 10]
 ```
 
 The clauses read in SQL order — name, columns, source, filter — and
@@ -3661,13 +3666,30 @@ the optional projection narrows the emitted columns.
     the select; it joins the select's parameters after every
     parameter the projection, the `where` clause and the other
     settings read, so the signature ends with it: `func
-    PointLatest(since int, limit int) rt.Query[Point]`. Each of these
-    is an error: `limit:` without `order:`, since the rows kept would
-    be arbitrary; a literal below 1, since `LIMIT 0` keeps nothing and
-    SQLite reads a negative limit as none, a literal that does not fit
-    `int64`, and any other value; `limit:` on a select that yields one
-    row (rule 10),
-    which has nothing to cap; and a second `limit:`. The statement
+    PointLatest(since int, limit int) rt.Query[Point]`. The order
+    MUST be **total**, so the rows kept are the same whatever plan
+    SQLite picks, an index added or not: it names a key no two rows
+    share. A table's key is every column of its primary key, a column
+    declared `unique`, or the columns of a unique index over columns
+    alone without `where:` (§indexes), none of them `null`, since
+    NULLs repeat under `unique`. Without `group:` a row is a row of
+    the `for` table, so the order names a key of it, of every member
+    of a group, as its own columns, and a joined relation of many
+    rows, a reverse relation (§relationships-ref), repeats that row
+    for each of its own, so the order names a key of that relation's
+    table too, qualified (`comments.id`). With `group:` a row is a
+    group, so the order names every `group:` item, or a key of the
+    `for` table that `group:` holds as its own columns when no `group:`
+    item reaches a relation of many rows, one group then being one row
+    of the table. The key may stand anywhere in the list, and a table
+    with no key takes no `limit:`. Each of
+    these is an error: `limit:` without `order:`, or over an order
+    that leaves ties (`order: (value desc)` alone), since the rows kept
+    at the cut would be arbitrary; a literal below 1, since `LIMIT 0`
+    keeps nothing and SQLite reads a negative limit as none, a literal
+    that does not fit `int64`, and any other value; and `limit:` on a
+    select that yields one row (rule 10), which has nothing to cap. A
+    second `limit:` is the repeated setting of §settings-lists. The statement
     ends in `LIMIT ?` after `ORDER BY`, the literal or the parameter
     bound behind it (§predicates, rendering): each member's statement
     of a group takes it, after `GROUP BY` it counts groups, and under
@@ -3676,10 +3698,13 @@ the optional projection narrows the emitted columns.
     function's effect carry `rt.ErrLimit` in `Err` (`Parent.Err` under
     `with`), which the runner returns without running a statement
     (§generated-query-surface): SQLite reads `LIMIT -1` as no limit at
-    all and would return every row. The error spine answers
-    `rt.ErrLimit` with 400 (§formats). A query route binds the
-    parameter like any other (§query-routes), and the generated client
-    method takes it (§generated-client).
+    all and would return every row. A value from a request never gets
+    that far: a query route and a route load refuse one below 1 where
+    they bind it, a 400 naming the key (§query-routes, §route-loads),
+    and a load's literal below 1 is an error (§route-loads), so an
+    `rt.ErrLimit` that reaches the error spine is a value the
+    application computed, and its 500 (§formats). The generated client
+    method takes the parameter (§generated-client).
 
 ---
 
@@ -4927,12 +4952,13 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    `rt.ArgsBound`, which binds a `time.Time` as its stored form
    (§go-types); `GetMany` and the dynamic
    layer render when the function is called, so a rendering that
-   fails (an `After` without an `OrderBy`) is a value carrying its
-   error in `Err`, which the runner returns without running a
-   statement. A select whose `limit:` parameter is below 1 carries
-   `rt.ErrLimit` the same way: its function sets `Err` to
-   `rt.LimitCheck(n)`, nil for an `n` of at least 1
-   (§selects-over-groups). `Create` and `Update` render from the changeset's marks
+   fails (an `After` without an `OrderBy`, a `Limit` below 1, which
+   fails with `rt.ErrLimit`) is a value carrying its error in `Err`,
+   which the runner returns without running a statement. A select
+   whose `limit:` parameter is below 1 carries `rt.ErrLimit` the same
+   way: its function sets `Err` to `rt.LimitCheck(n)`, nil for an `n`
+   of at least 1 (§selects-over-groups), so a limit below 1 has one
+   meaning on both paths and never reaches SQLite. `Create` and `Update` render from the changeset's marks
    and end in `RETURNING` (§changesets). The runner maps a database
    refusal of a `Write` or a keyed `Delete` onto `*rt.Invalid`;
    `DeleteWhere` and `UpdateWhere` yield the driver's error.

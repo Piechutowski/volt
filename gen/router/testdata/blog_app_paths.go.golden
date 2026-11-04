@@ -18,6 +18,10 @@ func PathAdminStats(opts ...volt.URLOption) string {
 	return volt.URL("/admin/stats", opts...)
 }
 
+func PathAdminTop(n int, opts ...volt.URLOption) string {
+	return volt.URL("/admin/top/"+volt.SegInt(n), opts...)
+}
+
 func PathUsers(opts ...volt.URLOption) string {
 	return volt.URL("/users", opts...)
 }

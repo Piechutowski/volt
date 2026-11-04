@@ -10,6 +10,7 @@ var Table = []volt.Route{
 	{Method: "GET", Pattern: "/{$}", Spelled: "/", Controller: "Home", Action: "Index", Helper: "PathRoot"},
 	{Method: "GET", Pattern: "/about", Spelled: "/about", Controller: "Home", Action: "About", Helper: "PathAbout"},
 	{Method: "GET", Pattern: "/admin/stats", Spelled: "/admin/stats", Controller: "Admin", Action: "Stats", Helper: "PathAdminStats"},
+	{Method: "GET", Pattern: "/admin/top/{n}", Spelled: "/admin/top/:n(int)", Controller: "Admin", Action: "Top", Helper: "PathAdminTop", Params: []volt.RouteParam{{Name: "n", Type: "int"}}},
 	{Method: "GET", Pattern: "/users", Spelled: "/users", Controller: "Users", Action: "Index", Helper: "PathUsers"},
 	{Method: "POST", Pattern: "/users", Spelled: "/users", Controller: "Users", Action: "Create"},
 	{Method: "GET", Pattern: "/users/{id}", Spelled: "/users/:id(int)", Controller: "Users", Action: "Show", Helper: "PathUser", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},

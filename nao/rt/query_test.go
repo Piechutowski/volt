@@ -171,6 +171,23 @@ func TestSelectRenderLimitVal(t *testing.T) {
 	}
 }
 
+// The dynamic layer's Limit below 1 is a rendering that fails with
+// ErrLimit (spec §generated-query-surface), as a select's limit: parameter
+// below 1 is, so LIMIT -1 never reaches SQLite as no limit at all.
+func TestSelectRenderLimitBelowOne(t *testing.T) {
+	for _, n := range []int{0, -1} {
+		query, args, err := SelectRender(`"users"`, `"id"`, []Opt[m]{OrderBy(id.Asc()), Limit[m](n)})
+		if !errors.Is(err, ErrLimit) || query != "" || args != nil {
+			t.Errorf("Limit(%d) = %q, %v, %v; want ErrLimit and no statement", n, query, args, err)
+		}
+	}
+	query, args := selectRender(t, Limit[m](1))
+	if want := `SELECT "id", "email", "bio" FROM "users" LIMIT ?`; query != want {
+		t.Errorf("Limit(1) = %q, want %q", query, want)
+	}
+	argsCheck(t, args, 1)
+}
+
 func TestSelectRenderOffsetWithoutLimit(t *testing.T) {
 	query, args := selectRender(t, Offset[m](5))
 	if want := `SELECT "id", "email", "bio" FROM "users" LIMIT -1 OFFSET ?`; query != want {

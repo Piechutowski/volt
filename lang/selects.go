@@ -364,6 +364,7 @@ type selectLowering struct {
 	adds    []nameAdd
 	diags   []diag.Diagnostic
 	unknown []string
+	ordered map[string]map[string]bool // the names order: lists, by qualifier, "" for the target's own and the aliases
 }
 
 func (l *selectLowering) errorf(pos token.Position, format string, args ...any) {
@@ -692,8 +693,12 @@ func (l *selectLowering) check() *SelectInfo {
 			return nil
 		}
 	}
-	if si.Limit != "" && sel.Settings.Get("order") == nil {
-		l.errorf(sel.Settings.Get("limit").Pos(), "select %q takes limit: without order:, so the rows it keeps would be arbitrary; order them, [order: (...), limit: ...] (§selects-over-groups)", sel.Name.Name())
+	if si.Limit != "" {
+		if sel.Settings.Get("order") == nil {
+			l.errorf(sel.Settings.Get("limit").Pos(), "select %q takes limit: without order:, so the rows it keeps would be arbitrary; order them, [order: (...), limit: ...] (§selects-over-groups)", sel.Name.Name())
+		} else {
+			l.limitOrderTotal()
+		}
 	}
 	if len(l.unknown) > 0 {
 		si.Unresolved = true
@@ -1329,8 +1334,7 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 	}
 	var terms []rt.GenOrder
 	var limitParam *ast.Param
-	var limitSeen bool
-	repeated, dupDiags := settingsRepeated(sel.Settings, "order", "group")
+	repeated, dupDiags := settingsRepeated(sel.Settings, "order", "group", "limit")
 	l.diags = append(l.diags, dupDiags...)
 	for _, s := range sel.Settings.Settings {
 		if repeated[s] {
@@ -1338,11 +1342,6 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 		}
 		switch s.Name {
 		case "limit":
-			if limitSeen {
-				l.errorf(s.Pos(), "select %q takes limit: twice; a select keeps one count of rows (§selects-over-groups)", sel.Name.Name())
-				continue
-			}
-			limitSeen = true
 			limitParam = l.limitSetting(s)
 		case "group":
 			l.groupSetting(env, s)
@@ -1371,6 +1370,7 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 					continue
 				}
 				seenOrder[name] = true
+				l.orderedNote(cr)
 				if b != nil && b.class == classEqOnly {
 					l.errorf(id.Pos(), "column %q has declared type %s; a declared type cannot be ordered (§selects-over-groups)", b.name, b.goType)
 					continue
@@ -1411,6 +1411,113 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 		}
 	}
 	return terms
+}
+
+// orderedNote records a name order: lists under its qualifier, the
+// relation joined or "" for the target's own columns and the aliases.
+func (l *selectLowering) orderedNote(cr *ast.ColRef) {
+	qual := ""
+	if cr.Qual != nil {
+		qual = cr.Qual.Name()
+	}
+	if l.ordered == nil {
+		l.ordered = map[string]map[string]bool{}
+	}
+	if l.ordered[qual] == nil {
+		l.ordered[qual] = map[string]bool{}
+	}
+	l.ordered[qual][cr.Name.Name()] = true
+}
+
+// limitOrderTotal reports an order: that leaves ties under a limit:
+// (spec §selects-over-groups). Without group: a row is a row of each
+// member and of each joined relation of many rows, so the order names a
+// key of each; with group: a row is a group, so the order names every
+// group: item, or a key of the target that group: holds when no item
+// reaches a relation of many rows.
+func (l *selectLowering) limitOrderTotal() {
+	sel, at := l.sel, l.sel.Settings.Get("limit").Pos()
+	var many []int
+	for i := range sel.Joins {
+		if rel := l.joins[i].rel; rel != nil && !rel.Forward {
+			many = append(many, i)
+		}
+	}
+	own := l.ordered[""]
+	if l.si.Group != nil {
+		if l.groupKeyed(many) {
+			return
+		}
+		for _, item := range sel.Items {
+			if item.Agg == nil && !own[item.Name()] {
+				l.errorf(at, "select %q takes limit: over an order that leaves ties: order: does not name the group: item %q, so two groups can tie and the ones kept at the cut would be arbitrary; name every group: item in order:, or a key of the target that group: holds (§selects-over-groups)", sel.Name.Name(), item.Name())
+				return
+			}
+		}
+		return
+	}
+	for _, ti := range l.members {
+		if !ti.ColumnsKeyed(own) {
+			l.errorf(at, "select %q takes limit: over an order that leaves ties: order: names no key of %s, so two rows can tie and the ones kept at the cut would be arbitrary; %s (§selects-over-groups)", sel.Name.Name(), ti.Decl.Name.Name(), keyHint(ti, ""))
+			return
+		}
+	}
+	for _, i := range many {
+		name, ti := sel.Joins[i].Name(), l.joins[i].rel.Table
+		if !ti.ColumnsKeyed(l.ordered[name]) {
+			l.errorf(at, "select %q takes limit: over an order that leaves ties: the join of %q repeats a row of %s for each of its rows, and order: names no key of %s, so two rows can tie and the ones kept at the cut would be arbitrary; %s (§selects-over-groups)", sel.Name.Name(), name, l.members[0].Decl.Name.Name(), ti.Decl.Name.Name(), keyHint(ti, name+"."))
+			return
+		}
+	}
+}
+
+// groupKeyed reports whether a grouped select's order names a key of
+// every member that group: holds as plain columns, while no group: item
+// reaches a joined relation of many rows (spec §selects-over-groups): one
+// group is then one row of the target.
+func (l *selectLowering) groupKeyed(many []int) bool {
+	sel := l.sel
+	reverse := map[string]bool{}
+	for _, i := range many {
+		reverse[sel.Joins[i].Name()] = true
+	}
+	held := map[string]bool{}
+	for _, item := range sel.Items {
+		if item.Agg != nil {
+			continue
+		}
+		if item.Expr != nil {
+			for _, cr := range arithCols(item.Expr, nil) {
+				if cr.Qual != nil && reverse[cr.Qual.Name()] {
+					return false
+				}
+			}
+			continue
+		}
+		if item.Col.Qual == nil && l.ordered[""][item.Col.Name.Name()] {
+			held[item.Col.Name.Name()] = true
+		}
+	}
+	for _, ti := range l.members {
+		if !ti.ColumnsKeyed(held) {
+			return false
+		}
+	}
+	return true
+}
+
+// keyHint suggests the primary key to end an order with, qualified by
+// prefix for a joined relation (spec §selects-over-groups).
+func keyHint(ti *check.TableInfo, prefix string) string {
+	pk := ti.PK()
+	if len(pk) == 0 {
+		return "a table without a primary key or a unique column that is never NULL takes no limit:"
+	}
+	names := make([]string, len(pk))
+	for i, cd := range pk {
+		names[i] = prefix + cd.Col.Name.Name() + " asc"
+	}
+	return "end it in the primary key, (..., " + strings.Join(names, ", ") + ")"
 }
 
 // limitSetting reads a select's limit: (spec §selects-over-groups): a
@@ -1723,7 +1830,7 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 		return name
 	}
 	if !goParamOK(name) {
-		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)", name)
+		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)", name)
 		return name
 	}
 	sp := SelectParam{GoName: name, GoType: goType}
@@ -1733,7 +1840,7 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 }
 
 func goParamOK(name string) bool {
-	if name == "" || goKeywords[name] || naming.RouteSignatureName(name) || naming.BodyBuiltin(name) || selectMethodNames[name] || naming.LocalName(name) {
+	if name == "" || name == "_" || goKeywords[name] || naming.RouteSignatureName(name) || naming.BodyBuiltin(name) || selectMethodNames[name] || naming.LocalName(name) {
 		return false
 	}
 	return goIdentOK(name)

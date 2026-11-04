@@ -2,7 +2,8 @@
 // the first rows in its order on a real SQLite, a literal on every member
 // of a group, a parameter after a grouping and on the parents of a
 // nesting, and a parameter below 1 is refused before any statement runs,
-// since SQLite reads a negative LIMIT as no limit at all.
+// as the dynamic layer's Limit below 1 is, since SQLite reads a negative
+// LIMIT as no limit at all.
 package itest
 
 import (
@@ -82,6 +83,28 @@ func TestSelectLimitKeepsTheFirstRowsInOrder(t *testing.T) {
 	}
 	if got, want := pageViewIDs(all), []int{pv[1].ID, pv[3].ID, pv[6].ID, pv[0].ID, pv[4].ID}; !slices.Equal(got, want) {
 		t.Fatalf("a limit above the row count = ids %v, want every alpha row in order %v", got, want)
+	}
+}
+
+// The checker takes limit: only over a total order (spec
+// §selects-over-groups), so the rows kept at the cut do not depend on the
+// plan: two alpha rows tie at 9 hits, and the order's id breaks the tie
+// the same way before an index on hits and after it.
+func TestSelectLimitTotalOrderSurvivesAnIndex(t *testing.T) {
+	db := newDB(t)
+	pv := seedHits(t, db)
+	ctx := context.Background()
+
+	for _, step := range []string{"", "CREATE INDEX ix_page_views_hits ON page_views (hits)"} {
+		if step != "" {
+			if _, err := db.Pool().Exec(step); err != nil {
+				t.Fatal(err)
+			}
+		}
+		one, err := run.Run(ctx, db, PageViewTopHits("alpha", 1))
+		if err != nil || len(one) != 1 || one[0].ID != pv[1].ID {
+			t.Fatalf("top 1 of alpha (%q) = %+v, %v; want id %d, the lower id of the two rows with 9 hits", step, one, err, pv[1].ID)
+		}
 	}
 }
 
@@ -165,6 +188,10 @@ func TestSelectLimitBelowOneRunsNoStatement(t *testing.T) {
 		users, err := run.Run(ctx, db, UserNewest(limit))
 		if !errors.Is(err, rt.ErrLimit) || users != nil {
 			t.Errorf("UserNewest(%d) = %v, %v; want rt.ErrLimit and no rows", limit, users, err)
+		}
+		dyn, err := run.Run(ctx, db, PageViewQuery(PageViewOrderBy(PageViewID.Asc()), PageViewLimit(limit)))
+		if !errors.Is(err, rt.ErrLimit) || dyn != nil {
+			t.Errorf("PageViewQuery with PageViewLimit(%d) = %v, %v; want rt.ErrLimit and no rows, as limit: refuses it (§generated-query-surface)", limit, dyn, err)
 		}
 		if ran := n.Load() - before; ran != 0 {
 			t.Errorf("a limit of %d ran %d statements; want none", limit, ran)

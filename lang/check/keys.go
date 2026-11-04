@@ -132,6 +132,43 @@ func (t *TableInfo) ColumnsUnique(names []string) bool {
 	return false
 }
 
+// ColumnsKeyed reports whether the named columns include a key no two
+// rows share (spec §selects-over-groups): every column of the primary
+// key, or of a unique key ColumnsUnique accepts whose columns are never
+// NULL, since a unique column or index lets NULLs repeat.
+func (t *TableInfo) ColumnsKeyed(names map[string]bool) bool {
+	within := func(key []string) bool {
+		for _, n := range key {
+			cd := t.Column(n)
+			if !names[n] || cd == nil || cd.Nullable {
+				return false
+			}
+		}
+		return len(key) > 0
+	}
+	var pk []string
+	for _, cd := range t.PK() {
+		pk = append(pk, cd.Col.Name.Name())
+	}
+	if within(pk) {
+		return true
+	}
+	for _, cd := range t.Columns {
+		if cd.Col.Settings.Get("unique") != nil && within([]string{cd.Col.Name.Name()}) {
+			return true
+		}
+	}
+	for _, ix := range t.Indexes {
+		if ix.Settings.Get("unique") == nil || ix.Settings.Get("where") != nil {
+			continue
+		}
+		if key, ok := indexColumns(ix); ok && within(key) {
+			return true
+		}
+	}
+	return false
+}
+
 func sameNames(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

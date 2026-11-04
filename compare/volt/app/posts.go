@@ -165,8 +165,9 @@ func (Posts) Audit(r volt.Request, ms []db.Member, id int, p db.Post, trail []db
 }
 
 // Feed pages the published posts newest first, after a cursor and
-// optionally with a tag. A select has no limit, so every post after the
-// cursor is read and the page cut here.
+// optionally with a tag. It predates a select's limit: (spec
+// §selects-over-groups), so every post after the cursor is read and the
+// page cut here until docs/plan.md step 20 rewrites it.
 func (Posts) Feed(r volt.Request, ms []db.Member) volt.Response {
 	if _, ok := memberOf(ms); !ok {
 		return unauthorized()

@@ -256,7 +256,8 @@ func (stub) Serve(r volt.Request, path string) volt.Response { return volt.NoCon
 func (stub) Show(r volt.Request, id int) volt.Response { return volt.NoContent() }
 func (stub) Create(r volt.Request) volt.Response { return volt.NoContent() }
 func (stub) Avatar(r volt.Request, id int) volt.Response { return volt.NoContent() }
-func (stub) Profile(r volt.Request, id int, user db.User, picked, since []db.User) volt.Response {
+func (stub) Top(r volt.Request, n int, top []db.User) volt.Response { return volt.NoContent() }
+func (stub) Profile(r volt.Request, id int, user db.User, picked, since, recent []db.User) volt.Response {
 	return volt.NoContent()
 }
 func (stub) ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response {

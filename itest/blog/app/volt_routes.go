@@ -22,6 +22,7 @@ var Table = []volt.Route{
 	{Method: "GET", Pattern: "/users/{id}/avatar", Spelled: "/users/:id(int)/avatar", Controller: "Users", Action: "Avatar", Helper: "PathAvatar", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "GET", Pattern: "/users/{id}/profile", Spelled: "/users/:id(int)/profile", Controller: "Users", Action: "Profile", Helper: "PathProfile", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "GET", Pattern: "/users/{id}/card", Spelled: "/users/:id(int)/card", Controller: "Users", Action: "Card", Helper: "PathCard", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
+	{Method: "GET", Pattern: "/users/{id}/peers/{n}", Spelled: "/users/:id(int)/peers/:n(int)", Controller: "Users", Action: "Peers", Helper: "PathPeers", Params: []volt.RouteParam{{Name: "id", Type: "int"}, {Name: "n", Type: "int"}}},
 	{Method: "PATCH", Pattern: "/users/{id}/email", Spelled: "/users/:id(int)/email", Controller: "Users", Action: "ChangeEmail", Helper: "PathChangeEmail", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "POST", Pattern: "/login", Spelled: "/login", Controller: "Session", Action: "Login", Helper: "PathLogin"},
 	{Method: "GET", Pattern: "/files/{path...}", Spelled: "/files/:path...", Controller: "Files", Action: "Serve", Helper: "PathServe", Params: []volt.RouteParam{{Name: "path", Type: "string", Wild: true}}},

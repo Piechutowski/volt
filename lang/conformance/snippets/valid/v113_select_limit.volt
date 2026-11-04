@@ -36,7 +36,7 @@ select padded  for page_views [order: (id asc), limit: 007]
 select first   for traffic [order: (day asc, id asc), limit: 5]
 select recent  for traffic where day >= :from [limit: :limit, order: (day desc, id desc)]
 select busiest (site, sum(hits) as total) for page_views [group: (site), order: (total desc, site asc), limit: :n]
-select board   for metrics with points [order: (name asc), limit: :limit]
+select board   for metrics with points [order: (name asc, id asc), limit: :limit]
 
 scope /api {
   get /pages/:from(int) PageViewPage

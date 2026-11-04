@@ -609,10 +609,10 @@ app/i361_group_name_case.volt:13:14: error: spec/selects-over-groups: unknown se
 db/schema.volt:10:5: error: spec/validators: validator emailShape must be exported: a validator is part of the package's API, so declare func EmailShape(string) error (§validators)
 
 ## i366_param_named_like_select_local.volt
-app/i366_param_named_like_select_local.volt:10:44: error: spec/selects-over-groups: parameter name "q" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i366_param_named_like_select_local.volt:11:44: error: spec/selects-over-groups: parameter name "rt" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i366_param_named_like_select_local.volt:12:44: error: spec/selects-over-groups: parameter name "voltRows" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i366_param_named_like_select_local.volt:13:45: error: spec/selects-over-groups: parameter name "voltErr" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i366_param_named_like_select_local.volt:10:44: error: spec/selects-over-groups: parameter name "q" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i366_param_named_like_select_local.volt:11:44: error: spec/selects-over-groups: parameter name "rt" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i366_param_named_like_select_local.volt:12:44: error: spec/selects-over-groups: parameter name "voltRows" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i366_param_named_like_select_local.volt:13:45: error: spec/selects-over-groups: parameter name "voltErr" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
 
 ## i369_compare_columns_go_type.volt
 app/i369_compare_columns_go_type.volt:11:41: error: spec/selects-over-groups: cannot compare column "hits" (int) with column "score" (float64) (§predicates)
@@ -628,8 +628,8 @@ app/i370_comparison_without_column.volt:11:38: error: spec/selects-over-groups: 
 app/i371_pred_redeclared.volt:11:6: error: spec/predicates: predicate "busy" redeclared (§predicates)
 
 ## i372_param_named_like_builtin.volt
-app/i372_param_named_like_builtin.volt:11:42: error: spec/selects-over-groups: parameter name "nil" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i372_param_named_like_builtin.volt:12:43: error: spec/selects-over-groups: parameter name "append" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i372_param_named_like_builtin.volt:11:42: error: spec/selects-over-groups: parameter name "nil" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i372_param_named_like_builtin.volt:12:43: error: spec/selects-over-groups: parameter name "append" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
 
 ## i373_load_on_query_route
 app/routes.volt:11:3: error: spec/route-loads: a load block belongs to a controller route; db.MetricList is a query route, whose handler is generated (§route-loads)
@@ -924,37 +924,65 @@ app/i467_dataset_helper_collision.volt:13:2: error: spec/scopes-and-routes: reve
 db/i468_limit_without_order.volt:10:28: error: spec/selects-over-groups: select "top" takes limit: without order:, so the rows it keeps would be arbitrary; order them, [order: (...), limit: ...] (§selects-over-groups)
 
 ## i469_limit_zero.volt
-db/i469_limit_zero.volt:10:55: error: spec/selects-over-groups: limit: keeps at least 1 row, not 0 (§selects-over-groups)
+db/i469_limit_zero.volt:10:63: error: spec/selects-over-groups: limit: keeps at least 1 row, not 0 (§selects-over-groups)
 
 ## i46_table_case.volt
 app/i46_table_case.volt:10:12: error: spec/resources: no table "Posts" in package "app"; did you mean "posts"? names are case-sensitive (§declaration)
 
 ## i470_limit_negative.volt
-db/i470_limit_negative.volt:10:55: error: spec/selects-over-groups: limit: keeps at least 1 row, not -1 (§selects-over-groups)
+db/i470_limit_negative.volt:10:63: error: spec/selects-over-groups: limit: keeps at least 1 row, not -1 (§selects-over-groups)
 
 ## i471_limit_on_one_row.volt
 db/i471_limit_on_one_row.volt:10:66: error: spec/selects-over-groups: select "totals" aggregates without group:, so it yields one row, which limit: has nothing to cap (§selects-over-groups)
 
 ## i472_limit_twice.volt
-db/i472_limit_twice.volt:10:59: error: spec/selects-over-groups: select "top" takes limit: twice; a select keeps one count of rows (§selects-over-groups)
+db/i472_limit_twice.volt:10:67: error: spec/settings-lists: setting "limit" may appear at most once (§settings-lists)
 
 ## i473_limit_not_integer.volt
-db/i473_limit_not_integer.volt:10:48: error: spec/selects-over-groups: limit: takes a positive integer or a parameter, :name (§selects-over-groups)
+db/i473_limit_not_integer.volt:10:56: error: spec/selects-over-groups: limit: takes a positive integer or a parameter, :name (§selects-over-groups)
 
 ## i474_limit_overflow.volt
-db/i474_limit_overflow.volt:10:55: error: spec/selects-over-groups: limit: 9223372036854775808 does not fit int64 (§selects-over-groups)
+db/i474_limit_overflow.volt:10:63: error: spec/selects-over-groups: limit: 9223372036854775808 does not fit int64 (§selects-over-groups)
 
 ## i475_limit_param_shared.volt
-db/i475_limit_param_shared.volt:10:72: error: spec/selects-over-groups: parameter :n is the limit and a parameter of the select besides; a limit takes a parameter of its own (§selects-over-groups)
+db/i475_limit_param_shared.volt:10:80: error: spec/selects-over-groups: parameter :n is the limit and a parameter of the select besides; a limit takes a parameter of its own (§selects-over-groups)
 
 ## i476_limit_param_name.volt
-db/i476_limit_param_name.volt:10:56: error: spec/selects-over-groups: parameter name "ctx" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+db/i476_limit_param_name.volt:10:64: error: spec/selects-over-groups: parameter name "ctx" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
 
 ## i477_param_value_elsewhere.volt
 db/i477_param_value_elsewhere.volt:11:28: error: spec/route-loads: timeout: takes a positive integer of seconds (§route-loads)
 
+## i478_limit_order_ties.volt
+db/i478_limit_order_ties.volt:10:48: error: spec/selects-over-groups: select "top" takes limit: over an order that leaves ties: order: names no key of page_views, so two rows can tie and the ones kept at the cut would be arbitrary; end it in the primary key, (..., id asc) (§selects-over-groups)
+
+## i479_limit_order_ties_group.volt
+db/i479_limit_order_ties_group.volt:11:95: error: spec/selects-over-groups: select "busiest" takes limit: over an order that leaves ties: order: does not name the group: item "site", so two groups can tie and the ones kept at the cut would be arbitrary; name every group: item in order:, or a key of the target that group: holds (§selects-over-groups)
+
 ## i47_unqualified_unknown_table.volt
 app/i47_unqualified_unknown_table.volt:11:12: error: spec/resources: no table "ghosts" in package "app" (§declaration)
+
+## i480_limit_order_nullable_unique.volt
+db/i480_limit_order_nullable_unique.volt:10:46: error: spec/selects-over-groups: select "by_slug" takes limit: over an order that leaves ties: order: names no key of posts, so two rows can tie and the ones kept at the cut would be arbitrary; end it in the primary key, (..., id asc) (§selects-over-groups)
+
+## i481_limit_order_ties_member.volt
+db/i481_limit_order_ties_member.volt:21:53: error: spec/selects-over-groups: select "first" takes limit: over an order that leaves ties: order: names no key of link_clicks, so two rows can tie and the ones kept at the cut would be arbitrary; end it in the primary key, (..., ref asc) (§selects-over-groups)
+
+## i482_param_blank.volt
+db/i482_param_blank.volt:10:42: error: spec/selects-over-groups: parameter name "_" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+
+## i483_limit_param_blank.volt
+db/i483_limit_param_blank.volt:10:64: error: spec/selects-over-groups: parameter name "_" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, the blank identifier _, which no expression reads, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+
+## i484_load_limit_literal.volt
+app/i484_load_limit_literal.volt:14:18: error: spec/route-loads: argument 1 of PostTop is its limit, at least 1, not 0, or every request would be refused (§route-loads, §selects-over-groups)
+app/i484_load_limit_literal.volt:15:18: error: spec/route-loads: argument 1 of PostTop is its limit, at least 1, not -1, or every request would be refused (§route-loads, §selects-over-groups)
+
+## i485_limit_order_ties_join.volt
+db/i485_limit_order_ties_join.volt:16:85: error: spec/selects-over-groups: select "replies" takes limit: over an order that leaves ties: the join of "comments" repeats a row of posts for each of its rows, and order: names no key of comments, so two rows can tie and the ones kept at the cut would be arbitrary; end it in the primary key, (..., comments.id asc) (§selects-over-groups)
+
+## i486_limit_order_ties_group_join.volt
+db/i486_limit_order_ties_group_join.volt:16:148: error: spec/selects-over-groups: select "per_commenter" takes limit: over an order that leaves ties: order: does not name the group: item "commenter", so two groups can tie and the ones kept at the cut would be arbitrary; name every group: item in order:, or a key of the target that group: holds (§selects-over-groups)
 
 ## i50_group_unknown.volt
 db/i50_group_unknown.volt:11:3: error: spec/groups: unknown group term "ms_revenu": no such table or group in package "db" (§groups)

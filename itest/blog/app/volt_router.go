@@ -110,6 +110,34 @@ func register(mux *http.ServeMux, c Controllers) {
 		return c.Users.Card(r, voltid)
 	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
+	mux.Handle("GET /users/{id}/peers/{n}", pipe0(volt.Handler("GET /users/{id}/peers/{n}", func(r volt.Request) volt.Response {
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		voltn, ok := volt.ParseInt(r.PathValue("n"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		if err := volt.LimitCheck("n", voltn); err != nil {
+			return volt.Fail(err)
+		}
+		volt_more_count, err := volt.QueryParam[int](r, "count")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		if err := volt.LimitCheck("count", volt_more_count); err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.UserGet(voltid), func(user db.User) volt.Response {
+			return volt.Then(db.UserLatest(voltn), func(peers []db.User) volt.Response {
+				return volt.Then(db.UserLatest(volt_more_count), func(more []db.User) volt.Response {
+					return c.Users.Peers(r, voltid, voltn, user, peers, more)
+				})
+			})
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id", "n"))))
+
 	mux.Handle("PATCH /users/{id}/email", pipe0(volt.Handler("PATCH /users/{id}/email", func(r volt.Request) volt.Response {
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
@@ -275,6 +303,9 @@ func register(mux *http.ServeMux, c Controllers) {
 		}
 		voltlimit, err := volt.QueryParam[int](r, "limit")
 		if err != nil {
+			return volt.Fail(err)
+		}
+		if err := volt.LimitCheck("limit", voltlimit); err != nil {
 			return volt.Fail(err)
 		}
 		return volt.Then(db.UserLatest(voltlimit), func(voltOut []db.User) volt.Response {

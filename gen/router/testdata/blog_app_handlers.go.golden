@@ -12,6 +12,7 @@ import (
 
 type AdminController interface {
 	Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts, latest []db.User) volt.Response
+	Top(r volt.Request, n int, top []db.User) volt.Response
 }
 
 type FilesController interface {
@@ -37,7 +38,7 @@ type UsersController interface {
 	Create(r volt.Request) volt.Response
 	Show(r volt.Request, id int) volt.Response
 	Avatar(r volt.Request, id int) volt.Response
-	Profile(r volt.Request, id int, user db.User, picked []db.User, since []db.User) volt.Response
+	Profile(r volt.Request, id int, user db.User, picked []db.User, since []db.User, recent []db.User) volt.Response
 	ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response
 	Signup(r volt.Request, body db.UserChangeset) volt.Response
 }
@@ -63,6 +64,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	var voltOut []string
 	if !volt.Same(c.Admin.Stats(r, db.Totals{}, nil, nil), c.Admin.Stats(r, db.Totals{}, nil, nil)) {
 		voltOut = append(voltOut, "Admin.Stats")
+	}
+	if !volt.Same(c.Admin.Top(r, 0, nil), c.Admin.Top(r, 0, nil)) {
+		voltOut = append(voltOut, "Admin.Top")
 	}
 	if !volt.Same(c.Files.Serve(r, ""), c.Files.Serve(r, "")) {
 		voltOut = append(voltOut, "Files.Serve")
@@ -94,7 +98,7 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Users.Avatar(r, 0), c.Users.Avatar(r, 0)) {
 		voltOut = append(voltOut, "Users.Avatar")
 	}
-	if !volt.Same(c.Users.Profile(r, 0, db.User{}, nil, nil), c.Users.Profile(r, 0, db.User{}, nil, nil)) {
+	if !volt.Same(c.Users.Profile(r, 0, db.User{}, nil, nil, nil), c.Users.Profile(r, 0, db.User{}, nil, nil, nil)) {
 		voltOut = append(voltOut, "Users.Profile")
 	}
 	if !volt.Same(c.Users.ChangeEmail(r, 0, db.UserNew()), c.Users.ChangeEmail(r, 0, db.UserNew())) {

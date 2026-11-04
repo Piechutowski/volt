@@ -445,8 +445,10 @@ func (g *generator) queryShimBody(r *lang.RouteInfo, parsed map[string]string) {
 		switch p.Source {
 		case lang.FromPath:
 			args = append(args, parsed[p.Name])
+			g.limitCheckEmit(p, parsed[p.Name], "\t\t")
 		case lang.FromQuery:
 			g.pf("\t\tvolt%s, err := volt.QueryParam[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", p.Name, p.GoType, p.Name)
+			g.limitCheckEmit(p, "volt"+p.Name, "\t\t")
 			args = append(args, "volt"+p.Name)
 		case lang.FromList:
 			g.pf("\t\tvolt%s, err := volt.QueryParams[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", p.Name, strings.TrimPrefix(p.GoType, "[]"), p.Name)
@@ -865,6 +867,7 @@ func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call,
 			switch p.Source {
 			case lang.FromPath:
 				argsOf[i][j] = parsed[p.Name]
+				g.limitCheckEmit(p, parsed[p.Name], indent)
 			case lang.FromLiteral:
 				argsOf[i][j] = p.Literal
 			case lang.FromList:
@@ -874,6 +877,7 @@ func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call,
 			default:
 				v := "volt_" + ld.Name + "_" + p.Name
 				g.pf("%s%s, err := volt.QueryParam[%s](r, %q)\n%sif err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, v, p.GoType, p.Name, indent, indent, indent)
+				g.limitCheckEmit(p, v, indent)
 				argsOf[i][j] = v
 			}
 		}
@@ -893,6 +897,15 @@ func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call,
 	g.pf("%sreturn %s\n", indent, call)
 	for i := len(closers) - 1; i >= 0; i-- {
 		g.pf("%s", closers[i])
+	}
+}
+
+// limitCheckEmit refuses a select's limit: parameter below 1 where the
+// request binds it (spec §query-routes, §route-loads): a 400 naming the
+// key, before anything runs.
+func (g *generator) limitCheckEmit(p lang.QueryParam, v, indent string) {
+	if p.Limit {
+		g.pf("%sif err := volt.LimitCheck(%q, %s); err != nil {\n%s\treturn volt.Fail(err)\n%s}\n", indent, p.Name, v, indent, indent)
 	}
 }
 

@@ -49,6 +49,9 @@ func (users) Update(r volt.Request, id int) volt.Response                { retur
 func (users) Delete(r volt.Request, id int) volt.Response                { return echo(r, id) }
 func (users) Avatar(r volt.Request, id int) volt.Response                { return echo(r, id) }
 func (users) Profile(r volt.Request, id int, user db.User) volt.Response { return volt.Render(user) }
+func (users) Peers(r volt.Request, id, n int, user db.User, peers, more []db.User) volt.Response {
+	return volt.Render(map[string]any{"user": user.ID, "peers": len(peers), "more": len(more)})
+}
 func (users) Card(r volt.Request, id int) volt.Response {
 	return volt.Then(db.UserGet(id), func(u db.User) volt.Response { return volt.Render(u) })
 }
@@ -194,6 +197,7 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathEditUser":        {"GET", app.PathEditUser(7)},
 		"PathAvatar":          {"GET", app.PathAvatar(7)},
 		"PathProfile":         {"GET", app.PathProfile(1)},
+		"PathPeers":           {"GET", app.PathPeers(1, 2, volt.Query("count", "1"))},
 		"PathCard":            {"GET", app.PathCard(1)},
 		"PathChangeEmail":     {"PATCH", app.PathChangeEmail(1)},
 		"PathLogin":           {"POST", app.PathLogin()},
@@ -219,7 +223,7 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathRefProfile":      {"GET", app.PathRefProfile(1)},
 		"PathEvents":          {"GET", app.PathEvents()},
 	}
-	queryRoutes := map[string]bool{"PathProfile": true, "PathCard": true}
+	queryRoutes := map[string]bool{"PathProfile": true, "PathCard": true, "PathPeers": true}
 	bodyRoutes := map[string]bool{"PathChangeEmail": true, "PathLogin": true}
 	haltRoutes := map[string]bool{"PathMeShow": true, "PathMeUserList": true}
 	for _, r := range app.Table {
@@ -528,6 +532,12 @@ func TestTableMatchesServedReality(t *testing.T) {
 		if row.Action == "Profile" || row.Action == "Card" {
 			if rec.Code != 404 {
 				t.Errorf("%s %s: the profile of a sampled user = %d, want 404 through the lookup", method, url, rec.Code)
+			}
+			continue
+		}
+		if row.Action == "Peers" {
+			if rec.Code != 400 {
+				t.Errorf("%s %s: a limited load without its count = %d, want 400 before anything loads", method, url, rec.Code)
 			}
 			continue
 		}

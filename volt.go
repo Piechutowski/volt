@@ -112,10 +112,9 @@ func DefaultErrorHandler(r Request, err error) Response {
 // ProblemOf is the Problem the error spine writes for err (spec §formats):
 // an HTTPError's own status and message; a refused write, a *rt.Invalid,
 // as 409 when a unique field error is among its fields and 422 otherwise
-// (spec §changesets); a query's row miss (rt.ErrNotFound) as 404; a
-// select's limit below 1 (rt.ErrLimit, spec §selects-over-groups) as 400;
-// each with the details of an error that itemizes them. ok is false for
-// any other error.
+// (spec §changesets); a query's row miss (rt.ErrNotFound) as 404; each
+// with the details of an error that itemizes them. ok is false for any
+// other error.
 func ProblemOf(err error) (p Problem, ok bool) {
 	var he HTTPError
 	var inv *rt.Invalid
@@ -131,8 +130,6 @@ func ProblemOf(err error) (p Problem, ok bool) {
 		}
 	case errors.Is(err, rt.ErrNotFound):
 		return Problem{Status: http.StatusNotFound, Message: "not found"}, true
-	case errors.Is(err, rt.ErrLimit):
-		return Problem{Status: http.StatusBadRequest, Message: "a limit is at least 1"}, true
 	default:
 		return Problem{}, false
 	}

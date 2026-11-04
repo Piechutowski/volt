@@ -102,6 +102,7 @@ type QueryParam struct {
 	GoType  string // unqualified Go type ("int", "[]string"); a changeset is qualified ("db.UserChangeset")
 	Source  QuerySource
 	Literal string // the Go spelling of a FromLiteral argument (§route-loads)
+	Limit   bool   // the select's limit: parameter, which a request value binds only when at least 1 (§selects-over-groups)
 }
 
 // LoadInfo is one load of a controller route (§route-loads): the name the

@@ -597,8 +597,8 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	qr := &QueryRef{Qualifier: qual, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200}
 
 	type sigParam struct {
-		name, goType string
-		body, key    bool
+		name, goType      string
+		body, key, limits bool
 	}
 	var sig []sigParam
 	found, op := false, ""
@@ -607,7 +607,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	if si, m, ok := l.selectByMethod(target, name); ok {
 		found, op, dropped = true, "select", si.droppedParams
 		for _, p := range si.Params {
-			sig = append(sig, sigParam{name: p.GoName, goType: p.GoType})
+			sig = append(sig, sigParam{name: p.GoName, goType: p.GoType, limits: p.GoName == si.LimitParam})
 		}
 		switch {
 		case si.With != nil:
@@ -679,7 +679,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 			qr.Unresolved = true
 			continue
 		}
-		qp := QueryParam{Name: sp.name, GoType: sp.goType}
+		qp := QueryParam{Name: sp.name, GoType: sp.goType, Limit: sp.limits}
 		switch {
 		case sp.body:
 			qp.Source = FromBody

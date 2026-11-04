@@ -30,6 +30,10 @@ func (c *Client) AdminStats(ctx context.Context) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/admin/stats"), nil)
 }
 
+func (c *Client) AdminTop(ctx context.Context, n int) (*http.Response, error) {
+	return c.Raw(ctx, "GET", volt.URL("/admin/top/"+volt.SegInt(n)), nil)
+}
+
 func (c *Client) Users(ctx context.Context) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/users"), nil)
 }

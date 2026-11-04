@@ -7,4 +7,4 @@ table page_views {
   hits int
 }
 
-select top for page_views [order: (hits desc), limit: 9223372036854775808]
+select top for page_views [order: (hits desc, id asc), limit: 9223372036854775808]

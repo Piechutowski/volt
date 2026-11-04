@@ -32,6 +32,17 @@ func QueryParam[T QueryValue](r Request, name string) (T, error) {
 	return v, nil
 }
 
+// LimitCheck is nil for a limit of at least 1 and otherwise the 400 naming
+// the request key it came from (§query-routes, §route-loads): a generated
+// route refuses a select's limit: parameter below 1 where it binds it,
+// before anything runs, since SQLite reads a negative limit as none.
+func LimitCheck(name string, n int) error {
+	if n >= 1 {
+		return nil
+	}
+	return Error(http.StatusBadRequest, fmt.Sprintf("parameter %s is a limit, at least 1, not %d", name, n))
+}
+
 // QueryParams binds a list parameter (§predicates): every value of a repeated
 // query key, in order. An absent key is an empty list, never an error;
 // an element that does not parse is a 400 naming the parameter.

@@ -19,6 +19,9 @@ scope / [pipe: api, error_handler: Errors] {
 			feed   db.UserFeed()
 			latest db.UserLatest(5)
 		}
+		get /top/:n(int) Admin.Top {
+			top db.UserLatest(n)
+		}
 	}
 
 	resources db.users [only: (index, show, create)]
@@ -29,6 +32,7 @@ scope / [pipe: api, error_handler: Errors] {
 		user   db.UserGet(id)
 		picked db.UserPicked(ids)
 		since  db.UserSince(since)
+		recent db.UserLatest(count)
 	}
 	patch /users/:id(int)/email Users.ChangeEmail [body: db.UserUpdate(id), only: (email)]
 	post  /signup                Users.Signup      [body: db.UserCreate]

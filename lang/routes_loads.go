@@ -124,13 +124,16 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 	}
 	qr := &QueryRef{Qualifier: qual, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200}
 
-	type sigParam struct{ name, goType string }
+	type sigParam struct {
+		name, goType string
+		limits       bool
+	}
 	var sig []sigParam
 	found := false
 	if si, m, ok := l.selectByMethod(target, name); ok {
 		found = true
 		for _, p := range si.Params {
-			sig = append(sig, sigParam{p.GoName, p.GoType})
+			sig = append(sig, sigParam{p.GoName, p.GoType, p.GoName == si.LimitParam})
 		}
 		switch {
 		case si.With != nil:
@@ -155,7 +158,7 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 			return nil
 		}
 		for _, k := range cm.Key {
-			sig = append(sig, sigParam{k.GoName, k.GoType})
+			sig = append(sig, sigParam{name: k.GoName, goType: k.GoType})
 		}
 		qr.Result, qr.Many = cm.Result, cm.Many
 	}
@@ -170,7 +173,7 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 	ok := true
 	for i, arg := range call.Args {
 		sp := sig[i]
-		qp := QueryParam{Name: sp.name, GoType: sp.goType}
+		qp := QueryParam{Name: sp.name, GoType: sp.goType, Limit: sp.limits}
 		if sp.goType == "" {
 			qr.Unresolved = true
 			qr.Params = append(qr.Params, qp)
@@ -224,6 +227,9 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 				if qp.Literal == "" {
 					l.errorf(a.Pos(), "route-loads", "argument %d of %s is %s, which the number %s does not spell (§route-loads)", i+1, ref, sp.goType, a.Tok.Val)
 					ok = false
+				} else if sp.limits && !limitLiteralOK(qp.Literal) {
+					l.errorf(a.Pos(), "route-loads", "argument %d of %s is its limit, at least 1, not %s, or every request would be refused (§route-loads, §selects-over-groups)", i+1, ref, a.Tok.Val)
+					ok = false
 				}
 			}
 		case *ast.NegNumber:
@@ -231,6 +237,9 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 			qp.Literal = numberLiteral("-"+a.Num.Tok.Val, sp.goType)
 			if qp.Literal == "" {
 				l.errorf(a.Pos(), "route-loads", "argument %d of %s is %s, which the number -%s does not spell (§route-loads)", i+1, ref, sp.goType, a.Num.Tok.Val)
+				ok = false
+			} else if sp.limits {
+				l.errorf(a.Pos(), "route-loads", "argument %d of %s is its limit, at least 1, not -%s, or every request would be refused (§route-loads, §selects-over-groups)", i+1, ref, a.Num.Tok.Val)
 				ok = false
 			}
 		}
@@ -240,6 +249,13 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 		return nil
 	}
 	return qr
+}
+
+// limitLiteralOK reports whether an int literal a load binds to a
+// select's limit: parameter is at least 1 (spec §route-loads).
+func limitLiteralOK(lit string) bool {
+	n, err := strconv.ParseInt(lit, 10, 64)
+	return err == nil && n >= 1
 }
 
 // numberLiteral is the Go spelling of lit as a value of goType, "" when

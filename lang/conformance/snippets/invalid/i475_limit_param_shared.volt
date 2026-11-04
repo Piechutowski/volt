@@ -7,4 +7,4 @@ table page_views {
   hits int
 }
 
-select top for page_views where hits >= :n [order: (hits desc), limit: :n]
+select top for page_views where hits >= :n [order: (hits desc, id asc), limit: :n]

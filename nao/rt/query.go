@@ -340,7 +340,9 @@ func (o limitOpt[M]) optApply(s *querySpec[M]) { s.limit, s.limitSet = o.n, true
 
 // Limit caps the number of rows returned; the last Limit wins. The value
 // is bound as a parameter, so page size does not change the SQL text
-// (one cached statement).
+// (one cached statement). A limit below 1 is a rendering that fails with
+// ErrLimit (spec §generated-query-surface), since SQLite reads a negative
+// limit as none.
 func Limit[M any](n int) Opt[M] { return limitOpt[M]{n: n} }
 
 // LimitVal is a limit over a value slot (spec §selects-over-groups), the
@@ -349,8 +351,10 @@ func Limit[M any](n int) Opt[M] { return limitOpt[M]{n: n} }
 func LimitVal(v any) Opt[Gen] { return limitOpt[Gen]{n: v} }
 
 // ErrLimit is what a select's effect carries when its limit parameter is
-// below 1 (spec §selects-over-groups): SQLite reads a negative LIMIT as no
-// limit at all, so the runner returns it without running a statement.
+// below 1, and what a dynamic Limit below 1 fails to render with (spec
+// §selects-over-groups, §generated-query-surface): SQLite reads a negative
+// LIMIT as no limit at all, so the runner returns it without running a
+// statement.
 var ErrLimit = errors.New("rt: a limit is at least 1")
 
 // LimitCheck is nil for a limit of at least 1 and ErrLimit, naming n,
@@ -464,6 +468,11 @@ func selectRenderOver[M any](table, columns string, columnArgs []any, opts []Opt
 
 	switch {
 	case s.limitSet:
+		if n, ok := s.limit.(int); ok {
+			if err := LimitCheck(n); err != nil {
+				return "", nil, err
+			}
+		}
 		b.WriteString(" LIMIT ?")
 		args = append(args, s.limit)
 		if s.offsetSet {
