@@ -185,9 +185,10 @@ func (r Response) Rescue(on func(error) Response) Response {
 
 // Same reports whether two responses are the same value: the same
 // status, headers, cookies and body, or continuations of the same
-// effect (spec §requests-and-responses). Streams compare as the same;
-// what a function writes cannot be compared. The generated
-// ControllersDeterministic calls it.
+// effect, an rt.Then by its first effect and an rt.Map or an rt.Atomic
+// by its inner one (spec §requests-and-responses). Streams compare as
+// the same, since neither what a function writes nor the function can
+// be compared; the generated ControllersDeterministic calls it.
 func Same(a, b Response) bool {
 	if a.status != b.status || !reflect.DeepEqual(a.header, b.header) || !reflect.DeepEqual(a.cookies, b.cookies) {
 		return false

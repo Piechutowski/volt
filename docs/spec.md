@@ -73,6 +73,11 @@ A hand-written handler is a function from a request value to a
 response value (§requests-and-responses): it holds no database, reads
 the clock from the request, and describes its effects for the
 generated shim to perform; the vet rules of `lint.md` hold it to that.
+An effect that uses an earlier effect's result carries a function, the
+`next` of `rt.Then` or the `f` of `rt.Map`
+(§generated-query-surface): that function is pure too, from a value to
+a description, the runner calls it between the statements, and nothing
+performs inside it.
 
 ---
 
@@ -2229,7 +2234,11 @@ func (r Response) Rescue(on func(error) Response) Response
    function that turns its result into the next response. The shim is
    a loop: perform the effect, call `next`, repeat until done, then
    write. `Then` is the only way a handler reaches the database, and
-   a handler calls nothing that performs one.
+   a handler calls nothing that performs one. Each continuation's
+   effect is performed on its own, so two continuations are never one
+   transaction: writes that must commit together, a row and the rows
+   that carry the key its insert assigned among them, are one effect,
+   an `rt.Atomic` over `rt.Then` (§generated-query-surface).
 3. **Failure.** An effect that fails, and a `Fail(err)` a handler
    returns, go to the route's error handler (§scopes), which answers
    404 for a row miss, 409 or 422 for a refused write, an `HTTPError`'s
@@ -2261,8 +2270,13 @@ func (r Response) Rescue(on func(error) Response) Response
    since a changeset no constructor made refuses a setter, and
    names the ones whose responses differ (`volt.Same`: the same status,
    headers, cookies and body, or continuations of the same effect;
-   streams compare as the same). An application's test calls it with
-   its controllers and asserts an empty list.
+   streams compare as the same). Functions cannot be compared, so a
+   continuation compares by its effect alone, never by `next`, and an
+   effect that wraps others by what it wraps: an `rt.Then` by its first
+   effect, never by the one its `next` would make, and an `rt.Map` and
+   an `rt.Atomic` by their inner one (§generated-query-surface). An
+   application's test calls it with its controllers and asserts an
+   empty list.
 6. **What keeps a handler pure** is the generated interface, which
    fixes every parameter, and the vet rules of `lint.md`:
    a controller is an empty struct (`handlerreceiver`), a file that
@@ -4910,6 +4924,10 @@ type Exec          struct { SQL string; Args []any; Model string; One bool; Err 
 type With[P, C any, K comparable, R any] struct { Parent Query[P]; Child string; ChildScan func(Row) (C, error); ParentKey func(P) K; ChildKey func(C) K; Build func(P, []C) R }  // parents with their children, []R
 func Tx(steps ...AnyEffect) Transaction   // all or nothing, results in order
 func All(steps ...AnyEffect) Parallel     // at once, first error cancels, results in order
+func Then[T, U any](e Effect[T], next func(T) Effect[U]) Effect[U]  // e, then the effect next makes of its result
+func Map[T, U any](e Effect[T], f func(T) U) Effect[U]              // f of e's result
+func Atomic[T any](e Effect[T]) Effect[T]                          // e and all it performs, all or nothing
+var ErrNoEffect error                     // a Then, Map or Atomic over no effect
 func Insert[M any](c Changeset[M]) Write[M]
 func Update[M any](c Changeset[M]) Write[M]
 
@@ -5000,7 +5018,45 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    structured log line per statement at debug level, with the text,
    the duration and the error, through the logger of `WithLogger`.
    `rt.Null[T]` marshals as the value or `null`.
-6. **Locals and helpers.** Every local a function of a data file
+6. **Effects over earlier results.** `rt.Then(e, next)` performs `e`,
+   calls `next` with its result and performs the effect `next` returns,
+   on the same executor, and yields that effect's result; `rt.Map(e, f)`
+   performs `e` and yields `f` of its result; `rt.Atomic(e)` performs
+   `e`, and everything `e` performs, in one transaction that commits
+   when all of it succeeds and rolls back on the first error, which it
+   returns. The three are effects like the others, values the runner
+   performs; their kinds are unexported, the constructors the one way
+   to build them, and the set stays sealed.
+   They nest, and `next` may return any effect: an `Atomic` over the
+   `Then` of `PostCreate(c)` whose `next` returns the `Transaction` of
+   the inserts that carry the new post's key writes the post and its
+   tags together or not at all.
+   - `next` and `f` are pure functions from a value to a description
+     (§values-and-effects): the runner calls them between the
+     statements, and nothing performs inside them; in a handler's file
+     the vet rules of `lint.md` hold them as they hold the handler.
+     Neither is called when the effect before it fails. A `next` that
+     returns no effect, a nil `Effect`, and a `Then`, a `Map` or an
+     `Atomic` built over none, yield `rt.ErrNoEffect`, which stops the
+     effect there as any other error does.
+   - A `Then` is not atomic by itself. Outside an `Atomic` and a
+     `Transaction` its steps run one after another, each on its own, so
+     when the effect `next` returns fails, what `e` wrote stays
+     written. Inside either, every step runs on that one transaction.
+   - An `Atomic` inside a `Transaction` or another `Atomic` opens no
+     transaction of its own and joins the one already open, as a
+     nested `Transaction` does: its failure rolls back the whole of the
+     outer one, and what it wrote commits only when the outer one does.
+   - A `Parallel` inside an `Atomic` does what it does inside a
+     `Transaction`: its steps run at once on the one transaction,
+     interleaving on its one connection, every step joining it, and the
+     first error cancels the rest and rolls back everything the
+     `Atomic` performed.
+   - An error comes back as the step reported it, unwrapped, so a
+     refused write is still the `*rt.Invalid` the error handler answers
+     with 409 or 422 and a miss still `rt.ErrNotFound`, a 404
+     (§formats).
+7. **Locals and helpers.** Every local a function of a data file
    declares, the parameters of a function literal included, is `volt`
    followed by an upper-case letter, with no underscore (`voltErr`,
    `voltRows`, `voltV`), and so is every unexported package-level name

@@ -245,7 +245,7 @@ landed; more follow one feature at a time.
 
 ---
 
-## Step 20. The comparison on `Load.Rescue` and `limit:`
+## Step 20. The comparison on `Load.Rescue`, `rt.Atomic` and `limit:`
 
 `compare/volt` was written while a scope load could not answer its own
 miss, so `CurrentMember` loads a list, empty for an unknown member, and
@@ -253,14 +253,19 @@ every handler checks it; `Load.Rescue` (spec §scope-loads) answers the
 miss in the load. Rewrite the blog onto it: `CurrentMember` returns
 `volt.Load[db.Member]` over `db.MemberGet`, rescuing `rt.ErrNotFound`
 with the contract's 401 and failing with every other error, and the
-handlers lose their checks. It was also written while a select had no
-limit, so the feed reads every post after the cursor and cuts the page
-in Go; `feed` and `feed_tagged` take `limit: :limit` (spec
-§selects-over-groups) and the handler asks for one row past the page
-to know whether a next cursor exists. `compare/suite` passes
-unchanged, `go run ./compare/measure` remeasures, and the README's
-table and its first and third gaps change in the commit that deletes
-this section.
+handlers lose their checks. It was written while an effect could not
+use an earlier one's result inside one transaction, so `Create` writes
+the post and then its tags in a second transaction; it becomes one
+continuation over `rt.Atomic(rt.Then(db.PostCreate(cs), next))`, whose
+`next` returns the `Transaction` of the tag inserts mapped back to the
+post (spec §generated-query-surface), so a refused tag leaves no post.
+It was also written while a select had no limit, so the feed reads
+every post after the cursor and cuts the page in Go; `feed` and
+`feed_tagged` take `limit: :limit` (spec §selects-over-groups) and the
+handler asks for one row past the page to know whether a next cursor
+exists. `compare/suite` passes unchanged, `go run ./compare/measure`
+remeasures, and the README's table and its first three gaps change in
+the commit that deletes this section.
 
 ---
 

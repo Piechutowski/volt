@@ -360,7 +360,10 @@ handler file.
 test fixes it.
 
 **Examples.** [testdata/handlerclock.go](../lang/vet/testdata/handlerclock.go):
-arithmetic on `r.Now()` passes; `time.Now()` and `time.Since` warn.
+arithmetic on `r.Now()` passes; `time.Now()` and `time.Since` warn, and
+so does `time.Since` inside the `next` of an `rt.Then`, which the
+runner calls and which is pure like the handler (spec
+§values-and-effects).
 
 ### packagestate
 

@@ -13,6 +13,10 @@ import (
 // driver's no-rows error to it.
 var ErrNotFound = errors.New("rt: no row")
 
+// ErrNoEffect is what a Then, a Map or an Atomic over no effect yields,
+// and a Then whose next returns none (spec §generated-query-surface).
+var ErrNoEffect = errors.New("rt: no effect to perform")
+
 // Row is what a generated scan function reads: one row's columns.
 type Row interface {
 	Scan(dest ...any) error
@@ -41,8 +45,9 @@ type Executor interface {
 
 // Effect is a computation over the database described as a value and
 // performed by the runner (spec §values-and-effects): a Query, a
-// Lookup, a Write, an Exec, a With, a Transaction or an All, nothing
-// else, since effect is unexported. T is what performing it yields.
+// Lookup, a Write, an Exec, a With, a Transaction, an All, a Then, a
+// Map or an Atomic, nothing else, since effect is unexported. T is what
+// performing it yields.
 type Effect[T any] interface {
 	Perform(ctx context.Context, x Executor) (T, error)
 	PerformAny(ctx context.Context, x Executor) (any, error)
@@ -297,6 +302,113 @@ func (p Parallel) Perform(ctx context.Context, x Executor) ([]any, error) {
 // PerformAny is Perform with its result as any.
 func (p Parallel) PerformAny(ctx context.Context, x Executor) (any, error) { return p.Perform(ctx, x) }
 
+type thenEffect[T, U any] struct {
+	first Effect[T]
+	next  func(T) Effect[U]
+}
+
+// Then is e and then the effect next makes of its result, performed on
+// the same executor (spec §generated-query-surface): one step after the
+// other, atomic only inside an Atomic or a Transaction. next is pure: it
+// turns a value into a description and performs nothing.
+func Then[T, U any](e Effect[T], next func(T) Effect[U]) Effect[U] {
+	return thenEffect[T, U]{first: e, next: next}
+}
+
+func (thenEffect[T, U]) effect() {}
+
+// Perform performs the first effect, calls next with its result and
+// performs what next returns; the first error stops it and is returned.
+func (t thenEffect[T, U]) Perform(ctx context.Context, x Executor) (U, error) {
+	var zero U
+	if t.first == nil {
+		return zero, ErrNoEffect
+	}
+	v, err := t.first.Perform(ctx, x)
+	if err != nil {
+		return zero, err
+	}
+	e := t.next(v)
+	if e == nil {
+		return zero, ErrNoEffect
+	}
+	return e.Perform(ctx, x)
+}
+
+// PerformAny is Perform with its result as any.
+func (t thenEffect[T, U]) PerformAny(ctx context.Context, x Executor) (any, error) {
+	return t.Perform(ctx, x)
+}
+
+type mapEffect[T, U any] struct {
+	inner Effect[T]
+	f     func(T) U
+}
+
+// Map is e with its result through f (spec §generated-query-surface); f
+// is pure.
+func Map[T, U any](e Effect[T], f func(T) U) Effect[U] {
+	return mapEffect[T, U]{inner: e, f: f}
+}
+
+func (mapEffect[T, U]) effect() {}
+
+// Perform performs the inner effect and yields f of its result.
+func (m mapEffect[T, U]) Perform(ctx context.Context, x Executor) (U, error) {
+	var zero U
+	if m.inner == nil {
+		return zero, ErrNoEffect
+	}
+	v, err := m.inner.Perform(ctx, x)
+	if err != nil {
+		return zero, err
+	}
+	return m.f(v), nil
+}
+
+// PerformAny is Perform with its result as any.
+func (m mapEffect[T, U]) PerformAny(ctx context.Context, x Executor) (any, error) {
+	return m.Perform(ctx, x)
+}
+
+type atomicEffect[T any] struct {
+	inner Effect[T]
+}
+
+// Atomic is e and everything it performs in one transaction, committed
+// when all of it succeeds and rolled back on the first error (spec
+// §generated-query-surface); inside a Transaction or another Atomic it
+// joins the transaction already open.
+func Atomic[T any](e Effect[T]) Effect[T] { return atomicEffect[T]{inner: e} }
+
+func (atomicEffect[T]) effect() {}
+
+// Perform performs the inner effect over the executor's transaction.
+func (a atomicEffect[T]) Perform(ctx context.Context, x Executor) (T, error) {
+	var out T
+	if a.inner == nil {
+		return out, ErrNoEffect
+	}
+	err := x.Transaction(ctx, func(tx Executor) error {
+		v, err := a.inner.Perform(ctx, tx)
+		if err != nil {
+			return err
+		}
+		out = v
+		return nil
+	})
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	return out, nil
+}
+
+// PerformAny is Perform with its result as any.
+func (a atomicEffect[T]) PerformAny(ctx context.Context, x Executor) (any, error) {
+	return a.Perform(ctx, x)
+}
+
 // ParallelMap applies f to every element of xs at once, one goroutine
 // per element, and joins them before returning the results in order
 // (spec §values-and-effects): CPU parallelism inside pure code.
@@ -320,7 +432,9 @@ func ScanOne[T any](r Row) (T, error) {
 
 // Describe spells an effect for comparison and logs (spec
 // §requests-and-responses): its kind, statement and arguments, a
-// transaction's or a parallel's steps in order, an error it carries.
+// transaction's or a parallel's steps in order, an error it carries, a
+// Then by its first effect and a Map or an Atomic by its inner one,
+// since a function cannot be spelled.
 func Describe(e AnyEffect) string {
 	switch e := e.(type) {
 	case describer:
@@ -354,3 +468,7 @@ func (q Query[T]) describe() string  { return describeStatement("query", q.SQL, 
 func (l Lookup[T]) describe() string { return describeStatement("lookup", l.SQL, l.Args, l.Err) }
 func (w Write[M]) describe() string  { return describeStatement("write", w.SQL, w.Args, w.Err) }
 func (e Exec) describe() string      { return describeStatement("exec", e.SQL, e.Args, e.Err) }
+
+func (t thenEffect[T, U]) describe() string { return "then(" + Describe(t.first) + ")" }
+func (m mapEffect[T, U]) describe() string  { return "map(" + Describe(m.inner) + ")" }
+func (a atomicEffect[T]) describe() string  { return "atomic(" + Describe(a.inner) + ")" }

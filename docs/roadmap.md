@@ -29,7 +29,7 @@ that lands it.
 | Migrations with a ledger and a schema check | yes | built | |
 | Migration generation from drift | yes | not planned: a migration is written by hand, and the checker folds the migrations against the schema instead of guessing one from a diff | |
 | Seeds | yes | built (`records`) | |
-| Transactions | yes | built (as values) | |
+| Transactions | yes | built (as values; `rt.Atomic` over `rt.Then` for writes that use an earlier write's key) | |
 | Sessions | yes | missing | |
 | Password hashing | yes | missing | |
 | CSRF | yes | missing | |

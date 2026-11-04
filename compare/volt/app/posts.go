@@ -66,8 +66,9 @@ func tagsChecked(tags []string) ([]string, volt.Response, bool) {
 	return slices.Compact(out), volt.Response{}, true
 }
 
-// Create stores a draft and its tags; the tags are written after the
-// post, since a transaction cannot use the id an earlier step assigns.
+// Create stores a draft and its tags. It predates rt.Atomic over rt.Then
+// (spec §generated-query-surface), so the tags are written after the
+// post in a second transaction until docs/plan.md step 20 rewrites it.
 func (Posts) Create(r volt.Request, ms []db.Member, body PostForm) volt.Response {
 	m, ok := memberOf(ms)
 	if !ok {

@@ -285,6 +285,18 @@ func TestResponseValues(t *testing.T) {
 	if !Same(Fail(errors.New("x")), Fail(errors.New("x"))) || Same(Then(q, next), Render(1)) {
 		t.Error("Same disagrees on failures")
 	}
+	done := func(int64) Response { return NoContent() }
+	write := func(sql string) func([]int) rt.Effect[int64] {
+		return func([]int) rt.Effect[int64] { return rt.Exec{SQL: sql} }
+	}
+	atomic := Then(rt.Atomic(rt.Then(q, write("a"))), done)
+	if !Same(atomic, Then(rt.Atomic(rt.Then(q, write("b"))), done)) || Same(atomic, Then(rt.Then(q, write("a")), done)) || Same(atomic, Then(rt.Atomic(rt.Then(rt.Query[int]{SQL: "SELECT 2"}, write("a"))), done)) {
+		t.Error("Same disagrees on an Atomic over a Then: it compares by the first effect and the kinds around it")
+	}
+	count := func(n []int) int { return len(n) }
+	if !Same(Then(rt.Map(q, count), func(int) Response { return NoContent() }), Then(rt.Map(q, func([]int) int { return 0 }), func(int) Response { return NoContent() })) || Same(Then(rt.Map(q, count), func(int) Response { return NoContent() }), Then(q, next)) {
+		t.Error("Same disagrees on a Map: it compares by its inner effect")
+	}
 	rec := httptest.NewRecorder()
 	Handler("GET /x", func(Request) Response { return HTML([]byte("<p>hi</p>")) }, nil, nil).ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
 	if rec.Code != 200 || rec.Header().Get("Content-Type") != "text/html; charset=utf-8" || rec.Body.String() != "<p>hi</p>" {
