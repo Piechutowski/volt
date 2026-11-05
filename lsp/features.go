@@ -408,7 +408,12 @@ func docWalk(n ast.Node, visit func(ast.Node)) {
 		for _, ld := range x.Loads {
 			visit(ld)
 		}
-	case *ast.Resources, *ast.Dataset, *ast.ScopeLoad, *ast.PackageClause, *ast.Group, *ast.Pred, *ast.Select:
+	case *ast.Group:
+		visit(x)
+		for _, term := range x.Terms {
+			visit(term)
+		}
+	case *ast.Resources, *ast.Dataset, *ast.ScopeLoad, *ast.PackageClause, *ast.Pred, *ast.Select:
 		visit(x)
 	default:
 		ast.Inspect(n, func(c ast.Node) bool {

@@ -1630,7 +1630,10 @@ comment does. It is the one way to document anything in Volt.
    package. Each `.volt` file of a package may write one; the
    package's doc text is theirs joined in file name order, each a
    paragraph. A comment at the top of a file with a blank line below
-   it, a license or a file header, documents nothing.
+   it, a license or a file header, documents nothing. The package is
+   documented in Volt alone: a package doc comment in a hand-written
+   Go file of the package is reported by the vet rule
+   [`packagedoc`](lint.md#packagedoc).
 6. **Partials.** A column a partial injects keeps its doc comment in
    every table that injects it; a column of the table that overrides
    it (§tablepartial) carries its own, or none.

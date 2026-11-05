@@ -637,10 +637,11 @@ func TestHoverDocComment(t *testing.T) {
 }
 
 func TestHoverDocCommentInRoutes(t *testing.T) {
-	src := "package app\n\n// The browser stack.\npipeline browser {\n\t// reads the session\n\tuse Session\n}\n\nscope / {\n\t// The front page.\n\tget / Home.Index {\n\t\t// the posts it lists\n\t\tposts db.PostList()\n\t}\n\tscope /admin {\n\t\t// The admin home.\n\t\tget / Admin.Home\n\t}\n}\n"
+	src := "package app\n\ngroup content {\n\t// posts are content\n\tposts\n}\n\n// The browser stack.\npipeline browser {\n\t// reads the session\n\tuse Session\n}\n\nscope / {\n\t// The front page.\n\tget / Home.Index {\n\t\t// the posts it lists\n\t\tposts db.PostList()\n\t}\n\tscope /admin {\n\t\t// The admin home.\n\t\tget / Admin.Home\n\t}\n}\n"
 	d := doc(t, src)
 	for needle, want := range map[string]string{
 		"use Session":      "reads the session",
+		"\tposts\n":        "posts are content",
 		"get / Home.Index": "The front page.",
 		"posts db.":        "the posts it lists",
 		"get / Admin.Home": "The admin home.",

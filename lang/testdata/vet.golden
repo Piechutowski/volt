@@ -1,6 +1,7 @@
 check:
 dup/schema.volt:8:1: error: spec/namespaces-and-uniqueness: duplicate table name "t"
 vet:
+data/kinds.go:1:1: warning: vet/packagedoc: a package doc comment in a Go file: the .volt files are the package's source, so write it above a package clause there, from where volt gen carries it into the generated code (§doc-comments)
 data/schema.volt:4:15: warning: vet/redundantindex: unique on "id" is redundant; the column is the primary key, which is unique and indexed already
 app/handlers.go:5:2: warning: vet/handlerimports: a file that declares a handler or a scope load imports os; a handler describes its effects and the shim performs them (§requests-and-responses, §scope-loads)
 dup/schema.volt:6:3: warning: vet/casecollision: column names total and Total differ only in case

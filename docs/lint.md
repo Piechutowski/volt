@@ -488,6 +488,30 @@ body.
 
 ---
 
+## Documentation
+
+### packagedoc
+
+**What it does.** Reports a package doc comment in a hand-written Go
+file of a Volt package, a data package or a routes package alike. A
+generated file, which carries the `Code generated` marker, and a test
+file are not read.
+
+**Why.** The `.volt` files are the source of truth of the package: its
+package doc comment is written above a package clause there (spec
+§doc-comments), and `volt gen` carries it into the generated code
+(§doc-comments-in-generated-code). A second one in Go would be joined
+with it by godoc and could drift from it unseen.
+
+**Examples.** [testdata/packagedoc.go](../lang/vet/testdata/packagedoc.go):
+the comment above `package app` warns; the doc comment of `Index`, a
+function, does not, since a Go declaration documents itself in Go.
+
+**Limitations.** A file excluded by its build constraints is read all
+the same.
+
+---
+
 ## Candidate rules — considered, not implemented
 
 Reviewed and deliberately deferred; listed so a reader can see what was

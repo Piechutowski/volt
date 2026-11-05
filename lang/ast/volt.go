@@ -391,6 +391,14 @@ type GroupTerm struct {
 // Set reports whether the term was written as a parenthesized set.
 func (t *GroupTerm) Set() bool { return t.Rparen.Line() > 0 }
 
+// Pos is the term's first position: its opening paren or its name.
+func (t *GroupTerm) Pos() token.Position {
+	if t.Set() {
+		return t.Lparen
+	}
+	return t.Names[0].Pos()
+}
+
 // End is the term's extent: the closing paren or the last name.
 func (t *GroupTerm) End() token.Position {
 	if t.Set() {

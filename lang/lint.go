@@ -63,14 +63,16 @@ func vetPackage(pr *Project, pkg *Package, memo *vet.Memo) []diag.Diagnostic {
 	if pkg.HasSchema() {
 		out = vet.RunMemo(pkg.merged, pkg.schema, pkg.plan, memo, vet.All()...)
 	}
-	if pkg.HasRouting() {
-		var srcs []vet.GoSource
-		for _, s := range GoSourcesRead(pr.src, pkg.Dir) {
-			if !s.Head {
-				srcs = append(srcs, vet.GoSource{Name: s.Name, Text: s.Text})
-			}
+	var srcs []vet.GoSource
+	for _, s := range GoSourcesRead(pr.src, pkg.Dir) {
+		if !s.Head {
+			srcs = append(srcs, vet.GoSource{Name: s.Name, Text: s.Text})
 		}
+	}
+	if pkg.HasRouting() {
 		out = append(out, vet.RunGo(pkg.Dir, srcs, bodiesOf(pkg))...)
+	} else {
+		out = append(out, vet.RunGo(pkg.Dir, srcs, nil, vet.ByName("packagedoc"))...)
 	}
 	return append(out, vetUnusedPipelines(pkg)...)
 }

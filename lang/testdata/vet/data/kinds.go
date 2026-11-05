@@ -1,3 +1,4 @@
+// Package data is documented here, where vet reports it.
 package data
 
 import "fmt"

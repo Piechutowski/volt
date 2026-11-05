@@ -28,6 +28,8 @@ func DocOf(n Node) *CommentGroup {
 		return x.Doc
 	case *Group:
 		return x.Doc
+	case *GroupTerm:
+		return x.Doc
 	case *Pred:
 		return x.Doc
 	case *Select:
