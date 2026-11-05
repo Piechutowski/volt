@@ -43,6 +43,7 @@ group series {
 }
 
 select browse for series where year = :year [order: (id asc)]
+select recent for series [order: (id desc), limit: :limit]
 
 table posts {
   id      int    [pk]

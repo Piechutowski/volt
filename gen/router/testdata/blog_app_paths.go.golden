@@ -126,6 +126,14 @@ func PathMsUsageBrowse(opts ...volt.URLOption) string {
 	return volt.URL("/ms/usage", opts...)
 }
 
+func PathMsrMsRevenueRecent(opts ...volt.URLOption) string {
+	return volt.URL("/msr/revenue", opts...)
+}
+
+func PathMsrMsUsageRecent(opts ...volt.URLOption) string {
+	return volt.URL("/msr/usage", opts...)
+}
+
 func PathRefUsers(opts ...volt.URLOption) string {
 	return volt.URL("/ref/users", opts...)
 }

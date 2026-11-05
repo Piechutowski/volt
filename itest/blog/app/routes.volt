@@ -59,6 +59,7 @@ scope / [pipe: api, error_handler: Errors] {
 			picks db.UserLatest(n)
 		}
 		get /latest db.UserLatest
+		get /top/:limit(int) db.UserLatest [name: top]
 	}
 
 	get /tags/:name             Tags.Show    [name: tag]

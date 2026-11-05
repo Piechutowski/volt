@@ -215,6 +215,7 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathMeUserList":       {"GET", app.PathMeUserList()},
 		"PathMePicks":          {"GET", app.PathMePicks(2)},
 		"PathMeUserLatest":     {"GET", app.PathMeUserLatest(volt.Query("limit", "2"))},
+		"PathMeTop":            {"GET", app.PathMeTop(2)},
 		"PathServe":            {"GET", app.PathServe("a/b c.txt")},
 		"PathOpsFail":          {"GET", app.PathOpsFail()},
 		"PathTag":              {"GET", app.PathTag("hello world")},
@@ -238,7 +239,7 @@ func TestRoundTripTotality(t *testing.T) {
 	}
 	queryRoutes := map[string]bool{"PathProfile": true, "PathCard": true, "PathPeers": true, "PathBoth": true}
 	bodyRoutes := map[string]bool{"PathChangeEmail": true, "PathLogin": true}
-	haltRoutes := map[string]bool{"PathMeShow": true, "PathMeUserList": true, "PathMePicks": true, "PathMeUserLatest": true}
+	haltRoutes := map[string]bool{"PathMeShow": true, "PathMeUserList": true, "PathMePicks": true, "PathMeUserLatest": true, "PathMeTop": true}
 	for _, r := range app.Table {
 		if r.Query != "" && r.Helper != "" {
 			queryRoutes[r.Helper] = true

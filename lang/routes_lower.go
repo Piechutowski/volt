@@ -279,6 +279,9 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 		l.errorf(pos, "datasets", "only: and except: cannot both be set on a dataset (§dataset-settings)")
 		return nil
 	}
+	if !l.datasetOptionalsRefuse(ds, si, inh.prefix, qual, local) {
+		return nil
+	}
 
 	var out []*RouteInfo
 	for _, m := range si.Members {
@@ -331,6 +334,36 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 		})
 	}
 	return out
+}
+
+// datasetOptionalsRefuse reports, once for the dataset, an optional
+// parameter of its select that no member's route can bind (spec
+// §dataset-declaration): an optional list, or one a scope prefix
+// parameter names.
+func (l *routeLowering) datasetOptionalsRefuse(ds *ast.Dataset, si *SelectInfo, prefix []*ast.Segment, qual string, local bool) bool {
+	ref := ds.Name.Name()
+	if !local {
+		ref = qual + "." + ref
+	}
+	inPrefix := map[string]bool{}
+	for _, seg := range prefix {
+		if seg.Kind != ast.SegLit {
+			inPrefix[seg.Name.Name()] = true
+		}
+	}
+	ok := true
+	for _, p := range si.Params {
+		switch {
+		case !p.Optional:
+		case strings.HasPrefix(p.GoType, "[]"):
+			l.errorf(ds.Name.Pos(), "datasets", "select %s takes the optional list parameter %q, which no dataset's route carries: a missing key and an empty list cannot be told apart in a query string, and an absent list matches every row where an empty one matches none; call the select from Go (§dataset-declaration)", ref, p.GoName)
+			ok = false
+		case inPrefix[p.GoName]:
+			l.errorf(ds.Pos(), "datasets", "parameter %q of select %s is optional, and the scope prefix parameter %q is a path segment, always present; declare the dataset in a scope without that prefix parameter, so the key binds from the query string, or name a second select whose parameter is required (§dataset-declaration)", p.GoName, ref, p.GoName)
+			ok = false
+		}
+	}
+	return ok
 }
 
 func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
@@ -706,14 +739,16 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 			qp.Source = FromBody
 		case sp.optional:
 			qp.Source = FromQuery
-			if pp, inPath := byName[sp.name]; inPath {
+			pp, inPath := byName[sp.name]
+			if inPath {
 				bound[sp.name] = true
-				l.errorf(segAt.pos(pp.Name), "query-routes", "parameter %q of %s is optional, and a path segment is always present; pass it in the query string, or route a second select whose parameter is required (§query-routes)", sp.name, ref)
-				ok = false
 			}
 			switch {
 			case strings.HasPrefix(sp.goType, "[]"):
 				l.errorf(pos, "query-routes", "%s takes the optional list parameter %q, which a route cannot carry: a missing key and an empty list cannot be told apart in a query string, and an absent list matches every row where an empty one matches none; call the select from Go (§query-routes)", ref, sp.name)
+				ok = false
+			case inPath:
+				l.errorf(segAt.pos(pp.Name), "query-routes", "parameter %q of %s is optional, and a path segment is always present; pass it in the query string, or route a second select whose parameter is required (§query-routes)", sp.name, ref)
 				ok = false
 			case !queryValueTypes[sp.goType]:
 				l.errorf(pos, "query-routes", "parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, qp.Type())

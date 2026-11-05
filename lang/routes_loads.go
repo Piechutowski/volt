@@ -251,14 +251,14 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 				_, inPath = byName[a.Name()]
 			}
 			switch {
+			case list:
+				l.errorf(arg.Pos(), "route-loads", "argument %d of %s binds the optional list parameter %q, which a load cannot carry: a missing key and an empty list cannot be told apart in a query string, and an absent list matches every row where an empty one matches none; call the select in the handler with Then (§route-loads, §query-routes)", i+1, ref, sp.name)
+				ok = false
 			case !isName || a.Name() == "true" || a.Name() == "false":
 				l.errorf(arg.Pos(), "route-loads", "argument %d of %s binds the optional parameter %q, which a literal, always present, cannot bind: an optional parameter binds from the query string only; name a query-string key, or load a second select whose parameter is required (§route-loads)", i+1, ref, sp.name)
 				ok = false
 			case inPath:
 				l.errorf(a.Pos(), "route-loads", "argument %d of %s binds the optional parameter %q, which a path parameter, always present, cannot bind: an optional parameter binds from the query string only; name a query-string key, or load a second select whose parameter is required (§route-loads)", i+1, ref, sp.name)
-				ok = false
-			case list:
-				l.errorf(a.Pos(), "route-loads", "argument %d of %s binds the optional list parameter %q, which a load cannot carry: a missing key and an empty list cannot be told apart in a query string, and an absent list matches every row where an empty one matches none (§route-loads, §query-routes)", i+1, ref, sp.name)
 				ok = false
 			default:
 				qp.Source, qp.Name = FromQuery, a.Name()

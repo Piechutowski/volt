@@ -31,6 +31,7 @@ var Table = []volt.Route{
 	{Method: "GET", Pattern: "/me/peers", Spelled: "/me/peers", Query: "db.UserList", Helper: "PathMeUserList"},
 	{Method: "GET", Pattern: "/me/picks/{n}", Spelled: "/me/picks/:n(int)", Controller: "Me", Action: "Picks", Helper: "PathMePicks", Params: []volt.RouteParam{{Name: "n", Type: "int"}}},
 	{Method: "GET", Pattern: "/me/latest", Spelled: "/me/latest", Query: "db.UserLatest", Helper: "PathMeUserLatest"},
+	{Method: "GET", Pattern: "/me/top/{limit}", Spelled: "/me/top/:limit(int)", Query: "db.UserLatest", Helper: "PathMeTop", Params: []volt.RouteParam{{Name: "limit", Type: "int"}}},
 	{Method: "GET", Pattern: "/tags/{name}", Spelled: "/tags/:name", Controller: "Tags", Action: "Show", Helper: "PathTag", Params: []volt.RouteParam{{Name: "name", Type: "string"}}},
 	{Method: "GET", Pattern: "/pages/{num}", Spelled: "/pages/:num(int)", Controller: "Pages", Action: "Show", Helper: "PathPage", Params: []volt.RouteParam{{Name: "num", Type: "int"}}},
 	{Method: "GET", Pattern: "/archive/{stamp}", Spelled: "/archive/:stamp(int)", Controller: "Archive", Action: "Show", Helper: "PathArchive", Params: []volt.RouteParam{{Name: "stamp", Type: "int"}}},

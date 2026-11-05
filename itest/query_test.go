@@ -317,9 +317,9 @@ func TestLoadKeyBindsTwice(t *testing.T) {
 }
 
 // TestScopeLoadLimitParam (§scope-loads, §route-loads, §query-routes): a
-// limit from the path is checked with the path parameters, before the
-// scope load runs or halts, and one from the query string where it binds,
-// after the scope load, as every query key is.
+// limit from the path, of a load or of a query route, is checked with the
+// path parameters, before the scope load runs or halts, and one from the
+// query string where it binds, after the scope load, as every query key is.
 func TestScopeLoadLimitParam(t *testing.T) {
 	h, ran := countedHandler()
 	call(h, "POST", "/api/users", strings.NewReader(`{"email":"two@example.com"}`))
@@ -334,16 +334,30 @@ func TestScopeLoadLimitParam(t *testing.T) {
 	if n := ran.Load() - served; n != 2 {
 		t.Fatalf("the served route ran %d statements; want the scope load's and the route load's, or the counts below prove nothing", n)
 	}
+	served = ran.Load()
+	rec = call(h, "GET", app.PathMeTop(2), nil, "X-User", "1")
+	var top []db.User
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &top) != nil || len(top) != 2 || top[0].ID != 3 || top[1].ID != 2 {
+		t.Fatalf("top 2: %d %s, want users 3 and 2", rec.Code, rec.Body.String())
+	}
+	if n := ran.Load() - served; n != 2 {
+		t.Fatalf("the served query route ran %d statements; want the scope load's and the query's, or the counts below prove nothing", n)
+	}
 	for _, user := range []string{"", "1"} {
 		for _, n := range []int{0, -1} {
-			before := ran.Load()
-			rec = call(h, "GET", app.PathMePicks(n), nil, "X-User", user)
-			var p volt.Problem
-			if rec.Code != 400 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || !strings.Contains(p.Message, "parameter n") {
-				t.Errorf("picks %d, X-User %q: %d %q, want a 400 naming n before the scope load (§scope-loads)", n, user, rec.Code, rec.Body.String())
-			}
-			if count := ran.Load() - before; count != 0 {
-				t.Errorf("picks %d, X-User %q ran %d statements; want none, the scope load's among them", n, user, count)
+			for _, tc := range []struct{ target, key string }{
+				{app.PathMePicks(n), "parameter n"},
+				{app.PathMeTop(n), "parameter limit"},
+			} {
+				before := ran.Load()
+				rec = call(h, "GET", tc.target, nil, "X-User", user)
+				var p volt.Problem
+				if rec.Code != 400 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || !strings.Contains(p.Message, tc.key) {
+					t.Errorf("%s, X-User %q: %d %q, want a 400 naming %s before the scope load (§scope-loads)", tc.target, user, rec.Code, rec.Body.String(), tc.key)
+				}
+				if count := ran.Load() - before; count != 0 {
+					t.Errorf("%s, X-User %q ran %d statements; want none, the scope load's among them", tc.target, user, count)
+				}
 			}
 		}
 	}
@@ -382,8 +396,8 @@ func TestQueryRouteTable(t *testing.T) {
 			t.Errorf("%s %s: helper %q — only GET query routes have one", r.Method, r.Spelled, r.Helper)
 		}
 	}
-	if seen != 28 {
-		t.Errorf("query rows = %d, want 28 (nine query routes, two under a scope load, two dataset members, fifteen resources [default] routes)", seen)
+	if seen != 29 {
+		t.Errorf("query rows = %d, want 29 (nine query routes, three under a scope load, two dataset members, fifteen resources [default] routes)", seen)
 	}
 }
 

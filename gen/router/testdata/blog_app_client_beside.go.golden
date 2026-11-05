@@ -218,6 +218,20 @@ func (c *Client) MsUsageBrowse(ctx context.Context, year int) ([]MsUsage, error)
 	return voltOut, voltErr
 }
 
+func (c *Client) MsrMsRevenueRecent(ctx context.Context, limit int) ([]MsRevenue, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []MsRevenue
+	voltErr := c.Do(ctx, "GET", volt.URL("/msr/revenue", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) MsrMsUsageRecent(ctx context.Context, limit int) ([]MsUsage, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []MsUsage
+	voltErr := c.Do(ctx, "GET", volt.URL("/msr/usage", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
 func (c *Client) RefUsers(ctx context.Context) ([]User, error) {
 	var voltOut []User
 	voltErr := c.Do(ctx, "GET", volt.URL("/ref/users"), nil, &voltOut)

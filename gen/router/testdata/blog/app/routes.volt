@@ -76,6 +76,9 @@ scope / [pipe: api, error_handler: Errors] {
 	scope /ms {
 		dataset db.browse [strip: "ms_"]
 	}
+	scope /msr [name: msr] {
+		dataset db.recent [strip: "ms_"]
+	}
 
 	// Default handlers (§default-handlers): every action is a query route over
 	// the table's generated CRUD; no controller to write.

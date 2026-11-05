@@ -90,6 +90,10 @@ func PathMeUserLatest(opts ...volt.URLOption) string {
 	return volt.URL("/me/latest", opts...)
 }
 
+func PathMeTop(limit int, opts ...volt.URLOption) string {
+	return volt.URL("/me/top/"+volt.SegInt(limit), opts...)
+}
+
 func PathTag(name string, opts ...volt.URLOption) string {
 	return volt.URL("/tags/"+volt.Seg(name), opts...)
 }

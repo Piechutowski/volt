@@ -2470,8 +2470,8 @@ parameters, so the handler reads them and never asks for them.
    and the error names the fix: a query-string key, or a second select
    whose parameter is required, which the path parameter or the
    literal then binds. An optional list parameter cannot be
-   loaded at all, for the reason a query route cannot route one
-   (§query-routes). A literal MUST spell the parameter's Go type: a
+   loaded at all, whatever its argument, for the reason a query route
+   cannot route one (§query-routes). A literal MUST spell the parameter's Go type: a
    string literal a `string`, a number an `int` when it is whole and
    a `float64` otherwise, `true` or `false` a `bool`. A parameter of a
    type the query string cannot carry, a declared type (§types) among
@@ -3272,10 +3272,13 @@ scope /ms [pipe: api] {
    the query string alone, absent when the key is missing; a prefix
    parameter the select does not take is an error, and so is one that
    names an optional parameter, since a path segment is always
-   present, and a select with an optional list parameter, which no
-   route carries, makes the dataset an error. The helper and client
-   method names are the scope name prefixes followed by the function
-   name (§query-routes).
+   present, and the error names the fix: the dataset in a scope
+   without that prefix parameter, or a second select whose parameter
+   is required. A select with an optional list parameter, which no
+   route carries (§query-routes), makes the dataset an error; each
+   is reported once for the dataset, not once per member. The helper
+   and client method names are the scope name prefixes followed by
+   the function name (§query-routes).
 3. Expanded routes obey every rule of routes: conflicts (§route-conflicts), one
    helper namespace (§route-names-and-reverse-urls, §generated-client). To hand-write one member's route,
    take it out with `except:` and declare it beside the dataset, with
