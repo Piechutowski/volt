@@ -230,6 +230,7 @@ func TestDocCommentText(t *testing.T) {
 		{"// trailing   \t\ntable t {\n  id int\n}\n", "trailing"},
 		{"// a \\n and \"quotes\" stay\ntable t {\n  id int\n}\n", `a \n and "quotes" stay`},
 		{"\t// indented\ntable t {\n  id int\n}\n", "indented"},
+		{"// crlf line  \r\n// ends\r\ntable t {\r\n  id int\r\n}\r\n", "crlf line\nends"},
 	} {
 		f, diags := parser.ParseFile("t.volt", tc.src)
 		if len(diags) != 0 {

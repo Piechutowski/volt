@@ -2,6 +2,7 @@ package lang_test
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -434,6 +435,72 @@ func TestSessionConcurrentCallersAgreeWithFreshAnalysis(t *testing.T) {
 	for _, err := range errs {
 		if err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestSessionCarriesEditedDocs(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"go.mod":          "module docs\n",
+		"db/schema.volt":  "// The blog data.\npackage db\n\n// A post.\ntable posts {\n\tid int [pk]\n\t// Shown in lists.\n\ttitle string\n}\n\n// Every post.\nselect all for posts\n",
+		"app/routes.volt": "package app\n\nimport (\n\tdb\n)\n\nscope / {\n\t// The front page.\n\tget / Posts.Index\n}\n",
+	}
+	for name, src := range files {
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	generated := func(pr *lang.Project) string {
+		t.Helper()
+		var b strings.Builder
+		data, err := model.Generate(pr.Packages["db"], model.Options{Source: "db"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		routes, err := router.Generate(pr.Packages["app"], router.Options{Source: "app"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, out := range []map[string][]byte{data, routes} {
+			for _, name := range slices.Sorted(maps.Keys(out)) {
+				fmt.Fprintf(&b, "== %s\n%s", name, out[name])
+			}
+		}
+		return b.String()
+	}
+	var s lang.Session
+	schema, routes := filepath.Join(root, "db", "schema.volt"), filepath.Join(root, "app", "routes.volt")
+	for _, edit := range []struct{ name, path, from, to, want string }{
+		{"first", "", "", "", "// A post."},
+		{"table doc", schema, "// A post.", "// A blog post.", "// A blog post."},
+		{"column doc", schema, "// Shown in lists.", "// Shown in every list.", "// Shown in every list."},
+		{"select doc", schema, "// Every post.", "// All the posts.", "// All the posts."},
+		{"package doc", schema, "// The blog data.", "// The blog's data.", "// The blog's data."},
+		{"route doc", routes, "// The front page.", "// The home page.", "// The home page."},
+	} {
+		overlay := map[string]string{}
+		if edit.path != "" {
+			src := files[strings.TrimPrefix(edit.path, root+string(filepath.Separator))]
+			files[strings.TrimPrefix(edit.path, root+string(filepath.Separator))] = strings.Replace(src, edit.from, edit.to, 1)
+		}
+		overlay[schema], overlay[routes] = files["db/schema.volt"], files["app/routes.volt"]
+		pr, _ := sessionRound(t, &s, root, overlay, s.Stats())
+		fresh, err := lang.LoadOverlay(disk.Source{}, root, overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lang.Check(fresh)
+		got, want := generated(pr), generated(fresh)
+		if got != want {
+			t.Fatalf("%s: the session generates other code than a fresh analysis\n--- session\n%s--- fresh\n%s", edit.name, got, want)
+		}
+		if !strings.Contains(got, edit.want) {
+			t.Errorf("%s: the generated code lacks %q:\n%s", edit.name, edit.want, got)
 		}
 	}
 }

@@ -635,3 +635,19 @@ func TestHoverDocComment(t *testing.T) {
 		t.Errorf("hover on an undocumented column carries a doc: %+v", h)
 	}
 }
+
+func TestHoverDocCommentInRoutes(t *testing.T) {
+	src := "package app\n\n// The browser stack.\npipeline browser {\n\t// reads the session\n\tuse Session\n}\n\nscope / {\n\t// The front page.\n\tget / Home.Index {\n\t\t// the posts it lists\n\t\tposts db.PostList()\n\t}\n\tscope /admin {\n\t\t// The admin home.\n\t\tget / Admin.Home\n\t}\n}\n"
+	d := doc(t, src)
+	for needle, want := range map[string]string{
+		"use Session":      "reads the session",
+		"get / Home.Index": "The front page.",
+		"posts db.":        "the posts it lists",
+		"get / Admin.Home": "The admin home.",
+	} {
+		h := d.Hover(posOf(t, src, needle, 0))
+		if h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, want) {
+			t.Errorf("hover at %q = %+v, want the doc text %q (§doc-comments)", needle, h, want)
+		}
+	}
+}

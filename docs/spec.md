@@ -415,9 +415,9 @@ any char = ? any Unicode character ? ;
 3. Comments are trivia: they may appear between any two tokens and have no
    semantic effect, except that one ends a route path or a package path,
    as whitespace does (§route-paths, §imports).
-4. A comment that is the only token-free text of its line, after
-   spaces and tabs, stands **on its own line**; one that follows a token
-   on its line is a **trailing comment**. Consecutive lines that each
+4. A comment with nothing but spaces and tabs before it on its line
+   stands **on its own line**; one that follows a token on its line is
+   a **trailing comment**. Consecutive lines that each
    hold a comment on its own line, with no other line between them,
    form a **comment group**. A blank line, or a line holding a token,
    ends the group.
