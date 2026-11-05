@@ -81,10 +81,6 @@ func (c *Client) Both(ctx context.Context, id int, count int, bio rt.Null[string
 	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/both", voltQ...), nil)
 }
 
-func (c *Client) From(ctx context.Context, id int) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/from"), nil)
-}
-
 func (c *Client) ChangeEmail(ctx context.Context, id int, cs db.UserChangeset) (*http.Response, error) {
 	return c.Raw(ctx, "PATCH", volt.URL("/users/"+volt.SegInt(id)+"/email"), cs.Params())
 }
@@ -192,34 +188,6 @@ func (c *Client) APIUserDescribed(ctx context.Context, bio rt.Null[string], from
 	}
 	var voltOut []db.User
 	voltErr := c.Do(ctx, "GET", volt.URL("/api/described", voltQ...), nil, &voltOut)
-	return voltOut, voltErr
-}
-
-func (c *Client) APIUserChosen(ctx context.Context, ids rt.Null[[]int]) ([]db.User, error) {
-	var voltOut []db.User
-	voltQ := []volt.URLOption{}
-	voltL0, voltE0 := volt.QueryListOptional("ids", ids)
-	if voltE0 != nil {
-		return voltOut, voltE0
-	}
-	voltQ = append(voltQ, voltL0...)
-	voltErr := c.Do(ctx, "GET", volt.URL("/api/chosen", voltQ...), nil, &voltOut)
-	return voltOut, voltErr
-}
-
-func (c *Client) APIRecent(ctx context.Context, limit rt.Null[int]) ([]db.User, error) {
-	voltQ := []volt.URLOption{}
-	if limit.Valid {
-		voltQ = append(voltQ, volt.Query("limit", volt.FormatQuery(limit.V)))
-	}
-	var voltOut []db.User
-	voltErr := c.Do(ctx, "GET", volt.URL("/api/recent", voltQ...), nil, &voltOut)
-	return voltOut, voltErr
-}
-
-func (c *Client) APITop(ctx context.Context, limit int) ([]db.User, error) {
-	var voltOut []db.User
-	voltErr := c.Do(ctx, "GET", volt.URL("/api/top/"+volt.SegInt(limit)), nil, &voltOut)
 	return voltOut, voltErr
 }
 

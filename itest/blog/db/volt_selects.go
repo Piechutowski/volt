@@ -31,12 +31,6 @@ func UserDescribed(bio rt.Null[string], from rt.Null[int]) rt.Query[User] {
 	return rt.Query[User]{SQL: voltUserDescribedSQL, Args: []any{bio, bio, bio, from, from}, Scan: voltUserScan}
 }
 
-const voltUserChosenSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE (? IS NULL OR "id" IN (SELECT value FROM json_each(?))) ORDER BY "id" ASC`
-
-func UserChosen(ids rt.Null[[]int]) rt.Query[User] {
-	return rt.Query[User]{SQL: voltUserChosenSQL, Args: []any{rt.JSONListOptional(ids), rt.JSONListOptional(ids)}, Scan: voltUserScan}
-}
-
 const voltMsRevenueBrowseSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "year" = ? ORDER BY "id" ASC`
 
 func MsRevenueBrowse(year int) rt.Query[MsRevenue] {

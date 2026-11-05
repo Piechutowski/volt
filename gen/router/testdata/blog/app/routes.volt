@@ -21,20 +21,7 @@ scope / [pipe: api, error_handler: Errors] {
 			ten    db.UserLatest(010)
 			written db.UserWritten(title, after)
 		}
-		get /chosen/:email Admin.Chosen {
-			chosen db.UserChosen(ids, email)
-			wrote  db.UserWritten("draft", after)
-		}
-		get /picked/:email db.UserChosen [name: picked_by]
-		get /newest db.UserLatest [name: newest, default_limit: 10, max_limit: 50]
-		get /newest/page Admin.Newest [name: newest_page, max_limit: 20] {
-			rows db.UserLatest(size)
-		}
-		get /newest/mix Admin.Mix [name: newest_mix, default_limit: 3] {
-			rows db.UserLatest(n)
-			more db.UserWritten(title, after)
-		}
-		get /top/:n(int) Admin.Top [max_limit: 100] {
+		get /top/:n(int) Admin.Top {
 			top db.UserLatest(n)
 		}
 		get /keys Admin.Keys {
@@ -88,9 +75,6 @@ scope / [pipe: api, error_handler: Errors] {
 	// A dataset (§datasets): one query route per member of the group select.
 	scope /ms {
 		dataset db.browse [strip: "ms_"]
-	}
-	scope /msr [name: msr] {
-		dataset db.recent [strip: "ms_", default_limit: 5, max_limit: 20]
 	}
 
 	// Default handlers (§default-handlers): every action is a query route over

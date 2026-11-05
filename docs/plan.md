@@ -40,6 +40,15 @@ Nothing is resolved at run time. The generated code, the runtime and the
 tooling follow the functional style: no mutation, no side effects outside
 one performer per lifetime.
 
+### Feature scope
+
+A feature lands only when a real program cannot be written well without
+it, as scopes are for routing. A convenience a handler writes in a few
+lines stays in the handler, and the language does not grow a setting or
+a binding for it: a route's default or most limit, an optional list read
+from the query string and a fixed value bound to an optional parameter
+were built and taken out on this rule.
+
 ### The functional rules
 
 Feldman's reduction: the functional style is avoiding mutation and

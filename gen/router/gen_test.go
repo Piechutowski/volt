@@ -257,12 +257,7 @@ func (stub) Show(r volt.Request, id int) volt.Response { return volt.NoContent()
 func (stub) Create(r volt.Request) volt.Response { return volt.NoContent() }
 func (stub) Avatar(r volt.Request, id int) volt.Response { return volt.NoContent() }
 func (stub) Top(r volt.Request, n int, top []db.User) volt.Response { return volt.NoContent() }
-func (stub) Newest(r volt.Request, rows []db.User) volt.Response { return volt.NoContent() }
-func (stub) Mix(r volt.Request, rows, more []db.User) volt.Response { return volt.NoContent() }
 func (stub) Keys(r volt.Request, a, b []db.User) volt.Response        { return volt.NoContent() }
-func (stub) Chosen(r volt.Request, email string, chosen, wrote []db.User) volt.Response {
-	return volt.NoContent()
-}
 func (stub) Profile(r volt.Request, id int, user db.User, picked, since, recent []db.User) volt.Response {
 	return volt.NoContent()
 }
@@ -700,30 +695,6 @@ func TestPredicateWordsProjectedCompiles(t *testing.T) {
 // §route-loads).
 func TestLoadKeyBindsTwiceCompiles(t *testing.T) {
 	snippetCompiles(t, "v120_load_key_twice")
-}
-
-// TestOptionalAlwaysPresentCompiles proves a path parameter and a literal
-// binding an optional parameter, on a query route and in loads, build
-// through volt.Present, and the client takes the path parameter's own
-// type (spec §query-routes, §route-loads, §generated-client).
-func TestOptionalAlwaysPresentCompiles(t *testing.T) {
-	snippetCompiles(t, "v122_optional_always_present")
-}
-
-// TestOptionalListRoutesCompile proves an optional list parameter routed
-// and loaded, and a dataset whose select takes one or binds an optional
-// one from a prefix parameter, generate routers and clients that build
-// (spec §query-routes, §dataset-declaration, §generated-client).
-func TestOptionalListRoutesCompile(t *testing.T) {
-	for _, name := range []string{"v123_optional_list_routes", "v124_dataset_optional_list", "v125_dataset_optional_prefix"} {
-		snippetCompiles(t, name)
-	}
-}
-
-// TestRouteLimitSettingsCompile proves limit: and max_limit: on a query
-// route and a load route build (spec §route-loads).
-func TestRouteLimitSettingsCompile(t *testing.T) {
-	snippetCompiles(t, "v126_route_limit_settings")
 }
 
 // TestParamNamedQCompiles proves a select parameter and a key column

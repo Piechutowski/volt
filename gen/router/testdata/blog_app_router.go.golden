@@ -47,84 +47,12 @@ func register(mux *http.ServeMux, c Controllers) {
 		})
 	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /admin/chosen/{email}", pipe0(volt.Handler("GET /admin/chosen/{email}", func(r volt.Request) volt.Response {
-		voltLoad0Arg0, err := volt.QueryParamsOptional[int](r, "ids")
-		if err != nil {
-			return volt.Fail(err)
-		}
-		voltLoad1Arg1, err := volt.QueryParamOptional[time.Time](r, "after")
-		if err != nil {
-			return volt.Fail(err)
-		}
-		return volt.Then(db.UserChosen(voltLoad0Arg0, volt.Present(r.PathValue("email"))), func(chosen []db.User) volt.Response {
-			return volt.Then(db.UserWritten(volt.Present("draft"), voltLoad1Arg1), func(wrote []db.User) volt.Response {
-				return c.Admin.Chosen(r, r.PathValue("email"), chosen, wrote)
-			})
-		})
-	}, errHandlerErrors, voltPerform, volt.Params("email"))))
-
-	mux.Handle("GET /admin/picked/{email}", pipe0(volt.Handler("GET /admin/picked/{email}", func(r volt.Request) volt.Response {
-		if _, err := volt.Negotiate(r); err != nil {
-			return volt.Fail(err)
-		}
-		voltids, err := volt.QueryParamsOptional[int](r, "ids")
-		if err != nil {
-			return volt.Fail(err)
-		}
-		return volt.Then(db.UserChosen(voltids, volt.Present(r.PathValue("email"))), func(voltOut []db.User) volt.Response {
-			return volt.RenderStatus(200, voltOut)
-		})
-	}, errHandlerErrors, voltPerform, volt.Params("email"))))
-
-	mux.Handle("GET /admin/newest", pipe0(volt.Handler("GET /admin/newest", func(r volt.Request) volt.Response {
-		if _, err := volt.Negotiate(r); err != nil {
-			return volt.Fail(err)
-		}
-		voltlimit, err := volt.QueryLimit(r, "limit", 10, 50)
-		if err != nil {
-			return volt.Fail(err)
-		}
-		return volt.Then(db.UserLatest(voltlimit), func(voltOut []db.User) volt.Response {
-			return volt.RenderStatus(200, voltOut)
-		})
-	}, errHandlerErrors, voltPerform)))
-
-	mux.Handle("GET /admin/newest/page", pipe0(volt.Handler("GET /admin/newest/page", func(r volt.Request) volt.Response {
-		voltLoad0Arg0, err := volt.QueryLimit(r, "size", 0, 20)
-		if err != nil {
-			return volt.Fail(err)
-		}
-		return volt.Then(db.UserLatest(voltLoad0Arg0), func(rows []db.User) volt.Response {
-			return c.Admin.Newest(r, rows)
-		})
-	}, errHandlerErrors, voltPerform)))
-
-	mux.Handle("GET /admin/newest/mix", pipe0(volt.Handler("GET /admin/newest/mix", func(r volt.Request) volt.Response {
-		voltLoad0Arg0, err := volt.QueryLimit(r, "n", 3, 0)
-		if err != nil {
-			return volt.Fail(err)
-		}
-		voltLoad1Arg0, err := volt.QueryParamOptional[string](r, "title")
-		if err != nil {
-			return volt.Fail(err)
-		}
-		voltLoad1Arg1, err := volt.QueryParamOptional[time.Time](r, "after")
-		if err != nil {
-			return volt.Fail(err)
-		}
-		return volt.Then(db.UserLatest(voltLoad0Arg0), func(rows []db.User) volt.Response {
-			return volt.Then(db.UserWritten(voltLoad1Arg0, voltLoad1Arg1), func(more []db.User) volt.Response {
-				return c.Admin.Mix(r, rows, more)
-			})
-		})
-	}, errHandlerErrors, voltPerform)))
-
 	mux.Handle("GET /admin/top/{n}", pipe0(volt.Handler("GET /admin/top/{n}", func(r volt.Request) volt.Response {
 		voltn, ok := volt.ParseInt(r.PathValue("n"))
 		if !ok {
 			return volt.Fail(volt.ErrNotFound)
 		}
-		if err := volt.LimitCheck("n", voltn, 100); err != nil {
+		if err := volt.LimitCheck("n", voltn); err != nil {
 			return volt.Fail(err)
 		}
 		return volt.Then(db.UserLatest(voltn), func(top []db.User) volt.Response {
@@ -137,7 +65,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if err != nil {
 			return volt.Fail(err)
 		}
-		if err := volt.LimitCheck("ctx", voltLoad0Arg0, 0); err != nil {
+		if err := volt.LimitCheck("ctx", voltLoad0Arg0); err != nil {
 			return volt.Fail(err)
 		}
 		voltLoad1Arg0, err := volt.QueryParam[time.Time](r, "ctx_")
@@ -196,7 +124,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if err != nil {
 			return volt.Fail(err)
 		}
-		if err := volt.LimitCheck("count", voltLoad3Arg0, 0); err != nil {
+		if err := volt.LimitCheck("count", voltLoad3Arg0); err != nil {
 			return volt.Fail(err)
 		}
 		return volt.Then(db.UserGet(voltid), func(user db.User) volt.Response {
@@ -268,7 +196,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if !ok {
 			return volt.Fail(volt.ErrNotFound)
 		}
-		if err := volt.LimitCheck("n", voltn, 0); err != nil {
+		if err := volt.LimitCheck("n", voltn); err != nil {
 			return volt.Fail(err)
 		}
 		return volt.Continue(CurrentUser(r), func(user db.User) volt.Response {
@@ -287,7 +215,7 @@ func register(mux *http.ServeMux, c Controllers) {
 			if err != nil {
 				return volt.Fail(err)
 			}
-			if err := volt.LimitCheck("limit", voltlimit, 0); err != nil {
+			if err := volt.LimitCheck("limit", voltlimit); err != nil {
 				return volt.Fail(err)
 			}
 			return volt.Then(db.UserLatest(voltlimit), func(voltOut []db.User) volt.Response {
@@ -417,7 +345,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		if err != nil {
 			return volt.Fail(err)
 		}
-		if err := volt.LimitCheck("limit", voltlimit, 0); err != nil {
+		if err := volt.LimitCheck("limit", voltlimit); err != nil {
 			return volt.Fail(err)
 		}
 		return volt.Then(db.UserLatest(voltlimit), func(voltOut []db.User) volt.Response {
@@ -518,32 +446,6 @@ func register(mux *http.ServeMux, c Controllers) {
 			return volt.Fail(err)
 		}
 		return volt.Then(db.MsUsageBrowse(voltyear), func(voltOut []db.MsUsage) volt.Response {
-			return volt.RenderStatus(200, voltOut)
-		})
-	}, errHandlerErrors, voltPerform)))
-
-	mux.Handle("GET /msr/revenue", pipe0(volt.Handler("GET /msr/revenue", func(r volt.Request) volt.Response {
-		if _, err := volt.Negotiate(r); err != nil {
-			return volt.Fail(err)
-		}
-		voltlimit, err := volt.QueryLimit(r, "limit", 5, 20)
-		if err != nil {
-			return volt.Fail(err)
-		}
-		return volt.Then(db.MsRevenueRecent(voltlimit), func(voltOut []db.MsRevenue) volt.Response {
-			return volt.RenderStatus(200, voltOut)
-		})
-	}, errHandlerErrors, voltPerform)))
-
-	mux.Handle("GET /msr/usage", pipe0(volt.Handler("GET /msr/usage", func(r volt.Request) volt.Response {
-		if _, err := volt.Negotiate(r); err != nil {
-			return volt.Fail(err)
-		}
-		voltlimit, err := volt.QueryLimit(r, "limit", 5, 20)
-		if err != nil {
-			return volt.Fail(err)
-		}
-		return volt.Then(db.MsUsageRecent(voltlimit), func(voltOut []db.MsUsage) volt.Response {
 			return volt.RenderStatus(200, voltOut)
 		})
 	}, errHandlerErrors, voltPerform)))

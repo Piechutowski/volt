@@ -70,11 +70,6 @@ type RouteInfo struct {
 	// Timeout the seconds of its timeout: setting, 0 when none.
 	Loads   []LoadInfo
 	Timeout int
-	// LimitDefault and LimitMost are its default_limit: and max_limit: settings,
-	// 0 when absent: the limit a select's limit: parameter takes from the
-	// query string when the key is missing, and the most it takes.
-	LimitDefault int
-	LimitMost    int
 	// Body is how a controller route binds its request body, nil when it
 	// takes none (§request-bodies).
 	Body *BodyInfo
@@ -108,7 +103,7 @@ type QueryParam struct {
 	Source   QuerySource
 	Literal  string // the Go spelling of a FromLiteral argument (§route-loads)
 	Limit    bool   // the select's limit: parameter, which a request value binds only when at least 1 (§selects-over-groups)
-	Optional bool   // an optional parameter (§predicates), rt.Null[GoType] in Go: from the query string absent when the key is missing, from a path parameter or a literal always present
+	Optional bool   // an optional parameter (§predicates): FromQuery, absent when the key is missing, rt.Null[GoType] in Go
 }
 
 // Type is the parameter's Go type in the query's signature: GoType, or

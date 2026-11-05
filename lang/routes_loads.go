@@ -79,9 +79,8 @@ func (l *routeLowering) loads(r *ast.Route, params []Param, inh inherited) (load
 
 // loadKeysAgree holds the query-string keys the loads of a route bind to
 // one Go type each (spec §route-loads, §generated-client): the client
-// method takes a key once, so a key two loads bind as two types, or as a
-// list one load requires and another takes optional, which no one
-// argument of the method can serve, is an error.
+// method takes a key once, so a key two loads bind as two types, which
+// no one argument of the method can serve, is an error.
 func (l *routeLowering) loadKeysAgree(ld *ast.Load, q *QueryRef, keys map[string]keyBinding) bool {
 	for _, p := range q.Params {
 		if p.Source != FromQuery && p.Source != FromList {
@@ -92,12 +91,8 @@ func (l *routeLowering) loadKeysAgree(ld *ast.Load, q *QueryRef, keys map[string
 			keys[p.Name] = keyBinding{p, ld.Name.Name()}
 			continue
 		}
-		switch {
-		case first.p.GoType != p.GoType:
+		if first.p.GoType != p.GoType {
 			l.errorf(ld.Call.Pos(), "route-loads", "load %s binds the query key %q as %s, and load %s binds it as %s; one key binds one type, the one the client sends it as (§route-loads, §generated-client)", ld.Name.Name(), p.Name, p.Type(), first.load, first.p.Type())
-			return false
-		case p.Source == FromList && first.p.Optional != p.Optional:
-			l.errorf(ld.Call.Pos(), "route-loads", "load %s binds the list key %q %s, and load %s binds it %s; a missing key is an empty list to one and absent to the other, which no one argument of the client tells apart (§route-loads, §generated-client)", ld.Name.Name(), p.Name, optionalWord(p.Optional), first.load, optionalWord(first.p.Optional))
 			return false
 		}
 	}
@@ -107,13 +102,6 @@ func (l *routeLowering) loadKeysAgree(ld *ast.Load, q *QueryRef, keys map[string
 type keyBinding struct {
 	p    QueryParam
 	load string
-}
-
-func optionalWord(optional bool) string {
-	if optional {
-		return "optional"
-	}
-	return "required"
 }
 
 // loadNameOK reports whether a load may be named so (spec §route-loads,
@@ -256,6 +244,28 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 			qr.Params = append(qr.Params, qp)
 			continue
 		}
+		if sp.optional {
+			a, isName := arg.(*ast.Ident)
+			inPath := false
+			if isName {
+				_, inPath = byName[a.Name()]
+			}
+			switch {
+			case !isName || a.Name() == "true" || a.Name() == "false":
+				l.errorf(arg.Pos(), "route-loads", "argument %d of %s binds the optional parameter %q, which a literal, always present, cannot bind: an optional parameter binds from the query string only; name a query-string key, or load a second select whose parameter is required (§route-loads)", i+1, ref, sp.name)
+				ok = false
+			case inPath:
+				l.errorf(a.Pos(), "route-loads", "argument %d of %s binds the optional parameter %q, which a path parameter, always present, cannot bind: an optional parameter binds from the query string only; name a query-string key, or load a second select whose parameter is required (§route-loads)", i+1, ref, sp.name)
+				ok = false
+			case list:
+				l.errorf(a.Pos(), "route-loads", "argument %d of %s binds the optional list parameter %q, which a load cannot carry: a missing key and an empty list cannot be told apart in a query string, and an absent list matches every row where an empty one matches none (§route-loads, §query-routes)", i+1, ref, sp.name)
+				ok = false
+			default:
+				qp.Source, qp.Name = FromQuery, a.Name()
+			}
+			qr.Params = append(qr.Params, qp)
+			continue
+		}
 		switch a := arg.(type) {
 		case *ast.Ident:
 			if a.Name() == "true" || a.Name() == "false" {
@@ -343,21 +353,6 @@ func numberLiteral(lit, goType string) string {
 		return ""
 	}
 	return s
-}
-
-// limitSetting reads a route's or a dataset's default_limit: or
-// max_limit: setting (spec §route-loads, §dataset-settings): a positive
-// integer of rows that fits a 32-bit int, as the limit it governs is an
-// int on every target.
-func (l *routeLowering) limitSetting(s *ast.Setting, code, cite string) (int, bool) {
-	lit, ok := s.Value.(*ast.BasicLit)
-	if ok && lit.Tok.Kind == token.NUMBER {
-		if n, err := strconv.ParseInt(lit.Tok.Val, 10, 32); err == nil && n > 0 {
-			return int(n), true
-		}
-	}
-	l.errorf(s.Pos(), code, "%s: takes a positive integer of rows that fits a 32-bit int, at most 2147483647, the limit it governs being an int (%s)", s.Name, cite)
-	return 0, false
 }
 
 // timeout reads a route's timeout: setting (spec §route-loads): a

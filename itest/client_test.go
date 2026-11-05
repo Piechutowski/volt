@@ -234,30 +234,6 @@ func TestClientHeader(t *testing.T) {
 // absent one out of the query string, the route binds the missing key as
 // absent, and the select's term that reads it is true, an exists term
 // whole (spec §predicates, §query-routes, §generated-client).
-// TestClientDefaultLimit (§generated-client, §route-loads): the client
-// takes the limit of a route with default_limit: as an rt.Null[int], so
-// an absent limit leaves the key out and the route's default applies.
-func TestClientDefaultLimit(t *testing.T) {
-	ctx := context.Background()
-	dbh := fixtureDB()
-	for _, email := range []string{"two@example.com", "three@example.com"} {
-		if _, err := run.Run(ctx, dbh, db.UserCreate(db.UserNew().EmailSet(email))); err != nil {
-			t.Fatal(err)
-		}
-	}
-	srv := httptest.NewServer(app.NewRouter(fixtureControllers(dbh, &volt.Broker{})))
-	defer srv.Close()
-	c := client.New(srv.URL)
-	for _, tc := range []struct {
-		limit rt.Null[int]
-		want  int
-	}{{rt.Null[int]{}, 2}, {rt.Some(3), 3}, {rt.Some(1), 1}} {
-		if rows, err := c.APIRecent(ctx, tc.limit); err != nil || len(rows) != tc.want {
-			t.Errorf("recent, limit %v: %d rows, %v; want %d", tc.limit, len(rows), err, tc.want)
-		}
-	}
-}
-
 func TestClientOptionalParams(t *testing.T) {
 	ctx := context.Background()
 	dbh := fixtureDB()
@@ -298,31 +274,7 @@ func TestClientOptionalParams(t *testing.T) {
 	if rec := call(h, "GET", "/api/described?from=many", nil); rec.Code != 400 || !strings.Contains(rec.Body.String(), "from") {
 		t.Errorf("an unparseable optional value: %d %q, want a 400 naming from", rec.Code, rec.Body.String())
 	}
-	for _, tc := range []struct {
-		name string
-		ids  rt.Null[[]int]
-		want []int
-	}{
-		{"an absent list", rt.Null[[]int]{}, []int{1, two.ID}},
-		{"a present list", rt.Some([]int{two.ID, 99}), []int{two.ID}},
-	} {
-		rows, err := c.APIUserChosen(ctx, tc.ids)
-		if err != nil || !slices.Equal(ids(rows), tc.want) {
-			t.Errorf("%s: %v, %v; want %v", tc.name, ids(rows), err, tc.want)
-		}
-	}
-	if rows, err := c.APIUserChosen(ctx, rt.Some([]int{})); err == nil || !strings.Contains(err.Error(), "ids") {
-		t.Errorf("a present empty list = %v, %v; want the client to refuse it, naming ids, before it sends", rows, err)
-	}
-	resp, err := c.From(ctx, two.ID)
-	var got struct{ Profiled []int }
-	if err != nil || json.NewDecoder(resp.Body).Decode(&got) != nil || !slices.Equal(got.Profiled, []int{two.ID}) {
-		t.Errorf("a load binding optional parameters from a literal and a path parameter = %v, %v; want the users from %d with a profile", got, err, two.ID)
-	}
-	if resp != nil {
-		resp.Body.Close()
-	}
-	resp, err = c.Both(ctx, 1, 2, rt.Some("%go%"))
+	resp, err := c.Both(ctx, 1, 2, rt.Some("%go%"))
 	var both map[string]int
 	if err != nil || resp.StatusCode != 200 || json.NewDecoder(resp.Body).Decode(&both) != nil || both["latest"] != 2 || both["described"] != 1 {
 		t.Errorf("the raw method of a controller route sending its loads' keys = %v, %v, %v; want latest 2 and described 1, the user from 2 whose bio is about go", resp, both, err)

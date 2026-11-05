@@ -18,26 +18,6 @@ func PathAdminStats(opts ...volt.URLOption) string {
 	return volt.URL("/admin/stats", opts...)
 }
 
-func PathAdminChosen(email string, opts ...volt.URLOption) string {
-	return volt.URL("/admin/chosen/"+volt.Seg(email), opts...)
-}
-
-func PathAdminPickedBy(email string, opts ...volt.URLOption) string {
-	return volt.URL("/admin/picked/"+volt.Seg(email), opts...)
-}
-
-func PathAdminNewest(opts ...volt.URLOption) string {
-	return volt.URL("/admin/newest", opts...)
-}
-
-func PathAdminNewestPage(opts ...volt.URLOption) string {
-	return volt.URL("/admin/newest/page", opts...)
-}
-
-func PathAdminNewestMix(opts ...volt.URLOption) string {
-	return volt.URL("/admin/newest/mix", opts...)
-}
-
 func PathAdminTop(n int, opts ...volt.URLOption) string {
 	return volt.URL("/admin/top/"+volt.SegInt(n), opts...)
 }
@@ -144,14 +124,6 @@ func PathMsRevenueBrowse(opts ...volt.URLOption) string {
 
 func PathMsUsageBrowse(opts ...volt.URLOption) string {
 	return volt.URL("/ms/usage", opts...)
-}
-
-func PathMsrMsRevenueRecent(opts ...volt.URLOption) string {
-	return volt.URL("/msr/revenue", opts...)
-}
-
-func PathMsrMsUsageRecent(opts ...volt.URLOption) string {
-	return volt.URL("/msr/usage", opts...)
 }
 
 func PathRefUsers(opts ...volt.URLOption) string {

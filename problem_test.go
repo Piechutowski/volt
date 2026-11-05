@@ -86,7 +86,7 @@ func TestProblemOfPrecedence(t *testing.T) {
 	if p, ok := ProblemOf(fmt.Errorf("load: %w", rt.ErrNotFound)); !ok || p.Status != http.StatusNotFound {
 		t.Errorf("a row miss = %+v, %v; want 404", p, ok)
 	}
-	if p, ok := ProblemOf(LimitCheck("limit", 0, 0)); !ok || p.Status != http.StatusBadRequest || !strings.Contains(p.Message, "limit") {
+	if p, ok := ProblemOf(LimitCheck("limit", 0)); !ok || p.Status != http.StatusBadRequest || !strings.Contains(p.Message, "limit") {
 		t.Errorf("a request's limit below 1 = %+v, %v; want a 400 naming the key (§query-routes)", p, ok)
 	}
 	if p, ok := ProblemOf(rt.LimitCheck(0)); ok {

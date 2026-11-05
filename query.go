@@ -49,81 +49,16 @@ func QueryParamOptional[T QueryValue](r Request, name string) (rt.Null[T], error
 	return rt.Some(v), nil
 }
 
-// QueryParamsOptional binds an optional list parameter (§predicates)
-// from the repeated query key, as a generated query route or route load
-// does (§query-routes): absent when the key is missing, every value of
-// the key in order otherwise, so a request never presents an empty list;
-// an element that does not parse is a 400 naming the parameter.
-func QueryParamsOptional[T QueryValue](r Request, name string) (rt.Null[[]T], error) {
-	if vals, ok := r.Query()[name]; !ok || len(vals) == 0 {
-		return rt.Null[[]T]{}, nil
+// LimitCheck is nil for a limit of at least 1 and otherwise the 400 naming
+// the request key it came from (§query-routes, §route-loads): a generated
+// route refuses a select's limit: parameter below 1 where it binds it, a
+// path parameter before the scope loads and a query key before the query
+// or the route's loads, since SQLite reads a negative limit as none.
+func LimitCheck(name string, n int) error {
+	if n >= 1 {
+		return nil
 	}
-	vs, err := QueryParams[T](r, name)
-	if err != nil {
-		return rt.Null[[]T]{}, err
-	}
-	return rt.Some(vs), nil
-}
-
-// Present is v as a present optional parameter (§route-loads): what a
-// generated route binds an optional parameter to from a path parameter
-// or a literal, which is always present.
-func Present[T QueryValue](v T) rt.Null[T] { return rt.Some(v) }
-
-// QueryListOptional is the query-string options a generated client sends
-// for an optional list parameter (§generated-client): none when it is
-// absent and the repeated key when it is present, and an error naming the
-// parameter for a present empty list, which the query string cannot
-// carry: the route reads a missing key as absent, which matches every row
-// where the empty list matches none.
-func QueryListOptional[T QueryValue](name string, v rt.Null[[]T]) ([]URLOption, error) {
-	if !v.Valid {
-		return nil, nil
-	}
-	if len(v.V) == 0 {
-		return nil, fmt.Errorf("volt: the optional list parameter %s is present and empty, which the query string cannot carry; leave it absent to match every row", name)
-	}
-	out := make([]URLOption, len(v.V))
-	for i, x := range v.V {
-		out[i] = Query(name, FormatQuery(x))
-	}
-	return out, nil
-}
-
-// LimitCheck is nil for a limit of at least 1 and, when most is set, at
-// most most, and otherwise the 400 naming the request key it came from
-// (§query-routes, §route-loads): a generated route refuses a select's
-// limit: parameter below 1, or above the route's max_limit:, where it
-// binds it, a path parameter before the scope loads and a query key
-// before the query or the route's loads, since SQLite reads a negative
-// limit as none.
-func LimitCheck(name string, n, most int) error {
-	if n < 1 {
-		return Error(http.StatusBadRequest, fmt.Sprintf("parameter %s is a limit, at least 1, not %d", name, n))
-	}
-	if most > 0 && n > most {
-		return Error(http.StatusBadRequest, fmt.Sprintf("parameter %s is a limit, at most %d, not %d", name, most, n))
-	}
-	return nil
-}
-
-// QueryLimit binds a select's limit: parameter from the query string under
-// a route's limit: and max_limit: settings (§route-loads): def when the key
-// is missing and def is set, a 400 naming the key when it is missing and
-// def is not, and a 400 naming the key for a value below 1 or, when most
-// is set, above most.
-func QueryLimit(r Request, name string, def, most int) (int, error) {
-	if vals, ok := r.Query()[name]; (!ok || len(vals) == 0) && def > 0 {
-		return def, nil
-	}
-	n, err := QueryParam[int](r, name)
-	if err != nil {
-		return 0, err
-	}
-	if err := LimitCheck(name, n, most); err != nil {
-		return 0, err
-	}
-	return n, nil
+	return Error(http.StatusBadRequest, fmt.Sprintf("parameter %s is a limit, at least 1, not %d", name, n))
 }
 
 // QueryParams binds a list parameter (§predicates): every value of a repeated

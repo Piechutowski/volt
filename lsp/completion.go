@@ -36,9 +36,9 @@ var (
 		"migration": {"irreversible", "no_transaction"},
 		"ref":       {"delete: ", "update: ", "as: ", "reverse: "},
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
-		"route":     {"name: ", "timeout: ", "body: ", "only: (", "default_limit: ", "max_limit: "},
+		"route":     {"name: ", "timeout: ", "body: ", "only: ("},
 		"resources": {"only: (", "except: (", "param: ", "singular: ", "api", "default"},
-		"dataset":   {"strip: ", "only: (", "except: (", "default_limit: ", "max_limit: "},
+		"dataset":   {"strip: ", "only: (", "except: ("},
 
 		"migrationcolumn": {"pk", "null", "unique", "index", "autoincrement", "default: ", "ref: ", "delete: ", "update: "},
 		"rebuildcolumn":   {"pk", "null", "unique", "index", "autoincrement", "default: ", "ref: ", "delete: ", "update: ", "from: "},

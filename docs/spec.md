@@ -474,7 +474,7 @@ then reads it as that keyword, so the error is reported once.
 |---|---|---|
 | element and block words | `table`, `table_partial`, `type`, `ref`, `records`, `group`, `pred`, `select`, `migration`, `pipeline`, `scope`, `indexes`, `validators` | §program-structure, §indexes, §validators |
 | package words | `package`, `import` | §projects-and-packages, §imports |
-| setting names | `pk`, `null`, `unique`, `index`, `autoincrement`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `group`, `limit`, `default_limit`, `max_limit`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
+| setting names | `pk`, `null`, `unique`, `index`, `autoincrement`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `group`, `limit`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
 | referential actions | `cascade`, `restrict`, `set_null`, `set_default` | §relationships-ref |
 | resource actions | `index`, `new`, `create`, `show`, `edit`, `update`, `delete` | §the-action-table |
 | order directions | `asc`, `desc` | §selects-over-groups |
@@ -2463,15 +2463,15 @@ parameters, so the handler reads them and never asks for them.
    missing key that one of them requires is a 400 whatever else it
    binds; every argument a key binds has one Go type, the one the
    generated client sends it as (§generated-client), so a key two
-   arguments bind as two types is an error, and so is a list key one
-   argument requires and another takes optional, a missing key being an
-   empty list to the one and absent to the other, which no one argument
-   of the client tells apart. An optional parameter (§predicates) binds from
-   the query string absent when the key is missing, an optional list
-   from the repeated key, as a query route binds them (§query-routes),
-   and from a path parameter or a literal present, since either is
-   always present: `feed db.PostFeed("go", at, id, 20)` loads the feed
-   of one tag through the select that serves every tag. A literal MUST spell the parameter's Go type: a
+   arguments bind as two types is an error. An optional parameter
+   (§predicates) binds from the query string only, absent when the key
+   is missing, as a query route binds it (§query-routes). A path
+   parameter or a literal, which is always present, cannot bind it,
+   and the error names the fix: a query-string key, or a second select
+   whose parameter is required, which the path parameter or the
+   literal then binds. An optional list parameter cannot be
+   loaded at all, for the reason a query route cannot route one
+   (§query-routes). A literal MUST spell the parameter's Go type: a
    string literal a `string`, a number an `int` when it is whole and
    a `float64` otherwise, `true` or `false` a `bool`. A parameter of a
    type the query string cannot carry, a declared type (§types) among
@@ -2502,37 +2502,7 @@ parameters, so the handler reads them and never asks for them.
    the handler would (§requests-and-responses): a missing row is a 404,
    and the handler never sees it. A route that must decide on a miss
    loads nothing and uses `Then` with `Rescue`.
-5. **`default_limit` and `max_limit`.** Route settings, each a
-   positive integer of rows that fits a 32-bit `int`, at most
-   2147483647, since the limit they govern is an `int` and an `int` is
-   32 bits on some targets Go builds for, over a select's `limit:`
-   parameter the route binds from the request, a query route's or a
-   load's (§selects-over-groups, §query-routes): `default_limit:` is
-   the limit a request that leaves the query key out gets, where it is
-   otherwise a 400 naming the key, and `max_limit:` the most a request
-   may ask, from the query string or a path parameter, a larger value a
-   400 naming the key where it binds, as a value below 1 is: a path
-   parameter once the path parameters parse, before the scope loads
-   (§scope-loads), and a query key after them, before the route's query
-   or any of its loads runs. `default_limit:` caps nothing: without
-   `max_limit:` a request may ask any limit. `get /feed db.PostFeed
-   [default_limit: 10, max_limit: 50]` serves ten rows to a bare `GET
-   /feed` and refuses `limit=51`, and `get /top/:limit(int)
-   db.PostFeed [max_limit: 50]` refuses `GET /top/51`. Each of these is
-   an error, since it would govern nothing: `default_limit:` on a route
-   that binds no such parameter from the query string, a path
-   parameter being always present, or that binds one under a key
-   another of its loads requires, which a request without the key
-   fails before the default applies; and `max_limit:` on one that binds
-   none from either. So is a `default_limit:` above the route's
-   `max_limit:`, whose every bare request would be refused. A limit
-   from a literal is the route's author's own, so neither setting reads
-   it. A dataset takes both settings for its member routes
-   (§dataset-settings). The generated client takes the limit of a
-   route with `default_limit:` as an `rt.Null[int]`, left out of the
-   query string when absent so that the default applies, and sends the
-   limit it is given otherwise (§generated-client).
-6. **`timeout`.** A route setting, a positive integer of seconds,
+5. **`timeout`.** A route setting, a positive integer of seconds,
    bounds the whole chain, loads and the handler's own effects, with
    one deadline from the request's arrival; an effect the deadline
    cuts off fails with a 504, which goes to the error spine unless a
@@ -2545,7 +2515,7 @@ parameters, so the handler reads them and never asks for them.
    that must answer at the deadline while another connection writes
    runs in an `Atomic`. A query route takes it too; an event route,
    whose stream the runtime serves, takes none.
-7. A load block on a query route or an event route is an error: their
+6. A load block on a query route or an event route is an error: their
    handlers are generated.
 
 ### Scope loads
@@ -2705,17 +2675,17 @@ scope /api [pipe: api] {
      `patch` (clause 1);
    - a **list parameter** (§predicates) binds from the **repeated query
      key** of its name; absent means the empty list;
-   - an **optional parameter** (§predicates) binds as `rt.Null[T]`:
-     from a path parameter of its name present, since a path segment
-     always is, else from the **query string** by name, absent when
-     the key is missing and present with the parsed value otherwise, an
-     unparseable value a 400 that names the parameter. An optional list
-     parameter binds from the repeated key, absent when the key is
-     missing and present with its values otherwise, so `tag in :tags?`
-     filters by the tags a request names and by none when it names
-     none. A request therefore never presents an empty list, which
-     matches no row (§predicates); only a Go caller spells one, and the
-     generated client refuses to send it (§generated-client);
+   - an **optional parameter** (§predicates) binds from the **query
+     string** by name as `rt.Null[T]`: absent when the key is missing,
+     present with the parsed value otherwise, and an unparseable value
+     is a 400 that names the parameter. A path segment is always
+     present, so a path parameter of its name is an error, which names
+     the fix: pass it in the query string, or route a second select
+     whose parameter is required. An optional list parameter is not
+     routable: a missing key and an empty list cannot be told apart in
+     a query string, and an absent list matches every row where a
+     present empty one matches none, so a route to its select is an
+     error; a Go caller, which can spell both, calls the select itself;
    - every other parameter binds from the **query string** by name,
      parsed to its type; a missing or unparseable value is a 400 that
      names the parameter.
@@ -2725,9 +2695,9 @@ scope /api [pipe: api] {
    SQLite reads a negative limit as none: from a path parameter once
    the path parameters parse, before the scope loads (§scope-loads),
    and from the query string where it binds, before the query runs.
-   The route's `default_limit:` setting gives one from the query
-   string a default, and its `max_limit:` gives one from either a most
-   (§route-loads).
+   A default or a most for the limit is a handler's to write: a
+   controller route reads the key and calls the select with the limit
+   it decides.
    A parameter binds from the query string only when its type is
    `string`, `bool`, `int`, `float64` or `time.Time`, a slice of one
    of those (a list parameter), or an `rt.Null` of one of those (an
@@ -2906,13 +2876,6 @@ the routes through typed methods instead of hand-built requests.
    repeated key, an optional parameter (§predicates) as the
    `rt.Null[T]` the query takes, left out of the query string when
    absent, `APIPostFeed(ctx, tag rt.Null[string]) ([]db.Post, error)`,
-   an optional list the same way, a present empty list being an error
-   the method returns before it sends anything, since the route would
-   read the missing key as absent and match every row where the empty
-   list matches none, an optional parameter a path parameter binds as
-   the path parameter's own type, a select's `limit:` parameter of a
-   route with `default_limit:` (§route-loads) as an `rt.Null[int]` left
-   out when absent, so that the route's default applies,
    a changeset as the body: `APIUserCreate(ctx, cs
    db.UserChangeset) (db.User, error)`, `APIUserUpdate(ctx, id int, cs
    db.UserChangeset) (db.User, error)`, sent as `cs.Params()`
@@ -2936,13 +2899,10 @@ the routes through typed methods instead of hand-built requests.
    route's path parameters, then every query-string key its loads bind
    (§route-loads), once each, in the order the loads first read it and
    typed and sent as a query route's parameter is (rule 3), in the one
-   type every load binds it as, required when any load requires it, a
-   select's `limit:` parameter requiring its key unless the route sets
-   `default_limit:`, and named as rule 3 names parameters, so a route
-   that loads through a `limit:` select sends its limit,
-   `Mine(ctx, at rt.Null[time.Time], limit int)`, or, under
-   `default_limit:`, sends it when present, `Mine(ctx, at
-   rt.Null[time.Time], limit rt.Null[int])`, and, when the route
+   type every load binds it as, required when any load requires it, and
+   named as rule 3 names parameters, so a route that loads through a
+   `limit:` select sends its limit,
+   `Mine(ctx, at rt.Null[time.Time], limit int)`, and, when the route
    binds a body (§request-bodies), the body last: a changeset `cs db.UserChangeset`
    sent as `cs.Params()`, or `body any` for a struct body, encoded in
    the client's format. It returns `*http.Response` for the caller to
@@ -3308,10 +3268,12 @@ scope /ms [pipe: api] {
    member's select function (`<Model><SelectName>`). Every parameter of
    the select binds as §query-routes binds it: from a scope prefix
    parameter of the same name, else from the query string, a list
-   parameter as a repeated key, and an optional one (§predicates) as
-   §query-routes binds it, present from a prefix parameter and absent
-   from the query string when the key is missing; a prefix
-   parameter the select does not take is an error. The helper and client
+   parameter as a repeated key, and an optional one (§predicates) from
+   the query string alone, absent when the key is missing; a prefix
+   parameter the select does not take is an error, and so is one that
+   names an optional parameter, since a path segment is always
+   present, and a select with an optional list parameter, which no
+   route carries, makes the dataset an error. The helper and client
    method names are the scope name prefixes followed by the function
    name (§query-routes).
 3. Expanded routes obey every rule of routes: conflicts (§route-conflicts), one
@@ -3326,8 +3288,6 @@ scope /ms [pipe: api] {
 | `strip` | string | prefix removed from each member's table name to form its segment |
 | `only` | table list `(ms_revenue, ms_usage)` | keep only these members |
 | `except` | table list | drop these members |
-| `default_limit` | positive integer that fits a 32-bit `int` | every member route's limit when the request leaves the key out (§route-loads) |
-| `max_limit` | positive integer that fits a 32-bit `int` | the most limit every member route serves (§route-loads) |
 
 1. `strip:` MUST be a prefix of every kept member's name, and what
    remains MUST be a usable segment (§route-paths); otherwise an error
@@ -3335,11 +3295,6 @@ scope /ms [pipe: api] {
 2. Names in `only`/`except` are members of the select's target,
    spelled exactly; an unknown name is an error. `only` and `except`
    MUST NOT be combined.
-3. `default_limit:` and `max_limit:` govern the select's `limit:`
-   parameter on every member route as they do on a route
-   (§route-loads): a dataset over a select with no `limit:` parameter,
-   or whose limit a prefix parameter binds and that sets
-   `default_limit:`, is an error.
 
 ## Settings whitelists
 
@@ -3349,9 +3304,9 @@ an element is an error on that element):
 | Element | Settings |
 |---|---|
 | `scope` | `pipe`, `name`, `error_handler` |
-| route | `name`, `timeout`, `body`, `only`, `default_limit`, `max_limit` |
+| route | `name`, `timeout`, `body`, `only` |
 | resources | `api`, `only`, `except`, `param`, `singular`, `default` |
-| dataset | `strip`, `only`, `except`, `default_limit`, `max_limit` |
+| dataset | `strip`, `only`, `except` |
 | Select | `order`, `group`, `limit` |
 | `migration` | `irreversible`, `no_transaction` |
 

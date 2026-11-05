@@ -23,7 +23,6 @@ table profiles {
 ref: profiles.user_id > users.id [delete: cascade]
 
 select described for users where exists profiles (bio like :bio?) and id >= :from? [order: (id asc)]
-select chosen for users where id in :ids? [order: (id asc)]
 
 table tags {
 	slug string [pk]

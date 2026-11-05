@@ -55,13 +55,6 @@ func (users) Peers(r volt.Request, id, n int, user db.User, peers, more []db.Use
 func (users) Both(r volt.Request, id int, latest, described []db.User) volt.Response {
 	return volt.Render(map[string]any{"latest": len(latest), "described": len(described)})
 }
-func (users) From(r volt.Request, id int, profiled []db.User) volt.Response {
-	out := make([]int, len(profiled))
-	for i, u := range profiled {
-		out[i] = u.ID
-	}
-	return volt.Render(map[string]any{"route": r.Route(), "profiled": out})
-}
 func (users) Card(r volt.Request, id int) volt.Response {
 	return volt.Then(db.UserGet(id), func(u db.User) volt.Response { return volt.Render(u) })
 }
@@ -233,10 +226,6 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathAPIUserSince":     {"GET", app.PathAPIUserSince(volt.Query("since", "2000-01-01T00:00:00Z"))},
 		"PathAPIUserLatest":    {"GET", app.PathAPIUserLatest(volt.Query("limit", "5"))},
 		"PathAPIUserDescribed": {"GET", app.PathAPIUserDescribed()},
-		"PathAPIUserChosen":    {"GET", app.PathAPIUserChosen()},
-		"PathAPIRecent":        {"GET", app.PathAPIRecent()},
-		"PathAPITop":           {"GET", app.PathAPITop(2)},
-		"PathFrom":             {"GET", app.PathFrom(1)},
 		"PathMsRevenueBrowse":  {"GET", app.PathMsRevenueBrowse(volt.Query("year", "2024"))},
 		"PathMsUsageBrowse":    {"GET", app.PathMsUsageBrowse(volt.Query("year", "2024"))},
 		"PathRefUsers":         {"GET", app.PathRefUsers()},
