@@ -1,7 +1,8 @@
-// spec: §columns, §default-values, pk, autoincrement, unique, null, note: and typed defaults
+// spec: §columns, §default-values, §doc-comments, pk, autoincrement, unique, null, a doc comment and typed defaults
 table t {
   id int [pk, autoincrement]
-  a string [unique, default: "direct", note: "source"]
+  // source
+  a string [unique, default: "direct"]
   b int [null, default: 123]
   c float64 [default: 123.456]
   d bool [default: false]

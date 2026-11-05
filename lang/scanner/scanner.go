@@ -38,19 +38,23 @@ func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
 // the tokens before the next element start after the first
 // byte, then an EOF standing at that start, which is the end returned
 // and whose text names what it is; without one, the whole text and an
-// EOF at its end. bound reports the former. buf is a token slice to
-// reuse, or nil.
-func ScanChunk(f *token.File, buf []token.Token) (toks []token.Token, errs []diag.Diagnostic, end int, bound bool) {
+// EOF at its end. An element starts at its doc comment when it has
+// one (§doc-comments); docs are the doc comments of the tokens
+// returned, in token order. bound reports the former. buf is a token
+// slice to reuse, or nil.
+func ScanChunk(f *token.File, buf []token.Token) (toks []token.Token, docs []Doc, errs []diag.Diagnostic, end int, bound bool) {
 	s := newScanner(f, buf)
 	s.chunk = true
 	s.run()
 	if s.done {
 		s.pos = s.start
+		docs := s.docList()
+		s.doc = nil
 		s.emit(token.EOF, ElementStart)
-		return s.toks, s.errs, s.start.Offset, true
+		return s.toks, docs, s.errs, s.start.Offset, true
 	}
 	s.emit(token.EOF, "")
-	return s.toks, s.errs, len(s.src), false
+	return s.toks, s.docList(), s.errs, len(s.src), false
 }
 
 // ElementStart is how a chunk's EOF reads in a diagnostic: the token
@@ -58,15 +62,34 @@ func ScanChunk(f *token.File, buf []token.Token) (toks []token.Token, errs []dia
 const ElementStart = "the start of the next element (§line-structure-and-whitespace)"
 
 // StartsDecl reports whether text begins, at its very first byte, a
-// top-level element (§line-structure-and-whitespace). One token is scanned, whatever the
-// text's length.
+// top-level element (§line-structure-and-whitespace), its doc comment
+// included (§doc-comments). One token is scanned, whatever the text's
+// length.
 func StartsDecl(text string) bool {
+	for {
+		rest := strings.TrimLeft(text, " \t\r")
+		if !strings.HasPrefix(rest, "//") {
+			break
+		}
+		nl := strings.IndexByte(rest, '\n')
+		if nl < 0 {
+			return false
+		}
+		text = rest[nl+1:]
+	}
 	var buf [1]token.Token
 	s := newScanner(token.NewFile("", text), buf[:0])
 	for state := anyScan; state != nil && len(s.toks) == 0; {
 		state = state(s)
 	}
 	return len(s.toks) == 1 && s.toks[0].DeclStart && s.toks[0].Pos.Offset() == 0
+}
+
+func (s *Scanner) docList() []Doc {
+	if s.doc == nil {
+		return nil
+	}
+	return s.doc.docs
 }
 
 func newScanner(f *token.File, buf []token.Token) *Scanner {
@@ -100,7 +123,25 @@ type Scanner struct {
 	toks []token.Token
 	errs []diag.Diagnostic
 
+	doc *docState
+
 	val strings.Builder
+}
+
+type docState struct {
+	grp   []token.Token
+	line  int
+	start cursor
+	docs  []Doc
+}
+
+// Doc is a comment group directly above a token that is the first on
+// its line: the doc comment of the construct the token begins (spec
+// §comments, §doc-comments).
+type Doc struct {
+	Tok      int           // index of the documented token
+	Start    int           // byte offset of the first comment's line
+	Comments []token.Token // the group's comments, each of Kind COMMENT
 }
 
 type cursor struct {
@@ -194,9 +235,24 @@ func (s *Scanner) tokEmit(t token.Token) {
 	t.NLBefore = s.nlBefore
 	t.SpBefore = s.spBefore || s.nlBefore
 	t.DeclStart = t.Kind == token.IDENT && s.start.col == 1 && s.depth == 0
-	if t.DeclStart && s.chunk && s.start.Offset > 0 {
-		s.done = true
-		return
+	doc := s.doc != nil && t.NLBefore && t.Kind != token.EOF && len(s.doc.grp) > 0 && s.doc.line == s.start.line-1
+	if t.DeclStart && s.chunk {
+		at := s.start
+		if doc {
+			at = s.doc.start
+		}
+		if at.Offset > 0 {
+			s.start = at
+			s.done = true
+			return
+		}
+	}
+	if doc {
+		s.doc.docs = append(s.doc.docs, Doc{Tok: len(s.toks), Start: s.doc.start.Offset, Comments: s.doc.grp})
+		s.doc.grp = nil
+	}
+	if s.doc != nil {
+		s.doc.grp = s.doc.grp[:0]
 	}
 	switch t.Kind {
 	case token.LBRACE:
@@ -264,30 +320,43 @@ func anyScan(s *Scanner) stateFn {
 }
 
 func lineCommentScan(s *Scanner) stateFn {
+	own := s.nlBefore
 	for r := s.peek(); r != '\n' && r != eof; r = s.peek() {
 		s.next()
+	}
+	if own {
+		s.groupAdd(token.Token{Kind: token.COMMENT, Val: s.rawVal()[2:]})
 	}
 	s.spBefore = true
 	return anyScan
 }
 
-func blockCommentScan(s *Scanner) stateFn {
-	s.next()
-	s.next()
-	for {
-		switch {
-		case s.peek() == eof:
-			s.errorf("syntax", "unterminated block comment (§comments)")
-			return nil
-		case s.peek() == '*' && s.peekAt(1) == '/':
-			s.next()
-			s.next()
-			s.spBefore = true
-			return anyScan
-		default:
-			s.next()
-		}
+func (s *Scanner) groupAdd(c token.Token) {
+	c.Pos = s.start.position(s.file)
+	c.Len = int32(s.pos.Offset - s.start.Offset)
+	if s.doc == nil {
+		s.doc = &docState{}
 	}
+	d := s.doc
+	if len(d.grp) == 0 || d.line != s.start.line-1 {
+		off := s.start.Offset
+		for off > 0 && s.src[off-1] != '\n' {
+			off--
+		}
+		d.grp = d.grp[:0]
+		d.start = cursor{Offset: off, line: s.start.line, col: 1}
+	}
+	d.grp = append(d.grp, c)
+	d.line = s.start.line
+}
+
+func blockCommentScan(s *Scanner) stateFn {
+	s.errorf("syntax", "a comment is written //, to the end of its line: Volt has no block comment (§comments)")
+	for r := s.peek(); r != '\n' && r != eof; r = s.peek() {
+		s.next()
+	}
+	s.spBefore = true
+	return anyScan
 }
 
 const (

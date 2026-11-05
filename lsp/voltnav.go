@@ -680,7 +680,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 			noun, verb = "columns", "have"
 		}
 		fmt.Fprintf(&b, "unresolved: %s %s %s an unknown type (§columns)\n", noun, strings.Join(si.UnknownCols, ", "), verb)
-		return b.String()
+		return b.String() + docSuffix(si.Decl)
 	}
 
 	if si.WhereSQL != "" {
@@ -721,7 +721,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 			model, si.MethodSuffix, strings.TrimPrefix(params.String(), ", "), effect)
 	}
 	b.WriteString("```\n")
-	return b.String()
+	return b.String() + docSuffix(si.Decl)
 }
 
 func fieldTypeMD(m *check.TableInfo, f naming.FieldSig) string {
@@ -794,7 +794,7 @@ func groupHover(sym voltSym, def voltDef, ix *voltIndex) string {
 		names[i] = "`" + m.Key + "`"
 	}
 	b.WriteString("\nMembers: " + strings.Join(names, ", ") + "\n")
-	return b.String()
+	return b.String() + docSuffix(g)
 }
 
 func predHover(sym voltSym, def voltDef, ix *voltIndex) string {
@@ -809,7 +809,7 @@ func predHover(sym voltSym, def voltDef, ix *voltIndex) string {
 			md += "```volt\n" + text[start:end] + "\n```\n"
 		}
 	}
-	return md
+	return md + docSuffix(p)
 }
 
 func tableModelHover(sym voltSym, def voltDef) string {
@@ -855,7 +855,7 @@ func tableModelHover(sym voltSym, def voltDef) string {
 	}
 	b.WriteString("}\n```\n\n")
 	b.WriteString("_Routes and helpers derive from this: the URL keeps the table's name, the member helper takes the model's (§table-resolution)._")
-	return b.String()
+	return b.String() + docSuffix(t)
 }
 
 func pipelineHover(sym voltSym, def voltDef) string {
@@ -869,8 +869,8 @@ func pipelineHover(sym voltSym, def voltDef) string {
 	for _, plug := range p.Plugs {
 		fmt.Fprintf(&b, "\tuse %s\n", plug.Ref.String())
 	}
-	b.WriteString("}\n```")
-	return b.String()
+	b.WriteString("}\n```\n")
+	return b.String() + docSuffix(p)
 }
 
 // tablePK is a table's single-column key and the route parameter type

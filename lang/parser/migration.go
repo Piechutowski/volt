@@ -9,7 +9,7 @@ import (
 )
 
 func (p *parser) migration() *ast.Migration {
-	d := &ast.Migration{MigrationPos: p.next().Pos}
+	d := &ast.Migration{Doc: p.doc(), MigrationPos: p.next().Pos}
 	d.Name = p.identOf(p.expect(token.IDENT, "migration name (§migrations)"))
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {
 		d.Settings = p.settingList()
@@ -89,19 +89,20 @@ func (p *parser) operation(ctx string) (op ast.Operation) {
 }
 
 func (p *parser) createOp() ast.Operation {
+	doc := p.doc()
 	p.lineBegin("create (§migrations)")
 	create := p.kwTake("create")
 	switch {
 	case p.atKw("table"):
 		p.lineClear()
 		p.kwTake("table")
-		d := &ast.CreateTable{CreatePos: create.Pos}
+		d := &ast.CreateTable{Doc: doc, CreatePos: create.Pos}
 		d.Name = p.ident("create table (§migrations)")
 		d.Body, d.Incomplete, d.Rbrace = p.shapeBody("create table (§migrations)")
 		return d
 	case p.atKw("index"):
 		p.kwTake("index")
-		d := &ast.CreateIndex{CreatePos: create.Pos}
+		d := &ast.CreateIndex{Doc: doc, CreatePos: create.Pos}
 		d.Table = p.ident("create index (§migrations)")
 		d.Index = p.indexRest()
 		p.endOfLine("create index (§migrations)")
@@ -113,12 +114,13 @@ func (p *parser) createOp() ast.Operation {
 }
 
 func (p *parser) dropOp() ast.Operation {
+	doc := p.doc()
 	p.lineBegin("drop (§migrations)")
 	drop := p.kwTake("drop")
 	switch {
 	case p.atKw("table"):
 		p.kwTake("table")
-		d := &ast.DropTable{DropPos: drop.Pos}
+		d := &ast.DropTable{Doc: doc, DropPos: drop.Pos}
 		d.Name = p.ident("drop table (§migrations)")
 		if p.at(token.LBRACE) && !p.cur().NLBefore {
 			d.Lbrace = p.cur().Pos
@@ -128,7 +130,7 @@ func (p *parser) dropOp() ast.Operation {
 		return d
 	case p.atKw("index"):
 		p.kwTake("index")
-		d := &ast.DropIndex{DropPos: drop.Pos}
+		d := &ast.DropIndex{Doc: doc, DropPos: drop.Pos}
 		d.Table = p.ident("drop index (§migrations)")
 		d.Index = p.indexRest()
 		p.endOfLine("drop index (§migrations)")
@@ -140,8 +142,9 @@ func (p *parser) dropOp() ast.Operation {
 }
 
 func (p *parser) renameTableOp() ast.Operation {
+	doc := p.doc()
 	p.lineBegin("rename table (§migrations)")
-	d := &ast.RenameTable{RenamePos: p.kwTake("rename").Pos}
+	d := &ast.RenameTable{Doc: doc, RenamePos: p.kwTake("rename").Pos}
 	if !p.atKw("table") {
 		p.fail(p.cur(), "expected 'table' after rename (§migrations), found %s", p.cur())
 	}
@@ -161,7 +164,8 @@ func (p *parser) expectKw(kw, ctx string) {
 }
 
 func (p *parser) alterTableOp() ast.Operation {
-	d := &ast.AlterTable{AlterPos: p.kwTake("alter").Pos}
+	doc := p.doc()
+	d := &ast.AlterTable{Doc: doc, AlterPos: p.kwTake("alter").Pos}
 	p.expectKw("table", "alter table (§migrations)")
 	d.Name = p.ident("alter table (§migrations)")
 	p.expect(token.LBRACE, "alter table (§migrations)")
@@ -175,6 +179,7 @@ func (p *parser) alterTableOp() ast.Operation {
 }
 
 func (p *parser) alterItem() (item ast.AlterItem) {
+	doc := p.doc()
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(bailout); !ok {
@@ -189,10 +194,10 @@ func (p *parser) alterItem() (item ast.AlterItem) {
 	switch {
 	case p.atKw("add"):
 		pos := p.kwTake("add").Pos
-		return &ast.AlterAdd{AddPos: pos, Column: p.column()}
+		return &ast.AlterAdd{Doc: doc, AddPos: pos, Column: p.column()}
 	case p.atKw("drop"):
 		p.lineBegin("drop column (§migrations)")
-		d := &ast.AlterDrop{DropPos: p.kwTake("drop").Pos}
+		d := &ast.AlterDrop{Doc: doc, DropPos: p.kwTake("drop").Pos}
 		d.Name = p.ident("drop column (§migrations)")
 		if p.atTypeStart() {
 			d.Type = p.typeRef()
@@ -204,7 +209,7 @@ func (p *parser) alterItem() (item ast.AlterItem) {
 		return d
 	case p.atKw("rename"):
 		p.lineBegin("rename column (§migrations)")
-		d := &ast.AlterRename{RenamePos: p.kwTake("rename").Pos}
+		d := &ast.AlterRename{Doc: doc, RenamePos: p.kwTake("rename").Pos}
 		d.From = p.ident("rename column (§migrations)")
 		p.expectKw("to", "rename column (§migrations)")
 		d.To = p.ident("rename column (§migrations)")
@@ -224,7 +229,8 @@ func (p *parser) atTypeStart() bool {
 }
 
 func (p *parser) rebuildTableOp() ast.Operation {
-	d := &ast.RebuildTable{RebuildPos: p.kwTake("rebuild").Pos}
+	doc := p.doc()
+	d := &ast.RebuildTable{Doc: doc, RebuildPos: p.kwTake("rebuild").Pos}
 	p.expectKw("table", "rebuild table (§migrations)")
 	d.Name = p.ident("rebuild table (§migrations)")
 	d.Body, d.Incomplete, d.Rbrace = p.shapeBody("rebuild table (§migrations)")
@@ -232,8 +238,9 @@ func (p *parser) rebuildTableOp() ast.Operation {
 }
 
 func (p *parser) execOp() ast.Operation {
+	doc := p.doc()
 	p.lineBegin("exec (§migrations)")
-	d := &ast.Exec{ExecPos: p.kwTake("exec").Pos}
+	d := &ast.Exec{Doc: doc, ExecPos: p.kwTake("exec").Pos}
 	if p.at(token.STRING) {
 		p.fail(p.cur(), "exec takes its SQL in backticks, an expression literal, not a string (§migrations)")
 	}

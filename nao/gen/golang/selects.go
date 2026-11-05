@@ -71,8 +71,8 @@ func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, erro
 			var rows align.Block
 			for _, f := range cols {
 				fieldImports(imports, f)
-				if note := naming.SettingNote(f.Col.Settings); note != "" {
-					commentLines(&rows, note)
+				if doc := f.Col.Doc.Text(); doc != "" {
+					commentLines(&rows, doc)
 				}
 				rows.Row(f.GoField, f.GoType, "`"+f.Tag+"`")
 			}
@@ -180,6 +180,9 @@ func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t 
 			childValue += ".V"
 		}
 		kind := fmt.Sprintf("rt.With[%s, %s, %s, %s]", row, child.Model, key.BaseType, w.RowType)
+		if fn.Doc != "" {
+			commentWrite(b, fn.Doc)
+		}
 		fmt.Fprintf(b, "func %s(%s) %s {\n", name, strings.TrimPrefix(sig.String(), ", "), kind)
 		fmt.Fprintf(b, "\treturn %s{\n", kind)
 		fmt.Fprintf(b, "\t\tParent:    rt.Query[%s]{SQL: %s, Args: %s, Scan: %s%s},\n", row, constName, argsList(args), naming.RowScan(row), check)
@@ -190,6 +193,9 @@ func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t 
 		fmt.Fprintf(b, "\t\tBuild: func(voltP %s, voltCs []%s) %s {\n\t\t\treturn %s{%s: voltP, %s: voltCs}\n\t\t},\n", row, child.Model, w.RowType, w.RowType, row, w.Field)
 		b.WriteString("\t}\n}\n\n")
 		return nil
+	}
+	if fn.Doc != "" {
+		commentWrite(b, fn.Doc)
 	}
 	fmt.Fprintf(b, "func %s(%s) %s[%s] {\n", name, strings.TrimPrefix(sig.String(), ", "), effect, row)
 	fmt.Fprintf(b, "\treturn %s[%s]{SQL: %s, Args: %s, Scan: %s%s}\n}\n\n", effect, row, constName, argsList(args), naming.RowScan(row), check)

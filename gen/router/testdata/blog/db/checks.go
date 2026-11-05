@@ -1,5 +1,3 @@
-// Package db is the itest data fixture: the schema's Go-reference
-// check target (§validators) beside the generated models and queries.
 package db
 
 import (

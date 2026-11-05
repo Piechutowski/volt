@@ -1,6 +1,3 @@
-// Package app is the itest fixture: the hand-written side of the
-// generated router — middleware and the error handler the routes.volt
-// file references by name.
 package app
 
 import (

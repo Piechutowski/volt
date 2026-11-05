@@ -2,6 +2,7 @@ package lang_test
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -312,7 +313,7 @@ func TestSessionBindsUnresolvedSelects(t *testing.T) {
 	routed := strings.Replace(routes, "scope /api {\n", "scope /api {\n\tget /tags db.TagList\n", 1)
 	round("route edit", map[string]string{routesPath: routed})
 	reused := s.Stats().SelectsReused
-	noted := strings.Replace(schema, "name string\n", "name string [note: \"shown\"]\n", 1)
+	noted := strings.Replace(schema, "\tname string\n", "\t// shown\n\tname string\n", 1)
 	round("data edit", map[string]string{schemaPath: noted, routesPath: routed})
 	if s.Stats().SelectsReused == reused {
 		t.Errorf("the data edit checked the unresolved select afresh; want it answered by the memo")
@@ -370,12 +371,12 @@ func TestSessionReparsesOneDeclaration(t *testing.T) {
 	all := work{whole.Parsed, 12, 12, 12, 13, 17, whole.Parsed}
 	round("first", text, all)
 	one := work{1, 1, 1, 1, 2, 2, 2}
-	round("edit one table", strings.Replace(text, "c002 string\n", "c002 string [note: \"edited\"]\n", 1), one)
+	round("edit one table", strings.Replace(text, "\tc002 string\n", "\t// edited\n\tc002 string\n", 1), one)
 	round("break it", strings.Replace(text, "c002 string\n", "c002 string [null\n", 1), one)
 	round("fix it", text, one)
 	cur := strings.Replace(text, "get /events        volt.Events", "get /stream        volt.Events", 1)
 	round("edit a route", cur, work{1, 0, 0, 0, 0, 17, 1})
-	cur = strings.Replace(cur, "created_at time.Time", "created_at time.Time [note: \"stamped\"]", 1)
+	cur = strings.Replace(cur, "\tcreated_at time.Time", "\t// stamped\n\tcreated_at time.Time", 1)
 	round("edit the partial", cur, work{1, 12, 12, 12, 13, 13, 13})
 	cur = strings.Replace(cur, "type Status string", "type Status  string", 1)
 	round("respace the Type", cur, work{1, 0, 0, 0, 0, 0, 1})
@@ -434,6 +435,72 @@ func TestSessionConcurrentCallersAgreeWithFreshAnalysis(t *testing.T) {
 	for _, err := range errs {
 		if err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestSessionCarriesEditedDocs(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"go.mod":          "module docs\n",
+		"db/schema.volt":  "// The blog data.\npackage db\n\n// A post.\ntable posts {\n\tid int [pk]\n\t// Shown in lists.\n\ttitle string\n}\n\n// Every post.\nselect all for posts\n",
+		"app/routes.volt": "package app\n\nimport (\n\tdb\n)\n\nscope / {\n\t// The front page.\n\tget / Posts.Index\n}\n",
+	}
+	for name, src := range files {
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	generated := func(pr *lang.Project) string {
+		t.Helper()
+		var b strings.Builder
+		data, err := model.Generate(pr.Packages["db"], model.Options{Source: "db"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		routes, err := router.Generate(pr.Packages["app"], router.Options{Source: "app"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, out := range []map[string][]byte{data, routes} {
+			for _, name := range slices.Sorted(maps.Keys(out)) {
+				fmt.Fprintf(&b, "== %s\n%s", name, out[name])
+			}
+		}
+		return b.String()
+	}
+	var s lang.Session
+	schema, routes := filepath.Join(root, "db", "schema.volt"), filepath.Join(root, "app", "routes.volt")
+	for _, edit := range []struct{ name, path, from, to, want string }{
+		{"first", "", "", "", "// A post."},
+		{"table doc", schema, "// A post.", "// A blog post.", "// A blog post."},
+		{"column doc", schema, "// Shown in lists.", "// Shown in every list.", "// Shown in every list."},
+		{"select doc", schema, "// Every post.", "// All the posts.", "// All the posts."},
+		{"package doc", schema, "// The blog data.", "// The blog's data.", "// The blog's data."},
+		{"route doc", routes, "// The front page.", "// The home page.", "// The home page."},
+	} {
+		overlay := map[string]string{}
+		if edit.path != "" {
+			src := files[strings.TrimPrefix(edit.path, root+string(filepath.Separator))]
+			files[strings.TrimPrefix(edit.path, root+string(filepath.Separator))] = strings.Replace(src, edit.from, edit.to, 1)
+		}
+		overlay[schema], overlay[routes] = files["db/schema.volt"], files["app/routes.volt"]
+		pr, _ := sessionRound(t, &s, root, overlay, s.Stats())
+		fresh, err := lang.LoadOverlay(disk.Source{}, root, overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lang.Check(fresh)
+		got, want := generated(pr), generated(fresh)
+		if got != want {
+			t.Fatalf("%s: the session generates other code than a fresh analysis\n--- session\n%s--- fresh\n%s", edit.name, got, want)
+		}
+		if !strings.Contains(got, edit.want) {
+			t.Errorf("%s: the generated code lacks %q:\n%s", edit.name, edit.want, got)
 		}
 	}
 }

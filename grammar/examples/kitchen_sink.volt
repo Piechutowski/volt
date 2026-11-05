@@ -1,6 +1,6 @@
 // Kitchen-sink example: every schema construct of docs/spec.md Part I.
-/* block comment
-   spanning lines */
+// a comment group a blank line keeps apart
+// documents nothing
 
 type Status string
 
@@ -11,10 +11,10 @@ table_partial base_template {
   created_at time.Time [null, index, default: `CURRENT_TIMESTAMP`]
 }
 
-table users [note: """
-    # User accounts
-    Multi-line **markdown** note.
-  """] {
+// # User accounts
+//
+// A multi-line **markdown** doc comment.
+table users {
   ~base_template
   name string [unique]
   full_name string [null]

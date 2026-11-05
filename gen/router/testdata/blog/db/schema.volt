@@ -1,3 +1,5 @@
+// Package db is the itest data fixture: the schema whose generated models
+// and queries sit beside the hand-written check targets (§validators).
 package db
 
 table users {

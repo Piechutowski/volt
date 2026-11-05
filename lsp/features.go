@@ -179,7 +179,7 @@ func (d *Document) Hover(pos protocol.Position) *protocol.Hover {
 	}
 	occ := d.Index.At(d.FromLSP(pos))
 	if occ == nil {
-		return nil
+		return d.docHover(pos)
 	}
 	var md string
 	switch occ.ID.Kind {
@@ -193,7 +193,7 @@ func (d *Document) Hover(pos protocol.Position) *protocol.Hover {
 		md = d.typeHover(occ.ID.Name)
 	}
 	if md == "" {
-		return nil
+		return d.docHover(pos)
 	}
 	rng := d.tokenRange(occ.Ident.Tok)
 	return &protocol.Hover{
@@ -216,10 +216,7 @@ func (d *Document) tableHover(key string) string {
 		}
 		b.WriteString(line + "\n")
 	}
-	if note := tableNote(ti.Decl); note != "" {
-		b.WriteString("\n---\n" + note + "\n")
-	}
-	return b.String()
+	return b.String() + docSuffix(ti.Decl)
 }
 
 func (d *Document) migrationHover(pos protocol.Position) *protocol.Hover {
@@ -231,7 +228,7 @@ func (d *Document) migrationHover(pos protocol.Position) *protocol.Hover {
 		}
 		rng := d.tokenRange(name.Tok)
 		return &protocol.Hover{
-			Contents: protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: migrationHoverMD(mi, i, len(d.Info.Migrations))},
+			Contents: protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: migrationHoverMD(mi, i, len(d.Info.Migrations)) + docSuffix(mi.Decl)},
 			Range:    &rng,
 		}
 	}
@@ -257,7 +254,7 @@ func (d *Document) typeHover(key string) string {
 			md += " from " + q
 		}
 	}
-	return md + "\n```\n"
+	return md + "\n```\n" + docSuffix(td.Decl)
 }
 
 func (d *Document) partialHover(name string) string {
@@ -273,7 +270,7 @@ func (d *Document) partialHover(name string) string {
 		}
 	}
 	fmt.Fprintf(&b, "\nInjected %d time(s).\n", pi.Uses)
-	return b.String()
+	return b.String() + docSuffix(pi.Decl)
 }
 
 func (d *Document) columnHover(id SymbolID) string {
@@ -289,10 +286,7 @@ func (d *Document) columnHover(id SymbolID) string {
 	if strings.HasPrefix(id.Container, "partial:") {
 		b.WriteString("\nDefined in table_partial `" + strings.TrimPrefix(id.Container, "partial:") + "`.\n")
 	}
-	if note := settingString(col.Settings, "note"); note != "" {
-		b.WriteString("\n---\n" + note + "\n")
-	}
-	return b.String()
+	return b.String() + docSuffix(col)
 }
 
 func (d *Document) columnFind(id SymbolID) *ast.Column {
@@ -323,9 +317,6 @@ func settingsSuffix(s *ast.SettingList) string {
 	var parts []string
 	if s != nil {
 		for _, setting := range s.Settings {
-			if setting.Name == "note" {
-				continue
-			}
 			part := setting.Name
 			if lit, ok := setting.Value.(*ast.BasicLit); ok && lit.Tok.Kind == token.STRING {
 				part += ": " + lit.Tok.Text()
@@ -339,14 +330,6 @@ func settingsSuffix(s *ast.SettingList) string {
 		return ""
 	}
 	return " — " + strings.Join(parts, ", ")
-}
-
-func settingString(s *ast.SettingList, name string) string {
-	setting := s.Get(name)
-	if setting == nil {
-		return ""
-	}
-	return valueString(setting.Value)
 }
 
 func valueString(v ast.Node) string {
@@ -371,4 +354,71 @@ func valueString(v ast.Node) string {
 	return ""
 }
 
-func tableNote(t *ast.Table) string { return settingString(t.Settings, "note") }
+func docSuffix(n ast.Node) string {
+	if text := ast.DocOf(n).Text(); text != "" {
+		return "\n\n---\n\n" + text + "\n"
+	}
+	return ""
+}
+
+func (d *Document) docHover(pos protocol.Position) *protocol.Hover {
+	if d.File == nil {
+		return nil
+	}
+	line := int(pos.Line) + 1
+	var found ast.Node
+	visit := func(n ast.Node) {
+		if n != nil && ast.DocOf(n) != nil && n.Pos().Line() == line {
+			found = n
+		}
+	}
+	for _, decl := range d.File.Decls {
+		if decl.Pos().Line() > line || decl.End().Line() < line {
+			continue
+		}
+		docWalk(decl, visit)
+	}
+	if found == nil {
+		return nil
+	}
+	return &protocol.Hover{
+		Contents: protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: ast.DocOf(found).Text()},
+	}
+}
+
+func docWalk(n ast.Node, visit func(ast.Node)) {
+	switch x := n.(type) {
+	case *ast.ImportDecl:
+		visit(x)
+		for _, s := range x.Specs {
+			visit(s)
+		}
+	case *ast.Pipeline:
+		visit(x)
+		for _, p := range x.Plugs {
+			visit(p)
+		}
+	case *ast.Scope:
+		visit(x)
+		for _, item := range x.Items {
+			docWalk(item, visit)
+		}
+	case *ast.Route:
+		visit(x)
+		for _, ld := range x.Loads {
+			visit(ld)
+		}
+	case *ast.Group:
+		visit(x)
+		for _, term := range x.Terms {
+			visit(term)
+		}
+	case *ast.Resources, *ast.Dataset, *ast.ScopeLoad, *ast.PackageClause, *ast.Pred, *ast.Select:
+		visit(x)
+	default:
+		ast.Inspect(n, func(c ast.Node) bool {
+			visit(c)
+			return true
+		})
+	}
+}

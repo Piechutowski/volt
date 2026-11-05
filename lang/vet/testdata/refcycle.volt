@@ -1,4 +1,5 @@
 // analyzers: refcycle
+
 table a {
   id int [pk]
   b_id int

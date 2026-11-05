@@ -23,7 +23,7 @@ func (p *parser) contiguous() bool {
 
 func (p *parser) packageClause() (d *ast.PackageClause) {
 	p.lineBegin("package clause (§projects-and-packages)")
-	d = &ast.PackageClause{PackagePos: p.next().Pos}
+	d = &ast.PackageClause{Doc: p.doc(), PackagePos: p.next().Pos}
 	d.Name = p.ident("package clause (§projects-and-packages)")
 	defer func() {
 		if r := recover(); r != nil {
@@ -34,7 +34,7 @@ func (p *parser) packageClause() (d *ast.PackageClause) {
 		}
 	}()
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {
-		p.errorf(p.cur(), "a package clause takes no settings list: a package carries no note (§notes), and its doc comment is written in a hand-written Go file of the package (§notes-become-doc-comments)")
+		p.errorf(p.cur(), "a package clause takes no settings list: a package is documented by the doc comment above its clause (§doc-comments)")
 		p.settingList()
 	}
 	p.endOfLine("package clause (§projects-and-packages)")
@@ -42,7 +42,7 @@ func (p *parser) packageClause() (d *ast.PackageClause) {
 }
 
 func (p *parser) importDecl() *ast.ImportDecl {
-	d := &ast.ImportDecl{ImportPos: p.next().Pos}
+	d := &ast.ImportDecl{Doc: p.doc(), ImportPos: p.next().Pos}
 	p.expect(token.LPAREN, "import declaration (§imports)")
 	for !p.at(token.RPAREN) && !p.at(token.RBRACE) && !p.at(token.EOF) {
 		if p.itemTo(func() { d.Specs = append(d.Specs, p.importSpec()) }, token.RPAREN, token.RBRACE) {
@@ -57,7 +57,7 @@ func (p *parser) importDecl() *ast.ImportDecl {
 }
 
 func (p *parser) importSpec() *ast.ImportSpec {
-	spec := &ast.ImportSpec{}
+	spec := &ast.ImportSpec{Doc: p.doc()}
 	p.lineBegin("import specifier (§imports)")
 	first := p.ident("import path (§imports)")
 	if p.at(token.IDENT) && !p.cur().NLBefore {
@@ -77,7 +77,7 @@ func (p *parser) importSpec() *ast.ImportSpec {
 }
 
 func (p *parser) pipeline() *ast.Pipeline {
-	d := &ast.Pipeline{PipelinePos: p.next().Pos}
+	d := &ast.Pipeline{Doc: p.doc(), PipelinePos: p.next().Pos}
 	d.Name = p.ident("pipeline name (§pipelines)")
 	p.expect(token.LBRACE, "pipeline (§pipelines)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
@@ -104,7 +104,7 @@ func (p *parser) plugLine() (plug *ast.Plug) {
 		p.fail(p.cur(), "expected 'use' plug line in pipeline body (§pipelines), found %s", p.cur())
 	}
 	p.lineBegin("plug line (§pipelines)")
-	plug = &ast.Plug{UsePos: p.kwTake("use").Pos}
+	plug = &ast.Plug{Doc: p.doc(), UsePos: p.kwTake("use").Pos}
 	plug.Ref = p.goRef("plug reference (§pipelines)")
 	p.endOfLine("plug line (§pipelines)")
 	return plug
@@ -120,7 +120,7 @@ func (p *parser) goRef(ctx string) *ast.GoRef {
 }
 
 func (p *parser) scope() *ast.Scope {
-	d := &ast.Scope{ScopePos: p.kwTake("scope").Pos}
+	d := &ast.Scope{Doc: p.doc(), ScopePos: p.kwTake("scope").Pos}
 	d.Path = p.routePath()
 	d.Settings = p.settingsAt("scope")
 	p.expect(token.LBRACE, "scope (§scopes-and-routes)")
@@ -167,7 +167,7 @@ func (p *parser) scopeItem() (item ast.ScopeItem) {
 
 func (p *parser) scopeLoad() *ast.ScopeLoad {
 	p.lineBegin("scope load (§scope-loads)")
-	d := &ast.ScopeLoad{LoadPos: p.kwTake("load").Pos}
+	d := &ast.ScopeLoad{Doc: p.doc(), LoadPos: p.kwTake("load").Pos}
 	d.Name = p.ident("scope load name (§scope-loads)")
 	d.Ref = p.goRef("scope load function (§scope-loads)")
 	p.endOfLine("scope load (§scope-loads)")
@@ -176,7 +176,7 @@ func (p *parser) scopeLoad() *ast.ScopeLoad {
 
 func (p *parser) dataset() *ast.Dataset {
 	p.lineBegin("dataset (§datasets)")
-	d := &ast.Dataset{DatasetPos: p.kwTake("dataset").Pos}
+	d := &ast.Dataset{Doc: p.doc(), DatasetPos: p.kwTake("dataset").Pos}
 	d.Name = p.ident("dataset select name (§datasets)")
 	if p.at(token.DOT) {
 		p.next()
@@ -192,7 +192,7 @@ func (p *parser) dataset() *ast.Dataset {
 
 func (p *parser) route() *ast.Route {
 	p.lineBegin("route (§scopes-and-routes)")
-	r := &ast.Route{}
+	r := &ast.Route{Doc: p.doc()}
 	if isPut(p.cur().Val) {
 		r.VerbTok = p.next()
 		r.VerbTok.Val = "put"
@@ -228,7 +228,7 @@ func (p *parser) load() (ld *ast.Load) {
 			p.lineSync()
 		}
 	}()
-	ld = &ast.Load{Name: p.ident("load name (§route-loads)")}
+	ld = &ast.Load{Doc: p.doc(), Name: p.ident("load name (§route-loads)")}
 	ld.Call = p.queryCall(p.goRef("load query (§route-loads)"), "load (§route-loads)")
 	p.endOfLine("load (§route-loads)")
 	return ld
@@ -270,7 +270,7 @@ func (p *parser) loadArg(ctx string) ast.Node {
 
 func (p *parser) resources() *ast.Resources {
 	p.lineBegin("resources (§resources)")
-	d := &ast.Resources{ResourcesPos: p.kwTake("resources").Pos}
+	d := &ast.Resources{Doc: p.doc(), ResourcesPos: p.kwTake("resources").Pos}
 	d.Name = p.ident("resources model name (§resources)")
 	if p.at(token.DOT) {
 		p.next()
@@ -359,15 +359,16 @@ func (p *parser) routePath() *ast.RoutePath {
 
 func (p *parser) groupDecl() *ast.Group {
 	p.lineBegin("group declaration (§groups)")
-	d := &ast.Group{GroupPos: p.next().Pos}
+	d := &ast.Group{Doc: p.doc(), GroupPos: p.next().Pos}
 	d.Name = p.ident("group declaration (§groups)")
 	switch {
 	case p.at(token.LBRACE):
 		p.next()
 		for !p.at(token.RBRACE) && !p.at(token.EOF) {
 			dropped := p.item(func() {
+				doc := p.doc()
 				name := p.ident("group member (§groups)")
-				d.Terms = append(d.Terms, &ast.GroupTerm{Names: []*ast.Ident{name}})
+				d.Terms = append(d.Terms, &ast.GroupTerm{Doc: doc, Names: []*ast.Ident{name}})
 				if !p.at(token.RBRACE) && !p.cur().NLBefore {
 					p.fail(p.cur(), "group members are one per line (§groups)")
 				}
@@ -417,7 +418,7 @@ func (p *parser) groupTerm(neg bool) *ast.GroupTerm {
 
 func (p *parser) predDecl() *ast.Pred {
 	p.lineBegin("predicate declaration (§predicates)")
-	d := &ast.Pred{PredPos: p.next().Pos}
+	d := &ast.Pred{Doc: p.doc(), PredPos: p.next().Pos}
 	d.Name = p.ident("predicate declaration (§predicates)")
 	p.expect(token.LBRACE, "predicate declaration (§predicates)")
 	d.X = p.predExpr()
@@ -669,7 +670,7 @@ func (p *parser) predNull(col *ast.ColRef) ast.PredExpr {
 
 func (p *parser) selectDecl() *ast.Select {
 	p.lineBegin("select declaration (§selects-over-groups)")
-	d := &ast.Select{SelectPos: p.next().Pos}
+	d := &ast.Select{Doc: p.doc(), SelectPos: p.next().Pos}
 	d.Name = p.ident("select declaration (§selects-over-groups)")
 	if p.at(token.LPAREN) {
 		p.selectProjection(d)

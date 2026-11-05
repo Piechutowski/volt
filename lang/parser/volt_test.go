@@ -278,7 +278,7 @@ func TestPipelineRecoversPerPlug(t *testing.T) {
 
 func TestPackageClauseSurvivesTrailingError(t *testing.T) {
 	for _, tc := range []struct{ src, kinds string }{
-		{"package db [note: \"the blog data\"]\n\ntable posts {\n\tid int [pk]\n}\n", "package,table"},
+		{"package db [model: \"Blog\"]\n\ntable posts {\n\tid int [pk]\n}\n", "package,table"},
 		{"package db extra\n\ntable posts {\n\tid int [pk]\n}\n", "package,table"},
 	} {
 		f, diags := ParseFile("db.volt", tc.src)

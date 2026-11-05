@@ -32,7 +32,7 @@ type Options struct {
 // here. The package must be free of check errors and declare data
 // elements.
 func Generate(pkg *lang.Package, opts Options) (map[string][]byte, error) {
-	gopts := golang.Options{Package: pkg.Name, Source: opts.Source}
+	gopts := golang.Options{Package: pkg.Name, Source: opts.Source, PackageDoc: pkg.Doc()}
 	if opts.Package != "" {
 		gopts.Package = opts.Package
 	}

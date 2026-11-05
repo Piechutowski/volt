@@ -1,7 +1,8 @@
 // spec: §keywords, §program-structure, project opens no element: a table and a column may be named project
 table project {
   id      int    [pk]
-  project string [note: "the name page views are counted under"]
+  // the name page views are counted under
+  project string
 }
 
 table page_views {

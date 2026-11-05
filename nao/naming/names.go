@@ -167,19 +167,6 @@ func LocalName(name string) bool {
 	return false
 }
 
-// SettingNote is the text of a list's note setting, "" when it has none
-// (spec §settings-lists).
-func SettingNote(sl *ast.SettingList) string {
-	s := sl.Get("note")
-	if s == nil {
-		return ""
-	}
-	if lit, ok := s.Value.(*ast.BasicLit); ok {
-		return lit.Tok.Val
-	}
-	return ""
-}
-
 // ImportKey is the key of one import of the generated files: the path,
 // or alias=path for a declared type's package whose alias is not the one
 // the path implies (spec §types).

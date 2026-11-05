@@ -8,6 +8,7 @@
 // marks nothing and a generated create casts nothing, and a single key
 // of a declared type stored as int, written INTEGER PRIMARY KEY but an
 // ordinary key in Go, which an insert must mark (spec §columns).
+
 package metrics
 
 type Visibility string

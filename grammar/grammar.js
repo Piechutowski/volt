@@ -921,13 +921,7 @@ module.exports = grammar({
 
     null: () => kw('null'),
 
-    comment: () =>
-      token(
-        choice(
-          seq('//', /[^\n]*/),
-          seq('/*', /([^*]|\*+[^*/])*\*+/, '/'),
-        ),
-      ),
+    comment: () => token(seq('//', /[^\n]*/)),
 
     _newline: () => /\n/,
   },

@@ -2,6 +2,7 @@
 // ON UPDATE clauses (spec §relationships-ref): set_null is SET NULL
 // and set_default is SET DEFAULT, two SQL words for one Volt word;
 // cascade and restrict are spelled as they are (§mapping-to-sqlite-ddl).
+
 table users {
   id    int    [pk]
   email string [unique]

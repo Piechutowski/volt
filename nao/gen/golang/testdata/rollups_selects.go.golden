@@ -8,6 +8,7 @@ import (
 
 const voltPageViewRowsSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" WHERE ("site" = ? AND "day" = ?)`
 
+// The views of one site on one day.
 func PageViewRows(site string, day int) rt.Query[PageView] {
 	return rt.Query[PageView]{SQL: voltPageViewRowsSQL, Args: []any{site, day}, Scan: voltPageViewScan}
 }
@@ -232,6 +233,7 @@ const voltHostBoardChildrenSQL = `SELECT "id", "host_id", "owner_id", "day" FROM
 
 const voltHostLineupSQL = `SELECT "id", "name" FROM "hosts"`
 
+// Every host with its visits.
 func HostLineup() rt.With[Host, Visit, int, HostWithVisits] {
 	return rt.With[Host, Visit, int, HostWithVisits]{
 		Parent:    rt.Query[Host]{SQL: voltHostLineupSQL, Args: nil, Scan: voltHostScan},

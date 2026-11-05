@@ -78,9 +78,6 @@ func (g *generator) tableEmit(ti *check.TableInfo) error {
 	name := ti.Key
 
 	g.out.WriteString("\n")
-	if note := tableNote(ti.Decl); note != "" {
-		commentWrite(&g.out, "", note)
-	}
 	fmt.Fprintf(&g.out, "CREATE TABLE %s (\n", identQuote(name))
 
 	var pkCols []string
@@ -93,11 +90,6 @@ func (g *generator) tableEmit(ti *check.TableInfo) error {
 		line, err := g.columnDef(ti, cd, pkCols)
 		if err != nil {
 			return fmt.Errorf("table %s: %w", name, err)
-		}
-		if note := settingNote(cd.Col.Settings); note != "" {
-			var b strings.Builder
-			commentWrite(&b, "  ", note)
-			line = b.String() + line
 		}
 		lines = append(lines, line)
 	}
@@ -347,31 +339,6 @@ func actionSQL(sl *ast.SettingList, kind string) string {
 		return strings.ToUpper(strings.ReplaceAll(v.Name(), "_", " "))
 	}
 	return ""
-}
-
-func tableNote(t *ast.Table) string { return settingNote(t.Settings) }
-
-func settingNote(sl *ast.SettingList) string { return settingString(sl, "note") }
-
-func settingString(sl *ast.SettingList, name string) string {
-	s := sl.Get(name)
-	if s == nil {
-		return ""
-	}
-	if lit, ok := s.Value.(*ast.BasicLit); ok {
-		return lit.Tok.Val
-	}
-	return ""
-}
-
-func commentWrite(b *strings.Builder, indent, text string) {
-	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
-		if strings.TrimSpace(line) == "" {
-			b.WriteString(indent + "--\n")
-			continue
-		}
-		b.WriteString(indent + "-- " + line + "\n")
-	}
 }
 
 // Ident quotes an identifier for SQLite the way the DDL generator does

@@ -85,7 +85,7 @@ is a golden (`cmd/volt/lsp_session_test.go`).
 - The only comments are doc comments on exported identifiers, one or
   two sentences citing the spec section (`§columns`), and directives.
   Nothing else is commented; a generated file carries the header and
-  the doc comments its notes become (spec §notes-become-doc-comments)
+  the doc comments of its schema (spec §doc-comments-in-generated-code)
   and nothing else.
 - Generated files start with the `Code generated … DO NOT EDIT.`
   marker; the CLI refuses to overwrite a file without it. Generated

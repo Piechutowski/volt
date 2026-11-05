@@ -110,7 +110,6 @@ func TestElementStarts(t *testing.T) {
 		"a\n\"x\ny\"\nb":           {5, 8},
 		"a\n\"\"\"x\ny\"\"\"\nb":   {12},
 		"a\n`x\ny`\nb":             {8},
-		"a\n/* x\ny */\nb":         {12},
 		"a\n// x\nb":               {7},
 		"a\n\"q\"\n1b":             {6},
 		"a\n{\nb\n}\nc\n}\nd":      {8, 12},

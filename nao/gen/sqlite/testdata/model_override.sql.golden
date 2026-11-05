@@ -8,7 +8,6 @@ CREATE TABLE menus (
   price REAL NOT NULL DEFAULT 0
 );
 
--- One row per status a customer order can be in
 CREATE TABLE order_status (
   code TEXT PRIMARY KEY NOT NULL,
   label TEXT NOT NULL

@@ -98,14 +98,15 @@ func chunkReuse(old map[string][]*chunk, src string, pos int) *chunk {
 }
 
 func (p *parser) chunkParse(f *token.File) *chunk {
-	toks, errs, end, bound := scanner.ScanChunk(f, p.buf)
+	toks, docs, errs, end, bound := scanner.ScanChunk(f, p.buf)
 	f.Src = f.Src[:end]
-	p.toks, p.pos, p.diags = toks, 0, errs
+	p.toks, p.docs, p.pos, p.diags = toks, docs, 0, errs
 	parsed := p.file(f.Name)
 	p.buf = toks[:0]
+	documented := len(docs) > 0 && docs[0].Tok == 0 && docs[0].Start == 0
 	return &chunk{
 		text: f.Src, file: f, decls: parsed.Decls, diags: p.diags, eof: parsed.EOF,
-		starts: toks[0].DeclStart && toks[0].Pos == f.At(0, 1, 1),
+		starts: toks[0].DeclStart && (toks[0].Pos == f.At(0, 1, 1) || documented),
 		bound:  bound,
 		lines:  strings.Count(f.Src, "\n"),
 	}

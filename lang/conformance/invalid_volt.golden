@@ -268,7 +268,7 @@ db/i211_migration_shape_records.volt:19:1: error: syntax: expected an element ty
 db/i214_migration_from_outside_rebuild.volt:13:27: error: spec/migrations: from: names the source of a rebuilt column and is a setting of rebuild table only (§migrations)
 
 ## i216_migration_exec_setting.volt
-db/i216_migration_exec_setting.volt:13:68: error: spec/migrations: unknown setting "note" (§migrations)
+db/i216_migration_exec_setting.volt:13:68: error: spec/migrations: unknown setting "name" (§migrations)
 
 ## i217_migration_duplicate_column.volt
 db/i217_migration_duplicate_column.volt:14:5: error: spec/migrations: duplicate column name "name" in table "users" (§migrations)
@@ -362,11 +362,6 @@ db/i243_group_takes_table_name.volt:13:7: error: spec/groups: group "users" take
 app/i24_toplevel_route.volt:4:1: error: syntax: routes, resources and datasets must appear inside a scope (§scopes-and-routes)
 app/i24_toplevel_route.volt:5:1: error: syntax: routes, resources and datasets must appear inside a scope (§scopes-and-routes)
 
-## i257_migration_note.volt
-db/i257_migration_note.volt:10:23: error: spec/migrations: unknown setting "note" (§migrations)
-db/i257_migration_note.volt:13:24: error: spec/migrations: note: documents the schema, which generated code carries, and is not a migration setting (§migrations)
-db/i257_migration_note.volt:16:19: error: spec/migrations: unknown setting "note" (§migrations)
-
 ## i25_short_ellipsis.volt
 app/i25_short_ellipsis.volt:5:14: error: syntax: wildcard ellipsis is spelled ':name...' (§route-paths)
 
@@ -395,8 +390,8 @@ db/i268_declared_type_list_bytes.volt:13:31: error: spec/predicates: column "ico
 ## i26_typed_wildcard.volt
 app/i26_typed_wildcard.volt:5:18: error: syntax: a wildcard cannot carry a type; ':name...' always captures a string (§route-paths)
 
-## i272_group_note.volt
-db/i272_group_note.volt:8:15: error: syntax: expected '{' or '=' after the group name (§groups)
+## i272_group_settings.volt
+db/i272_group_settings.volt:8:15: error: syntax: expected '{' or '=' after the group name (§groups)
 
 ## i277_migration_no_transaction_two_words.volt
 db/i277_migration_no_transaction_two_words.volt:9:26: error: syntax: expected ',' or ']' in settings list, found identifier "transaction": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
@@ -443,7 +438,7 @@ db/i292_case_value_words.volt:10:37: error: syntax: write desc, not DESC: keywor
 db/i292_case_value_words.volt:13:26: error: syntax: write index, not Index: keywords are case-sensitive (§keywords)
 
 ## i298_backslash_line_break.volt
-db/i298_backslash_line_break.volt:7:34: error: syntax: a backslash before a line break continues nothing: a string ends on its line, and a multi-line string is written """...""" (§escape-sequences)
+db/i298_backslash_line_break.volt:7:37: error: syntax: a backslash before a line break continues nothing: a string ends on its line, and a multi-line string is written """...""" (§escape-sequences)
 db/i298_backslash_line_break.volt:15:22: error: syntax: a backslash before a line break continues nothing: Volt has no line continuation (§escape-sequences)
 db/i298_backslash_line_break.volt:16:3: error: syntax: unknown element type "admins" (§program-structure)
 
@@ -892,8 +887,8 @@ db/i451_migration_shape_autoincrement_misplaced.volt:17:22: error: spec/columns:
 db/i451_migration_shape_autoincrement_misplaced.volt:21:25: error: spec/columns: autoincrement on "post_id" in table "post_tags", whose primary key is (post_id, tag): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (§columns)
 db/i451_migration_shape_autoincrement_misplaced.volt:29:24: error: spec/columns: autoincrement on "hits": only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (§columns, §mapping-to-sqlite-ddl)
 
-## i453_package_note.volt
-db/i453_package_note.volt:3:12: error: syntax: a package clause takes no settings list: a package carries no note (§notes), and its doc comment is written in a hand-written Go file of the package (§notes-become-doc-comments)
+## i453_package_settings.volt
+db/i453_package_settings.volt:3:12: error: syntax: a package clause takes no settings list: a package is documented by the doc comment above its clause (§doc-comments)
 
 ## i457_migration_shape_rowid_alias.volt
 db/i457_migration_shape_rowid_alias.volt:21:17: error: spec/columns: default on "id", the rowid alias of table "users": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
@@ -1129,6 +1124,9 @@ db/i53_pred_type_mismatch.volt:9:33: error: spec/predicates: column "org" (strin
 ## i540_dataset_limit_settings_refused
 app/routes.volt:10:35: error: spec/settings-whitelists: setting "max_limit" is not valid on a dataset (§settings-whitelists); valid: strip, only, except
 app/routes.volt:10:50: error: spec/settings-whitelists: setting "default_limit" is not valid on a dataset (§settings-whitelists); valid: strip, only, except
+
+## i541_shared_action_two_docs.volt
+app/i541_shared_action_two_docs.volt:9:2: error: spec/scopes-and-routes: Posts.Index is documented by the route at app/i541_shared_action_two_docs.volt:7:2 already: one of the routes that share an action carries its doc comment (§handler-references, §doc-comments-in-generated-code)
 
 ## i54_group_type_disagree.volt
 db/i54_group_type_disagree.volt:19:29: error: spec/selects-over-groups: column "org" disagrees on type across "mixed": int in ks_seats; string in ms_revenue — the predicate cannot be checked for every member (§selects-over-groups)

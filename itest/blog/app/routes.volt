@@ -1,3 +1,5 @@
+// Package app is the itest fixture: the generated router and, beside it,
+// the hand-written middleware and error handler its routes name.
 package app
 
 import (
@@ -15,6 +17,7 @@ pipeline extra {
 }
 
 scope / [pipe: api, error_handler: Errors] {
+	// The front page.
 	get /        Home.Index [name: root]
 	get /teapot  Home.Teapot
 	any /ping    Home.Ping
@@ -30,6 +33,9 @@ scope / [pipe: api, error_handler: Errors] {
 	resources db.users
 
 	get /users/:id(int)/avatar Users.Avatar
+	// A user's public profile.
+	//
+	// Loads the user, or answers 404.
 	get /users/:id(int)/profile Users.Profile [name: profile, timeout: 5] {
 		user db.UserGet(id)
 	}
@@ -51,6 +57,7 @@ scope / [pipe: api, error_handler: Errors] {
 	// reaches every route beneath, and a query route runs it for the halt.
 	// A limit from the path is checked before the scope load runs, one
 	// from the query string after it.
+
 	scope /me [name: me] {
 		load user CurrentUser
 		get /      Me.Show
@@ -67,6 +74,7 @@ scope / [pipe: api, error_handler: Errors] {
 	get /archive/:stamp(int)  Archive.Show [name: archive]
 
 	// Query routes (§query-routes): generated handlers over the data package.
+
 	scope /api [name: api] {
 		get    /users            db.UserList
 		get    /users/:id(int) db.UserGet
@@ -80,12 +88,14 @@ scope / [pipe: api, error_handler: Errors] {
 	}
 
 	// A dataset (§datasets): one query route per member of the group select.
+
 	scope /ms {
 		dataset db.browse [strip: "ms_"]
 	}
 
 	// Default handlers (§default-handlers): every action is a query route over
 	// the table's generated CRUD; no controller to write.
+
 	scope /ref [name: ref] {
 		resources db.users    [default]
 		resources db.tags     [default]

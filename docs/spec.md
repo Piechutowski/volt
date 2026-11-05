@@ -15,7 +15,7 @@ specification has two parts and the appendices:
 
 - **[Part I — The Schema Core](#part-i-the-schema-core)**: lexis,
   grammar and static semantics of the schema language: tables,
-  columns, indexes, refs, types, partials, records and notes,
+  columns, indexes, refs, types, partials, records and doc comments,
   with Go's types as the column types.
 - **[Part II — The Project and Routing Layer](#part-ii-the-project-and-routing-layer)**:
   projects, packages, imports, pipelines, scopes, routes, resources,
@@ -85,7 +85,7 @@ nothing performs inside it, and it writes no variable it captures.
 
 **Status:** Normative.
 Part I is Volt's schema language: tables, columns, indexes, refs,
-types, partials, records and notes, with column types drawn
+types, partials, records and doc comments, with column types drawn
 from Go (§columns, §types). A Part I file
 body is a valid Volt file body (§layers-files-and-the-superset-rule).
 The reference implementation is [`lang/`](../lang/); the executable
@@ -142,7 +142,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Types](#types)
     - [TablePartial](#tablepartial)
     - [Records (Sample Data)](#records-sample-data)
-    - [Notes](#notes)
+    - [Doc Comments](#doc-comments)
   - [Static Semantics](#static-semantics)
     - [Namespaces and Uniqueness](#namespaces-and-uniqueness)
     - [Reference Resolution](#reference-resolution)
@@ -197,7 +197,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Go types](#go-types)
     - [Nullability](#nullability)
     - [Names](#names)
-    - [Notes become doc comments](#notes-become-doc-comments)
+    - [Doc comments in generated code](#doc-comments-in-generated-code)
     - [Struct tags](#struct-tags)
     - [Generated query surface](#generated-query-surface)
   - [Mapping to SQLite DDL](#mapping-to-sqlite-ddl)
@@ -364,7 +364,9 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
    never below zero, over the tokens before it. The element before such an
    identifier ends there, complete or not: a parser MUST NOT read past it to
    finish an element, and MAY therefore parse each element from its own
-   text. An element that continues onto a further line either indents that
+   text. An element's doc comment (§doc-comments) is part of the element:
+   when the identifier has one, the element before ends at the first line
+   of that doc comment instead. An element that continues onto a further line either indents that
    line or continues inside braces or a multi-line string; a settings list,
    an import block or a relationship that spills onto a first-column
    identifier line is a syntax error at that line.
@@ -397,32 +399,38 @@ users.id                      // error: a new element begins here
 
 ### Comments
 
-There are **exactly two** comment forms:
+There is **exactly one** comment form, as in Go's doc comments:
 
 ```ebnf
-comment            = line comment | block comment ;
-line comment       = "//", { any char - newline } ;
-block comment      = "/*", block comment body, "*/" ;
-block comment body = { any char } - ( { any char }, "*/", { any char } ) ;
+comment  = "//", { any char - newline } ;
 
-any char           = ? any Unicode character ? ;
+any char = ? any Unicode character ? ;
 ```
 
-1. A line comment extends to, but does not include, the next `newline` (or
-   end of file).
-2. A block comment may span any number of lines and MUST be terminated by
-   `*/` before end of file; an unterminated block comment is a lexical error.
-3. Block comments do not nest.
-4. Comments are trivia: they may appear between any two tokens and have no
+1. A comment extends to, but does not include, the next `newline` (or
+   end of file). It does **not** consume the terminating newline; the
+   newline retains its statement-terminating role.
+2. `/*` outside a string, an expression literal and a comment is a
+   lexical error naming `//`: Volt has no block comment.
+3. Comments are trivia: they may appear between any two tokens and have no
    semantic effect, except that one ends a route path or a package path,
-   as whitespace does (§route-paths, §imports). A line comment does
-   **not** consume the terminating
-   newline; the newline retains its statement-terminating role.
+   as whitespace does (§route-paths, §imports).
+4. A comment with nothing but spaces and tabs before it on its line
+   stands **on its own line**; one that follows a token on its line is
+   a **trailing comment**. Consecutive lines that each
+   hold a comment on its own line, with no other line between them,
+   form a **comment group**. A blank line, or a line holding a token,
+   ends the group.
+5. A comment group directly above a construct is that construct's doc
+   comment (§doc-comments). Every other comment, a trailing one, a
+   group a blank line separates from what follows, a group at the end
+   of a body, is a comment to the reader and nothing else.
 
 ```volt
-// single-line comment
-/* block
-   comment */
+// A doc comment: the group directly above the table documents it.
+table users {
+  id int [pk] // a trailing comment documents nothing
+}
 ```
 
 ### Identifiers
@@ -474,7 +482,7 @@ then reads it as that keyword, so the error is reported once.
 |---|---|---|
 | element and block words | `table`, `table_partial`, `type`, `ref`, `records`, `group`, `pred`, `select`, `migration`, `pipeline`, `scope`, `indexes`, `validators` | §program-structure, §indexes, §validators |
 | package words | `package`, `import` | §projects-and-packages, §imports |
-| setting names | `pk`, `null`, `unique`, `index`, `autoincrement`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `group`, `limit`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
+| setting names | `pk`, `null`, `unique`, `index`, `autoincrement`, `default`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `group`, `limit`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
 | referential actions | `cascade`, `restrict`, `set_null`, `set_default` | §relationships-ref |
 | resource actions | `index`, `new`, `create`, `show`, `edit`, `update`, `delete` | §the-action-table |
 | order directions | `asc`, `desc` | §selects-over-groups |
@@ -551,15 +559,16 @@ mls plain         = any char - ( "\" | '"' ) ;
    first tab.
 
 ```volt
-table posts [note: """
-  This is a block string.
-  It spans multiple lines.
-"""] {
+table posts {
   id int [pk]
+  body string [default: """
+    This is a block string.
+    It spans multiple lines.
+  """]
 }
 ```
 
-The note's value is `This is a block string.\nIt spans multiple lines.`
+The default's value is `This is a block string.\nIt spans multiple lines.`
 
 ### Escape Sequences
 
@@ -697,7 +706,7 @@ setting value = string | number | boolean | null
 ```
 
 1. A setting is either a flag (`pk`, `unique`, `null`) or a key-value
-   pair (`note: "text"`, `default: 123`).
+   pair (`model: "Account"`, `default: 123`).
 2. Setting names are lowercase keywords, matched exactly (§keywords). A
    setting name is one
    identifier, and so is a setting value that is a word; a name or
@@ -762,8 +771,7 @@ table body     = { column
                  } ;
 
 table settings = "[", table setting, { ",", table setting }, "]" ;
-table setting  = "note", ":", string
-               | "model", ":", string ;
+table setting  = "model", ":", string ;
 ```
 
 1. A table MUST contain at least one column, either directly or via an
@@ -772,14 +780,16 @@ table setting  = "note", ":", string
    and no schema qualifier. That name is the table's SQLite name,
    quoted only when needed (§mapping-to-sqlite-ddl). Tables and groups
    share one namespace in a package (§groups).
-3. **Settings.** `note` (§notes) and `model` are the only table
-   settings. `model:` pins the Go model name used by `volt gen` (by
-   default the singularized table name, §names); the `vet` rule
-   [`modelname`](lint.md#modelname) tells you when it is needed.
+3. **Settings.** `model` is the only table setting. `model:` pins the
+   Go model name used by `volt gen` (by default the singularized table
+   name, §names); the `vet` rule [`modelname`](lint.md#modelname) tells
+   you when it is needed. A table is documented by its doc comment
+   (§doc-comments).
 4. Column names MUST be unique within a table after partial injection (§partial-injection-order).
 
 ```volt
-table users [note: "Registered accounts"] {
+// Registered accounts
+table users {
   id int [pk]
   email string [unique]
 }
@@ -801,7 +811,6 @@ column setting  = "pk"
                 | "autoincrement"
                 | "required"
                 | "default", ":", default value
-                | "note", ":", string
                 | "tag", ":", string
                 | "ref", ":", name, ".", name ;   (* table.column, §relationships-ref *)
 ```
@@ -1095,8 +1104,8 @@ index setting  = "name", ":", string
    so the index stays small, and a unique partial index constrains
    only those rows. The DDL carries it as `WHERE <expr>`, verbatim and
    SQLite's to judge.
-8. An index carries no method and no note: SQLite has one index
-   method, and an index documents itself by its key.
+8. An index carries no method: SQLite has one index method. Its doc
+   comment (§doc-comments) says why it exists.
 
 ```volt
 table bookings {
@@ -1455,8 +1464,8 @@ partial injection = "~", name, newline ;
 
 1. Partial names live in their own namespace and MUST be unique.
 2. A partial body is a table body without `records` and without nested
-   partial injections. A partial takes no settings: a table's `note`
-   and `model` are its own.
+   partial injections. A partial takes no settings: a table's `model`
+   is its own.
 3. An injection `~p` inside a table body replaces itself with the entire
    content of partial `p` at that position. Injection order is source
    order.
@@ -1583,35 +1592,80 @@ records posts(id, user_id, posted_at) {
 }
 ```
 
-### Notes
+### Doc Comments
 
-A note is human-readable documentation. It has one spelling, the
-`note:` setting, and one meaning: generated code carries it.
+A doc comment documents the construct directly below it, as a Go doc
+comment does. It is the one way to document anything in Volt.
 
-1. `note: string` is a setting of a `table` (§table) and a column
-   (§columns), and of nothing else: a package, a partial, a type, an
-   index, a relationship, a group and a migration carry no note. A
-   constant of a declared type documents itself in the Go file that
-   declares it (§types), and a package in a hand-written Go file of
-   its own (§notes-become-doc-comments).
-2. The value is a string. A multi-line string
-   (§multi-line-string-literals) is permitted and conventionally
-   contains Markdown; a settings list spans lines inside its brackets
-   (§line-structure-and-whitespace), so a long note stays readable.
-3. `Note` is not a keyword: a `Note:` line in a table body reads as a
-   column, and is an error there.
-4. Every note becomes a doc comment in generated Go
-   (§notes-become-doc-comments) and a comment in the DDL
-   (§mapping-to-sqlite-ddl).
+1. **Attachment.** A comment group (§comments) documents a construct
+   when the group's last line is the line directly above the
+   construct's first token and that token is the first on its line.
+   The rule is the same for every construct that begins a line: an
+   element (§program-structure), the package clause included, and an
+   item of any body, such as a column, an `indexes` or `validators`
+   block and each of its entries, a partial injection, a `records`
+   block and each of its rows, an import, a plug, a scope, a route, a
+   load, a resources or dataset declaration, a group member, and a
+   migration's operations and their items.
+2. **Separation.** A group that a blank line separates from the line
+   below documents nothing, nor does a trailing comment, nor a group
+   above a closing `}`. Only the group directly above counts: a
+   comment to the reader sits apart from the construct, with a blank
+   line below it, or trails a line.
+3. **Text.** The doc text is the group's lines with `//` removed, and
+   one space after it when there is one. Trailing spaces and tabs of
+   each line, and the empty lines at the start and end of the group,
+   are removed, and a run of empty lines becomes one, a paragraph
+   break. A comment takes every character as itself: there are no
+   escapes (§escape-sequences). The text is conventionally Markdown,
+   in Go's doc comment syntax.
+4. **Meaning.** A doc comment never changes what a program means: no
+   generated statement or identifier depends on one, and the one check
+   it meets is that of the routes sharing an action, at most one
+   carries a doc comment (§handler-references). Generated Go carries
+   the doc comment where its construct becomes a Go declaration
+   (§doc-comments-in-generated-code); every other one is the reader's,
+   shown by the language server ([`editor.md`](editor.md)).
+5. **Package.** The doc comment of the package clause documents the
+   package. Each `.volt` file of a package may write one; the
+   package's doc text is theirs joined in file name order, each a
+   paragraph. A comment at the top of a file with a blank line below
+   it, a license or a file header, documents nothing. The package is
+   documented in Volt alone: a package doc comment in a hand-written
+   Go file of the package is reported by the vet rule
+   [`packagedoc`](lint.md#packagedoc).
+6. **Partials.** A column a partial injects keeps its doc comment in
+   every table that injects it; a column of the table that overrides
+   it (§tablepartial) carries its own, or none.
 
 ```volt
-table posts [note: """
-  A blog post.
-  Its author sees it before anyone else.
-"""] {
+// The blog: posts and the people who write them.
+package db
+
+// Kept apart by the blank line below, this comment documents nothing.
+
+// A person who writes posts.
+table users {
   id int [pk]
-  title string [note: "Shown in lists"]
 }
+
+// A blog post.
+//
+// Its author sees it before anyone else.
+table posts {
+  id int [pk]
+  // Shown in lists
+  title string // a trailing comment documents nothing
+  author_id int
+
+  indexes {
+    // Lists a writer's posts in order.
+    (author_id, id)
+  }
+}
+
+// Who wrote the post.
+ref: posts.author_id > users.id
 ```
 
 ---
@@ -1683,8 +1737,7 @@ table                = "table", name, [ table settings ],
 table body           = { column | indexes block | validators block
                        | partial injection | records block } ;
 table settings       = "[", table setting, { ",", table setting }, "]" ;
-table setting        = "note", ":", string
-                     | "model", ":", string ;
+table setting        = "model", ":", string ;
 
 column               = name, column type, [ column settings ], newline ;
 column type          = [ "[", "]" ], type name ;
@@ -1693,7 +1746,6 @@ column settings      = "[", column setting, { ",", column setting }, "]" ;
 column setting       = "pk" | "null"
                      | "unique" | "index" | "autoincrement" | "required"
                      | "default", ":", default value
-                     | "note", ":", string
                      | "tag", ":", string
                      | "ref", ":", name, ".", name ;
 default value        = [ "-" ], number | string | boolean
@@ -1760,10 +1812,7 @@ newline              = ? U+000A LINE FEED ? ;
 sp                   = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
 any char             = ? any Unicode character ? ;
 
-comment              = line comment | block comment ;
-line comment         = "//", { any char - newline } ;
-block comment        = "/*", block comment body, "*/" ;
-block comment body   = { any char } - ( { any char }, "*/", { any char } ) ;
+comment              = "//", { any char - newline } ;
 
 identifier           = letter, { letter | unicode digit } ;
 letter               = ? any character of Unicode category L (Letter) ?
@@ -1836,11 +1885,9 @@ files under `invalid/` MUST be rejected.
    slash = "/" ;
    ```
 
-   `/` is a token wherever it is not the start of a `//` or `/*`
-   comment. Consequence: **`/*` always opens a block comment**, which
-   is why the rest-of-path wildcard is spelled `:name...` (§route-paths)
-   and not `*name` — after a slash, a star-marked wildcard would open a
-   block comment.
+   `/` is a token wherever it is not the start of a `//` comment, or
+   of `/*`, which is an error (§comments). The rest-of-path wildcard
+   is spelled `:name...` (§route-paths), so a path never writes `/*`.
 3. Declaration order and file assignment carry no meaning; they fix
    only the order of generated output (the DDL, the route table) and of
    diagnostics (§projects-and-packages).
@@ -1913,8 +1960,8 @@ package clause = "package", name, newline ;
    directive is Go's business and ignored. There is no second manifest.
 2. Every `.volt` file MUST begin with a package clause: its first
    declaration, at most one per file. The name is an identifier, and
-   the clause takes no settings list: a package carries no note
-   (§notes). The name `volt` is reserved: generated files import the
+   the clause takes no settings list; the doc comment above it
+   documents the package (§doc-comments). The name `volt` is reserved: generated files import the
    volt runtime under that qualifier (§generation-contract-informative), so a package of that name
    is an error.
 3. A **package** is a directory: all `.volt` files in one directory
@@ -2195,7 +2242,10 @@ handler ref = name, [ ".", name ] ;
    loads (§scope-loads), identical parameter signatures (names, types
    and wildcard-ness, in order), the same body type or none
    (§request-bodies) and identical loads (names and types, in order;
-   §route-loads).
+   §route-loads). At most one of the routes that share an action carries
+   a doc comment (§doc-comments); its text documents the action's method
+   (§doc-comments-in-generated-code), and a second documented route is an
+   error naming the first.
 4. The generated `Controllers` manifest is one namespace: a controller
    MUST NOT take the name of a field the manifest holds for a data
    the query routes run on (`DB`; §query-routes) or for the event broker
@@ -4513,9 +4563,9 @@ migration 0002__users_bio {
    `null`, and `set_default` requires `null` or a `default:`. An index
    setting is one of `unique`, `name:`, `where:`; `pk` on an index is
    an error naming the column form, as in §indexes. `tag:`, `required` and
-   `model:` describe Go, and `note:` documents the schema, which
-   generated code carries; all four are errors here, in every position
-   of a migration. A migration takes `irreversible` and
+   `model:` describe Go; all three are errors here, in every position
+   of a migration. A doc comment in a migration documents its construct
+   to the reader and generates nothing (§doc-comments). A migration takes `irreversible` and
    `no_transaction` and no other setting; an `exec` takes `down:` and
    no other setting.
 5. **`create table`.** The body MUST contain at least one column;
@@ -5191,22 +5241,31 @@ files declare it. Its name is exported, so the unexported names of
 generated code never meet it, and one that takes an exported
 generated name, a router's included, is a check error (§types).
 
-### Notes become doc comments
+### Doc comments in generated code
 
-Every note is the `note:` setting (§notes):
+A doc comment (§doc-comments) is carried, as its doc text, into the
+generated Go where its construct becomes a Go declaration:
 
-| Note on | Generated position |
+| Doc comment on | Generated position |
 |---|---|
-| `table` | struct doc comment |
-| column | field doc comment |
-| injected partial column | travels with the column; a §tablepartial override brings its own note |
+| package clause | package doc comment of `volt_models.go`, or of `volt_router.go` in a package without data |
+| `table` | model struct doc comment |
+| column | field doc comment, in the model and in the struct derivative of a star select (§selects-over-groups) |
+| injected partial column | travels with the column; a §tablepartial override brings its own |
+| `select` | doc comment of the query function of every member |
+| route | doc comment of its action's method in the controller interface (§handler-references) |
 
-These are the only comments a generated file carries besides the
-header: a note is the maintainer's text, and the generators write no
-comment of their own, so a generated file has no package comment and
-a file without notes has no comment but the header. A package doc
-comment, if wanted, is written in a hand-written Go file of the
-package, as any Go package documents itself.
+Every other doc comment is the reader's alone: the controller
+interface, a reverse-URL helper and a client method carry none, a
+`resources` or `dataset` declaration's doc documents none of the
+methods it expands to, and the DDL carries no comment but its header,
+since the schema documents itself in Volt (§mapping-to-sqlite-ddl).
+These are the only comments a generated file carries besides the header: a doc comment
+is the maintainer's text, and the generators write no comment of
+their own, so a file of an undocumented schema has no comment but the
+header, and a package without a documented package clause has no
+package doc comment. The header stands apart from the package doc
+comment by a blank line, as Go requires of a file header.
 Generated files start with the machine-readable
 `// Code generated … DO NOT EDIT.` marker; `volt gen` refuses to
 overwrite a file lacking it. Generated data-layer code imports the
@@ -5536,8 +5595,9 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 
 Identifiers are quoted only when needed (not a plain lower-case name,
 or a SQLite keyword): `order` → `"order"`, `Users` → `"Users"`,
-`żółw` → `"żółw"`. Table and column notes → comments above their
-DDL. Output opens with
+`żółw` → `"żółw"`. The DDL carries no comment but its header: doc
+comments stay in the Volt source (§doc-comments-in-generated-code).
+Output opens with
 `PRAGMA foreign_keys = ON;` and the `-- Code generated … DO NOT EDIT.`
 marker, with the same overwrite protection as §mapping-to-go.
 

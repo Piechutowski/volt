@@ -146,6 +146,8 @@ const (
 	LE        // <=
 	GE        // >=
 	QUESTION  // ? (an optional query parameter, §predicates)
+
+	COMMENT // a // comment, never among the parser's tokens (spec §comments)
 )
 
 var kindNames = [...]string{
@@ -177,6 +179,7 @@ var kindNames = [...]string{
 	LE:        "'<='",
 	GE:        "'>='",
 	QUESTION:  "'?'",
+	COMMENT:   "comment",
 }
 
 func (k Kind) String() string {

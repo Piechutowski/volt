@@ -7,6 +7,7 @@ import "github.com/Piechutowski/volt/lang/token"
 // Migration is a Migration element: a named list of structural
 // operations, written flat or as up and down blocks (spec §migrations).
 type Migration struct {
+	Doc          *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	MigrationPos token.Position
 	Name         *Ident
 	Settings     *SettingList
@@ -35,6 +36,7 @@ type Operation interface {
 // CreateTable is a create table operation; its body holds columns and
 // Indexes blocks (spec §migrations).
 type CreateTable struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	CreatePos  token.Position
 	Name       *Ident
 	Body       []TableItem
@@ -49,6 +51,7 @@ func (x *CreateTable) operationNode()      {}
 // DropTable is a drop table operation, with the dropped shape as its
 // body when the migration is to be reversible (spec §migrations).
 type DropTable struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	DropPos    token.Position
 	Name       *Ident
 	Body       []TableItem
@@ -71,6 +74,7 @@ func (x *DropTable) HasBody() bool { return x.Lbrace.IsValid() }
 
 // RenameTable is a rename table operation (spec §migrations).
 type RenameTable struct {
+	Doc       *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	RenamePos token.Position
 	From, To  *Ident
 }
@@ -82,6 +86,7 @@ func (x *RenameTable) operationNode()      {}
 // AlterTable is an alter table operation: one ALTER TABLE statement per
 // item (spec §migrations).
 type AlterTable struct {
+	Doc      *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	AlterPos token.Position
 	Name     *Ident
 	Items    []AlterItem
@@ -101,6 +106,7 @@ type AlterItem interface {
 
 // AlterAdd adds a column (spec §migrations).
 type AlterAdd struct {
+	Doc    *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	AddPos token.Position
 	Column *Column
 }
@@ -112,6 +118,7 @@ func (x *AlterAdd) alterItemNode()      {}
 // AlterDrop drops a column; the type and settings, when written, are
 // the dropped column's shape for reversibility (spec §migrations).
 type AlterDrop struct {
+	Doc      *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	DropPos  token.Position
 	Name     *Ident
 	Type     *TypeRef // nil when no shape was written
@@ -132,6 +139,7 @@ func (x *AlterDrop) alterItemNode() {}
 
 // AlterRename renames a column (spec §migrations).
 type AlterRename struct {
+	Doc       *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	RenamePos token.Position
 	From, To  *Ident
 }
@@ -143,6 +151,7 @@ func (x *AlterRename) alterItemNode()      {}
 // RebuildTable is a rebuild table operation; its body is the new shape
 // (spec §migrations).
 type RebuildTable struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	RebuildPos token.Position
 	Name       *Ident
 	Body       []TableItem
@@ -157,6 +166,7 @@ func (x *RebuildTable) operationNode()      {}
 // CreateIndex is a create index operation: a table and an index as a
 // schema Indexes block writes it (spec §migrations).
 type CreateIndex struct {
+	Doc       *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	CreatePos token.Position
 	Table     *Ident
 	Index     *Index
@@ -168,6 +178,7 @@ func (x *CreateIndex) operationNode()      {}
 
 // DropIndex is a drop index operation (spec §migrations).
 type DropIndex struct {
+	Doc     *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	DropPos token.Position
 	Table   *Ident
 	Index   *Index
@@ -180,6 +191,7 @@ func (x *DropIndex) operationNode()      {}
 // Exec is an exec operation: SQL in an expression literal run
 // verbatim, with its inverse in the down: setting (spec §migrations).
 type Exec struct {
+	Doc      *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	ExecPos  token.Position
 	SQL      *FuncExpr
 	Settings *SettingList

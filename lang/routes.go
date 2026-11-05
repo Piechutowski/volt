@@ -74,6 +74,10 @@ type RouteInfo struct {
 	// takes none (§request-bodies).
 	Body *BodyInfo
 
+	// Doc is the route's doc text, the doc comment of its action's
+	// method (§doc-comments-in-generated-code); "" when it has none.
+	Doc string
+
 	Pos           token.Position
 	FromResources bool
 	Table         string // the resources declaration's table name, when FromResources
@@ -203,6 +207,7 @@ type ActionInfo struct {
 	Name       string
 	Params     []Param
 	Body       *BodyInfo   // the body the action receives after its parameters, nil when none (§request-bodies)
+	Doc        string      // the doc text of the one route that documents the action, "" when none (§handler-references)
 	ScopeLoads []ScopeLoad // the scope loads the action receives first (§scope-loads)
 	Loads      []LoadInfo  // the loaded values the action receives after the body (§route-loads)
 	Routes     []*RouteInfo
@@ -287,4 +292,13 @@ func scopeLoadsString(ls []ScopeLoad) string {
 		parts[i] = ld.Name + " " + ld.GoType
 	}
 	return "<" + strings.Join(parts, ", ") + "> "
+}
+
+func (a *ActionInfo) documentedBy() *RouteInfo {
+	for _, r := range a.Routes {
+		if r.Doc != "" {
+			return r
+		}
+	}
+	return nil
 }

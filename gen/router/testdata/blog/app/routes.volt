@@ -1,3 +1,5 @@
+// Package app is the itest fixture: the generated router and, beside it,
+// the hand-written middleware and error handler its routes name.
 package app
 
 import (
@@ -10,6 +12,7 @@ pipeline api {
 }
 
 scope / [pipe: api, error_handler: Errors] {
+	// The front page.
 	get  /        Home.Index [name: root]
 	get  /about   Home.About
 
@@ -34,6 +37,9 @@ scope / [pipe: api, error_handler: Errors] {
 
 	get /files/:path...          Files.Serve
 	get /users/:id(int)/avatar Users.Avatar
+	// A user's public profile.
+	//
+	// Loads the user, or answers 404.
 	get /users/:id(int)/profile Users.Profile [timeout: 5] {
 		user   db.UserGet(id)
 		picked db.UserPicked(ids)
@@ -73,6 +79,7 @@ scope / [pipe: api, error_handler: Errors] {
 	}
 
 	// A dataset (§datasets): one query route per member of the group select.
+
 	scope /ms {
 		dataset db.browse [strip: "ms_"]
 	}
@@ -82,6 +89,7 @@ scope / [pipe: api, error_handler: Errors] {
 
 	// Default handlers (§default-handlers): every action is a query route over
 	// the table's generated CRUD; no controller to write.
+
 	scope /ref [name: ref] {
 		resources db.users [default]
 		resources db.tags  [default]

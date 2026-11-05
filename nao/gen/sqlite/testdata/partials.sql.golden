@@ -5,10 +5,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE invoices (
   id INTEGER PRIMARY KEY,
   total REAL NOT NULL,
-  -- Set on insert
   created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-  -- NULL until first update
   updated_at TIMESTAMP,
-  -- Override: also records who deleted, see audit log
   deleted_at TIMESTAMP
 );

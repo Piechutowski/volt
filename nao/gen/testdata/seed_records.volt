@@ -1,4 +1,5 @@
 // records at both positions; SQL backends turn them into INSERTs
+
 table currencies {
   code string [pk]
   name string
@@ -8,7 +9,8 @@ table currencies {
     "PLN", "Polish złoty"
   }
 }
-table rates [note: "Seeded exchange rates"] {
+// Seeded exchange rates
+table rates {
   id int [pk]
   currency_code string [ref: currencies.code]
   rate float64

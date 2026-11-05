@@ -1,4 +1,5 @@
 // analyzers: reftarget
+
 table users {
   id int [pk]
   email string

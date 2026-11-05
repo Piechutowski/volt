@@ -2,6 +2,7 @@
 // over the model row, a list parameter, literals, a shared projection, a
 // star-form exclusion, an ordering and a bare select, so volt_selects.go
 // has a golden beside the other generated files.
+
 package metrics
 
 table page_views {
@@ -28,6 +29,7 @@ group traffic {
 pred at    { site = :site and day = :day }
 pred since { day >= :from }
 
+// The views of one site on one day.
 select rows    for page_views where at
 select chosen  for traffic where site in :sites
 select busy    for page_views where hits > 10 and score >= 0.5 and note is not null
@@ -39,6 +41,7 @@ select all     for link_clicks
 // Joins (spec §selects-over-groups, §relationships-ref): a forward
 // relation joins inner, a nullable one left with its columns rt.Null, and
 // a reverse relation, named outright where two would collide, joins left.
+
 table hosts {
   id   int [pk]
   name string
@@ -61,17 +64,21 @@ select traffic (id, name, visits.day) for hosts join visits where visits.day = :
 // grouped select keeps one row per group, an ungrouped one yields one
 // row as a lookup with its aggregates rt.Null, and an expression binds
 // its numbers as arguments.
+
 select daily  (site, day / 7 * 7 as week, sum(hits) as total, avg(score) as mean, count() as n) for page_views where day >= :from [group: (site, week), order: (site asc, week asc)]
 select totals (count() as n, max(hits) as top, min(note) as first) for page_views
 select scaled (id, hits * :factor + 1 as scaled) for page_views
 
 // Nested results (spec §selects-over-groups): each host with its visits,
 // the children loaded by one statement over the parent keys.
+
 select board (* \ name) for hosts with visits where id >= :from [order: (id asc)]
+// Every host with its visits.
 select lineup for hosts with visits
 
 // A composite key joins on every pair, the forward relation named after
 // the referenced table (spec §relationships-ref).
+
 table merchants {
   id           int    [pk]
   country_code string [pk]
@@ -92,6 +99,7 @@ select placed (id, merchants.name) for merchant_periods join merchants where mer
 // bound as an argument, a parameter last in the signature and checked by
 // the effect, on every member of a group, after a grouping, and on the
 // parents of a nesting.
+
 select top     for page_views where day >= :from [order: (hits desc, id asc), limit: :limit]
 select first   for traffic [order: (day asc, id asc), limit: 3]
 select leading (site, sum(hits) as total) for page_views [group: (site), order: (total desc, site asc), limit: :n]
@@ -101,6 +109,7 @@ select newest  for hosts with visits [order: (id desc), limit: :limit]
 // absent optional parameter is taken out behind its guard, an optional list
 // binds through JSONListOptional, and an exists term tests a forward or a
 // reverse relation without joining it, a composite key on every pair.
+
 select keyset  for visits where day < :day? or (day = :day? and id < :id?) [order: (day desc, id desc), limit: :limit]
 select picked  for page_views where id in :ids? and site like :site? [order: (id asc)]
 select visited for hosts where exists visits (day >= :from?) and not exists owned (day = 0) [order: (id asc)]

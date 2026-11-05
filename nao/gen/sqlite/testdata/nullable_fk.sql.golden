@@ -9,10 +9,8 @@ CREATE TABLE users (
 CREATE TABLE posts (
   id INTEGER PRIMARY KEY,
   author_id INTEGER NOT NULL,
-  -- NULL until an editor is assigned
   editor_id INTEGER,
   reviewed_at TIMESTAMP,
-  -- rt.Null[string] expresses NULL; no pointer needed
   meta TEXT,
   raw BLOB,
   FOREIGN KEY (author_id) REFERENCES users (id),

@@ -19,7 +19,7 @@ func mustParse(t *testing.T, src string) *ast.File {
 
 func TestTableShape(t *testing.T) {
 	f := mustParse(t, `
-table core_users [note: "people"] {
+table core_users [model: "Person"] {
   id int [pk]
   name string
   indexes {
@@ -34,8 +34,8 @@ table core_users [note: "people"] {
 	if tb.Name.Name() != "core_users" {
 		t.Errorf("name = %q", tb.Name.Name())
 	}
-	if tb.Settings.Get("note") == nil {
-		t.Error("note setting missing")
+	if tb.Settings.Get("model") == nil {
+		t.Error("model setting missing")
 	}
 	if len(tb.Body) != 3 {
 		t.Fatalf("body items = %d, want 3", len(tb.Body))

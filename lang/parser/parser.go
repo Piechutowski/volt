@@ -13,10 +13,13 @@
 package parser
 
 import (
+	"cmp"
+	"slices"
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/scanner"
 	"github.com/Piechutowski/volt/lang/token"
 )
 
@@ -34,6 +37,7 @@ type parser struct {
 	lineCtx   string
 
 	toks  []token.Token
+	docs  []scanner.Doc
 	pos   int
 	diags []diag.Diagnostic
 	buf   []token.Token
@@ -76,6 +80,14 @@ func (p *parser) qualOf(parts ...*ast.Ident) *ast.QualName {
 }
 
 type bailout struct{}
+
+func (p *parser) doc() *ast.CommentGroup {
+	i, ok := slices.BinarySearchFunc(p.docs, p.pos, func(d scanner.Doc, tok int) int { return cmp.Compare(d.Tok, tok) })
+	if !ok {
+		return nil
+	}
+	return &ast.CommentGroup{List: p.docs[i].Comments}
+}
 
 func (p *parser) cur() token.Token { return p.toks[p.pos] }
 func (p *parser) next() token.Token {
@@ -295,7 +307,7 @@ func (p *parser) settingsAt(construct string) *ast.SettingList {
 }
 
 func (p *parser) table() *ast.Table {
-	d := &ast.Table{TablePos: p.next().Pos}
+	d := &ast.Table{Doc: p.doc(), TablePos: p.next().Pos}
 	d.Name = p.ident("table name (§table)")
 	d.Settings = p.settingsAt("table")
 	p.expect(token.LBRACE, "table (§table)")
@@ -305,7 +317,7 @@ func (p *parser) table() *ast.Table {
 }
 
 func (p *parser) tablePartial() *ast.TablePartial {
-	d := &ast.TablePartial{PartialPos: p.next().Pos}
+	d := &ast.TablePartial{Doc: p.doc(), PartialPos: p.next().Pos}
 	d.Name = p.ident("table_partial name (§tablepartial)")
 	if p.at(token.LBRACKET) {
 		p.fail(p.cur(), "a table_partial takes no settings; its body holds columns, indexes and validators (§tablepartial)")
@@ -342,8 +354,9 @@ func (p *parser) tableItem(what string) (item ast.TableItem) {
 	switch {
 	case t.Kind == token.TILDE:
 		p.lineBegin("partial injection (§tablepartial)")
+		pr := &ast.PartialRef{Doc: p.doc(), TildePos: t.Pos}
 		p.next()
-		pr := &ast.PartialRef{TildePos: t.Pos, Name: p.ident("partial injection (§tablepartial)")}
+		pr.Name = p.ident("partial injection (§tablepartial)")
 		p.endOfLine("partial injection (§tablepartial)")
 		return pr
 	case p.atKw("indexes") && p.peekKind(1) == token.LBRACE:
@@ -362,6 +375,7 @@ func (p *parser) tableItem(what string) (item ast.TableItem) {
 
 func (p *parser) column() *ast.Column {
 	c := p.columns.new()
+	c.Doc = p.doc()
 	p.lineBegin("column definition (§columns)")
 	c.Name = p.ident("column name (§columns)")
 	c.Type = p.typeRef()
@@ -390,7 +404,7 @@ func (p *parser) typeRef() *ast.TypeRef {
 }
 
 func (p *parser) indexesBlock() *ast.IndexesBlock {
-	b := &ast.IndexesBlock{IndexesPos: p.kwTake("indexes").Pos}
+	b := &ast.IndexesBlock{Doc: p.doc(), IndexesPos: p.kwTake("indexes").Pos}
 	p.expect(token.LBRACE, "indexes block (§indexes)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.item(func() { b.Indexes = append(b.Indexes, p.index()) })
@@ -413,8 +427,10 @@ func (p *parser) indexAtom() ast.Node {
 }
 
 func (p *parser) index() *ast.Index {
+	doc := p.doc()
 	p.lineBegin("index definition (§indexes)")
 	ix := p.indexRest()
+	ix.Doc = doc
 	p.endOfLine("index definition (§indexes)")
 	return ix
 }
@@ -443,12 +459,12 @@ func (p *parser) indexRest() *ast.Index {
 }
 
 func (p *parser) validatorsBlock() *ast.ValidatorsBlock {
-	b := &ast.ValidatorsBlock{ValidatorsPos: p.kwTake("validators").Pos}
+	b := &ast.ValidatorsBlock{Doc: p.doc(), ValidatorsPos: p.kwTake("validators").Pos}
 	p.expect(token.LBRACE, "validators block (§validators)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.item(func() {
 			p.lineBegin("validator (§validators)")
-			v := &ast.Validator{Ref: p.goRef("validator reference (§validators)")}
+			v := &ast.Validator{Doc: p.doc(), Ref: p.goRef("validator reference (§validators)")}
 			p.expect(token.LPAREN, "validator arguments (§validators)")
 			for {
 				v.Args = append(v.Args, p.ident("validator argument (§validators)"))
@@ -467,7 +483,7 @@ func (p *parser) validatorsBlock() *ast.ValidatorsBlock {
 }
 
 func (p *parser) ref() *ast.Ref {
-	d := &ast.Ref{RefPos: p.next().Pos}
+	d := &ast.Ref{Doc: p.doc(), RefPos: p.next().Pos}
 	if !p.at(token.COLON) {
 		p.fail(p.cur(), "expected ':' after Ref (§relationships-ref), found %s", p.cur())
 	}
@@ -511,7 +527,7 @@ func (p *parser) refEndpoint() *ast.RefEndpoint {
 
 func (p *parser) typeDecl() *ast.TypeDecl {
 	p.lineBegin("type declaration (§types)")
-	d := &ast.TypeDecl{TypePos: p.next().Pos}
+	d := &ast.TypeDecl{Doc: p.doc(), TypePos: p.next().Pos}
 	d.Name = p.qualName("declared type name (§types)")
 	d.Storage = p.typeRef()
 	d.EndPos = d.Storage.End()
@@ -525,18 +541,20 @@ func (p *parser) typeDecl() *ast.TypeDecl {
 }
 
 func (p *parser) recordsDecl() *ast.Records {
+	doc := p.doc()
 	pos := p.next().Pos
 	table := p.ident("records target table (§records-sample-data)")
-	return p.recordsRest(pos, table)
+	return p.recordsRest(doc, pos, table)
 }
 
 func (p *parser) records(_ *ast.Ident) *ast.Records {
+	doc := p.doc()
 	pos := p.kwTake("records").Pos
-	return p.recordsRest(pos, nil)
+	return p.recordsRest(doc, pos, nil)
 }
 
-func (p *parser) recordsRest(pos token.Position, table *ast.Ident) *ast.Records {
-	d := &ast.Records{RecordsPos: pos, Table: table}
+func (p *parser) recordsRest(doc *ast.CommentGroup, pos token.Position, table *ast.Ident) *ast.Records {
+	d := &ast.Records{Doc: doc, RecordsPos: pos, Table: table}
 	if p.at(token.LPAREN) {
 		d.HasColumns = true
 		p.next()
@@ -563,7 +581,7 @@ func (p *parser) recordsRest(pos token.Position, table *ast.Ident) *ast.Records 
 }
 
 func (p *parser) recordRow() *ast.RecordRow {
-	row := &ast.RecordRow{}
+	row := &ast.RecordRow{Doc: p.doc()}
 	p.lineBegin("record row (§records-sample-data)")
 	for {
 		if len(row.Values) > 0 && (p.cur().NLBefore || p.at(token.RBRACE) || p.at(token.EOF)) {
