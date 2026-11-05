@@ -64,8 +64,8 @@ func (d *Document) renameEdits(pos protocol.Position, newName string) (edits []r
 	path, off := pathFromURI(d.URI), d.FromLSP(pos)
 	if d.vindex != nil {
 		if ref := d.vindex.at(path, off); ref != nil && ref.sym.kind != "package" && ref.sym.kind != "param" {
-			if def := d.vindex.defs[ref.sym]; ref.sym.kind == "relation" && def.column != "" {
-				return nil, false, relationColumnRefusal(ref.text, def.column)
+			if column := d.vindex.relationColumns[ref.sym]; ref.sym.kind == "relation" && column != "" {
+				return nil, false, relationColumnRefusal(ref.text, column)
 			}
 			return d.vindex.renameEdits(ref.sym, ref.text, newName), ref.sym.kind == "gofunc", nil
 		}

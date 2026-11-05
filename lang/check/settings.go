@@ -264,8 +264,11 @@ func (c *checker) rowidAliasDefaultCheck(ti *TableInfo) {
 // assigned is the table's database-assigned key, nil when it has none.
 // It runs on a migration shape too, which takes no records.
 func (c *checker) keyAssignedCheck(ti *TableInfo, assigned *ColumnDef, records []*ast.Records) {
+	if assigned != nil {
+		return
+	}
 	alias := rowidAliasInt(ti)
-	if alias == nil || alias == assigned {
+	if alias == nil {
 		return
 	}
 	col := alias.Col

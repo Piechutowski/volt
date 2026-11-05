@@ -72,15 +72,41 @@ func (r *RelationInfo) Side() string {
 	return "reverse"
 }
 
+func relationResolved(ri *RefInfo) bool {
+	return ri.FK.Table != nil && ri.Target.Table != nil && len(ri.FK.Columns) == len(ri.Target.Columns)
+}
+
 func (c *checker) relationsBuild() {
-	c.info.relations = map[string][]*RelationInfo{}
+	count := make(map[string]int, len(c.info.Tables))
+	refs, pairs := 0, 0
 	for _, ri := range c.info.Refs {
-		if ri.FK.Table == nil || ri.Target.Table == nil || len(ri.FK.Columns) != len(ri.Target.Columns) {
+		if relationResolved(ri) {
+			count[ri.FK.Table.Key]++
+			count[ri.Target.Table.Key]++
+			refs++
+			pairs += len(ri.FK.Columns)
+		}
+	}
+	c.info.relations = make(map[string][]*RelationInfo, len(count))
+	if refs == 0 {
+		return
+	}
+	rels := make([]RelationInfo, 2*refs)
+	on := make([][2]string, 2*pairs)
+	lists := make([]*RelationInfo, 2*refs)
+	for key, n := range count {
+		c.info.relations[key], lists = lists[:0:n], lists[n:]
+	}
+	for _, ri := range c.info.Refs {
+		if !relationResolved(ri) {
 			continue
 		}
 		n := len(ri.FK.Columns)
-		forward := &RelationInfo{Ref: ri, Forward: true, Table: ri.Target.Table, Pos: ri.FK.Pos, On: make([][2]string, n)}
-		reverse := &RelationInfo{Ref: ri, Table: ri.FK.Table, Optional: true, Pos: ri.FK.Pos, On: make([][2]string, n)}
+		forward, reverse := &rels[0], &rels[1]
+		rels = rels[2:]
+		*forward = RelationInfo{Ref: ri, Forward: true, Table: ri.Target.Table, Pos: ri.FK.Pos, On: on[:n:n]}
+		*reverse = RelationInfo{Ref: ri, Table: ri.FK.Table, Optional: true, Pos: ri.FK.Pos, On: on[n : 2*n : 2*n]}
+		on = on[2*n:]
 		for i, col := range ri.FK.Columns {
 			forward.On[i] = [2]string{col, ri.Target.Columns[i]}
 			reverse.On[i] = [2]string{ri.Target.Columns[i], col}

@@ -7,6 +7,7 @@ package check
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
@@ -33,12 +34,18 @@ func (t *TableInfo) PK() []*ColumnDef {
 // fact alone: whether the database assigns the key is Info.KeyAssigned's
 // to say.
 func (t *TableInfo) RowidAlias() *ColumnDef {
-	pk := t.PK()
-	if len(pk) != 1 {
-		return nil
+	var key *ColumnDef
+	for _, cd := range t.Columns {
+		if cd.Col.Settings.Get("pk") == nil {
+			continue
+		}
+		if key != nil {
+			return nil
+		}
+		key = cd
 	}
-	if cd := pk[0]; cd.Type.Known() && cd.Type.Storage == "int" {
-		return cd
+	if key != nil && key.Type.Known() && key.Type.Storage == "int" {
+		return key
 	}
 	return nil
 }
@@ -68,24 +75,18 @@ func (i *Info) KeyAssigned(t *TableInfo) *ColumnDef {
 // built-in int rowid alias of a table that no relationship takes as a
 // foreign-key column.
 func (c *checker) keysAssign() {
-	foreign := map[string]map[string]bool{}
+	c.info.assigned = make(map[string]*ColumnDef, len(c.info.Tables))
+	for _, ti := range c.info.Tables {
+		if cd := rowidAliasInt(ti); cd != nil {
+			c.info.assigned[ti.Key] = cd
+		}
+	}
 	for _, ri := range c.info.Refs {
 		if ri.FK.Table == nil {
 			continue
 		}
-		cols := foreign[ri.FK.Table.Key]
-		if cols == nil {
-			cols = map[string]bool{}
-			foreign[ri.FK.Table.Key] = cols
-		}
-		for _, col := range ri.FK.Columns {
-			cols[col] = true
-		}
-	}
-	c.info.assigned = map[string]*ColumnDef{}
-	for _, ti := range c.info.Tables {
-		if cd := rowidAliasInt(ti); cd != nil && !foreign[ti.Key][cd.Col.Name.Name()] {
-			c.info.assigned[ti.Key] = cd
+		if cd := c.info.assigned[ri.FK.Table.Key]; cd != nil && slices.Contains(ri.FK.Columns, cd.Col.Name.Name()) {
+			delete(c.info.assigned, ri.FK.Table.Key)
 		}
 	}
 }

@@ -40,24 +40,23 @@ type voltRef struct {
 }
 
 type voltDef struct {
-	span   voltSpan
-	table  *ast.Table
-	pkg    *lang.Package
-	pipe   *ast.Pipeline
-	group  *ast.Group
-	pred   *ast.Pred
-	gofn   *lang.GoFunc
-	md     string
-	column string
+	span  voltSpan
+	table *ast.Table
+	pkg   *lang.Package
+	pipe  *ast.Pipeline
+	group *ast.Group
+	pred  *ast.Pred
+	md    string
 }
 
 type voltIndex struct {
-	defs    map[voltSym]voltDef
-	refs    []voltRef
-	texts   map[string]string
-	gofuncs map[string]map[string]lang.GoFunc
-	gosrcs  map[string][]lang.GoSource
-	goscans map[string]goScanEntry
+	defs            map[voltSym]voltDef
+	relationColumns map[voltSym]string
+	refs            []voltRef
+	texts           map[string]string
+	gofuncs         map[string]map[string]lang.GoFunc
+	gosrcs          map[string][]lang.GoSource
+	goscans         map[string]goScanEntry
 }
 
 func (ix *voltIndex) goStale() bool {
@@ -87,7 +86,7 @@ type goScanEntry struct {
 }
 
 func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndexMemo) *voltIndex {
-	ix := &voltIndex{defs: map[voltSym]voltDef{}, texts: overlay}
+	ix := &voltIndex{defs: map[voltSym]voltDef{}, relationColumns: map[voltSym]string{}, texts: overlay}
 	if memo != nil {
 		if memo.index == nil {
 			memo.index = map[string]*IndexMemo{}
@@ -172,13 +171,18 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 				}
 				md := ""
 				if via := single.Via(occ.Ident); via.Kind == SymRelation {
-					md = ix.relationDef(path, single.Info, via).md
+					def, _ := ix.relationDef(path, single.Info, via)
+					md = def.md
 				}
 				ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{"table", path, ti.Decl.Name.Name()}, occ.IsDecl, occ.Ident.Name(), md})
 			case SymRelation:
 				sym := voltSym{"relation", path, occ.ID.Container + "." + occ.ID.Name}
 				if _, done := ix.defs[sym]; !done {
-					ix.defs[sym] = ix.relationDef(path, single.Info, occ.ID)
+					def, column := ix.relationDef(path, single.Info, occ.ID)
+					ix.defs[sym] = def
+					if column != "" {
+						ix.relationColumns[sym] = column
+					}
 				}
 				ix.refs = append(ix.refs, voltRef{sp, sp, sym, occ.IsDecl, occ.Ident.Name(), ""})
 			}
@@ -237,10 +241,10 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 // §relationships-ref): at the as: or reverse: that names it, else at the
 // column its name derives from, which it remembers, and as the
 // relationship it walks followed by the table it leads to.
-func (ix *voltIndex) relationDef(path string, info *check.Info, id SymbolID) voltDef {
+func (ix *voltIndex) relationDef(path string, info *check.Info, id SymbolID) (voltDef, string) {
 	r, _ := info.Relation(id.Container, id.Name)
 	if r == nil {
-		return voltDef{}
+		return voltDef{}, ""
 	}
 	var def voltDef
 	named, column := relationNaming(r)
@@ -248,7 +252,6 @@ func (ix *voltIndex) relationDef(path string, info *check.Info, id SymbolID) vol
 	case named != nil:
 		def.span = spanOf(named)
 	case column != "":
-		def.column = column
 		if cd := r.Ref.FK.Table.Column(column); cd != nil {
 			def.span = spanOf(cd.Col.Name)
 		}
@@ -274,7 +277,7 @@ func (ix *voltIndex) relationDef(path string, info *check.Info, id SymbolID) vol
 	b.WriteString(" (§relationships-ref)\n\n---\n")
 	b.WriteString(tableModelHover(voltSym{"table", path, target}, ix.defs[voltSym{"table", path, target}]))
 	def.md = b.String()
-	return def
+	return def, column
 }
 
 // paramRefs records every parameter a select names, in its where and as
@@ -387,7 +390,7 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	if gf, found := funcs[name]; found {
 		gfCopy := gf
 		span := voltSpan{file: gf.File, pos: gf.Pos, end: gf.End}
-		ix.defs[sym] = voltDef{span: span, gofn: &gfCopy, md: goFuncHover(name, pkg.Name, &gfCopy)}
+		ix.defs[sym] = voltDef{span: span, md: goFuncHover(name, pkg.Name, &gfCopy)}
 	} else {
 		ix.defs[sym] = voltDef{md: goFuncHover(name, pkg.Name, nil)}
 	}

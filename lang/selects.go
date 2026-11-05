@@ -277,12 +277,10 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *nam
 	if !ok {
 		return nil
 	}
-	models := make([]memberModel, len(members))
-	refs := make([]any, len(members))
-	for i, m := range members {
-		model, fields, err := c.pkg.plan.ModelFields(m.Key)
-		models[i] = memberModel{model: model, fields: fields, err: err}
-		refs[i] = c.pkg.plan.ModelRef(m.Key)
+	var refBuf [4]any
+	refs := refBuf[:0]
+	for _, m := range members {
+		refs = append(refs, c.pkg.plan.ModelRef(m.Key))
 	}
 	joins := make([]joinTarget, len(sel.Joins))
 	rels := make([]*check.RelationInfo, len(sel.Joins))
@@ -337,7 +335,8 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *nam
 	if len(sel.Joins) > 0 || sel.With != nil || len(exists) > 0 {
 		relationNames = info.RelationNames(members[0].Key)
 	}
-	whys := make([]string, 0, len(joins)+len(exists)+2)
+	var whyBuf [4]string
+	whys := whyBuf[:0]
 	for _, j := range joins {
 		whys = append(whys, j.why)
 	}
@@ -357,13 +356,18 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *nam
 			return e.si
 		}
 	}
+	models := make([]memberModel, len(members))
+	for i, m := range members {
+		model, fields, err := c.pkg.plan.ModelFields(m.Key)
+		models[i] = memberModel{model: model, fields: fields, err: err}
+	}
 	si, lookups, adds, diags := selectCheck(sel, members, models, joins, with, exists, relationNames, preds, minted)
 	for _, a := range adds {
 		minted.Add(a.name, a.desc)
 	}
 	c.diags = append(c.diags, diags...)
 	if memo != nil {
-		memo.next[sel] = &selectEntry{members: members, models: refs, joins: rels, joined: joined, with: withRel, withRef: withRef, exists: existsRels, whys: whys, preds: preds, lookups: lookups, adds: adds, si: si, diags: diags}
+		memo.next[sel] = &selectEntry{members: members, models: slices.Clone(refs), joins: rels, joined: joined, with: withRel, withRef: withRef, exists: existsRels, whys: slices.Clone(whys), preds: preds, lookups: lookups, adds: adds, si: si, diags: diags}
 		memo.Misses++
 	}
 	return si
