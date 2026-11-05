@@ -53,4 +53,4 @@ that lands it.
 | REPL | iex / rails c | not planned | |
 | Admin dashboard | LiveDashboard / gems | not planned | |
 | Databases other than SQLite | yes | not planned | |
-| Example applications as end-to-end tests | yes | partial (five feature examples with guigui clients: tables, migrations, scopes, pipelines, validation; the Elm example waits for step 5) | |
+| Example applications as end-to-end tests | yes | missing | |

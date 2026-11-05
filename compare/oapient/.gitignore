@@ -1,5 +1,0 @@
-# oapi-codegen and Ent write these; go generate ./compare/... makes them
-/api/*.gen.go
-/ent/*
-!/ent/generate.go
-!/ent/schema/

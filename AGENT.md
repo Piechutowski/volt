@@ -43,48 +43,27 @@ green.
 
 ## Repository
 
-Five Go modules under `go.work`: the library at the root (runtime,
+Three Go modules under `go.work`: the library at the root (runtime,
 `lang/`, `gen/`, `nao/` with the value runtime `nao/rt` and the runner
-`nao/run`, `itest/`; stdlib only, sqlite3 test-only), the tools `lsp/`
-and `cmd/volt/`, the examples `examples/` and the stack comparison
-`compare/`, which carry the third-party dependencies; `cmd/volt` carries the
-`mattn/go-sqlite3` driver for the fold and `volt migration up`, so the
-tool is built with cgo (a C compiler on the path; without it the
-driver is a stub and `volt` refuses the fold and the migration
-commands with exit 2), while the library and the runtime register
-none. `examples/` holds one tiny program per feature (`tables`,
-`migrations`, `scopes`, `pipelines`, `validation`), each its `.volt`
-files, a server started in process and a guigui window that calls it
-through the generated client. Their generated code is not committed
-(`examples/.gitignore`): a `//go:generate` line in each `main.go` runs
-the checkout's `volt gen`, so `go generate ./examples/...` comes before
-building them, and `go run ./examples/run NAME` generates one and then
-runs it. Generated code is committed only where it is a golden: the
-generator testdata and the `itest/` and `nao/itest/` fixtures. Each
-example has a test over its server. `examples/byhand` is the `tables`
-server and client written by hand on the standard library, the measure
-of what `volt gen` saves; its parity test sends both servers the same
-requests and requires the same replies. `compare/` is the same blog
-with real rules built five ways, Volt and four popular stacks (Gin and
-GORM, chi with sqlc and goose, Echo with sqlx, oapi-codegen with Ent):
-`compare/suite` is the contract every one passes unchanged, each
-stack's generated code comes from `go generate`, and `go run
-./compare/measure` counts them all by one rule.
-The windows are guigui on Ebitengine, so building the module needs the
-X11 and OpenGL development headers Ebitengine needs on Linux; no test
-opens a window. Go floor is the
-newest stable Go, declared in all five `go.mod` files. `grammar/`,
-`zed-extension/` and `scripts/sync-grammar.sh` are the editor stack.
-`go test ./...` at the root does not cover the tool modules, the
-examples or the comparison.
+`nao/run`, `itest/`; stdlib only, sqlite3 test-only) and the tools
+`lsp/` and `cmd/volt/`, which carry the third-party dependencies;
+`cmd/volt` carries the `mattn/go-sqlite3` driver for the fold and
+`volt migration up`, so the tool is built with cgo (a C compiler on the
+path; without it the driver is a stub and `volt` refuses the fold and
+the migration commands with exit 2), while the library and the runtime
+register none. Generated code is committed only where it is a golden:
+the generator testdata and the `itest/` and `nao/itest/` fixtures. Go
+floor is the newest stable Go, declared in all three `go.mod` files.
+`grammar/`, `zed-extension/` and `scripts/sync-grammar.sh` are the
+editor stack.
+`go test ./...` at the root does not cover the tool modules.
 
 ## Verification bar, all of it, before claiming done
 
 ```sh
-go generate ./examples/... ./compare/...
-go build ./... ./lsp/... ./cmd/volt/... ./examples/... ./compare/...
-go vet   ./... ./lsp/... ./cmd/volt/... ./examples/... ./compare/...
-go test  ./... ./lsp/... ./cmd/volt/... ./examples/... ./compare/...
+go build ./... ./lsp/... ./cmd/volt/...
+go vet   ./... ./lsp/... ./cmd/volt/...
+go test  ./... ./lsp/... ./cmd/volt/...
 go test  -race ./lang/... ./lsp/...
 gofmt -l . | grep -v zed-extension        # must be empty
 ```
