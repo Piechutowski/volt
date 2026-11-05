@@ -10,7 +10,7 @@ import (
 )
 
 const migrationsSrc = `table users {
-  id   int    [pk, increment]
+  id   int    [pk]
   name string
 }
 
@@ -26,7 +26,7 @@ migration 0002__exec_only [irreversible] {
 
 migration 0001__create_users {
   create table users {
-    id int [pk, increment]
+    id int [pk]
   }
 }
 

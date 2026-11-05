@@ -3,11 +3,11 @@
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE users (
-  id INTEGER PRIMARY KEY NOT NULL
+  id INTEGER PRIMARY KEY
 );
 
 CREATE TABLE roles (
-  id INTEGER PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY KEY,
   name TEXT NOT NULL
 );
 CREATE UNIQUE INDEX idx_roles_name ON roles (name);

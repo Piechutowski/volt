@@ -11,8 +11,8 @@ import (
 
 // TestTableDDLOneToOneAndActions pins the shape rendering of a
 // one-to-one, unique plus a ref:, of a composite key and an index
-// column, and of delete: and update: beside a ref: (spec §migrations
-// rules 4 and 5, §relationships-ref, §indexes): the same DDL as a schema
+// column, and of delete: and update: beside a ref: (spec §migrations,
+// §relationships-ref, §indexes): the same DDL as a schema
 // Table of the same shape, which testdata/inline_one_to_one.volt pins as
 // a golden. A unique or index column is a CREATE INDEX after the table,
 // never an inline UNIQUE.
@@ -24,7 +24,7 @@ func TestTableDDLOneToOneAndActions(t *testing.T) {
 	}{
 		{
 			name:    "a one-to-one is a unique column with a ref, and its uniqueness a unique index",
-			body:    "    id      int [pk, increment]\n    user_id int [unique, ref: users.id]\n",
+			body:    "    id      int [pk]\n    user_id int [unique, ref: users.id]\n",
 			want:    "CREATE TABLE profiles (\n  id INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  FOREIGN KEY (user_id) REFERENCES users (id)\n)",
 			indexes: []string{"CREATE UNIQUE INDEX idx_profiles_user_id ON profiles (user_id)"},
 		},
@@ -36,7 +36,7 @@ func TestTableDDLOneToOneAndActions(t *testing.T) {
 		},
 		{
 			name: "delete: and update: follow the reference",
-			body: "    id      int [pk, increment]\n    user_id int [null, ref: users.id, delete: cascade, update: set_null]\n",
+			body: "    id      int [pk]\n    user_id int [null, ref: users.id, delete: cascade, update: set_null]\n",
 			want: "CREATE TABLE profiles (\n  id INTEGER PRIMARY KEY,\n  user_id INTEGER,\n  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE SET NULL\n)",
 		},
 	}

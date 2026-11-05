@@ -1,7 +1,7 @@
 package db
 
 table metrics {
-  id   int    [pk, increment]
+  id   int    [pk]
   slug string [unique]
   unit string
 }

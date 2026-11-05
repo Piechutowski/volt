@@ -21,10 +21,22 @@ func (p *parser) contiguous() bool {
 	return !t.SpBefore && !t.NLBefore
 }
 
-func (p *parser) packageClause() *ast.PackageClause {
+func (p *parser) packageClause() (d *ast.PackageClause) {
 	p.lineBegin("package clause (§projects-and-packages)")
-	d := &ast.PackageClause{PackagePos: p.next().Pos}
+	d = &ast.PackageClause{PackagePos: p.next().Pos}
 	d.Name = p.ident("package clause (§projects-and-packages)")
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(bailout); !ok {
+				panic(r)
+			}
+			p.topLevelSync()
+		}
+	}()
+	if p.at(token.LBRACKET) && !p.cur().NLBefore {
+		p.errorf(p.cur(), "a package clause takes no settings list: a package carries no note (§notes), and its doc comment is written in a hand-written Go file of the package (§notes-become-doc-comments)")
+		p.settingList()
+	}
 	p.endOfLine("package clause (§projects-and-packages)")
 	return d
 }
@@ -452,8 +464,14 @@ func (p *parser) predPrimary() ast.PredExpr {
 		(p.atKw("true") || p.atKw("false")) && p.compOpAt(1):
 		x := p.operand()
 		return p.comparisonTail(x)
+	case p.atKw("exists") && p.peekKind(1) == token.IDENT:
+		return p.predExists()
 	case p.at(token.IDENT):
-		col := p.colRef("predicate (§predicates)")
+		bare := "pred"
+		if p.compOpAt(1) || p.kwAt(1, "in") || p.kwAt(1, "like") || p.kwAt(1, "is") {
+			bare = "column"
+		}
+		col := p.colRef("predicate (§predicates)", bare)
 		switch {
 		case p.compOpAt(0):
 			return p.comparisonTail(col)
@@ -475,14 +493,51 @@ func (p *parser) predPrimary() ast.PredExpr {
 	}
 }
 
-func (p *parser) predKeywordCheck() {
+func (p *parser) param() *ast.Param {
+	colon := p.next().Pos
+	if !p.at(token.IDENT) || !p.contiguous() {
+		p.fail(p.cur(), "':' must be directly followed by a parameter name (§predicates)")
+	}
+	x := &ast.Param{ColonPos: colon, Name: p.ident("parameter (§predicates)")}
+	if p.at(token.QUESTION) {
+		if !p.contiguous() {
+			p.fail(p.cur(), "'?' makes a parameter optional only directly after its name, :%s? (§predicates)", x.Name.Name())
+		}
+		p.next()
+		x.Optional = true
+	}
+	return x
+}
+
+func (p *parser) predExists() ast.PredExpr {
+	x := &ast.PredExists{ExistsPos: p.kwTake("exists").Pos}
+	p.predKeywordCheck("relation")
+	x.Rel = p.ident("exists (§predicates)")
+	x.Lparen = p.expect(token.LPAREN, "exists (§predicates)").Pos
+	x.X = p.predExpr()
+	x.Rparen = p.expect(token.RPAREN, "exists (§predicates)").End()
+	return x
+}
+
+// predKeywordCheck refuses a predicate keyword where a name stands, naming
+// what the name would be there, a column, a relation or a pred
+// (§keywords, §predicates).
+func (p *parser) predKeywordCheck(role string) {
 	t := p.cur()
 	if t.Kind != token.IDENT {
 		return
 	}
 	if _, ok := foldTo(t.Val, predWords); ok {
-		p.fail(t, "%q is a keyword inside a predicate and names no column there (§predicates)", t.Val)
+		p.fail(t, "%q is a keyword inside a predicate and names no %s there (§predicates)", t.Val, role)
 	}
+}
+
+func (p *parser) kwAt(n int, kw string) bool {
+	if p.pos+n >= len(p.toks) {
+		return false
+	}
+	t := p.toks[p.pos+n]
+	return t.Kind == token.IDENT && strings.EqualFold(t.Val, kw)
 }
 
 func (p *parser) compOpAt(n int) bool {
@@ -505,12 +560,7 @@ func (p *parser) operand() ast.Operand {
 	t := p.cur()
 	switch {
 	case p.at(token.COLON):
-		colon := p.next().Pos
-		if !p.at(token.IDENT) || !p.contiguous() {
-			p.fail(p.cur(), "':' must be directly followed by a parameter name (§predicates)")
-		}
-		name := p.ident("parameter (§predicates)")
-		return &ast.Param{ColonPos: colon, Name: name}
+		return p.param()
 	case p.at(token.NUMBER), p.at(token.STRING):
 		return &ast.Lit{Tok: p.next()}
 	case p.at(token.MINUS) && p.peekKind(1) == token.NUMBER:
@@ -524,7 +574,7 @@ func (p *parser) operand() ast.Operand {
 	case p.atKw("false"):
 		return &ast.Lit{Tok: p.kwTake("false")}
 	case p.at(token.IDENT):
-		return p.colRef("operand (§predicates)")
+		return p.colRef("operand (§predicates)", "column")
 	default:
 		p.fail(t, "expected a column, :param or literal (§predicates), found %s", t)
 		return nil
@@ -533,15 +583,28 @@ func (p *parser) operand() ast.Operand {
 
 // colRef reads a column reference: a name, or relation.column
 // (§predicates, §selects-over-groups); neither part is a predicate
-// keyword.
-func (p *parser) colRef(ctx string) *ast.ColRef {
-	p.predKeywordCheck()
+// keyword, and bare names what a lone name stands for, a column or a pred.
+func (p *parser) colRef(ctx, bare string) *ast.ColRef {
+	role := bare
+	if p.peekKind(1) == token.DOT {
+		role = "relation"
+	}
+	p.predKeywordCheck(role)
 	name := p.ident(ctx)
 	if !p.at(token.DOT) {
 		return &ast.ColRef{Name: name}
 	}
 	p.next()
-	p.predKeywordCheck()
+	p.predKeywordCheck("column")
+	return &ast.ColRef{Qual: name, Name: p.ident(ctx)}
+}
+
+func (p *parser) projCol(ctx string) *ast.ColRef {
+	name := p.ident(ctx)
+	if !p.at(token.DOT) {
+		return &ast.ColRef{Name: name}
+	}
+	p.next()
 	return &ast.ColRef{Qual: name, Name: p.ident(ctx)}
 }
 
@@ -697,7 +760,7 @@ func (p *parser) projItem() *ast.ProjItem {
 					p.fail(p.cur(), "%s takes a column; only count() counts the rows (§selects-over-groups)", agg.Name())
 					return item
 				}
-				item.Col = p.colRef("aggregate column (§selects-over-groups)")
+				item.Col = p.projCol("aggregate column (§selects-over-groups)")
 			}
 			item.EndPos = p.expect(token.RPAREN, "aggregate (§selects-over-groups)").End()
 		}
@@ -777,13 +840,9 @@ func (p *parser) arithFactor() ast.ArithExpr {
 		num.Pos = minus.Pos
 		return &ast.Lit{Tok: num}
 	case p.at(token.COLON):
-		colon := p.next().Pos
-		if !p.at(token.IDENT) || !p.contiguous() {
-			p.fail(p.cur(), "':' must be directly followed by a parameter name (§predicates)")
-		}
-		return &ast.Param{ColonPos: colon, Name: p.ident("parameter (§predicates)")}
+		return p.param()
 	case p.at(token.IDENT):
-		return p.colRef("projected column (§selects-over-groups)")
+		return p.projCol("projected column (§selects-over-groups)")
 	default:
 		p.fail(t, "expected a column, an aggregate, a number, a :param or a parenthesized expression in the projection (§selects-over-groups), found %s", t)
 		return nil

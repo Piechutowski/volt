@@ -103,13 +103,13 @@ func TestParseFileReuseEdits(t *testing.T) {
 type PostState string
 
 table posts {
-  id     int [pk, increment]
+  id     int [pk]
   title  string
   status PostState  [default: "active"]
 }
 
 table tags {
-  id   int [pk, increment]
+  id   int [pk]
   name string    [unique]
 }
 

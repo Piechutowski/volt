@@ -17,8 +17,8 @@ type Gen struct{}
 // the tree a Volt predicate lowers to.
 type GenPred = Pred[Gen]
 
-// GenOrder is an ORDER BY term of the generator's view (spec §predicates
-// rule 6).
+// GenOrder is an ORDER BY term of the generator's view (spec
+// §predicates).
 type GenOrder = Order[Gen]
 
 func cmpOpOK(op string) bool {
@@ -83,6 +83,132 @@ func PredNull(col string) GenPred {
 // Column.IsNotNull builds.
 func PredNotNull(col string) GenPred {
 	return Column[Gen, any]{Name: col}.IsNotNull()
+}
+
+// PredExists is the exists term over a relation (spec §predicates):
+// true for a row when a row of table, under the alias as, matches p and
+// the relation's key, the pairs of on, each a column of the related
+// table qualified by as and the column of the outer table it equals.
+// A zero p tests the key alone.
+func PredExists(table, as string, on [][2]string, p GenPred) GenPred {
+	x := GenPred{kind: predExists, col: table, col2: as, pairs: on}
+	if p.kind != predEmpty {
+		x.kids = []GenPred{p}
+	}
+	return x
+}
+
+// PredOptional is p behind one guard per optional parameter it reads
+// (spec §predicates), (? IS NULL OR p), each guard a value slot that
+// binds the parameter, so p is true whenever one of them is absent. No
+// guards is p itself, and a zero p stays zero.
+func PredOptional(guards []any, p GenPred) GenPred {
+	if len(guards) == 0 || p.kind == predEmpty {
+		return p
+	}
+	return GenPred{kind: predOptional, vals: guards, kids: []GenPred{p}}
+}
+
+// PredVanish is p with every term of it that reads an absent optional
+// parameter taken out (spec §predicates): such a term is the identity of
+// the connective it stands in, true under and and false under or, a
+// connective, a not or an exists term all of whose operands are taken
+// out is itself taken out, and the whole is true when all of it is. The
+// tree p is the lowering's, its terms behind PredOptional, an exists
+// term's inner terms each behind its own; the result renders as one
+// constant text, every guard a value slot of the parameter.
+func PredVanish(p GenPred) GenPred {
+	if p.kind == predEmpty {
+		return p
+	}
+	return vanishEmit(p, false)
+}
+
+func vanishCond(p GenPred) (GenPred, bool) {
+	switch p.kind {
+	case predOptional:
+		slots := make([]GenPred, len(p.vals))
+		for i, v := range p.vals {
+			slots[i] = GenPred{kind: predNullSlot, vals: []any{v}}
+		}
+		return Or(slots...), true
+	case predAnd, predOr:
+		var conds []GenPred
+		for _, k := range p.kids {
+			c, ok := vanishCond(k)
+			if !ok {
+				return GenPred{}, false
+			}
+			parts := []GenPred{c}
+			if c.kind == predAnd {
+				parts = c.kids
+			}
+			for _, part := range parts {
+				seen := false
+				for _, d := range conds {
+					seen = seen || slotSame(d, part)
+				}
+				if !seen {
+					conds = append(conds, part)
+				}
+			}
+		}
+		return And(conds...), true
+	case predExists:
+		if len(p.kids) == 0 {
+			return GenPred{}, false
+		}
+		return vanishCond(p.kids[0])
+	case predNot:
+		return vanishCond(p.kids[0])
+	}
+	return GenPred{}, false
+}
+
+func slotSame(a, b GenPred) bool {
+	if a.kind != predNullSlot || b.kind != predNullSlot {
+		return false
+	}
+	x, ok := a.vals[0].(string)
+	y, okY := b.vals[0].(string)
+	return ok && okY && x == y
+}
+
+func vanishEmit(p GenPred, inOr bool) GenPred {
+	switch p.kind {
+	case predOptional:
+		q := p
+		q.not = inOr
+		return q
+	case predAnd, predOr:
+		kids := make([]GenPred, len(p.kids))
+		for i, k := range p.kids {
+			kids[i] = vanishEmit(k, p.kind == predOr)
+		}
+		q := p
+		q.kids = kids
+		if cond, ok := vanishCond(p); ok && (p.kind == predOr) != inOr {
+			return GenPred{kind: predVanish, not: inOr, kids: []GenPred{cond, q}}
+		}
+		return q
+	case predExists:
+		q := p
+		if len(p.kids) > 0 {
+			q.kids = []GenPred{vanishEmit(p.kids[0], false)}
+		}
+		if cond, ok := vanishCond(p); ok {
+			return GenPred{kind: predVanish, not: inOr, kids: []GenPred{cond, q}}
+		}
+		return q
+	case predNot:
+		q := p
+		q.kids = []GenPred{vanishEmit(p.kids[0], false)}
+		if cond, ok := vanishCond(p.kids[0]); ok {
+			return GenPred{kind: predVanish, not: inOr, kids: []GenPred{cond, q}}
+		}
+		return q
+	}
+	return p
 }
 
 // OrderTerm is one ORDER BY term (spec §predicates), the value

@@ -26,6 +26,80 @@ func (t *TableInfo) PK() []*ColumnDef {
 	return out
 }
 
+// RowidAlias is the column SQLite aliases to the rowid (spec §columns,
+// §mapping-to-sqlite-ddl): the one column of a single-column primary
+// key stored as int, of the built-in int or of a declared type, which
+// renders INTEGER PRIMARY KEY; nil for any other key. It is the DDL
+// fact alone: whether the database assigns the key is Info.KeyAssigned's
+// to say.
+func (t *TableInfo) RowidAlias() *ColumnDef {
+	pk := t.PK()
+	if len(pk) != 1 {
+		return nil
+	}
+	if cd := pk[0]; cd.Type.Known() && cd.Type.Storage == "int" {
+		return cd
+	}
+	return nil
+}
+
+// rowidAliasInt is the table's rowid alias when it is of the built-in
+// int, the one key the database may assign (spec §columns); nil
+// otherwise.
+func rowidAliasInt(t *TableInfo) *ColumnDef {
+	if cd := t.RowidAlias(); cd != nil && cd.Type.Decl == nil {
+		return cd
+	}
+	return nil
+}
+
+// KeyAssigned is the table's database-assigned key (spec §columns): its
+// rowid alias when that is of the built-in int and no foreign key, which
+// the database assigns whenever an insert leaves it unmarked; nil when
+// the table has none. A rowid alias of a declared type, or one that is
+// a foreign key and so takes its value from the referenced row, is an
+// ordinary key.
+func (i *Info) KeyAssigned(t *TableInfo) *ColumnDef {
+	return i.assigned[t.Key]
+}
+
+// keysAssign records every table's database-assigned key once the
+// relationships are resolved (spec §columns, §relationships-ref): the
+// built-in int rowid alias of a table that no relationship takes as a
+// foreign-key column.
+func (c *checker) keysAssign() {
+	foreign := map[string]map[string]bool{}
+	for _, ri := range c.info.Refs {
+		if ri.FK.Table == nil {
+			continue
+		}
+		cols := foreign[ri.FK.Table.Key]
+		if cols == nil {
+			cols = map[string]bool{}
+			foreign[ri.FK.Table.Key] = cols
+		}
+		for _, col := range ri.FK.Columns {
+			cols[col] = true
+		}
+	}
+	c.info.assigned = map[string]*ColumnDef{}
+	for _, ti := range c.info.Tables {
+		if cd := rowidAliasInt(ti); cd != nil && !foreign[ti.Key][cd.Col.Name.Name()] {
+			c.info.assigned[ti.Key] = cd
+		}
+	}
+}
+
+// shapeKeyAssigned is the database-assigned key of a migration shape
+// (spec §migrations, §columns): its built-in int rowid alias unless the
+// column carries ref:, the one foreign key a shape spells.
+func shapeKeyAssigned(ti *TableInfo) *ColumnDef {
+	if cd := rowidAliasInt(ti); cd != nil && cd.Col.Settings.Get("ref") == nil {
+		return cd
+	}
+	return nil
+}
+
 // ColumnsUnique reports whether the named columns are unique together
 // (spec §indexes, §relationships-ref): they are exactly the primary
 // key's columns, or one column that carries unique, or exactly the key
@@ -52,6 +126,59 @@ func (t *TableInfo) ColumnsUnique(names []string) bool {
 			continue
 		}
 		if key, ok := indexColumns(ix); ok && sameNames(key, names) {
+			return true
+		}
+	}
+	return false
+}
+
+// Keys lists the keys no two rows share (spec §selects-over-groups), in
+// this order: the primary key, each column that carries unique, and the
+// key of each unique index whose key is columns only and which has no
+// where:, every one of them never NULL, since a unique column or index
+// lets NULLs repeat.
+func (t *TableInfo) Keys() [][]string {
+	notNull := func(key []string) bool {
+		for _, n := range key {
+			if cd := t.Column(n); cd == nil || cd.Nullable {
+				return false
+			}
+		}
+		return len(key) > 0
+	}
+	var keys [][]string
+	var pk []string
+	for _, cd := range t.PK() {
+		pk = append(pk, cd.Col.Name.Name())
+	}
+	if notNull(pk) {
+		keys = append(keys, pk)
+	}
+	for _, cd := range t.Columns {
+		if key := []string{cd.Col.Name.Name()}; cd.Col.Settings.Get("unique") != nil && notNull(key) {
+			keys = append(keys, key)
+		}
+	}
+	for _, ix := range t.Indexes {
+		if ix.Settings.Get("unique") == nil || ix.Settings.Get("where") != nil {
+			continue
+		}
+		if key, ok := indexColumns(ix); ok && notNull(key) {
+			keys = append(keys, key)
+		}
+	}
+	return keys
+}
+
+// ColumnsKeyed reports whether the named columns include one of the
+// table's Keys (spec §selects-over-groups).
+func (t *TableInfo) ColumnsKeyed(names map[string]bool) bool {
+	for _, key := range t.Keys() {
+		within := true
+		for _, n := range key {
+			within = within && names[n]
+		}
+		if within {
 			return true
 		}
 	}

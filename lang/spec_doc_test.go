@@ -16,7 +16,8 @@ var (
 
 	specCiteRE     = regexp.MustCompile(`§[\s\p{Zs}]*([a-z][a-z0-9-]*)`)
 	specNumberedRE = regexp.MustCompile(`§[\s\p{Zs}]*[0-9A-Z]|\bAppendix[\s\p{Zs}]+[A-Z]+\b|\bspec/[A-Z]*[0-9]`)
-	specRuleRE     = regexp.MustCompile(`§[\s\p{Zs}]*[a-z][a-z0-9-]*[\s\p{Zs}]+(?:rule|clause)s?(?:[\s\p{Zs}]+[0-9]|[\s\p{Zs}]*$)`)
+	specRuleRE     = regexp.MustCompile(`§[\s\p{Zs}]*[a-z][a-z0-9-]*,?[\s\p{Zs}]+(?:rule|clause)s?(?:[\s\p{Zs}]+[0-9]|[\s\p{Zs}]*$)`)
+	commentLeadRE  = regexp.MustCompile(`\n[\s\p{Zs}]*(?://|#)?[\s\p{Zs}]*`)
 	specRFCRE      = regexp.MustCompile(`RFC[\s\p{Zs}]+[0-9]+(?:` + rfcSep + rfcRef + `)*` + rfcSep + `§?$`)
 	specCodeRE     = regexp.MustCompile(`spec/([A-Za-z0-9][A-Za-z0-9-]*)`)
 	mdAnchorLinkRE = regexp.MustCompile(`\]\(([A-Za-z0-9_./-]*\.md)?#([^)\s]+)(?:\s+` + mdTitle + `)?\)`)
@@ -225,14 +226,23 @@ func TestRuleCitationsCaught(t *testing.T) {
 		"see " + sect + "table-resolution clause 2":    true,
 		"see " + sect + "predicates" + nbsp + "rule 6": true,
 		"(spec " + sect + "predicates rule":            true,
-		"see " + sect + "columns, rule 2":              false,
+		"see " + sect + "columns, rule 2":              true,
+		"(spec " + sect + "columns\n// rule 2)":        true,
+		"(spec " + sect + "columns,\n\t// rule 2)":     true,
 		"see " + sect + "columns and the rule":         false,
 		"the rules of " + sect + "indexes":             false,
 	} {
-		if got := specRuleRE.MatchString(line); got != want {
+		if got := specRuleRE.MatchString(commentsJoined(line)); got != want {
 			t.Errorf("specRuleRE on %q = %v, want %v", line, got, want)
 		}
 	}
+}
+
+// commentsJoined is text with each line break and the comment leader
+// after it folded into one space, so a citation broken across the lines
+// of a comment reads as one line does.
+func commentsJoined(text string) string {
+	return commentLeadRE.ReplaceAllString(text, " ")
 }
 
 func TestSpecCitationsNeverNumbered(t *testing.T) {
@@ -246,9 +256,9 @@ func TestSpecCitationsNeverNumbered(t *testing.T) {
 			for _, m := range numberedCitations(line) {
 				bad = append(bad, fmt.Sprintf("%s:%d: %q", path, i+1, m))
 			}
-			if m := specRuleRE.FindString(line); m != "" {
-				bad = append(bad, fmt.Sprintf("%s:%d: %q", path, i+1, m))
-			}
+		}
+		for _, m := range specRuleRE.FindAllString(commentsJoined(string(b)), -1) {
+			bad = append(bad, fmt.Sprintf("%s: %q", path, m))
 		}
 	}
 	if len(bad) > 0 {

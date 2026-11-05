@@ -1,4 +1,0 @@
-package db
-
-project metrics {
-}

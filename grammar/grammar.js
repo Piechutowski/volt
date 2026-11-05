@@ -3,7 +3,7 @@
  * the schema extensions, and the routing layer above them.
  *
  * Covers the full schema language of docs/spec.md Part I:
- * Project, Table (settings, columns), TablePartial and ~injection,
+ * Table (settings, columns), TablePartial and ~injection,
  * Type, Ref (the element and the inline ref: setting, composite
  * endpoints), Records (top-level and in-table), Indexes and Validators
  * blocks, plus the Volt routing layer of docs/spec.md Part II: package clauses, Go-style
@@ -13,7 +13,7 @@
  *
  * Design notes, driven by spec §lexical-structure:
  *  - Volt is newline-sensitive: columns, record rows, index and
- *    validator lines, project properties, group members and partial injections
+ *    validator lines, group members and partial injections
  *    are newline-terminated. Newlines are therefore NOT extras; bodies use an
  *    explicit "items separated by one-or-more newlines" shape, which also
  *    accepts a final item flush against the closing brace.
@@ -68,7 +68,6 @@ module.exports = grammar({
 
     _element: ($) =>
       choice(
-        $.project_definition,
         $.table_definition,
         $.table_partial_definition,
         $.type_definition,
@@ -84,22 +83,6 @@ module.exports = grammar({
         $.select_definition,
         $.migration_definition,
       ),
-
-    // ==================== Project (§project) ====================
-
-    project_definition: ($) =>
-      seq(
-        kw('project'),
-        optional(field('name', $._name)),
-        optional(field('settings', $.settings_list)),
-        '{',
-        repeat($._newline),
-        optional(newlineSep1($.project_property, $)),
-        '}',
-      ),
-
-    project_property: ($) =>
-      seq(field('key', $._name), ':', field('value', $.string)),
 
     // ==================== Table (§table, §columns) ====================
 
@@ -411,6 +394,12 @@ module.exports = grammar({
         ')',
       ),
 
+    // A bare query ref as a setting value, the value of a route's body:
+    // naming a write without arguments (§request-bodies): `db.MetricCreate`.
+    // A single name is a plain identifier value, so only the qualified
+    // form is a go_ref here.
+    _query_ref: ($) => seq($.identifier, '.', $.identifier),
+
     _load_arg: ($) => choice($.identifier, $.string, $.number, $.signed_number, $.boolean),
 
     verb: () =>
@@ -509,6 +498,7 @@ module.exports = grammar({
         $.pred_in,
         $.pred_like,
         $.pred_null,
+        $.pred_exists,
         alias($.identifier, $.pred_ref),
       ),
 
@@ -542,6 +532,17 @@ module.exports = grammar({
         kw('is'),
         optional(kw('not')),
         kw('null'),
+      ),
+
+    // exists rel (expr): a row the relation leads to matches expr, a
+    // predicate over the related table's columns (§predicates).
+    pred_exists: ($) =>
+      seq(
+        kw('exists'),
+        field('relation', alias($.identifier, $.relation_name)),
+        '(',
+        field('body', $.pred_expr),
+        ')',
       ),
 
     _pred_operand: ($) =>
@@ -593,8 +594,14 @@ module.exports = grammar({
     _pred_literal: ($) =>
       choice($.number, seq('-', $.number), $.string, $.boolean),
 
+    // :name, or :name? when optional, the ? directly after the name
+    // (§predicates).
     query_param: ($) =>
-      seq(':', field('name', alias($._ident_immediate, $.parameter_name))),
+      seq(
+        ':',
+        field('name', alias($._ident_immediate, $.parameter_name)),
+        optional(field('optional', alias(token.immediate('?'), $.optional_marker))),
+      ),
 
     // Select name [(cols) | (* \ cols)] for target [where expr]
     // [settings] (§selects-over-groups, §predicates)
@@ -825,6 +832,8 @@ module.exports = grammar({
     // A setting name is one identifier: `no_transaction` (§settings-lists).
     setting_name: ($) => $._name,
 
+    // A parameter is the value of a select's limit: (§selects-over-groups,
+    // §settings-whitelists).
     _setting_value: ($) =>
       choice(
         $.string,
@@ -835,6 +844,8 @@ module.exports = grammar({
         $.expression,
         $.ident_group,
         $.query_call,
+        alias($._query_ref, $.go_ref),
+        $.query_param,
         $._name,
       ),
 

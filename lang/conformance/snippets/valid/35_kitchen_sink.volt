@@ -1,8 +1,4 @@
 // spec: §program-structure — representative complete schema
-project blog [note: "Blogging platform"] {
-  database_type: "SQLite"
-}
-
 type PostState string
 
 table_partial timestamps {
@@ -11,7 +7,7 @@ table_partial timestamps {
 }
 
 table users [note: "Registered users"] {
-  id int [pk, increment]
+  id int [pk]
   username string [unique]
   ~timestamps
 }

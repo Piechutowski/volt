@@ -4,10 +4,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // ColumnType is a column's resolved type (spec §columns): a built-in or
@@ -312,13 +314,13 @@ func (c *checker) recordsCoverageCheck(ti *TableInfo, d *ast.Records) {
 	for _, id := range d.Columns {
 		listed[id.Name()] = true
 	}
+	alias := rowidAliasInt(ti)
 	for _, cd := range ti.Columns {
 		col := cd.Col
-		rowid := col.Settings.Get("pk") != nil && col.Settings.Get("increment") != nil
-		if listed[col.Name.Name()] || cd.Nullable || rowid || col.Settings.Get("default") != nil {
+		if listed[col.Name.Name()] || cd.Nullable || cd == alias || col.Settings.Get("default") != nil {
 			continue
 		}
-		c.errorf(d.Pos(), "records-sample-data", "records of table %q do not list column %q, which is NOT NULL and has no default: only increment leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)", ti.Key, col.Name.Name())
+		c.errorf(d.Pos(), "records-sample-data", "records of table %q do not list column %q, which is NOT NULL and has no default: only the database-assigned key leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)", ti.Key, col.Name.Name())
 	}
 }
 
@@ -327,7 +329,10 @@ func (c *checker) recordsCoverageCheck(ti *TableInfo, d *ast.Records) {
 func (c *checker) valueTypeCheck(cd *ColumnDef, v ast.Node, section, what string) {
 	name := cd.Col.Name.Name()
 	typ := cd.Col.Type.String()
-	if _, expr := v.(*ast.FuncExpr); expr {
+	if expr, ok := v.(*ast.FuncExpr); ok {
+		if cd.Type.Storage == "time.Time" {
+			c.timeExprCheck(cd, v, expr.Text(), section, what)
+		}
 		return
 	}
 	kind := defaultKind(v)
@@ -360,93 +365,149 @@ func (c *checker) valueTypeCheck(cd *ColumnDef, v ast.Node, section, what string
 		c.errorf(v.Pos(), section, "%s %q (%s) must be %s %s, found %s (§%s)", what, name, typ, article, want, kind, section)
 		return
 	}
-	if lit, isLit := v.(*ast.BasicLit); isLit && cd.Type.Storage == "time.Time" && !isoTimeOK(lit.Tok.Val) {
-		c.errorf(v.Pos(), section, "%s %q (%s) must be ISO 8601 text such as \"2024-01-15 10:30:00\", found %q (§%s)", what, name, typ, lit.Tok.Val, section)
+	if lit, isLit := v.(*ast.BasicLit); isLit && cd.Type.Storage == "time.Time" {
+		c.timeTextCheck(cd, v, lit.Tok.Val, section, what, "")
 	}
 }
 
-func isoTimeOK(s string) bool {
-	s = strings.TrimSuffix(s, "Z")
-	num := func(min, max int) (int, bool) {
-		n, v := 0, 0
-		for n < max && n < len(s) && '0' <= s[n] && s[n] <= '9' {
-			v = v*10 + int(s[n]-'0')
-			n++
-		}
-		s = s[n:]
-		return v, n >= min
+// timeTextCheck enforces that time text a default or a record writes is
+// the one stored form of a time.Time (spec §go-types), so that a value
+// read back from the row compares equal to it.
+func (c *checker) timeTextCheck(cd *ColumnDef, v ast.Node, text, section, what, sqlString string) {
+	canon, ok := timeTextCanonical(text)
+	if ok && canon == text {
+		return
 	}
-	lit := func(c byte) bool {
-		if s == "" || s[0] != c {
-			return false
-		}
-		s = s[1:]
-		return true
+	name, typ := cd.Col.Name.Name(), cd.Col.Type.String()
+	if !ok {
+		c.errorf(v.Pos(), section, "%s %q (%s) must be%s date/time text in SQLite's canonical UTC form, such as \"2024-01-15 10:30:00\", found %q (§%s)", what, name, typ, sqlString, text, section)
+		return
 	}
-	year, okY := num(4, 4)
-	if !okY || !lit('-') {
-		return false
-	}
-	month, okM := num(2, 2)
-	if !okM || !lit('-') {
-		return false
-	}
-	day, okD := num(2, 2)
-	if !okD || month < 1 || month > 12 || day < 1 || day > monthDays(year, month) {
-		return false
-	}
-	if s == "" {
-		return true
-	}
-	if !lit(' ') && !lit('T') {
-		return false
-	}
-	hour, okH := num(1, 2)
-	if !okH || hour > 23 || !lit(':') {
-		return false
-	}
-	if minute, ok := num(2, 2); !ok || minute > 59 {
-		return false
-	}
-	if s == "" {
-		return true
-	}
-	if !lit(':') {
-		return false
-	}
-	if second, ok := num(2, 2); !ok || second > 59 {
-		return false
-	}
-	if lit('.') {
-		if _, ok := num(1, 9); !ok {
-			return false
-		}
-	}
-	if s == "" {
-		return true
-	}
-	if !lit('+') && !lit('-') {
-		return false
-	}
-	offHour, okOH := num(2, 2)
-	if !okOH || offHour > 23 || !lit(':') {
-		return false
-	}
-	offMinute, okOM := num(2, 2)
-	return okOM && offMinute <= 59 && s == ""
+	c.errorf(v.Pos(), section, "%s %q (%s) must be%s SQLite's canonical UTC date/time text, %q, found %q (§%s)", what, name, typ, sqlString, canon, text, section)
 }
 
-func monthDays(year, month int) int {
-	switch month {
-	case 2:
-		if year%4 == 0 && (year%100 != 0 || year%400 == 0) {
-			return 29
-		}
-		return 28
-	case 4, 6, 9, 11:
-		return 30
+// timeExprCheck enforces that an expression literal a time.Time default
+// or record value writes is one SQLite evaluates to the stored form of a
+// time.Time (spec §go-types): a SQL string of that text, CURRENT_TIMESTAMP,
+// or datetime() without a modifier that changes its form or its zone.
+func (c *checker) timeExprCheck(cd *ColumnDef, v ast.Node, expr, section, what string) {
+	e := sqlUnparen(strings.TrimSpace(expr))
+	if text, isString := sqlStringOf(e); isString {
+		c.timeTextCheck(cd, v, text, section, what, " a SQL string of")
+		return
 	}
-	return 31
+	if timeExprStored(e) {
+		return
+	}
+	c.errorf(v.Pos(), section, "%s %q (%s) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `%s` (§%s)", what, cd.Col.Name.Name(), cd.Col.Type.String(), strings.TrimSpace(expr), section)
+}
+
+// timeExprStored reports whether e, unparenthesized, is an expression
+// SQLite evaluates to the stored form of a time.Time or to NULL:
+// CURRENT_TIMESTAMP, NULL, or one datetime() call none of whose string
+// arguments is the 'subsec' modifier, which writes three fractional
+// digits, or 'localtime' or 'utc', which shift the instant by the
+// server's zone (spec §default-values).
+func timeExprStored(e string) bool {
+	switch strings.ToUpper(e) {
+	case "CURRENT_TIMESTAMP", "NULL":
+		return true
+	}
+	const fn = "datetime"
+	if len(e) < len(fn) || !strings.EqualFold(e[:len(fn)], fn) {
+		return false
+	}
+	rest := strings.TrimLeft(e[len(fn):], " \t\n")
+	if rest == "" || rest[0] != '(' || sqlParenEnd(rest) != len(rest)-1 {
+		return false
+	}
+	for _, arg := range sqlStringsIn(rest) {
+		switch strings.ToLower(strings.TrimSpace(arg)) {
+		case "subsec", "localtime", "utc":
+			return false
+		}
+	}
+	return true
+}
+
+// sqlUnparen is e without the parentheses that enclose all of it, which
+// change nothing SQLite evaluates.
+func sqlUnparen(e string) string {
+	for len(e) > 1 && e[0] == '(' && sqlParenEnd(e) == len(e)-1 {
+		e = strings.TrimSpace(e[1 : len(e)-1])
+	}
+	return e
+}
+
+// sqlParenEnd is the index of the parenthesis that closes the one e
+// starts with, skipping SQL strings and quoted identifiers, or -1.
+func sqlParenEnd(e string) int {
+	depth := 0
+	for i := 0; i < len(e); i++ {
+		switch e[i] {
+		case '\'', '"', '`':
+			q := e[i]
+			for i++; i < len(e) && e[i] != q; i++ {
+			}
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// sqlStringsIn is the value of every SQL string literal in e.
+func sqlStringsIn(e string) []string {
+	var out []string
+	for i := 0; i < len(e); i++ {
+		if e[i] != '\'' {
+			continue
+		}
+		var b strings.Builder
+		for i++; i < len(e); i++ {
+			if e[i] == '\'' {
+				if i+1 < len(e) && e[i+1] == '\'' {
+					b.WriteByte('\'')
+					i++
+					continue
+				}
+				break
+			}
+			b.WriteByte(e[i])
+		}
+		out = append(out, b.String())
+	}
+	return out
+}
+
+// timeTextCanonical is the stored form of the instant s names (spec
+// §go-types), the text rt.TimeText writes, and whether s names one in a
+// layout SQLite or the driver reads.
+func timeTextCanonical(s string) (string, bool) {
+	var t rt.Time
+	if err := t.Scan(s); err != nil {
+		return "", false
+	}
+	canon, err := rt.TimeText(time.Time(t))
+	return canon, err == nil
+}
+
+// sqlStringOf is the value of an expression literal that is one SQL
+// string literal, such as '2024-01-15 10:30:00', and whether it is one.
+func sqlStringOf(expr string) (string, bool) {
+	if len(expr) < 2 || expr[0] != '\'' || expr[len(expr)-1] != '\'' {
+		return "", false
+	}
+	inner := expr[1 : len(expr)-1]
+	if strings.Contains(strings.ReplaceAll(inner, "''", ""), "'") {
+		return "", false
+	}
+	return strings.ReplaceAll(inner, "''", "'"), true
 }
 
 func defaultKind(v ast.Node) string {

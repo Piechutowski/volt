@@ -5,7 +5,7 @@ package db
 type slug.Slug string from "example.com/app/slug"
 
 table posts {
-  id   int  [pk, increment]
+  id   int  [pk]
   slug slug.Slug
 }
 

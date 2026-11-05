@@ -6,16 +6,21 @@ package itest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Piechutowski/volt"
+	"github.com/Piechutowski/volt/itest/blog/app"
 	"github.com/Piechutowski/volt/itest/blog/app/client"
 	"github.com/Piechutowski/volt/itest/blog/db"
+	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/nao/run"
 )
 
 func TestClientQueryRoutes(t *testing.T) {
@@ -57,6 +62,14 @@ func TestClientQueryRoutes(t *testing.T) {
 		}
 		if none, err := c.APIUserPicked(ctx, nil); err != nil || len(none) != 0 {
 			t.Fatalf("%v: picked none = %+v, %v", f, none, err)
+		}
+		latest, err := c.APIUserLatest(ctx, 1)
+		if err != nil || len(latest) != 1 || latest[0].ID != made.ID {
+			t.Fatalf("%v: latest 1 = %+v, %v; want the newest user (§generated-client)", f, latest, err)
+		}
+		var pe *volt.ProblemError
+		if _, err := c.APIUserLatest(ctx, 0); !errors.As(err, &pe) || pe.Status != 400 {
+			t.Fatalf("%v: latest 0 = %v, want a 400 problem (§selects-over-groups)", f, err)
 		}
 		if err := c.APIUserDelete(ctx, made.ID); err != nil {
 			t.Fatalf("%v: delete = %v", f, err)
@@ -187,4 +200,86 @@ func TestClientBodyRoutes(t *testing.T) {
 		t.Fatalf("login = %v, %v", resp, err)
 	}
 	resp.Body.Close()
+}
+
+// TestClientHeader proves the generated constructor starts the client
+// with an empty Header, so a header set on a fresh client reaches the
+// scope load of every route beneath, through the typed method of a
+// query route and the raw method of a controller route alike
+// (§generated-client, §scope-loads).
+func TestClientHeader(t *testing.T) {
+	srv := httptest.NewServer(handlerWithDB(t))
+	defer srv.Close()
+	ctx := context.Background()
+	c := client.New(srv.URL)
+	var he volt.HTTPError
+	if _, err := c.MeUserList(ctx); !errors.As(err, &he) || he.StatusCode() != 401 {
+		t.Fatalf("no X-User = %v, want the load's 401", err)
+	}
+	c.Header.Set("X-User", "1")
+	for _, f := range []volt.Format{volt.FormatJSON, volt.FormatGOB} {
+		c.Format = f
+		if peers, err := c.MeUserList(ctx); err != nil || len(peers) != 1 {
+			t.Fatalf("%v: X-User 1 on a query route = %+v, %v", f, peers, err)
+		}
+		resp, err := c.MeShow(ctx)
+		if err != nil || resp.StatusCode != 200 {
+			t.Fatalf("%v: X-User 1 on a controller route = %v, %v", f, resp, err)
+		}
+		resp.Body.Close()
+	}
+}
+
+// An optional parameter travels only when present: the client leaves an
+// absent one out of the query string, the route binds the missing key as
+// absent, and the select's term that reads it is true, an exists term
+// whole (spec §predicates, §query-routes, §generated-client).
+func TestClientOptionalParams(t *testing.T) {
+	ctx := context.Background()
+	dbh := fixtureDB()
+	two, err := run.Run(ctx, dbh, db.UserCreate(db.UserNew().EmailSet("two@example.com")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run.Run(ctx, dbh, db.ProfileCreate(db.ProfileNew().UserIDSet(two.ID).BioSet("writes go"))); err != nil {
+		t.Fatal(err)
+	}
+	h := app.NewRouter(fixtureControllers(dbh, &volt.Broker{}))
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	c := client.New(srv.URL)
+	ids := func(rows []db.User) []int {
+		out := make([]int, len(rows))
+		for i, r := range rows {
+			out[i] = r.ID
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name string
+		bio  rt.Null[string]
+		from rt.Null[int]
+		want []int
+	}{
+		{"both absent", rt.Null[string]{}, rt.Null[int]{}, []int{1, two.ID}},
+		{"bio present", rt.Some("%go%"), rt.Null[int]{}, []int{two.ID}},
+		{"bio matching nobody", rt.Some("%rust%"), rt.Null[int]{}, []int{}},
+		{"from present", rt.Null[string]{}, rt.Some(two.ID), []int{two.ID}},
+	} {
+		rows, err := c.APIUserDescribed(ctx, tc.bio, tc.from)
+		if err != nil || !slices.Equal(ids(rows), tc.want) {
+			t.Errorf("%s: %v, %v; want %v", tc.name, ids(rows), err, tc.want)
+		}
+	}
+	if rec := call(h, "GET", "/api/described?from=many", nil); rec.Code != 400 || !strings.Contains(rec.Body.String(), "from") {
+		t.Errorf("an unparseable optional value: %d %q, want a 400 naming from", rec.Code, rec.Body.String())
+	}
+	resp, err := c.Both(ctx, 1, 2, rt.Some("%go%"))
+	var both map[string]int
+	if err != nil || resp.StatusCode != 200 || json.NewDecoder(resp.Body).Decode(&both) != nil || both["latest"] != 2 || both["described"] != 1 {
+		t.Errorf("the raw method of a controller route sending its loads' keys = %v, %v, %v; want latest 2 and described 1, the user from 2 whose bio is about go", resp, both, err)
+	}
+	if resp != nil {
+		resp.Body.Close()
+	}
 }

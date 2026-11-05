@@ -30,6 +30,7 @@ type HomeController interface {
 
 type MeController interface {
 	Show(r volt.Request, user db.User) volt.Response
+	Picks(r volt.Request, user db.User, n int, picks []db.User) volt.Response
 }
 
 type OpsController interface {
@@ -59,6 +60,8 @@ type UsersController interface {
 	Avatar(r volt.Request, id int) volt.Response
 	Profile(r volt.Request, id int, user db.User) volt.Response
 	Card(r volt.Request, id int) volt.Response
+	Peers(r volt.Request, id int, n int, user db.User, peers []db.User, more []db.User) volt.Response
+	Both(r volt.Request, id int, latest []db.User, described []db.User) volt.Response
 	ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response
 }
 
@@ -106,6 +109,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Me.Show(r, *new(db.User)), c.Me.Show(r, *new(db.User))) {
 		voltOut = append(voltOut, "Me.Show")
 	}
+	if !volt.Same(c.Me.Picks(r, *new(db.User), 0, nil), c.Me.Picks(r, *new(db.User), 0, nil)) {
+		voltOut = append(voltOut, "Me.Picks")
+	}
 	if !volt.Same(c.Ops.Fail(r), c.Ops.Fail(r)) {
 		voltOut = append(voltOut, "Ops.Fail")
 	}
@@ -148,7 +154,13 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Users.Card(r, 0), c.Users.Card(r, 0)) {
 		voltOut = append(voltOut, "Users.Card")
 	}
-	if !volt.Same(c.Users.ChangeEmail(r, 0, db.UserChangeset{}), c.Users.ChangeEmail(r, 0, db.UserChangeset{})) {
+	if !volt.Same(c.Users.Peers(r, 0, 0, db.User{}, nil, nil), c.Users.Peers(r, 0, 0, db.User{}, nil, nil)) {
+		voltOut = append(voltOut, "Users.Peers")
+	}
+	if !volt.Same(c.Users.Both(r, 0, nil, nil), c.Users.Both(r, 0, nil, nil)) {
+		voltOut = append(voltOut, "Users.Both")
+	}
+	if !volt.Same(c.Users.ChangeEmail(r, 0, db.UserNew()), c.Users.ChangeEmail(r, 0, db.UserNew())) {
 		voltOut = append(voltOut, "Users.ChangeEmail")
 	}
 	return voltOut

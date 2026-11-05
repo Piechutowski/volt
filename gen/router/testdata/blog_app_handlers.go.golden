@@ -11,7 +11,9 @@ import (
 )
 
 type AdminController interface {
-	Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts) volt.Response
+	Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts, latest []db.User, ten []db.User, written []db.User) volt.Response
+	Top(r volt.Request, n int, top []db.User) volt.Response
+	Keys(r volt.Request, a []db.User, b []db.User) volt.Response
 }
 
 type FilesController interface {
@@ -26,6 +28,7 @@ type HomeController interface {
 
 type MeController interface {
 	Show(r volt.Request, user db.User) volt.Response
+	Picks(r volt.Request, user db.User, n int, picks []db.User) volt.Response
 }
 
 type SessionController interface {
@@ -37,7 +40,7 @@ type UsersController interface {
 	Create(r volt.Request) volt.Response
 	Show(r volt.Request, id int) volt.Response
 	Avatar(r volt.Request, id int) volt.Response
-	Profile(r volt.Request, id int, user db.User, picked []db.User, since []db.User) volt.Response
+	Profile(r volt.Request, id int, user db.User, picked []db.User, since []db.User, recent []db.User) volt.Response
 	ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response
 	Signup(r volt.Request, body db.UserChangeset) volt.Response
 }
@@ -61,8 +64,14 @@ func NewRouter(c Controllers) http.Handler {
 
 func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	var voltOut []string
-	if !volt.Same(c.Admin.Stats(r, db.Totals{}, nil), c.Admin.Stats(r, db.Totals{}, nil)) {
+	if !volt.Same(c.Admin.Stats(r, db.Totals{}, nil, nil, nil, nil), c.Admin.Stats(r, db.Totals{}, nil, nil, nil, nil)) {
 		voltOut = append(voltOut, "Admin.Stats")
+	}
+	if !volt.Same(c.Admin.Top(r, 0, nil), c.Admin.Top(r, 0, nil)) {
+		voltOut = append(voltOut, "Admin.Top")
+	}
+	if !volt.Same(c.Admin.Keys(r, nil, nil), c.Admin.Keys(r, nil, nil)) {
+		voltOut = append(voltOut, "Admin.Keys")
 	}
 	if !volt.Same(c.Files.Serve(r, ""), c.Files.Serve(r, "")) {
 		voltOut = append(voltOut, "Files.Serve")
@@ -79,6 +88,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Me.Show(r, *new(db.User)), c.Me.Show(r, *new(db.User))) {
 		voltOut = append(voltOut, "Me.Show")
 	}
+	if !volt.Same(c.Me.Picks(r, *new(db.User), 0, nil), c.Me.Picks(r, *new(db.User), 0, nil)) {
+		voltOut = append(voltOut, "Me.Picks")
+	}
 	if !volt.Same(c.Session.Login(r, LoginForm{}), c.Session.Login(r, LoginForm{})) {
 		voltOut = append(voltOut, "Session.Login")
 	}
@@ -94,13 +106,13 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Users.Avatar(r, 0), c.Users.Avatar(r, 0)) {
 		voltOut = append(voltOut, "Users.Avatar")
 	}
-	if !volt.Same(c.Users.Profile(r, 0, db.User{}, nil, nil), c.Users.Profile(r, 0, db.User{}, nil, nil)) {
+	if !volt.Same(c.Users.Profile(r, 0, db.User{}, nil, nil, nil), c.Users.Profile(r, 0, db.User{}, nil, nil, nil)) {
 		voltOut = append(voltOut, "Users.Profile")
 	}
-	if !volt.Same(c.Users.ChangeEmail(r, 0, db.UserChangeset{}), c.Users.ChangeEmail(r, 0, db.UserChangeset{})) {
+	if !volt.Same(c.Users.ChangeEmail(r, 0, db.UserNew()), c.Users.ChangeEmail(r, 0, db.UserNew())) {
 		voltOut = append(voltOut, "Users.ChangeEmail")
 	}
-	if !volt.Same(c.Users.Signup(r, db.UserChangeset{}), c.Users.Signup(r, db.UserChangeset{})) {
+	if !volt.Same(c.Users.Signup(r, db.UserNew()), c.Users.Signup(r, db.UserNew())) {
 		voltOut = append(voltOut, "Users.Signup")
 	}
 	return voltOut

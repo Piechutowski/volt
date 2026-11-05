@@ -3,12 +3,12 @@
 package db
 
 table users {
-  id int [pk, increment]
+  id int [pk]
 }
 
 migration 0001__init [irreversible] {
   create table users {
-    id int [pk, increment]
+    id int [pk]
   }
   exec `PRAGMA user_version = 1` [down: "PRAGMA user_version = 0"]
 }

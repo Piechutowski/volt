@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -132,6 +133,144 @@ func TestThenPerformsThroughThePerformer(t *testing.T) {
 	}
 }
 
+func TestLoad(t *testing.T) {
+	found := fakeEffect{Query: rt.Query[int]{SQL: "SELECT user"}, rows: []int{1}}
+	miss := fakeEffect{Query: rt.Query[int]{SQL: "SELECT user"}, err: rt.ErrNotFound}
+	eh := func(r Request, err error) Response {
+		return DefaultErrorHandler(r, err).WithHeader("X-Error-Handler", "route")
+	}
+	var ran bool
+	serve := func(l Load[[]int]) *httptest.ResponseRecorder {
+		ran = false
+		return serveWith(func(Request) Response {
+			return Continue(l, func(rows []int) Response {
+				ran = true
+				return Render(len(rows))
+			})
+		}, eh, performFake, httptest.NewRequest("GET", "/x", nil))
+	}
+	if rec := serve(LoadWith[[]int](found)); rec.Code != 200 || !ran || strings.TrimSpace(rec.Body.String()) != "1" {
+		t.Errorf("LoadWith = %d %q, ran %v; want the value handed beneath", rec.Code, rec.Body.String(), ran)
+	}
+	if rec := serve(LoadWith[[]int](miss)); rec.Code != 404 || ran || rec.Header().Get("X-Error-Handler") != "route" {
+		t.Errorf("a failed load = %d via %q, ran %v; want 404 through the error handler", rec.Code, rec.Header().Get("X-Error-Handler"), ran)
+	}
+	if rec := serve(Halt[[]int](Reject(401, "sign in"))); rec.Code != 401 || ran || rec.Header().Get("X-Error-Handler") != "" {
+		t.Errorf("Halt = %d via %q, ran %v; want its own 401", rec.Code, rec.Header().Get("X-Error-Handler"), ran)
+	}
+	if rec := serve(Load[[]int]{}); rec.Code != 500 || ran || rec.Header().Get("X-Error-Handler") != "route" {
+		t.Errorf("the zero Load = %d via %q, ran %v; want 500 through the error handler", rec.Code, rec.Header().Get("X-Error-Handler"), ran)
+	}
+}
+
+func TestLoadRescue(t *testing.T) {
+	found := fakeEffect{Query: rt.Query[int]{SQL: "SELECT user"}, rows: []int{1}}
+	miss := fakeEffect{Query: rt.Query[int]{SQL: "SELECT user"}, err: rt.ErrNotFound}
+	down := fakeEffect{Query: rt.Query[int]{SQL: "SELECT user"}, err: errors.New("disk I/O error")}
+	eh := func(r Request, err error) Response {
+		return DefaultErrorHandler(r, err).WithHeader("X-Error-Handler", "route")
+	}
+	var rescued []error
+	signIn := func(err error) Response {
+		rescued = append(rescued, err)
+		if errors.Is(err, rt.ErrNotFound) {
+			return Reject(401, "sign in")
+		}
+		return Fail(err)
+	}
+	var ran bool
+	serve := func(l Load[[]int], next func([]int) Response) *httptest.ResponseRecorder {
+		ran, rescued = false, nil
+		return serveWith(func(Request) Response {
+			return Continue(l, func(rows []int) Response {
+				ran = true
+				return next(rows)
+			})
+		}, eh, performFake, httptest.NewRequest("GET", "/x", nil))
+	}
+	render := func(rows []int) Response { return Render(len(rows)) }
+	via := func(rec *httptest.ResponseRecorder) string { return rec.Header().Get("X-Error-Handler") }
+
+	rec := serve(LoadWith[[]int](miss).Rescue(signIn), render)
+	if rec.Code != 401 || via(rec) != "" || ran || len(rescued) != 1 || !errors.Is(rescued[0], rt.ErrNotFound) {
+		t.Errorf("a rescued miss = %d via %q, ran %v, rescued %v; want the rescue's 401 and nothing beneath", rec.Code, via(rec), ran, rescued)
+	}
+	rec = serve(LoadWith[[]int](down).Rescue(signIn), render)
+	if rec.Code != 500 || via(rec) != "route" || ran || len(rescued) != 1 {
+		t.Errorf("a rescue's Fail = %d via %q, ran %v; want 500 through the error handler", rec.Code, via(rec), ran)
+	}
+	rec = serve(LoadWith[[]int](found).Rescue(signIn), render)
+	if rec.Code != 200 || !ran || len(rescued) != 0 || strings.TrimSpace(rec.Body.String()) != "1" {
+		t.Errorf("a rescued load that succeeds = %d %q, ran %v; want the value handed beneath", rec.Code, rec.Body.String(), ran)
+	}
+
+	beneath := map[string]func([]int) Response{
+		"the handler's continuation": func([]int) Response { return Then[[]int](miss, render) },
+		"a route load's continuation": func([]int) Response {
+			return Then[[]int](found, func([]int) Response { return Then[[]int](miss, render) })
+		},
+		"a later scope load":     func([]int) Response { return Continue(LoadWith[[]int](miss), render) },
+		"the handler's own Fail": func([]int) Response { return Fail(rt.ErrNotFound) },
+	}
+	for name, next := range beneath {
+		rec = serve(LoadWith[[]int](found).Rescue(signIn), next)
+		if rec.Code != 404 || via(rec) != "route" || !ran || len(rescued) != 0 {
+			t.Errorf("%s failing under a rescued load = %d via %q, rescued %v; want 404 through the error handler, never the load's rescue", name, rec.Code, via(rec), rescued)
+		}
+	}
+	other := func(error) Response { return Reject(403, "not yours") }
+	rec = serve(LoadWith[[]int](found).Rescue(signIn), func([]int) Response {
+		return Continue(LoadWith[[]int](miss).Rescue(other), render)
+	})
+	if rec.Code != 403 || len(rescued) != 0 {
+		t.Errorf("a later scope load's own rescue = %d, outer rescued %v; want the inner load's 403", rec.Code, rescued)
+	}
+
+	halted := Halt[[]int](Reject(401, "sign in"))
+	if rec = serve(halted.Rescue(other), render); rec.Code != 401 || ran || len(rescued) != 0 {
+		t.Errorf("Rescue on a Halt = %d, ran %v; want the halt's own 401", rec.Code, ran)
+	}
+	if !Same(Continue(halted.Rescue(other), render), Reject(401, "sign in")) {
+		t.Error("Rescue changed a Halt")
+	}
+	called := false
+	zero := Load[[]int]{}.Rescue(func(error) Response { called = true; return NoContent() })
+	if rec = serve(zero, render); rec.Code != 500 || via(rec) != "route" || called {
+		t.Errorf("Rescue on the zero Load = %d via %q, called %v; want 500 through the error handler", rec.Code, via(rec), called)
+	}
+
+	plain := LoadWith[[]int](miss)
+	_ = plain.Rescue(signIn)
+	if rec = serve(plain, render); rec.Code != 404 || len(rescued) != 0 {
+		t.Errorf("Rescue changed its receiver: %d, rescued %v", rec.Code, rescued)
+	}
+	if rec = serve(plain.Rescue(signIn).Rescue(other), render); rec.Code != 403 || len(rescued) != 0 {
+		t.Errorf("a second Rescue = %d, first rescued %v; want the second to replace the first", rec.Code, rescued)
+	}
+	if rec = serve(plain.Rescue(signIn).Rescue(nil), render); rec.Code != 404 || via(rec) != "route" || len(rescued) != 0 {
+		t.Errorf("Rescue(nil) = %d via %q; want the error handler back", rec.Code, via(rec))
+	}
+	if Same(Continue(plain.Rescue(signIn), render), Continue(plain, render)) || !Same(Continue(plain.Rescue(signIn), render), Then[[]int](miss, render).Rescue(signIn)) {
+		t.Error("Same does not see a load's rescue as a continuation's")
+	}
+
+	slow := func(ctx context.Context, e rt.AnyEffect) (any, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	rescued = nil
+	rec = httptest.NewRecorder()
+	Handler("GET /x", func(Request) Response {
+		return Continue(LoadWith[[]int](found).Rescue(signIn), render)
+	}, eh, slow, Timeout(10*time.Millisecond)).ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+	var he HTTPError
+	if rec.Code != http.StatusGatewayTimeout || via(rec) != "route" || len(rescued) != 1 || !errors.As(rescued[0], &he) || he.StatusCode() != http.StatusGatewayTimeout {
+		t.Errorf("a load past its timeout = %d via %q, rescued %v; want the rescue to see the 504 and Fail it to the error handler", rec.Code, via(rec), rescued)
+	}
+}
+
+func done0(int) Response { return NoContent() }
+
 func TestResponseValues(t *testing.T) {
 	a := Render(1).WithHeader("X-A", "1").WithCookie(http.Cookie{Name: "c", Value: "v"})
 	b := a.WithStatus(202)
@@ -148,6 +287,40 @@ func TestResponseValues(t *testing.T) {
 	}
 	if !Same(Fail(errors.New("x")), Fail(errors.New("x"))) || Same(Then(q, next), Render(1)) {
 		t.Error("Same disagrees on failures")
+	}
+	if Same(Fail(Error(409, "taken")), Fail(Error(422, "taken"))) || Same(Then(rt.Fail[int](Error(409, "taken")), done0), Then(rt.Fail[int](Error(422, "taken")), done0)) {
+		t.Error("Same calls two failures of one message and two statuses the same")
+	}
+	if nan := math.NaN(); !Same(Render(nan), Render(nan)) || !Same(Render([]float64{nan}), Render([]float64{nan})) {
+		t.Error("Same tells a body holding a NaN apart from itself")
+	}
+	if Same(Then(rt.Query[int]{SQL: "q", Args: []any{"a b", "c"}}, next), Then(rt.Query[int]{SQL: "q", Args: []any{"a", "b c"}}, next)) {
+		t.Error("Same compares arguments as they print, not as they are")
+	}
+	done := func(int64) Response { return NoContent() }
+	write := func(sql string) func([]int) rt.Effect[int64] {
+		return func([]int) rt.Effect[int64] { return rt.Exec{SQL: sql} }
+	}
+	atomic := Then(rt.Atomic(rt.Then(q, write("a"))), done)
+	if !Same(atomic, Then(rt.Atomic(rt.Then(q, write("b"))), done)) || Same(atomic, Then(rt.Then(q, write("a")), done)) || Same(atomic, Then(rt.Atomic(rt.Then(rt.Query[int]{SQL: "SELECT 2"}, write("a"))), done)) {
+		t.Error("Same disagrees on an Atomic over a Then: it compares by the first effect and the kinds around it")
+	}
+	count := func(n []int) int { return len(n) }
+	if !Same(Then(rt.Map(q, count), func(int) Response { return NoContent() }), Then(rt.Map(q, func([]int) int { return 0 }), func(int) Response { return NoContent() })) || Same(Then(rt.Map(q, count), func(int) Response { return NoContent() }), Then(q, next)) {
+		t.Error("Same disagrees on a Map: it compares by its kind and its inner effect")
+	}
+	if !Same(Then(rt.Pure[int64](1), done), Then(rt.Pure[int64](1), done)) || Same(Then(rt.Pure[int64](1), done), Then(rt.Pure[int64](2), done)) {
+		t.Error("Same disagrees on a Pure: it compares by its value")
+	}
+	type counted struct{ N *int }
+	pointed := func(n int) Response {
+		return Then(rt.All(rt.Pure(counted{&n})), func([]any) Response { return NoContent() })
+	}
+	if !Same(pointed(1), pointed(1)) || Same(pointed(1), pointed(2)) {
+		t.Error("Same disagrees on a Pure holding a pointer: it compares the value with reflect.DeepEqual, as a done response's body")
+	}
+	if !Same(Then(rt.Fail[int64](errors.New("full")), done), Then(rt.Fail[int64](errors.New("full")), done)) || Same(Then(rt.Fail[int64](errors.New("full")), done), Then(rt.Fail[int64](errors.New("closed")), done)) {
+		t.Error("Same disagrees on a Fail: it compares by its error's message")
 	}
 	rec := httptest.NewRecorder()
 	Handler("GET /x", func(Request) Response { return HTML([]byte("<p>hi</p>")) }, nil, nil).ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
@@ -286,5 +459,29 @@ func TestTimeoutIs504(t *testing.T) {
 	Handler("GET /x", h, nil, slow, Timeout(10*time.Millisecond)).ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
 	if rec.Code != http.StatusGatewayTimeout {
 		t.Fatalf("a chain past its timeout = %d, want 504", rec.Code)
+	}
+
+	eh := func(r Request, err error) Response {
+		return DefaultErrorHandler(r, err).WithHeader("X-Error-Handler", "route")
+	}
+	var rescued []error
+	busy := func(err error) Response {
+		rescued = append(rescued, err)
+		return Reject(http.StatusServiceUnavailable, "try again")
+	}
+	rescuedChain := func(Request) Response {
+		return Then(rt.Query[int]{SQL: "SELECT 1"}, func([]int) Response { return NoContent() }).Rescue(busy)
+	}
+	rescuedLoad := func(Request) Response {
+		return Continue(LoadWith(rt.Query[int]{SQL: "SELECT 1"}).Rescue(busy), func([]int) Response { return NoContent() })
+	}
+	for name, h := range map[string]HandlerFunc{"a rescued continuation": rescuedChain, "a rescued scope load": rescuedLoad} {
+		rescued = nil
+		rec = httptest.NewRecorder()
+		Handler("GET /x", h, eh, slow, Timeout(10*time.Millisecond)).ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+		var he HTTPError
+		if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("X-Error-Handler") != "" || len(rescued) != 1 || !errors.As(rescued[0], &he) || he.StatusCode() != http.StatusGatewayTimeout {
+			t.Errorf("%s past its timeout = %d via %q, rescued %v; want the rescue to receive the 504 and answer for it", name, rec.Code, rec.Header().Get("X-Error-Handler"), rescued)
+		}
 	}
 }

@@ -2,7 +2,7 @@
 package app
 
 table users {
-	id int [pk, increment]
+	id int [pk]
 }
 
 scope / {

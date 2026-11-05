@@ -2,7 +2,7 @@
 package db
 
 table users {
-  id    int [pk, increment]
+  id    int [pk]
   email string    [unique]
   name  string    [default: ""]
 }

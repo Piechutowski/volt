@@ -21,6 +21,10 @@ func (c UserChangeset) Validate() UserChangeset {
 	return UserChangeset{c.WithFindings(voltErrs)}
 }
 
+func (c ProfileChangeset) Validate() ProfileChangeset {
+	return ProfileChangeset{c.WithFindings(nil)}
+}
+
 func (c TagChangeset) Validate() TagChangeset {
 	return TagChangeset{c.WithFindings(nil)}
 }

@@ -25,6 +25,12 @@ func newDB(t *testing.T) run.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
+	ddlApply(t, db)
+	return db
+}
+
+func ddlApply(t *testing.T, db run.DB) {
+	t.Helper()
 	ddl, err := os.ReadFile("volt_schema.sql")
 	if err != nil {
 		t.Fatal(err)
@@ -32,7 +38,6 @@ func newDB(t *testing.T) run.DB {
 	if _, err := db.Pool().Exec(string(ddl)); err != nil {
 		t.Fatalf("generated DDL rejected by SQLite: %v", err)
 	}
-	return db
 }
 
 func seedUser(t *testing.T, db run.DB, email string) User {

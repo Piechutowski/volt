@@ -53,8 +53,9 @@ type PlanMemo struct {
 }
 
 type memoModel struct {
-	tm      *Table
-	imports map[string]bool
+	tm       *Table
+	imports  map[string]bool
+	assigned *check.ColumnDef
 }
 
 // PlanBuildMemo is PlanBuild with a memo of the package's earlier
@@ -246,7 +247,7 @@ func crudMethodsBuild(t *Table) []CRUDMethod {
 	}
 	methods = append(methods, CRUDMethod{Name: n.List, Op: "list", Result: m, Many: true})
 	methods = append(methods, CRUDMethod{Name: n.Create, Op: "create", Body: n.Changeset, Params: n.Params,
-		New: n.New, Allow: t.handles(t.Settable()), Result: m})
+		New: n.New, Allow: t.handles(t.CreateCast()), Result: m})
 	if len(t.PK) > 0 {
 		if len(t.NonPK()) > 0 {
 			methods = append(methods, CRUDMethod{Name: n.Update, Op: "update", Key: key, Body: n.Changeset, Params: n.Params,
@@ -276,11 +277,14 @@ func fieldSigsBuild(t *Table) []FieldSig {
 }
 
 func fieldSigOf(fp *Field) FieldSig {
-	return FieldSig{
+	sig := FieldSig{
 		Name: fp.GoField, Col: fp.ColName, Type: fp.GoType,
-		Tag: fp.Tag, Doc: SettingNote(fp.Col.Settings),
-		Nullable: fp.Nullable,
+		Tag: fp.Tag, Nullable: fp.Nullable,
 	}
+	if fp.Col != nil {
+		sig.Doc = SettingNote(fp.Col.Settings)
+	}
+	return sig
 }
 
 // SelectRowType names the row type one instantiation returns (§selects-over-groups)
@@ -532,6 +536,9 @@ func (pl *Plan) SelectSQL(fn SelectFn) (string, []string, error) {
 	}
 	if len(fn.Order) > 0 {
 		opts = append(opts, rt.OrderBy(fn.Order...))
+	}
+	if fn.Limit != "" {
+		opts = append(opts, rt.LimitVal(fn.Limit))
 	}
 	from := rt.Ident(t.SQLName)
 	if len(fn.Joins) > 0 {

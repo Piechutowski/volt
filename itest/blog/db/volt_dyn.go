@@ -49,6 +49,48 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec {
 }
 
 const (
+	voltProfileTableSQL   = `"profiles"`
+	voltProfileColumnsSQL = `"user_id", "bio"`
+)
+
+func ProfileLimit(n int) rt.Opt[Profile] { return rt.Limit[Profile](n) }
+
+func ProfileOffset(n int) rt.Opt[Profile] { return rt.Offset[Profile](n) }
+
+func ProfileDistinct() rt.Opt[Profile] { return rt.Distinct[Profile]() }
+
+func ProfileOrderBy(terms ...rt.Order[Profile]) rt.Opt[Profile] { return rt.OrderBy(terms...) }
+
+func ProfileAfter(key ...any) rt.Opt[Profile] { return rt.After[Profile](key...) }
+
+func ProfileSet(assigns ...rt.Assign[Profile]) []rt.Assign[Profile] { return assigns }
+
+func ProfileQuery(opts ...rt.Opt[Profile]) rt.Query[Profile] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltProfileTableSQL, voltProfileColumnsSQL, opts)
+	return rt.Query[Profile]{SQL: voltSQL, Args: voltArgs, Scan: voltProfileScan, Err: voltErr}
+}
+
+func ProfileCount(preds ...rt.Pred[Profile]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltProfileTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func ProfileExists(preds ...rt.Pred[Profile]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltProfileTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func ProfileDeleteWhere(preds ...rt.Pred[Profile]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltProfileTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func ProfileUpdateWhere(set []rt.Assign[Profile], preds ...rt.Pred[Profile]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltProfileTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+const (
 	voltTagTableSQL   = `"tags"`
 	voltTagColumnsSQL = `"slug", "name"`
 )

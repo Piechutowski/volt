@@ -9,7 +9,7 @@ table currencies {
   }
 }
 table rates [note: "Seeded exchange rates"] {
-  id int [pk, increment]
+  id int [pk]
   currency_code string [ref: currencies.code]
   rate float64
   fetched_at time.Time

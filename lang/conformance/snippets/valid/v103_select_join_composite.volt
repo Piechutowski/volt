@@ -8,7 +8,7 @@ table merchants {
 }
 
 table merchant_periods {
-  id           int    [pk, increment]
+  id           int    [pk]
   merchant_id  int
   country_code string
 }

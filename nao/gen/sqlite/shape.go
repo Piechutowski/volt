@@ -69,7 +69,7 @@ func TableDDL(table string, body []ast.TableItem) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("table %s: column %q: type %q is not a built-in (§migrations)", table, name, col.Type.String())
 		}
-		line, err := columnLine(col, sqlType, pkCols)
+		line, err := columnLine(col, sqlType, col.Type.String() == "int", pkCols)
 		if err != nil {
 			return "", fmt.Errorf("table %s: %w", table, err)
 		}

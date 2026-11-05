@@ -73,7 +73,7 @@ func TestResourcesDefault(t *testing.T) {
 }
 
 // TestResourcesDefaultStringKey (§default-handlers, §query-routes): a table
-// keyed by a string column without increment takes its key in the
+// keyed by a string column, not the rowid alias, takes its key in the
 // create body, and an update ignores a body that names the key, which
 // is outside the update's allow list.
 func TestResourcesDefaultStringKey(t *testing.T) {
@@ -134,5 +134,48 @@ func TestResourcesDefaultStringKey(t *testing.T) {
 			t.Fatalf("%v: after delete = %v, want volt.ErrNotFound", f, err)
 		}
 		srv.Close()
+	}
+}
+
+// TestResourcesDefaultSharedKey (§default-handlers, §columns,
+// §changesets): a shared-key one-to-one, whose int key is also the
+// foreign key, is the rowid alias in the DDL but no database-assigned
+// key, so the generated create takes user_id from the body and
+// SQLite stores the value given, not a rowid of its choosing, and a body
+// that leaves user_id out is refused as not_null before any insert.
+func TestResourcesDefaultSharedKey(t *testing.T) {
+	h := handlerWithDB(t)
+	for _, email := range []string{"two@example.com", "three@example.com"} {
+		if rec := call(h, "POST", "/ref/users", strings.NewReader(`{"email":"`+email+`"}`), "Content-Type", "application/json"); rec.Code != 201 {
+			t.Fatalf("user create: %d %s", rec.Code, rec.Body.String())
+		}
+	}
+	rec := call(h, "POST", "/ref/profiles", strings.NewReader(`{"user_id":3,"bio":"third"}`), "Content-Type", "application/json")
+	var made db.Profile
+	if rec.Code != 201 || json.Unmarshal(rec.Body.Bytes(), &made) != nil || made.UserID != 3 || made.Bio != "third" {
+		t.Fatalf("create: %d %s, want 201 with user_id 3 from the body, not the rowid 2 SQLite would assign", rec.Code, rec.Body.String())
+	}
+	rec = call(h, "GET", app.PathRefProfile(3), nil)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"user_id":3`) || !strings.Contains(rec.Body.String(), `"bio":"third"`) {
+		t.Fatalf("show: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "GET", app.PathRefProfile(2), nil); rec.Code != 404 {
+		t.Fatalf("show of a profile never created: %d %s, want 404", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "POST", "/ref/profiles", strings.NewReader(`{"user_id":7,"bio":"nobody"}`), "Content-Type", "application/json"); rec.Code < 400 {
+		t.Fatalf("create for a user that does not exist: %d %s, want the foreign key refused", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "POST", "/ref/users", strings.NewReader(`{"email":"four@example.com"}`), "Content-Type", "application/json"); rec.Code != 201 {
+		t.Fatalf("user create: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = call(h, "POST", "/ref/profiles", strings.NewReader(`{"bio":"nokey"}`), "Content-Type", "application/json")
+	if rec.Code != 422 || !strings.Contains(rec.Body.String(), `"check":"not_null"`) || !strings.Contains(rec.Body.String(), `"user_id"`) {
+		t.Fatalf("create without user_id: %d %s, want 422 not_null on user_id, not the rowid 4 SQLite would assign to user 4's row", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "GET", app.PathRefProfile(4), nil); rec.Code != 404 {
+		t.Fatalf("a create without user_id stored a profile for user 4: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := db.ProfileNew().From(db.Profile{UserID: 3, Bio: "x"}); !got.Changed(db.ProfileUserID) {
+		t.Fatal("From left the shared key unmarked; it is no database-assigned key (§changesets)")
 	}
 }

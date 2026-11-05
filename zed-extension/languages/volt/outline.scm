@@ -1,17 +1,13 @@
-(project_definition
-  "Project" @context
-  name: (_) @name) @item
-
 (table_definition
-  "Table" @context
+  "table" @context
   name: (table_name) @name) @item
 
 (table_partial_definition
-  "TablePartial" @context
+  "table_partial" @context
   name: (partial_name) @name) @item
 
 (type_definition
-  "Type" @context
+  "type" @context
   name: (type_name) @name) @item
 
 (column_definition
@@ -19,17 +15,17 @@
   type: (column_type) @context.extra) @item
 
 (indexes_block
-  "Indexes" @name) @item
+  "indexes" @name) @item
 
 (validators_block
-  "Validators" @name) @item
+  "validators" @name) @item
 
 (ref_definition
-  "Ref" @context
+  "ref" @context
   (ref_relation) @name) @item
 
 (records_definition
-  "Records" @context
+  "records" @context
   table: (table_name) @name) @item
 
 ; ---------- Volt layer (docs/spec.md Part II) ----------
@@ -39,11 +35,11 @@
   name: (identifier) @name) @item
 
 (pipeline_definition
-  "Pipeline" @context
+  "pipeline" @context
   name: (pipeline_name) @name) @item
 
 (scope_definition
-  "Scope" @context
+  "scope" @context
   path: (route_path) @name) @item
 
 (route
@@ -55,17 +51,17 @@
   table: (table_name) @name) @item
 
 (group_definition
-  "Group" @context
+  "group" @context
   name: (group_name) @name) @item
 
 (pred_definition
-  "Pred" @context
+  "pred" @context
   name: (pred_name) @name) @item
 
 (select_definition
-  "Select" @context
+  "select" @context
   name: (select_name) @name) @item
 
 (migration_definition
-  "Migration" @context
+  "migration" @context
   name: (migration_name) @name) @item

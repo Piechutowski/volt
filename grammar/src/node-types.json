@@ -1121,6 +1121,32 @@
     }
   },
   {
+    "type": "pred_exists",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "pred_expr",
+            "named": true
+          }
+        ]
+      },
+      "relation": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "relation_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "pred_expr",
     "named": true,
     "fields": {},
@@ -1130,6 +1156,10 @@
       "types": [
         {
           "type": "pred_compare",
+          "named": true
+        },
+        {
+          "type": "pred_exists",
           "named": true
         },
         {
@@ -1237,68 +1267,6 @@
     }
   },
   {
-    "type": "project_definition",
-    "named": true,
-    "fields": {
-      "name": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "identifier",
-            "named": true
-          }
-        ]
-      },
-      "settings": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "settings_list",
-            "named": true
-          }
-        ]
-      }
-    },
-    "children": {
-      "multiple": true,
-      "required": false,
-      "types": [
-        {
-          "type": "project_property",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "project_property",
-    "named": true,
-    "fields": {
-      "key": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "identifier",
-            "named": true
-          }
-        ]
-      },
-      "value": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "string",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
     "type": "qualified_column",
     "named": true,
     "fields": {},
@@ -1369,6 +1337,16 @@
         "types": [
           {
             "type": "parameter_name",
+            "named": true
+          }
+        ]
+      },
+      "optional": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "optional_marker",
             "named": true
           }
         ]
@@ -1966,6 +1944,10 @@
             "named": true
           },
           {
+            "type": "go_ref",
+            "named": true
+          },
+          {
             "type": "ident_group",
             "named": true
           },
@@ -1983,6 +1965,10 @@
           },
           {
             "type": "query_call",
+            "named": true
+          },
+          {
+            "type": "query_param",
             "named": true
           },
           {
@@ -2077,10 +2063,6 @@
         },
         {
           "type": "pred_definition",
-          "named": true
-        },
-        {
-          "type": "project_definition",
           "named": true
         },
         {
@@ -2539,6 +2521,10 @@
     "named": false
   },
   {
+    "type": "exists",
+    "named": false
+  },
+  {
     "type": "expression_content",
     "named": true
   },
@@ -2639,6 +2625,10 @@
     "named": true
   },
   {
+    "type": "optional_marker",
+    "named": true
+  },
+  {
     "type": "options",
     "named": false
   },
@@ -2685,10 +2675,6 @@
   {
     "type": "pred_ref",
     "named": true
-  },
-  {
-    "type": "project",
-    "named": false
   },
   {
     "type": "rebuild",

@@ -116,7 +116,7 @@ func (x *SettingList) Get(name string) *Setting {
 type Setting struct {
 	NameTok token.Token // the name as written
 	Name    string
-	Value   Node // nil for flags; BasicLit, Ident, FuncExpr, NegNumber, QualIdent, IdentList, or RefEndpoint for ref:
+	Value   Node // nil for flags; BasicLit, Ident, FuncExpr, NegNumber, QualIdent, IdentList, Param, a query call, or RefEndpoint for ref:
 	endPos  token.Position
 }
 
@@ -146,28 +146,6 @@ type Decl interface {
 	Node
 	declNode()
 }
-
-// Project is a Project element (spec §project).
-type Project struct {
-	ProjectPos token.Position
-	Name       *Ident // may be nil
-	Settings   *SettingList
-	Props      []*ProjectProp
-	Rbrace     token.Position
-}
-
-func (d *Project) Pos() token.Position { return d.ProjectPos }
-func (d *Project) End() token.Position { return d.Rbrace }
-func (d *Project) declNode()           {}
-
-// ProjectProp is one key: "value" line inside a Project body.
-type ProjectProp struct {
-	Key   *Ident
-	Value *BasicLit
-}
-
-func (x *ProjectProp) Pos() token.Position { return x.Key.Pos() }
-func (x *ProjectProp) End() token.Position { return x.Value.End() }
 
 // Table is a Table element (spec §table).
 type Table struct {

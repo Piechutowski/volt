@@ -4,25 +4,25 @@
 package site
 
 table posts {
-  id    int [pk, increment]
+  id    int [pk]
   title string
 }
 
 table tags {
-  id   int [pk, increment]
+  id   int [pk]
   name string    [unique]
 }
 
 select picked for posts where id in :ids [order: (id asc)]
 
 table ms_revenue {
-  id   int [pk, increment]
+  id   int [pk]
   org  string
   year int
 }
 
 table ms_usage {
-  id   int [pk, increment]
+  id   int [pk]
   org  string
   year int
 }

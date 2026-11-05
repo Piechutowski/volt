@@ -5,7 +5,7 @@
 package metrics
 
 table page_views {
-  id    int [pk, increment]
+  id    int [pk]
   site  string
   day   int
   hits  int [default: 0]
@@ -14,7 +14,7 @@ table page_views {
 }
 
 table link_clicks {
-  id     int [pk, increment]
+  id     int [pk]
   site   string
   day    int
   target string [default: ""]
@@ -40,12 +40,12 @@ select all     for link_clicks
 // relation joins inner, a nullable one left with its columns rt.Null, and
 // a reverse relation, named outright where two would collide, joins left.
 table hosts {
-  id   int [pk, increment]
+  id   int [pk]
   name string
 }
 
 table visits {
-  id       int [pk, increment]
+  id       int [pk]
   host_id  int [ref: hosts.id]
   owner_id int [null]
   day      int
@@ -79,7 +79,7 @@ table merchants {
 }
 
 table merchant_periods {
-  id           int    [pk, increment]
+  id           int    [pk]
   merchant_id  int
   country_code string
 }
@@ -87,3 +87,22 @@ table merchant_periods {
 ref: merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)
 
 select placed (id, merchants.name) for merchant_periods join merchants where merchants.name like :pattern
+
+// Limits (spec §selects-over-groups): LIMIT ? after ORDER BY, a literal
+// bound as an argument, a parameter last in the signature and checked by
+// the effect, on every member of a group, after a grouping, and on the
+// parents of a nesting.
+select top     for page_views where day >= :from [order: (hits desc, id asc), limit: :limit]
+select first   for traffic [order: (day asc, id asc), limit: 3]
+select leading (site, sum(hits) as total) for page_views [group: (site), order: (total desc, site asc), limit: :n]
+select newest  for hosts with visits [order: (id desc), limit: :limit]
+
+// Optional parameters and exists (spec §predicates): a term that reads an
+// absent optional parameter is taken out behind its guard, an optional list
+// binds through JSONListOptional, and an exists term tests a forward or a
+// reverse relation without joining it, a composite key on every pair.
+select keyset  for visits where day < :day? or (day = :day? and id < :id?) [order: (day desc, id desc), limit: :limit]
+select picked  for page_views where id in :ids? and site like :site? [order: (id asc)]
+select visited for hosts where exists visits (day >= :from?) and not exists owned (day = 0) [order: (id asc)]
+select by_host (id, day) for visits where exists host (name = :name)
+select active  for merchants where exists merchant_periods (id > 0)

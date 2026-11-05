@@ -54,6 +54,14 @@ func PathCard(id int, opts ...volt.URLOption) string {
 	return volt.URL("/users/"+volt.SegInt(id)+"/card", opts...)
 }
 
+func PathPeers(id int, n int, opts ...volt.URLOption) string {
+	return volt.URL("/users/"+volt.SegInt(id)+"/peers/"+volt.SegInt(n), opts...)
+}
+
+func PathBoth(id int, opts ...volt.URLOption) string {
+	return volt.URL("/users/"+volt.SegInt(id)+"/both", opts...)
+}
+
 func PathChangeEmail(id int, opts ...volt.URLOption) string {
 	return volt.URL("/users/"+volt.SegInt(id)+"/email", opts...)
 }
@@ -72,6 +80,18 @@ func PathMeShow(opts ...volt.URLOption) string {
 
 func PathMeUserList(opts ...volt.URLOption) string {
 	return volt.URL("/me/peers", opts...)
+}
+
+func PathMePicks(n int, opts ...volt.URLOption) string {
+	return volt.URL("/me/picks/"+volt.SegInt(n), opts...)
+}
+
+func PathMeUserLatest(opts ...volt.URLOption) string {
+	return volt.URL("/me/latest", opts...)
+}
+
+func PathMeTop(limit int, opts ...volt.URLOption) string {
+	return volt.URL("/me/top/"+volt.SegInt(limit), opts...)
 }
 
 func PathTag(name string, opts ...volt.URLOption) string {
@@ -102,6 +122,14 @@ func PathAPIUserSince(opts ...volt.URLOption) string {
 	return volt.URL("/api/since", opts...)
 }
 
+func PathAPIUserLatest(opts ...volt.URLOption) string {
+	return volt.URL("/api/latest", opts...)
+}
+
+func PathAPIUserDescribed(opts ...volt.URLOption) string {
+	return volt.URL("/api/described", opts...)
+}
+
 func PathMsRevenueBrowse(opts ...volt.URLOption) string {
 	return volt.URL("/ms/revenue", opts...)
 }
@@ -124,6 +152,14 @@ func PathRefTags(opts ...volt.URLOption) string {
 
 func PathRefTag(slug string, opts ...volt.URLOption) string {
 	return volt.URL("/ref/tags/"+volt.Seg(slug), opts...)
+}
+
+func PathRefProfiles(opts ...volt.URLOption) string {
+	return volt.URL("/ref/profiles", opts...)
+}
+
+func PathRefProfile(userID int, opts ...volt.URLOption) string {
+	return volt.URL("/ref/profiles/"+volt.SegInt(userID), opts...)
 }
 
 func PathEvents(opts ...volt.URLOption) string {

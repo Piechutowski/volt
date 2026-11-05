@@ -22,14 +22,15 @@ that lands it.
 | Generated Elm client | no | missing | |
 | Models, CRUD, dynamic queries | Ecto / ActiveRecord | built | |
 | Changesets and validation | Ecto changesets / validations | built | |
-| Joins in declared queries | yes | built (`join` over relation names) | |
+| Joins in declared queries | yes | built (`join` over relation names, `exists` over one without joining) | |
+| Optional filters in declared queries | yes | built (`:name?`, a term taken out of the predicate when its parameter is absent, which searches no index; routable from the query string as a scalar, a list from Go alone) | |
 | Aggregates and grouping | yes | built (`count`, `sum`, `avg`, `min`, `max`, arithmetic, `group:`) | |
 | Nested results (preload / include) | yes | built (`with` over a reverse relation) | |
 | Many-to-many through a junction | yes | missing | |
 | Migrations with a ledger and a schema check | yes | built | |
 | Migration generation from drift | yes | not planned: a migration is written by hand, and the checker folds the migrations against the schema instead of guessing one from a diff | |
 | Seeds | yes | built (`records`) | |
-| Transactions | yes | built (as values) | |
+| Transactions | yes | built (as values; `rt.Atomic` over `rt.Then` for writes that use an earlier write's key) | |
 | Sessions | yes | missing | |
 | Password hashing | yes | missing | |
 | CSRF | yes | missing | |

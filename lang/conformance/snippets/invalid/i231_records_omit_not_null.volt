@@ -17,7 +17,7 @@ table posts {
 }
 
 table authors {
-  id   int [pk, increment]
+  id   int [pk]
   name string
   bio  string [null]
 }

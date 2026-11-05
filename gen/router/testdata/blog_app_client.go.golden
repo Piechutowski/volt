@@ -9,6 +9,7 @@ import (
 
 	"blog/db"
 	"github.com/Piechutowski/volt"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 type Client struct {
@@ -16,7 +17,7 @@ type Client struct {
 }
 
 func New(base string) *Client {
-	return &Client{volt.Client{Base: base}}
+	return &Client{volt.Client{Base: base, Header: map[string][]string{}}}
 }
 
 func (c *Client) Root(ctx context.Context) (*http.Response, error) {
@@ -27,8 +28,24 @@ func (c *Client) About(ctx context.Context) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/about"), nil)
 }
 
-func (c *Client) AdminStats(ctx context.Context) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/admin/stats"), nil)
+func (c *Client) AdminStats(ctx context.Context, title rt.Null[string], after rt.Null[time.Time]) (*http.Response, error) {
+	voltQ := []volt.URLOption{}
+	if title.Valid {
+		voltQ = append(voltQ, volt.Query("title", volt.FormatQuery(title.V)))
+	}
+	if after.Valid {
+		voltQ = append(voltQ, volt.Query("after", volt.FormatQuery(after.V)))
+	}
+	return c.Raw(ctx, "GET", volt.URL("/admin/stats", voltQ...), nil)
+}
+
+func (c *Client) AdminTop(ctx context.Context, n int) (*http.Response, error) {
+	return c.Raw(ctx, "GET", volt.URL("/admin/top/"+volt.SegInt(n)), nil)
+}
+
+func (c *Client) AdminKeys(ctx context.Context, ctx_ int, ctx__ time.Time) (*http.Response, error) {
+	voltQ := []volt.URLOption{volt.Query("ctx", volt.FormatQuery(ctx_)), volt.Query("ctx_", volt.FormatQuery(ctx__))}
+	return c.Raw(ctx, "GET", volt.URL("/admin/keys", voltQ...), nil)
 }
 
 func (c *Client) Users(ctx context.Context) (*http.Response, error) {
@@ -47,8 +64,12 @@ func (c *Client) Avatar(ctx context.Context, id int) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/avatar"), nil)
 }
 
-func (c *Client) Profile(ctx context.Context, id int) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/profile"), nil)
+func (c *Client) Profile(ctx context.Context, id int, ids []int, since time.Time, count int) (*http.Response, error) {
+	voltQ := []volt.URLOption{volt.Query("since", volt.FormatQuery(since)), volt.Query("count", volt.FormatQuery(count))}
+	for _, voltV := range ids {
+		voltQ = append(voltQ, volt.Query("ids", volt.FormatQuery(voltV)))
+	}
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/profile", voltQ...), nil)
 }
 
 func (c *Client) ChangeEmail(ctx context.Context, id int, cs db.UserChangeset) (*http.Response, error) {
@@ -74,6 +95,17 @@ func (c *Client) MeShow(ctx context.Context) (*http.Response, error) {
 func (c *Client) MeUserList(ctx context.Context) ([]db.User, error) {
 	var voltOut []db.User
 	voltErr := c.Do(ctx, "GET", volt.URL("/me/peers"), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) MePicks(ctx context.Context, n int) (*http.Response, error) {
+	return c.Raw(ctx, "GET", volt.URL("/me/picks/"+volt.SegInt(n)), nil)
+}
+
+func (c *Client) MeUserLatest(ctx context.Context, limit int) ([]db.User, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/me/latest", voltQ...), nil, &voltOut)
 	return voltOut, voltErr
 }
 
@@ -134,6 +166,33 @@ func (c *Client) APIUserFeed(ctx context.Context) ([]db.UserWithPosts, error) {
 	return voltOut, voltErr
 }
 
+func (c *Client) APIUserLatest(ctx context.Context, limit int) ([]db.User, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/latest", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) APIUserWritten(ctx context.Context, title rt.Null[string], after rt.Null[time.Time]) ([]db.User, error) {
+	voltQ := []volt.URLOption{}
+	if title.Valid {
+		voltQ = append(voltQ, volt.Query("title", volt.FormatQuery(title.V)))
+	}
+	if after.Valid {
+		voltQ = append(voltQ, volt.Query("after", volt.FormatQuery(after.V)))
+	}
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/written", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) APIUserBydb(ctx context.Context, db_ int) ([]db.User, error) {
+	voltQ := []volt.URLOption{volt.Query("db", volt.FormatQuery(db_))}
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/bydb", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
 func (c *Client) APIUserRoleGet(ctx context.Context, userID int, roleID int) (db.UserRole, error) {
 	var voltOut db.UserRole
 	voltErr := c.Do(ctx, "GET", volt.URL("/api/roles/"+volt.SegInt(userID)+"/"+volt.SegInt(roleID)), nil, &voltOut)
@@ -157,6 +216,20 @@ func (c *Client) MsUsageBrowse(ctx context.Context, year int) ([]db.MsUsage, err
 	voltQ := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
 	var voltOut []db.MsUsage
 	voltErr := c.Do(ctx, "GET", volt.URL("/ms/usage", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) MsrMsRevenueRecent(ctx context.Context, limit int) ([]db.MsRevenue, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []db.MsRevenue
+	voltErr := c.Do(ctx, "GET", volt.URL("/msr/revenue", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) MsrMsUsageRecent(ctx context.Context, limit int) ([]db.MsUsage, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []db.MsUsage
+	voltErr := c.Do(ctx, "GET", volt.URL("/msr/usage", voltQ...), nil, &voltOut)
 	return voltOut, voltErr
 }
 

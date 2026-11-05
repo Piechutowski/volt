@@ -66,7 +66,7 @@ func planStatements(t *testing.T, p *naming.Plan) map[string]stmtCase {
 		sql, args, err := tm.ListSQL()
 		static(tm.Model+"List", sql, args, err)
 		stmts[tm.Model+"CreateDefaults"] = stmtCase{SQL: rt.InsertRender(table, nil, returning), N: 0}
-		if set := cols(tm.Settable()); len(set) > 0 {
+		if set := cols(tm.Fields); len(set) > 0 {
 			stmts[tm.Model+"CreateOne"] = stmtCase{SQL: rt.InsertRender(table, set[:1], returning), N: 1}
 			stmts[tm.Model+"CreateAll"] = stmtCase{SQL: rt.InsertRender(table, set, returning), N: len(set)}
 		}

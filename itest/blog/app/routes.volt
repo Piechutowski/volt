@@ -34,16 +34,32 @@ scope / [pipe: api, error_handler: Errors] {
 		user db.UserGet(id)
 	}
 	get /users/:id(int)/card    Users.Card    [name: card]
+	get /users/:id(int)/peers/:n(int) Users.Peers [name: peers] {
+		user  db.UserGet(id)
+		peers db.UserLatest(n)
+		more  db.UserLatest(count)
+	}
+	get /users/:id(int)/both Users.Both [name: both] {
+		latest    db.UserLatest(count)
+		described db.UserDescribed(bio, count)
+	}
 	patch /users/:id(int)/email Users.ChangeEmail [name: change_email, body: db.UserUpdate(id), only: (email)]
 	post  /login                Session.Login     [name: login, body: LoginForm]
 	get /files/:path...          Files.Serve
 
 	// Scope loads (§scope-loads): the current user, read from a header,
 	// reaches every route beneath, and a query route runs it for the halt.
+	// A limit from the path is checked before the scope load runs, one
+	// from the query string after it.
 	scope /me [name: me] {
 		load user CurrentUser
 		get /      Me.Show
 		get /peers db.UserList
+		get /picks/:n(int) Me.Picks {
+			picks db.UserLatest(n)
+		}
+		get /latest db.UserLatest
+		get /top/:limit(int) db.UserLatest [name: top]
 	}
 
 	get /tags/:name             Tags.Show    [name: tag]
@@ -59,6 +75,8 @@ scope / [pipe: api, error_handler: Errors] {
 		delete /users/:id(int) db.UserDelete
 		get    /picked           db.UserPicked
 		get    /since            db.UserSince
+		get    /latest           db.UserLatest
+		get    /described        db.UserDescribed
 	}
 
 	// A dataset (§datasets): one query route per member of the group select.
@@ -69,8 +87,9 @@ scope / [pipe: api, error_handler: Errors] {
 	// Default handlers (§default-handlers): every action is a query route over
 	// the table's generated CRUD; no controller to write.
 	scope /ref [name: ref] {
-		resources db.users [default]
-		resources db.tags  [default]
+		resources db.users    [default]
+		resources db.tags     [default]
+		resources db.profiles [default]
 	}
 
 	// The event stream (§event-routes).

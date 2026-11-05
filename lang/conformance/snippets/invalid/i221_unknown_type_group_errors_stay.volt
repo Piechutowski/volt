@@ -3,32 +3,32 @@
 package db
 
 table page_views {
-  id   int    [pk, increment]
+  id   int    [pk]
   hits int32
 }
 
 table link_clicks {
-  id   int    [pk, increment]
+  id   int    [pk]
   path string
 }
 
 table feed_reads {
-  id   int    [pk, increment]
+  id   int    [pk]
   hits int
 }
 
 table search_hits {
-  id   int    [pk, increment]
+  id   int    [pk]
   hits string
 }
 
 table raw_marks {
-  id   int    [pk, increment]
+  id   int    [pk]
   hits []byte
 }
 
 table counteds {
-  id int [pk, increment]
+  id int [pk]
 }
 
 group lacking {

@@ -4,14 +4,14 @@
 package db
 
 table page_views {
-  id int [pk, increment]
+  id int [pk]
   site string
   day int
   hits int [default: 0]
 }
 
 table link_clicks {
-  id int [pk, increment]
+  id int [pk]
   site string
   day int
   target string [default: ""]
@@ -32,12 +32,12 @@ select named   for page_views where site like "%a%" and hits in (1, 2) and not (
 select chosen  for metrics where site in :sites and day in :days
 
 table hosts {
-  id   int [pk, increment]
+  id   int [pk]
   name string
 }
 
 table visits {
-  id       int [pk, increment]
+  id       int [pk]
   host_id  int [ref: hosts.id]
   owner_id int [null]
   day      int
@@ -64,7 +64,7 @@ table merchants {
 }
 
 table merchant_periods {
-  id           int    [pk, increment]
+  id           int    [pk]
   merchant_id  int
   country_code string
 }
@@ -72,3 +72,9 @@ table merchant_periods {
 ref: merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)
 
 select placed (id, merchants.name) for merchant_periods join merchants
+
+select keyset  for visits where day < :day? or (day = :day? and id < :id?) [order: (day desc, id desc), limit: :limit]
+select picked  for page_views where id in :ids? and site like :site? [order: (id asc)]
+select visited for hosts where exists visits (day >= :from?) and not exists owned (day = 0) [order: (id asc)]
+select by_host (id, day) for visits where exists host (name = :name)
+select active  for merchants where exists merchant_periods (id > 0)

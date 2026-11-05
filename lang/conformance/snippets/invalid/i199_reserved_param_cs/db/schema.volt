@@ -1,6 +1,6 @@
 package db
 
 table marks {
-  cs    int [pk, increment]
+  cs    int [pk]
   label string
 }

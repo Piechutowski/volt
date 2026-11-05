@@ -2,14 +2,14 @@
 package db
 
 table posts {
-  id    int    [pk, increment]
+  id    int    [pk]
   title string
   slug  string
 }
 
 migration 0001__create_posts {
   create table posts {
-    id    int    [pk, increment]
+    id    int    [pk]
     title string
   }
 }

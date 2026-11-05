@@ -36,7 +36,7 @@ func scheduleFixture(t *testing.T) string {
 type kinds.Kind string from "example.com/kinds"
 
 table posts {
-  id    int [pk, increment]
+  id    int [pk]
   title string
   title string [null]
   body  string    [null]

@@ -11,11 +11,11 @@ table a [model: "Alpha"] {
 }
 
 table post {
-  id       int    [pk, increment]
+  id       int    [pk]
   tag_slug string [unique]
 }
 
 table post_tag [model: "Label"] {
-  id   int    [pk, increment]
+  id   int    [pk]
   slug string [index]
 }

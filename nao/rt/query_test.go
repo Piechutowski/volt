@@ -1,6 +1,8 @@
 package rt
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -60,8 +62,8 @@ func TestSelectRenderOperators(t *testing.T) {
 		{"in empty", id.In(), `1 = 0`, nil},
 		{"notin", id.NotIn(1), `"id" NOT IN (?)`, []any{int64(1)}},
 		{"notin empty", id.NotIn(), `1 = 1`, nil},
-		{"inlist", id.InList([]int64{1, 2}), `"id" IN (SELECT value FROM json_each(?))`, []any{"[1,2]"}},
-		{"inlist empty", id.InList(nil), `"id" IN (SELECT value FROM json_each(?))`, []any{"[]"}},
+		{"inlist", id.InList([]int64{1, 2}), `"id" IN (SELECT value FROM json_each(?))`, []any{JSONList([]int64{1, 2})}},
+		{"inlist empty", id.InList(nil), `"id" IN (SELECT value FROM json_each(?))`, []any{JSONList[int64](nil)}},
 		{"isnull", bio.IsNull(), `"bio" IS NULL`, nil},
 		{"isnotnull", bio.IsNotNull(), `"bio" IS NOT NULL`, nil},
 		{"eqcol", email.EqCol(Column[m, string]{Name: "name"}), `"email" = "name"`, nil},
@@ -143,6 +145,47 @@ func TestSelectRenderShaping(t *testing.T) {
 		t.Errorf("query = %q, want %q", query, want)
 	}
 	argsCheck(t, args, "%@x", 10, 20)
+}
+
+// A select's limit: (spec §selects-over-groups) renders after ORDER BY
+// over its value slot, and LimitCheck refuses a limit below 1, which
+// SQLite would read as none when negative.
+func TestSelectRenderLimitVal(t *testing.T) {
+	query, args, err := SelectRender(`"users"`, `"id"`, []Opt[Gen]{OrderBy(OrderTerm("id", true)), LimitVal("limit")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `SELECT "id" FROM "users" ORDER BY "id" DESC LIMIT ?`; query != want {
+		t.Errorf("query = %q, want %q", query, want)
+	}
+	argsCheck(t, args, "limit")
+	for _, n := range []int{1, 50} {
+		if err := LimitCheck(n); err != nil {
+			t.Errorf("LimitCheck(%d) = %v, want nil", n, err)
+		}
+	}
+	for _, n := range []int{0, -1} {
+		if err := LimitCheck(n); !errors.Is(err, ErrLimit) || !strings.Contains(err.Error(), fmt.Sprint(n)) {
+			t.Errorf("LimitCheck(%d) = %v, want ErrLimit naming %d", n, err, n)
+		}
+	}
+}
+
+// The dynamic layer's Limit below 1 is a rendering that fails with
+// ErrLimit (spec §generated-query-surface), as a select's limit: parameter
+// below 1 is, so LIMIT -1 never reaches SQLite as no limit at all.
+func TestSelectRenderLimitBelowOne(t *testing.T) {
+	for _, n := range []int{0, -1} {
+		query, args, err := SelectRender(`"users"`, `"id"`, []Opt[m]{OrderBy(id.Asc()), Limit[m](n)})
+		if !errors.Is(err, ErrLimit) || query != "" || args != nil {
+			t.Errorf("Limit(%d) = %q, %v, %v; want ErrLimit and no statement", n, query, args, err)
+		}
+	}
+	query, args := selectRender(t, Limit[m](1))
+	if want := `SELECT "id", "email", "bio" FROM "users" LIMIT ?`; query != want {
+		t.Errorf("Limit(1) = %q, want %q", query, want)
+	}
+	argsCheck(t, args, 1)
 }
 
 func TestSelectRenderOffsetWithoutLimit(t *testing.T) {

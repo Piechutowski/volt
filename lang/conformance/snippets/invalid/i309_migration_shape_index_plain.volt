@@ -3,14 +3,14 @@
 package db
 
 table accounts {
-  id    int    [pk, increment]
+  id    int    [pk]
   owner string [index]
   email string [unique]
 }
 
 migration 0001__create_accounts {
   create table accounts {
-    id    int    [pk, increment]
+    id    int    [pk]
     owner string
     email string [unique]
 

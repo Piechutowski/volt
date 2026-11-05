@@ -31,22 +31,19 @@ type settingSpec struct {
 }
 
 var (
-	projectSettings = settingSpec{
-		kinds: map[string]valueKind{"note": strValue},
-	}
 	tableSettings = settingSpec{
 		kinds: map[string]valueKind{"note": strValue, "model": strValue},
 	}
 	columnSettings = settingSpec{
 		kinds: map[string]valueKind{
 			"pk": flagOnly, "null": flagOnly,
-			"unique": flagOnly, "index": flagOnly, "increment": flagOnly,
+			"unique": flagOnly, "index": flagOnly, "autoincrement": flagOnly,
 			"default": defaultVal,
 			"note":    strValue, "ref": refVal, "tag": strValue,
 			"required": flagOnly,
 		},
 		repeatable: map[string]bool{"tag": true},
-		conflicts:  [][2]string{{"required", "default"}, {"required", "increment"}, {"unique", "index"}},
+		conflicts:  [][2]string{{"required", "default"}, {"unique", "index"}},
 	}
 	indexSettings = settingSpec{
 		kinds: map[string]valueKind{
@@ -207,41 +204,129 @@ func isString(n ast.Node) bool {
 	return ok && lit.Tok.Kind == token.STRING
 }
 
-func (c *checker) incrementCheck(ti *TableInfo) {
+// autoincrementCheck enforces the part of the rule that autoincrement is
+// written on the database-assigned key alone (spec §columns) that the
+// table decides by itself: the column is a rowid alias of the built-in
+// int; whether that alias is no foreign key, and so the
+// database-assigned key, is keyAssignedCheck's to decide once the
+// relationships are known.
+func (c *checker) autoincrementCheck(ti *TableInfo) {
 	pk := ti.PK()
-	compositePK := len(pk) > 1
+	alias := rowidAliasInt(ti)
 	for _, cd := range ti.Columns {
 		col := cd.Col
-		inc := col.Settings.Get("increment")
-		if inc == nil {
-			continue
-		}
 		name := col.Name.Name()
-		if !cd.Type.Known() {
-			continue
-		}
-		if cd.Type.Storage != "int" || cd.Type.Decl != nil {
-			c.errorf(inc.Pos(), "columns",
-				"increment on %q (%s): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
+		auto := col.Settings.Get("autoincrement")
+		if cd == alias || auto == nil || !cd.Type.Known() {
 			continue
 		}
 		isPK := col.Settings.Get("pk") != nil
 		switch {
-		case compositePK:
+		case cd.Type.Decl != nil && cd.Type.Storage == "int":
+			c.errorf(auto.Pos(), "columns",
+				"autoincrement on %q (%s): a declared type stored as int is the rowid alias but an ordinary key, whose value the row gives; only the database-assigned key, a rowid alias of the built-in int that is no foreign key, takes AUTOINCREMENT (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
+		case cd.Type.Storage != "int" || cd.Type.Decl != nil:
+			c.errorf(auto.Pos(), "columns",
+				"autoincrement on %q (%s): only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; a column that is not int is never the rowid alias (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
+		case len(pk) > 1 && isPK:
 			key := make([]string, len(pk))
 			for i, cd := range pk {
 				key[i] = cd.Col.Name.Name()
 			}
-			c.errorf(inc.Pos(), "columns",
-				"increment on %q in table %q, whose primary key is (%s): a composite primary key has no auto-assigned column, since SQLite auto-assigns only a single-column int key (§columns)", name, ti.Key, strings.Join(key, ", "))
-		case !isPK:
-			c.errorf(inc.Pos(), "columns",
-				"increment on %q: only the primary key auto-increments; elsewhere the keyword would be silently ignored while no changeset ever marks the column (§columns, §mapping-to-sqlite-ddl)", name)
+			c.errorf(auto.Pos(), "columns",
+				"autoincrement on %q in table %q, whose primary key is (%s): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (§columns)", name, ti.Key, strings.Join(key, ", "))
+		default:
+			c.errorf(auto.Pos(), "columns",
+				"autoincrement on %q: only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (§columns, §mapping-to-sqlite-ddl)", name)
 		}
 	}
 }
 
+// rowidAliasDefaultCheck refuses a default: on the rowid alias (spec
+// §columns, §default-values): SQLite ignores a DEFAULT on it and
+// assigns a rowid to an insert that leaves it out, so the default
+// would never be written.
+func (c *checker) rowidAliasDefaultCheck(ti *TableInfo) {
+	alias := ti.RowidAlias()
+	if alias == nil {
+		return
+	}
+	if def := alias.Col.Settings.Get("default"); def != nil {
+		c.errorf(def.Pos(), "columns",
+			"default on %q, the rowid alias of table %q: SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)", alias.Col.Name.Name(), ti.Key)
+	}
+}
+
+// keyAssignedCheck enforces what sets a built-in int rowid alias that
+// is a foreign key apart from the database-assigned key (spec §columns,
+// §records-sample-data): it takes no autoincrement, since its values
+// come from the referenced row, and every records list names it.
+// assigned is the table's database-assigned key, nil when it has none.
+// It runs on a migration shape too, which takes no records.
+func (c *checker) keyAssignedCheck(ti *TableInfo, assigned *ColumnDef, records []*ast.Records) {
+	alias := rowidAliasInt(ti)
+	if alias == nil || alias == assigned {
+		return
+	}
+	col := alias.Col
+	name := col.Name.Name()
+	if auto := col.Settings.Get("autoincrement"); auto != nil {
+		c.errorf(auto.Pos(), "columns",
+			"autoincrement on %q, the rowid alias of table %q and a foreign key: its values come from the referenced row, so the never-reuse bookkeeping of AUTOINCREMENT has nothing to assign; it is valid on the database-assigned key alone (§columns)", name, ti.Key)
+	}
+	for _, r := range records {
+		if !r.HasColumns || alias.Nullable {
+			continue
+		}
+		listed := false
+		for _, id := range r.Columns {
+			listed = listed || id.Name() == name
+		}
+		if !listed {
+			c.errorf(r.Pos(), "records-sample-data", "records of table %q do not list column %q, the rowid alias and a foreign key: its value comes from the referenced row, and only the database-assigned key leaves a column's value to the database; list the column (§records-sample-data, §columns)", ti.Key, name)
+		}
+	}
+}
+
+// keysAssignedCheck runs keyAssignedCheck over every table once the
+// relationships are resolved (spec §columns), with the records blocks
+// of each, in the table and at the top level.
+func (c *checker) keysAssignedCheck(f *ast.File) {
+	records := map[string][]*ast.Records{}
+	for _, d := range f.Decls {
+		if r, ok := d.(*ast.Records); ok && r.Table != nil {
+			records[r.Table.Name()] = append(records[r.Table.Name()], r)
+		}
+	}
+	for _, ti := range c.info.Tables {
+		rs := records[ti.Key]
+		for _, item := range ti.Decl.Body {
+			if r, ok := item.(*ast.Records); ok {
+				rs = append(rs, r)
+			}
+		}
+		assigned := c.info.KeyAssigned(ti)
+		c.keyAssignedCheck(ti, assigned, rs)
+		c.assignedRequiredCheck(ti, assigned)
+	}
+}
+
+// assignedRequiredCheck refuses required on the database-assigned key
+// (spec §columns): the database assigns it whenever an insert
+// leaves it unmarked, so its zero value is no missing value. A
+// migration shape never runs it, since required is no migration
+// setting at all (§migrations).
+func (c *checker) assignedRequiredCheck(ti *TableInfo, assigned *ColumnDef) {
+	if assigned == nil {
+		return
+	}
+	if req := assigned.Col.Settings.Get("required"); req != nil {
+		c.errorf(req.Pos(), "columns", "required on %q, the database-assigned key of table %q: the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)", assigned.Col.Name.Name(), ti.Key)
+	}
+}
+
 func (c *checker) requiredCheck(ti *TableInfo) {
+	alias := rowidAliasInt(ti)
 	for _, cd := range ti.Columns {
 		col := cd.Col
 		req := col.Settings.Get("required")
@@ -250,6 +335,9 @@ func (c *checker) requiredCheck(ti *TableInfo) {
 		}
 		name := col.Name.Name()
 		if !cd.Type.Known() {
+			continue
+		}
+		if cd == alias {
 			continue
 		}
 		if _, ok := cd.Type.RequiredKind(); !ok {

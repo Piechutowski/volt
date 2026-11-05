@@ -111,7 +111,7 @@ func TestSessionReadsWhatIsOnDisk(t *testing.T) {
 		}
 	}
 	write("go.mod", "module disk\n")
-	write("db/schema.volt", "package db\n\ntable users {\n\tid int [pk, increment]\n\temail string\n\ttitle string\n\ttitle string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t}\n}\n")
+	write("db/schema.volt", "package db\n\ntable users {\n\tid int [pk]\n\temail string\n\ttitle string\n\ttitle string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t}\n}\n")
 	write("db/checks.go", "package db\n\nfunc EmailValid(email string) error { return nil }\n")
 	sameStamp := func(name, from, to string) {
 		t.Helper()
@@ -277,7 +277,7 @@ func TestSessionBindsUnresolvedSelects(t *testing.T) {
 		return path
 	}
 	write("go.mod", "module unresolved\n")
-	schema := "package db\n\ntable authors {\n\tid int [pk, increment]\n\trank int32\n}\n\ntable tags {\n\tid int [pk, increment]\n\tname string\n}\n\nselect ranked for authors where rank >= :min\n"
+	schema := "package db\n\ntable authors {\n\tid int [pk]\n\trank int32\n}\n\ntable tags {\n\tid int [pk]\n\tname string\n}\n\nselect ranked for authors where rank >= :min\n"
 	schemaPath := write("db/schema.volt", schema)
 	routes := "package app\n\nimport (\n\tdb\n)\n\nscope /api {\n\tget /ranked db.AuthorRanked [name: RankedRows]\n\tget /ranked/:min db.AuthorRanked [name: RankedFrom]\n\tdataset db.ranked\n}\n"
 	routesPath := write("app/routes.volt", routes)

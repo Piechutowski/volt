@@ -100,7 +100,7 @@ column settings
 ==================
 
 table t {
-  a int [pk, unique, increment]
+  a int [pk, unique, autoincrement]
   b int [null]
   c string [default: "x", note: "col"]
   d time.Time [default: `now()`]
@@ -263,7 +263,7 @@ table t [
   note: "x"
 ] {
   id int [pk,
-    increment]
+    autoincrement]
   title string [
     null
   ]
@@ -513,7 +513,7 @@ two settings without a comma are an error
 ==================
 
 table t {
-  id int [pk increment]
+  id int [pk autoincrement]
 }
 
 ---

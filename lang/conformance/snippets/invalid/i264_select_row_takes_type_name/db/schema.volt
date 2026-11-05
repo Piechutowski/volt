@@ -5,7 +5,7 @@ package db
 type Summary string
 
 table page_views {
-  id   int     [pk, increment]
+  id   int     [pk]
   site string
   note Summary
 }

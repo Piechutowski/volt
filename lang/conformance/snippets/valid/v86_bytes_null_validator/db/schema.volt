@@ -5,7 +5,7 @@
 package db
 
 table attachments {
-  id    int    [pk, increment]
+  id    int    [pk]
   body  []byte [required]
   thumb []byte [null]
 

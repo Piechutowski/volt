@@ -2,9 +2,12 @@ package volt
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // QueryValue is the set of Go types a query-string parameter can carry: the
@@ -15,8 +18,9 @@ type QueryValue interface {
 }
 
 // QueryParam binds one scalar parameter from the query string by name, as a
-// generated query route does (§query-routes). A missing or unparseable value is
-// a 400 naming the parameter.
+// generated query route does (§query-routes). A missing or unparseable value,
+// a time.Time outside the years Volt stores (§go-types) and a float64 NaN,
+// which SQLite binds as NULL, included, is a 400 naming the parameter.
 func QueryParam[T QueryValue](r Request, name string) (T, error) {
 	var v T
 	vals, ok := r.Query()[name]
@@ -27,6 +31,34 @@ func QueryParam[T QueryValue](r Request, name string) (T, error) {
 		return v, Error(http.StatusBadRequest, fmt.Sprintf("query parameter %s: %v", name, err))
 	}
 	return v, nil
+}
+
+// QueryParamOptional binds an optional parameter (§predicates) from the
+// query string by name, as a generated query route or route load does
+// (§query-routes): absent when the key is missing, the parsed value of
+// its first value otherwise; a value that does not parse is a 400 naming
+// the parameter, as for QueryParam.
+func QueryParamOptional[T QueryValue](r Request, name string) (rt.Null[T], error) {
+	if vals, ok := r.Query()[name]; !ok || len(vals) == 0 {
+		return rt.Null[T]{}, nil
+	}
+	v, err := QueryParam[T](r, name)
+	if err != nil {
+		return rt.Null[T]{}, err
+	}
+	return rt.Some(v), nil
+}
+
+// LimitCheck is nil for a limit of at least 1 and otherwise the 400 naming
+// the request key it came from (§query-routes, §route-loads): a generated
+// route refuses a select's limit: parameter below 1 where it binds it, a
+// path parameter before the scope loads and a query key before the query
+// or the route's loads, since SQLite reads a negative limit as none.
+func LimitCheck(name string, n int) error {
+	if n >= 1 {
+		return nil
+	}
+	return Error(http.StatusBadRequest, fmt.Sprintf("parameter %s is a limit, at least 1, not %d", name, n))
 }
 
 // QueryParams binds a list parameter (§predicates): every value of a repeated
@@ -57,9 +89,13 @@ func parseQuery(s string, dst any) error {
 		v, err = strconv.ParseInt(s, 10, 0)
 		*d = int(v)
 	case *float64:
-		*d, err = strconv.ParseFloat(s, 64)
+		if *d, err = strconv.ParseFloat(s, 64); err == nil && math.IsNaN(*d) {
+			err = strconv.ErrSyntax
+		}
 	case *time.Time:
-		*d, err = time.Parse(time.RFC3339, s)
+		if *d, err = time.Parse(time.RFC3339, s); err == nil {
+			_, err = rt.TimeText(*d)
+		}
 	default:
 		return fmt.Errorf("unsupported parameter type %T", dst)
 	}
@@ -74,7 +110,8 @@ func typeName(dst any) string {
 }
 
 // FormatQuery renders a query-string value the way QueryParam parses it
-// (§generated-client).
+// (§generated-client), a time.Time as RFC 3339 with its fractional
+// seconds, so the instant arrives whole.
 func FormatQuery[T QueryValue](v T) string {
 	switch v := any(v).(type) {
 	case string:
@@ -82,7 +119,7 @@ func FormatQuery[T QueryValue](v T) string {
 	case bool:
 		return strconv.FormatBool(v)
 	case time.Time:
-		return v.Format(time.RFC3339)
+		return v.Format(time.RFC3339Nano)
 	case float64:
 		return strconv.FormatFloat(v, 'g', -1, 64)
 	default:

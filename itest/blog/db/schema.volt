@@ -1,7 +1,7 @@
 package db
 
 table users {
-	id         int       [pk, increment]
+	id         int       [pk]
 	email      string    [required, unique]
 	created_at time.Time [default: `CURRENT_TIMESTAMP`]
 
@@ -13,6 +13,16 @@ table users {
 
 select picked for users where id in :ids [order: (id asc)]
 select since for users where created_at > :since [order: (id asc)]
+select latest for users [order: (id desc), limit: :limit]
+
+table profiles {
+	user_id int    [pk]
+	bio     string
+}
+
+ref: profiles.user_id > users.id [delete: cascade]
+
+select described for users where exists profiles (bio like :bio?) and id >= :from? [order: (id asc)]
 
 table tags {
 	slug string [pk]
@@ -20,13 +30,13 @@ table tags {
 }
 
 table ms_revenue {
-	id   int [pk, increment]
+	id   int [pk]
 	org  string
 	year int
 }
 
 table ms_usage {
-	id   int [pk, increment]
+	id   int [pk]
 	org  string
 	year int
 }

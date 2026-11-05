@@ -17,9 +17,9 @@ var entryDesc = &Desc[entry]{
 	Table:   `"entries"`,
 	Columns: `"id", "title", "body"`,
 	Fields: []FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "title", Wire: "title", Settable: true},
-		{Column: "body", Wire: "body", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
+		{Column: "title", Wire: "title"},
+		{Column: "body", Wire: "body"},
 	},
 	Defaults: entry{Title: "untitled"},
 	Scan: func(r Row) (entry, error) {
@@ -28,6 +28,9 @@ var entryDesc = &Desc[entry]{
 	},
 	Values: func(r entry) []any { return []any{r.ID, r.Title, r.Body} },
 	Apply: func(data, vals entry, set []bool) entry {
+		if set[0] {
+			data.ID = vals.ID
+		}
 		if set[1] {
 			data.Title = vals.Title
 		}
@@ -38,6 +41,12 @@ var entryDesc = &Desc[entry]{
 	},
 	Cast: func(c Changeset[entry], p Params[entry], i int) (Changeset[entry], error) {
 		switch i {
+		case 0:
+			v, ok, err := Field(p, "id", "int", false, func(r *entry) int { return r.ID })
+			if err != nil || !ok {
+				return c, err
+			}
+			return Set(c, 0, func(r *entry) { r.ID = v }), nil
 		case 1:
 			v, ok, err := Field(p, "title", "string", false, func(r *entry) string { return r.Title })
 			if err != nil || !ok {
@@ -115,8 +124,11 @@ func TestChangesetCast(t *testing.T) {
 	if len(errs) != 2 || errs[0].Check != "unknown_field" || errs[0].Columns[0] != "nope" || errs[1].Check != "cast" || errs[1].Columns[0] != "title" {
 		t.Errorf("Cast errors = %v", errs)
 	}
-	if c.Changed(entryTitle) || !c.Changed(entryBody) || c.Changed(entryID) || c.Row().Body.Valid {
-		t.Errorf("Cast marks: title %v body %v id %v", c.Changed(entryTitle), c.Changed(entryBody), c.Changed(entryID))
+	if c.Changed(entryTitle) || !c.Changed(entryBody) || !c.Changed(entryID) || c.Row().Body.Valid || c.Row().ID != 9 {
+		t.Errorf("Cast marks: title %v body %v id %v (%d)", c.Changed(entryTitle), c.Changed(entryBody), c.Changed(entryID), c.Row().ID)
+	}
+	if keyless := NewChangeset(entryDesc).Cast(p, entryTitle, entryBody); keyless.Changed(entryID) {
+		t.Errorf("Cast set the database-assigned key its allow list leaves out")
 	}
 	var inv *Invalid
 	if err := c.Err(); !errors.As(err, &inv) || inv.Model != "Post" || len(inv.Fields) != 2 {
@@ -129,4 +141,53 @@ func TestChangesetCast(t *testing.T) {
 	if len(c.Errors()) != 2 || custom.WithFindings(nil).Errors()[2].Check != "custom" || len(custom.WithFindings(nil).Errors()) != 3 {
 		t.Errorf("ErrorAdd or WithFindings touched its receiver")
 	}
+}
+
+func TestInsertRefusesAnUnmarkedOrdinaryRowidAlias(t *testing.T) {
+	shared := *entryDesc
+	shared.Fields = []FieldDesc{
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "title", Wire: "title"},
+		{Column: "body", Wire: "body"},
+	}
+	title := func(c Changeset[entry]) Changeset[entry] { return Set(c, 1, func(r *entry) { r.Title = "t" }) }
+	var inv *Invalid
+	w := Insert(title(NewChangeset(&shared)))
+	if !errors.As(w.Err, &inv) || len(inv.Fields) != 1 || inv.Fields[0].Check != "not_null" || !reflect.DeepEqual(inv.Fields[0].Columns, []string{"id"}) || w.SQL != "" {
+		t.Errorf("Insert of an unmarked ordinary rowid alias = %+v, err %v", w, w.Err)
+	}
+	if w := Insert(title(NewChangeset(&shared)).From(entry{ID: 3, Title: "t"})); w.Err != nil || w.SQL == "" || w.Args[0] != 3 {
+		t.Errorf("Insert of a marked ordinary rowid alias = %+v, err %v", w, w.Err)
+	}
+	required := title(NewChangeset(&shared)).WithFindings([]FieldError{{Check: "required", Columns: []string{"id"}, Message: "is required"}})
+	if w := Insert(required); !errors.As(w.Err, &inv) || len(inv.Fields) != 1 || inv.Fields[0].Check != "required" {
+		t.Errorf("Insert added a second error to a key refused already: %v", w.Err)
+	}
+	if w := Insert(title(NewChangeset(entryDesc))); w.Err != nil || w.SQL == "" || len(w.Args) != 1 {
+		t.Errorf("Insert of an unmarked database-assigned key = %+v, err %v", w, w.Err)
+	}
+}
+
+// TestSetRefusesTheZeroChangeset proves a setter on a changeset no
+// constructor made panics rather than drop the write (spec §changesets).
+func TestSetRefusesTheZeroChangeset(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("Set on the zero changeset did not panic")
+		}
+	}()
+	var c Changeset[entry]
+	Set(c, 1, func(r *entry) { r.Title = "hello" })
+}
+
+// TestSetRefusesAColumnTheChangesetLacks proves a constructed changeset
+// given an index outside its columns panics rather than dropping the
+// write (spec §changesets).
+func TestSetRefusesAColumnTheChangesetLacks(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("Set with index 99 on a constructed changeset did not panic")
+		}
+	}()
+	Set(NewChangeset(entryDesc), 99, func(r *entry) { r.Title = "hello" })
 }

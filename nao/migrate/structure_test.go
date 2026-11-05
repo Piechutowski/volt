@@ -37,7 +37,7 @@ CREATE TABLE comments (
 );
 `
 
-const rebuildPosts = "rebuild table posts {\n  id int [pk, increment]\n  slug string [unique]\n  title string\n  views int [default: 0]\n\n  indexes {\n    views [where: `views > 0`]\n  }\n}"
+const rebuildPosts = "rebuild table posts {\n  id int [pk]\n  slug string [unique]\n  title string\n  views int [default: 0]\n\n  indexes {\n    views [where: `views > 0`]\n  }\n}"
 
 type diffCase struct {
 	name         string
@@ -73,7 +73,7 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		fold:   "CREATE TABLE posts (id INTEGER PRIMARY KEY);",
 		target: postsDDL,
 		want: []string{
-			"create table comments {\n  id int [pk, increment]\n  post_id int [ref: posts.id]\n  body string [null]\n}",
+			"create table comments {\n  id int [pk]\n  post_id int [ref: posts.id]\n  body string [null]\n}",
 			rebuildPosts,
 		},
 		reason:   "table comments is in the schema but not in the fold",
@@ -91,7 +91,7 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		name:   "a NULL default is no default",
 		fold:   postsDDL,
 		target: postsDDL + "CREATE TABLE notes (id INTEGER PRIMARY KEY, memo TEXT DEFAULT NULL, aside TEXT DEFAULT (null));",
-		want:   []string{"create table notes {\n  id int [pk, increment]\n  memo string [null]\n  aside string [null]\n}"},
+		want:   []string{"create table notes {\n  id int [pk]\n  memo string [null]\n  aside string [null]\n}"},
 		reason: "table notes is in the schema but not in the fold",
 	},
 	{
@@ -148,7 +148,7 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		name:     "a NOT NULL foreign key only in the schema is a rebuild",
 		fold:     strings.Replace(strings.Replace(postsDDL, "  post_id INTEGER NOT NULL,\n", "", 1), "  body TEXT,\n  FOREIGN KEY (post_id) REFERENCES posts (id)\n", "  body TEXT\n", 1),
 		target:   postsDDL,
-		want:     []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [ref: posts.id]\n  body string [null]\n}"},
+		want:     []string{"rebuild table comments {\n  id int [pk]\n  post_id int [ref: posts.id]\n  body string [null]\n}"},
 		reason:   "foreign key comments (post_id) references posts (id) is in the schema but not in the fold",
 		also:     "column comments.post_id is in the schema but not in the fold and is NOT NULL without a default, which add cannot fill",
 		unclosed: "rule 9 refuses the rebuild while comments.post_id, NOT NULL and new, has no from: or default:; the user supplies one",
@@ -157,7 +157,7 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		name:   "a foreign key with a default only in the schema is a rebuild",
 		fold:   strings.Replace(strings.Replace(postsDDL, "  post_id INTEGER NOT NULL,\n", "", 1), "  body TEXT,\n  FOREIGN KEY (post_id) REFERENCES posts (id)\n", "  body TEXT\n", 1),
 		target: strings.Replace(postsDDL, "post_id INTEGER NOT NULL", "post_id INTEGER DEFAULT 0", 1),
-		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [null, default: 0, ref: posts.id]\n  body string [null]\n}"},
+		want:   []string{"rebuild table comments {\n  id int [pk]\n  post_id int [null, default: 0, ref: posts.id]\n  body string [null]\n}"},
 		reason: "foreign key comments (post_id) references posts (id) is in the schema but not in the fold",
 		also:   "column comments.post_id is in the schema but not in the fold and is a foreign key with a default, which add cannot make",
 	},
@@ -172,22 +172,41 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		name:   "a nullability change is a rebuild",
 		fold:   strings.Replace(postsDDL, "body TEXT,", "body TEXT NOT NULL,", 1),
 		target: postsDDL,
-		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [ref: posts.id]\n  body string [null]\n}"},
+		want:   []string{"rebuild table comments {\n  id int [pk]\n  post_id int [ref: posts.id]\n  body string [null]\n}"},
 		reason: "column comments.body is nullable in the schema, NOT NULL in the fold",
 	},
 	{
-		name:   "an increment only in the schema is a rebuild",
+		name:   "a NOT NULL integer key only in the fold is a rebuild to the rowid alias",
 		fold:   strings.Replace(postsDDL, "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY,", "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY NOT NULL,", 1),
 		target: postsDDL,
 		want:   []string{rebuildPosts},
-		reason: "column posts.id is pk, increment in the schema, pk without increment in the fold",
+		reason: "column posts.id is the rowid alias, INTEGER PRIMARY KEY without NOT NULL in the schema, a NOT NULL key in the fold",
 	},
 	{
-		name:   "an increment only in the fold is a rebuild",
+		name:   "a NOT NULL integer key only in the schema is a rebuild to the bool key that lowers to it",
 		fold:   postsDDL,
 		target: strings.Replace(postsDDL, "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY,", "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY NOT NULL,", 1),
-		want:   []string{strings.Replace(rebuildPosts, "id int [pk, increment]", "id int [pk]", 1)},
-		reason: "column posts.id is pk without increment in the schema, pk, increment in the fold",
+		want:   []string{strings.Replace(rebuildPosts, "id int [pk]", "id bool [pk]", 1)},
+		reason: "column posts.id is a NOT NULL key in the schema, the rowid alias, INTEGER PRIMARY KEY without NOT NULL in the fold",
+	},
+	{
+		name:   "autoincrement only in the schema is a rebuild",
+		fold:   postsDDL,
+		target: strings.Replace(postsDDL, "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY,", "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,", 1),
+		want:   []string{strings.Replace(rebuildPosts, "id int [pk]", "id int [pk, autoincrement]", 1)},
+		reason: "column posts.id is AUTOINCREMENT in the schema, without AUTOINCREMENT in the fold",
+	},
+	{
+		name:   "autoincrement only in the fold is a rebuild",
+		fold:   strings.Replace(postsDDL, "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY,", "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,", 1),
+		target: postsDDL,
+		want:   []string{rebuildPosts},
+		reason: "column posts.id is without AUTOINCREMENT in the schema, AUTOINCREMENT in the fold",
+	},
+	{
+		name:   "autoincrement on both sides, sqlite_sequence aside, folds equal",
+		fold:   strings.Replace(postsDDL, "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY,", "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,", 1) + "INSERT INTO posts (slug, title) VALUES ('a', 'A');",
+		target: strings.Replace(postsDDL, "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY,", "CREATE TABLE posts (\n  \"id\" INTEGER /* AUTOINCREMENT */ PRIMARY KEY autoincrement,", 1),
 	},
 	{
 		name:   "a unique constraint and a unique index are one structure",
@@ -264,14 +283,14 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		name:   "a foreign key change is a rebuild",
 		fold:   strings.Replace(postsDDL, "REFERENCES posts (id)", "REFERENCES posts (id) ON DELETE CASCADE", 1),
 		target: postsDDL,
-		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [ref: posts.id]\n  body string [null]\n}"},
+		want:   []string{"rebuild table comments {\n  id int [pk]\n  post_id int [ref: posts.id]\n  body string [null]\n}"},
 		reason: "foreign key comments (post_id) references posts (id) is in the schema but not in the fold; foreign key comments (post_id) references posts (id) [delete: cascade] is in the fold but not in the schema",
 	},
 	{
 		name:   "referential actions read back as delete: and update:",
 		fold:   strings.Replace(postsDDL, "post_id INTEGER NOT NULL", "post_id INTEGER", 1),
 		target: strings.Replace(strings.Replace(postsDDL, "post_id INTEGER NOT NULL", "post_id INTEGER", 1), "REFERENCES posts (id)", "REFERENCES posts (id) ON DELETE CASCADE ON UPDATE SET NULL", 1),
-		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [null, ref: posts.id, delete: cascade, update: set_null]\n  body string [null]\n}"},
+		want:   []string{"rebuild table comments {\n  id int [pk]\n  post_id int [null, ref: posts.id, delete: cascade, update: set_null]\n  body string [null]\n}"},
 		reason: "foreign key comments (post_id) references posts (id) [delete: cascade, update: set_null] is in the schema but not in the fold",
 	},
 	{
@@ -342,7 +361,7 @@ CREATE TABLE invoices (
 );
 `,
 		want: []string{
-			"create table invoices {\n  id int [pk, increment]\n  merchant int [null]\n  country string [null]\n\n  indexes {\n    // foreign key invoices (merchant, country) references periods (merchant, country) [delete: cascade] has no shape item: write the table's CREATE TABLE with exec\n  }\n}",
+			"create table invoices {\n  id int [pk]\n  merchant int [null]\n  country string [null]\n\n  indexes {\n    // foreign key invoices (merchant, country) references periods (merchant, country) [delete: cascade] has no shape item: write the table's CREATE TABLE with exec\n  }\n}",
 		},
 		reason:   "table invoices is in the schema but not in the fold; foreign key invoices (merchant, country) references periods (merchant, country) [delete: cascade] is over several columns, which no shape body holds: write the CREATE TABLE of invoices with exec",
 		unclosed: "a shape body holds no composite foreign key; the user writes the CREATE TABLE with exec",
@@ -389,8 +408,8 @@ func TestDiff(t *testing.T) {
 	}
 }
 
-// TestDriftCloses is the promise of the drift report (spec §the-fold
-// rule 5): its operations, written into one migration after the
+// TestDriftCloses is the promise of the drift report (spec
+// §the-fold): its operations, written into one migration after the
 // migration that made the fold, pass the checker, lower, run and leave
 // no drift behind, in the order reported. The fold's migration is its
 // tables as shapeVolt renders them, so it also proves the rendering
@@ -510,9 +529,30 @@ func TestReadLeavesOutSQLiteObjects(t *testing.T) {
 	if len(s.Tables) != 1 || s.Tables[0].Name != "t" {
 		t.Fatalf("tables %+v, want t alone (no sqlite_sequence)", s.Tables)
 	}
+	if !s.Tables[0].Column("id").Autoincrement || s.Tables[0].Column("n").Autoincrement {
+		t.Errorf("columns %+v, want AUTOINCREMENT on id alone", s.Tables[0].Columns)
+	}
 	ix := s.Tables[0].Indexes
 	if len(ix) != 1 || ix[0].Name != "" || !ix[0].Unique || strings.Join(ix[0].Key, ",") != "n" {
 		t.Errorf("indexes %+v, want one unnamed unique on n", ix)
+	}
+}
+
+func TestAutoincrementRead(t *testing.T) {
+	for stmt, want := range map[string]bool{
+		"CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT)":                   true,
+		"create table t (id integer primary key autoincrement, n text)":           true,
+		"CREATE TABLE t (id INTEGER PRIMARY KEY, n TEXT DEFAULT 'AUTOINCREMENT')": false,
+		`CREATE TABLE t (id INTEGER PRIMARY KEY, "autoincrement" TEXT)`:           false,
+		"CREATE TABLE t (id INTEGER PRIMARY KEY, n TEXT) -- AUTOINCREMENT":        false,
+		"CREATE TABLE t (id INTEGER PRIMARY KEY /* AUTOINCREMENT */, n TEXT)":     false,
+		"CREATE TABLE t (id INTEGER PRIMARY KEY, autoincrement_at TEXT)":          false,
+		"CREATE TABLE t (id INTEGER PRIMARY KEY /* x */ AUTOINCREMENT)":           true,
+		"CREATE TABLE t (id INTEGER PRIMARY KEY, [n AUTOINCREMENT] TEXT)":         false,
+	} {
+		if got := autoincrementRead(stmt); got != want {
+			t.Errorf("autoincrementRead(%q) = %v, want %v", stmt, got, want)
+		}
 	}
 }
 

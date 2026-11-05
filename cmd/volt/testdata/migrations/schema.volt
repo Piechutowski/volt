@@ -3,14 +3,14 @@
 package blog
 
 table posts {
-  id    int    [pk, increment]
+  id    int    [pk]
   title string
   body  string [null]
   views int    [index, default: 0]
 }
 
 table comments {
-  id      int    [pk, increment]
+  id      int    [pk]
   post_id int    [ref: posts.id]
   body    string
 }

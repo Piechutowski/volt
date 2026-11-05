@@ -28,9 +28,9 @@ var voltUserDesc = &rt.Desc[User]{
 	Table:   `"users"`,
 	Columns: `"id", "user_name", "bio"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "user_name", Wire: "userName", Settable: true},
-		{Column: "bio", Wire: "bio", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
+		{Column: "user_name", Wire: "userName"},
+		{Column: "bio", Wire: "bio"},
 	},
 	Scan:   voltUserScan,
 	Values: voltUserValues,
@@ -45,6 +45,10 @@ func UserNew() UserChangeset { return UserChangeset{rt.NewChangeset(voltUserDesc
 func (r User) Changeset() UserChangeset { return UserChangeset{rt.ChangesetOf(voltUserDesc, r)} }
 
 func (c UserChangeset) From(r User) UserChangeset { return UserChangeset{c.Changeset.From(r)} }
+
+func (c UserChangeset) IDSet(v int) UserChangeset {
+	return UserChangeset{rt.Set(c.Changeset, 0, func(voltR *User) { voltR.ID = v })}
+}
 
 func (c UserChangeset) UserNameSet(v string) UserChangeset {
 	return UserChangeset{rt.Set(c.Changeset, 1, func(voltR *User) { voltR.UserName = v })}
@@ -72,6 +76,9 @@ func voltUserValues(voltR User) []any { return []any{voltR.ID, voltR.UserName, v
 
 func voltUserApply(voltData, voltVals User, voltSet []bool) User {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.UserName = voltVals.UserName
 	}
@@ -83,6 +90,12 @@ func voltUserApply(voltData, voltVals User, voltSet []bool) User {
 
 func voltUserCast(c rt.Changeset[User], p rt.Params[User], i int) (rt.Changeset[User], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *User) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return UserChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "userName", "string", false, func(voltR *User) string { return voltR.UserName })
 		if voltErr != nil || !voltOK {

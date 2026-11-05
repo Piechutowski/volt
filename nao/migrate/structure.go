@@ -32,13 +32,16 @@ type Table struct {
 	Indexes     []Index      // compared by key, uniqueness and predicate
 }
 
-// Column is one column as PRAGMA table_xinfo reports it.
+// Column is one column as PRAGMA table_xinfo reports it, and whether
+// the table's CREATE TABLE text gives it AUTOINCREMENT, which no PRAGMA
+// reports (spec §the-fold).
 type Column struct {
-	Name    string
-	Type    string // the declared type as written
-	NotNull bool
-	Default string // the default as SQLite stores it; "" when none or NULL (spec §default-values)
-	PK      int    // 1-based position in the primary key; 0 outside it
+	Name          string
+	Type          string // the declared type as written
+	NotNull       bool
+	Default       string // the default as SQLite stores it; "" when none or NULL (spec §default-values)
+	PK            int    // 1-based position in the primary key; 0 outside it
+	Autoincrement bool
 }
 
 // ForeignKey is one foreign key as PRAGMA foreign_key_list reports it.
@@ -136,6 +139,13 @@ func tableRead(ctx context.Context, db *sql.DB, name string) (Table, error) {
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return t, err
+	}
+	var text string
+	if err := db.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", name).Scan(&text); err != nil {
+		return t, err
+	}
+	if key := pkColumns(&t); len(key) == 1 && autoincrementRead(text) {
+		t.Column(key[0]).Autoincrement = true
 	}
 	if t.ForeignKeys, err = foreignKeysRead(ctx, db, name); err != nil {
 		return t, err
@@ -301,6 +311,45 @@ func indexSQLParse(stmt string) (key []string, where string) {
 		}
 	}
 	return key, where
+}
+
+// autoincrementRead reports whether a CREATE TABLE statement carries the
+// AUTOINCREMENT keyword outside its quoted names, strings and comments
+// (spec §the-fold): SQLite takes it only on the table's one INTEGER
+// PRIMARY KEY column.
+func autoincrementRead(stmt string) bool {
+	for i := 0; i < len(stmt); i++ {
+		switch c := stmt[i]; {
+		case c == '\'' || c == '"' || c == '`' || c == '[':
+			i = quotedEnd(stmt, i)
+		case strings.HasPrefix(stmt[i:], "--"):
+			if j := strings.IndexByte(stmt[i:], '\n'); j >= 0 {
+				i += j
+			} else {
+				i = len(stmt)
+			}
+		case strings.HasPrefix(stmt[i:], "/*"):
+			if j := strings.Index(stmt[i+2:], "*/"); j >= 0 {
+				i += j + 3
+			} else {
+				i = len(stmt)
+			}
+		case wordByte(c):
+			j := i
+			for j < len(stmt) && wordByte(stmt[j]) {
+				j++
+			}
+			if strings.EqualFold(stmt[i:j], "AUTOINCREMENT") {
+				return true
+			}
+			i = j - 1
+		}
+	}
+	return false
+}
+
+func wordByte(c byte) bool {
+	return c == '_' || c == '$' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= 0x80
 }
 
 // quotedEnd returns the index of the closing quote of the quoted run
@@ -577,10 +626,13 @@ func columnDiff(tt, ft *Table, target, fold Column) []string {
 	}
 	switch {
 	case target.NotNull == fold.NotNull:
-	case isIncrement(tt, target) || isIncrement(ft, fold):
-		out = append(out, fmt.Sprintf("%s is %s in the schema, %s in the fold", at, incrementness(tt, target), incrementness(ft, fold)))
+	case isRowidAlias(tt, target) || isRowidAlias(ft, fold):
+		out = append(out, fmt.Sprintf("%s is %s in the schema, %s in the fold", at, keyness(tt, target), keyness(ft, fold)))
 	default:
 		out = append(out, fmt.Sprintf("%s is %s in the schema, %s in the fold", at, nullness(target.NotNull), nullness(fold.NotNull)))
+	}
+	if target.Autoincrement != fold.Autoincrement {
+		out = append(out, fmt.Sprintf("%s is %s in the schema, %s in the fold", at, autoincrementness(target.Autoincrement), autoincrementness(fold.Autoincrement)))
 	}
 	if target.Default != fold.Default {
 		out = append(out, fmt.Sprintf("%s defaults to %s in the schema, %s in the fold", at, defaultDescribe(target.Default), defaultDescribe(fold.Default)))
@@ -594,18 +646,28 @@ func columnDiff(tt, ft *Table, target, fold Column) []string {
 	return out
 }
 
-func isIncrement(t *Table, c Column) bool {
+// isRowidAlias reports whether c is the rowid alias as Volt writes it
+// (spec §mapping-to-sqlite-ddl): the one INTEGER column of the primary
+// key, without NOT NULL.
+func isRowidAlias(t *Table, c Column) bool {
 	return c.PK == 1 && len(pkColumns(t)) == 1 && strings.EqualFold(c.Type, "INTEGER") && !c.NotNull
 }
 
-func incrementness(t *Table, c Column) string {
+func keyness(t *Table, c Column) string {
 	switch {
-	case isIncrement(t, c):
-		return "pk, increment"
+	case isRowidAlias(t, c):
+		return "the rowid alias, INTEGER PRIMARY KEY without NOT NULL"
 	case c.PK != 0:
-		return "pk without increment"
+		return "a NOT NULL key"
 	}
 	return nullness(c.NotNull)
+}
+
+func autoincrementness(auto bool) string {
+	if auto {
+		return "AUTOINCREMENT"
+	}
+	return "without AUTOINCREMENT"
 }
 
 func nullness(notNull bool) string {
@@ -817,22 +879,27 @@ func pkColumns(t *Table) []string {
 }
 
 // columnVolt renders one column as a migration writes it (spec
-// §migrations): the built-in type, pk on every column of the
-// primary key and increment for a rowid alias, null for a nullable
+// §migrations): the built-in type, bool for the one INTEGER column of
+// a key that is NOT NULL, since int [pk] is the rowid alias without
+// NOT NULL and bool [pk] the one shape that lowers to it, pk on every column of the
+// primary key and autoincrement where SQLite reports it, null for a nullable
 // column outside the primary key, unique or index for the index of the
 // column alone, default: and ref: for a one-column foreign key with its
 // delete: and update: actions.
 func columnVolt(t *Table, c Column) string {
 	typ := sqlite.TypeVolt(c.Type)
-	if typ == "" {
+	switch {
+	case typ == "":
 		typ = c.Type
+	case typ == "int" && c.NotNull && c.PK == 1 && len(pkColumns(t)) == 1:
+		typ = "bool"
 	}
 	var settings []string
 	switch {
 	case c.PK > 0:
 		settings = append(settings, "pk")
-		if isIncrement(t, c) {
-			settings = append(settings, "increment")
+		if c.Autoincrement {
+			settings = append(settings, "autoincrement")
 		}
 	case !c.NotNull:
 		settings = append(settings, "null")

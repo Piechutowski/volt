@@ -18,10 +18,6 @@ table users {
   }
 }
 
-project blog [note: "the blog schema"] {
-  database_type: "SQLite"
-}
-
 type PostStatus string
 type CoreKind string
 

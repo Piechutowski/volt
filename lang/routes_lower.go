@@ -279,6 +279,9 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 		l.errorf(pos, "datasets", "only: and except: cannot both be set on a dataset (§dataset-settings)")
 		return nil
 	}
+	if !l.datasetOptionalsRefuse(ds, si, inh.prefix, qual, local) {
+		return nil
+	}
 
 	var out []*RouteInfo
 	for _, m := range si.Members {
@@ -311,6 +314,9 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 		if qr == nil {
 			continue
 		}
+		if !l.scopeLoadKeysRefuse(ds.Pos(), qr, inh.loads, true) {
+			return nil
+		}
 		helper := inh.namePrefix + method
 		out = append(out, &RouteInfo{
 			Method:       "GET",
@@ -328,6 +334,36 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 		})
 	}
 	return out
+}
+
+// datasetOptionalsRefuse reports, once for the dataset, an optional
+// parameter of its select that no member's route can bind (spec
+// §dataset-declaration): an optional list, or one a scope prefix
+// parameter names.
+func (l *routeLowering) datasetOptionalsRefuse(ds *ast.Dataset, si *SelectInfo, prefix []*ast.Segment, qual string, local bool) bool {
+	ref := ds.Name.Name()
+	if !local {
+		ref = qual + "." + ref
+	}
+	inPrefix := map[string]bool{}
+	for _, seg := range prefix {
+		if seg.Kind != ast.SegLit {
+			inPrefix[seg.Name.Name()] = true
+		}
+	}
+	ok := true
+	for _, p := range si.Params {
+		switch {
+		case !p.Optional:
+		case strings.HasPrefix(p.GoType, "[]"):
+			l.errorf(ds.Name.Pos(), "datasets", "select %s takes the optional list parameter %q, which no dataset's route carries: a missing key and an empty list cannot be told apart in a query string, and an absent list matches every row where an empty one matches none; call the select from Go (§dataset-declaration)", ref, p.GoName)
+			ok = false
+		case inPrefix[p.GoName]:
+			l.errorf(ds.Pos(), "datasets", "parameter %q of select %s is optional, and the scope prefix parameter %q is a path segment, always present; declare the dataset in a scope without that prefix parameter, so the key binds from the query string, or name a second select whose parameter is required (§dataset-declaration)", p.GoName, ref, p.GoName)
+			ok = false
+		}
+	}
+	return ok
 }
 
 func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
@@ -375,7 +411,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		events = true
 	case controller == "":
 		query = l.queryRef(r, method, params, l.facts.pkgName, l.facts.pkgPath, true)
-		if query == nil {
+		if query == nil || !l.scopeLoadKeysRefuse(r.Handler.Pos(), query, inh.loads, false) {
 			return nil
 		}
 		controller, action = "", query.Method
@@ -385,7 +421,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	default:
 		if kind == qualImport {
 			query = l.queryRef(r, method, params, controller, target, false)
-			if query == nil {
+			if query == nil || !l.scopeLoadKeysRefuse(r.Handler.Pos(), query, inh.loads, false) {
 				return nil
 			}
 			controller, action = "", query.Method
@@ -489,6 +525,24 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		Timeout:      timeout,
 		Pos:          r.Pos(),
 	}
+}
+
+// scopeLoadKeysRefuse reports a parameter of a query route or a dataset
+// that binds from the query string by the name of a scope load above it
+// (spec §scope-loads): the route drops the load's value, so the client
+// would choose the value the name stands for.
+func (l *routeLowering) scopeLoadKeysRefuse(pos token.Position, q *QueryRef, loads []ScopeLoad, dataset bool) bool {
+	what, cite := "a query route", "§query-routes"
+	if dataset {
+		what, cite = "a dataset's route", "§datasets"
+	}
+	for _, p := range q.Params {
+		if (p.Source == FromQuery || p.Source == FromList) && scopeLoadNamed(loads, p.Name) {
+			l.errorf(pos, "scope-loads", "parameter %q of %s binds from the query string by the name of a scope load above the route, whose value %s drops, so the client would choose it; name the parameter otherwise, or route through a controller that receives the load (§scope-loads, %s)", p.Name, q.Method, what, cite)
+			return false
+		}
+	}
+	return true
 }
 
 func routeKindArticled(query *QueryRef, events bool) string {
@@ -597,8 +651,8 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	qr := &QueryRef{Qualifier: qual, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200}
 
 	type sigParam struct {
-		name, goType string
-		body, key    bool
+		name, goType                string
+		body, key, limits, optional bool
 	}
 	var sig []sigParam
 	found, op := false, ""
@@ -607,7 +661,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	if si, m, ok := l.selectByMethod(target, name); ok {
 		found, op, dropped = true, "select", si.droppedParams
 		for _, p := range si.Params {
-			sig = append(sig, sigParam{name: p.GoName, goType: p.GoType})
+			sig = append(sig, sigParam{name: p.GoName, goType: p.GoType, limits: p.GoName == si.LimitParam, optional: p.Optional})
 		}
 		switch {
 		case si.With != nil:
@@ -679,10 +733,27 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 			qr.Unresolved = true
 			continue
 		}
-		qp := QueryParam{Name: sp.name, GoType: sp.goType}
+		qp := QueryParam{Name: sp.name, GoType: sp.goType, Limit: sp.limits, Optional: sp.optional}
 		switch {
 		case sp.body:
 			qp.Source = FromBody
+		case sp.optional:
+			qp.Source = FromQuery
+			pp, inPath := byName[sp.name]
+			if inPath {
+				bound[sp.name] = true
+			}
+			switch {
+			case strings.HasPrefix(sp.goType, "[]"):
+				l.errorf(pos, "query-routes", "%s takes the optional list parameter %q, which a route cannot carry: a missing key and an empty list cannot be told apart in a query string, and an absent list matches every row where an empty one matches none; call the select from Go (§query-routes)", ref, sp.name)
+				ok = false
+			case inPath:
+				l.errorf(segAt.pos(pp.Name), "query-routes", "parameter %q of %s is optional, and a path segment is always present; pass it in the query string, or route a second select whose parameter is required (§query-routes)", sp.name, ref)
+				ok = false
+			case !queryValueTypes[sp.goType]:
+				l.errorf(pos, "query-routes", "parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, qp.Type())
+				ok = false
+			}
 		case strings.HasPrefix(sp.goType, "[]"):
 			qp.Source = FromList
 			if pp, inPath := byName[sp.name]; inPath {
@@ -690,7 +761,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 				ok = false
 			}
 			if !queryValueTypes[strings.TrimPrefix(sp.goType, "[]")] {
-				l.errorf(pos, "query-routes", "list parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, sp.goType)
+				l.errorf(pos, "query-routes", "list parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, qp.Type())
 				ok = false
 			}
 		default:
@@ -718,7 +789,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 			} else {
 				qp.Source = FromQuery
 				if !queryValueTypes[sp.goType] {
-					l.errorf(pos, "query-routes", "parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, sp.goType)
+					l.errorf(pos, "query-routes", "parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, qp.Type())
 					ok = false
 				}
 			}
@@ -1098,6 +1169,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 			FromResources: true,
 			ScopeLoads:    inh.loads,
 			Table:         tableName,
+			collection:    a.Name == "Index",
 		}
 		if qr != nil {
 			r.Controller, r.Action = "", ""

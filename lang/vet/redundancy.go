@@ -91,7 +91,7 @@ type emptyBodyRule struct{ meta }
 
 var emptyBody = &emptyBodyRule{meta{
 	name: "emptybody",
-	doc:  "reports empty indexes and validators blocks and a project with neither properties nor a note",
+	doc:  "reports empty indexes and validators blocks",
 }}
 
 func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
@@ -105,10 +105,6 @@ func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagn
 		case *ast.ValidatorsBlock:
 			if len(n.Validators) == 0 {
 				out = append(out, r.warnf(n.Pos(), "empty validators block"))
-			}
-		case *ast.Project:
-			if len(n.Props) == 0 && n.Settings.Get("note") == nil {
-				out = append(out, r.warnf(n.Pos(), "empty project: no properties and no note"))
 			}
 		}
 	}

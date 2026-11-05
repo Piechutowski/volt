@@ -227,6 +227,18 @@ func (c *checker) fileRules(pkg *Package) {
 	}
 }
 
+// generatedImportNames are the names the route files and the client import
+// the standard library and the runtime under, each with what it names
+// there; no import qualifier takes one (§imports).
+var generatedImportNames = map[string]string{
+	"context": "the standard library's context",
+	"http":    "net/http",
+	"rt":      "the data runtime nao/rt",
+	"run":     "the runner nao/run",
+	"time":    "the standard library's time",
+	"volt":    "the root volt package",
+}
+
 func (c *checker) importsResolve(pkg *Package) {
 	byPath := map[string]*ast.ImportSpec{}
 	for _, f := range pkg.Files {
@@ -249,6 +261,9 @@ func (c *checker) importsResolve(pkg *Package) {
 				qual := spec.Qualifier()
 				if spec.Alias != nil && !goIdentOK(qual) {
 					c.errorf(spec.Alias.Pos(), "imports", "import alias %q is not an identifier of ASCII letters, digits and underscores (§imports)", qual)
+				}
+				if what := generatedImportNames[qual]; what != "" {
+					c.errorf(spec.Pos(), "imports", "import qualifier %q is the name the generated route files and client import %s under (§imports); alias the import: %s %s", qual, what, qual+"db", path)
 				}
 				if prev, taken := pkg.Imports[qual]; taken && prev != path {
 					c.errorf(spec.Pos(), "imports", "import qualifier %q already used for package %q (§imports); alias one of them", qual, prev)
@@ -397,7 +412,7 @@ func (c *checker) routing(pkg *Package) {
 	c.typesRouterCheck(pkg)
 
 	for _, spec := range pkg.importSpecs {
-		if _, resolved := pkg.Imports[spec.Qualifier()]; resolved && !c.usedQual[spec.Qualifier()] {
+		if _, resolved := pkg.Imports[spec.Qualifier()]; resolved && !c.usedQual[spec.Qualifier()] && generatedImportNames[spec.Qualifier()] == "" {
 			c.errorf(spec.Pos(), "imports", "package %q imported and not used (§imports)", spec.PathString())
 		}
 	}
@@ -563,7 +578,7 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 func (c *checker) scopeLoad(ld *ast.ScopeLoad, above []ScopeLoad) (ScopeLoad, bool) {
 	name := ld.Name.Name()
 	if !loadNameOK(name) {
-		c.errorf(ld.Name.Pos(), "scope-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§scope-loads, §route-paths)", name)
+		c.errorf(ld.Name.Pos(), "scope-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier and no Go keyword, that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), not a predeclared Go identifier (string, int, len, nil and the rest), and not shaped like a generated local (§scope-loads, §route-paths)", name)
 		return ScopeLoad{}, false
 	}
 	if loadNameQualifier(name, c.pkg.Name, c.pkg.Imports) {
@@ -583,6 +598,10 @@ func (c *checker) scopeLoad(ld *ast.ScopeLoad, above []ScopeLoad) (ScopeLoad, bo
 		return ScopeLoad{}, false
 	}
 	fn := ld.Ref.Parts[0].Name()
+	if scopeLoadNamed(above, fn) {
+		c.errorf(ld.Ref.Pos(), "scope-loads", "scope load %q calls %s, the name of an earlier load of this scope or of a load of one above it, whose value the shim holds under that name when it calls %s (§scope-loads)", name, fn, fn)
+		return ScopeLoad{}, false
+	}
 	const want = "func %s(r volt.Request) volt.Load[T]"
 	sc := c.goFuncs(c.pkg)
 	gf, found := sc.funcs[fn]
@@ -800,7 +819,7 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 				c.errorf(r.Pos, "resources", "resources %q: the collection and member reverse-URL helpers are both %q, because singularizing %q does not change it (§table-resolution); set the singular explicitly, e.g. [singular: <name>]",
 					prev.Table, r.HelperName, prev.Table)
 			} else {
-				c.errorf(r.Pos, "scopes-and-routes", "reverse-URL helper or client method %q already produced by the route at %s (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name", name, prev.Pos)
+				c.errorf(r.Pos, "scopes-and-routes", "reverse-URL helper or client method %q already produced by the route at %s (§route-names-and-reverse-urls, §generated-client); disambiguate with %s", name, prev.Pos, r.renameWith())
 			}
 			r.HelperName, r.ClientName = "", ""
 		} else {
@@ -811,7 +830,7 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 		r.ClientName = r.HelperName
 	}
 	if what, taken := voltClientNames[r.ClientName]; taken {
-		c.errorf(r.Pos, "scopes-and-routes", "client method %q would take the name of the embedded volt.Client's %s (§generated-client); rename the route with [name:] or a scope name", r.ClientName, what)
+		c.errorf(r.Pos, "generated-client", "client method %q would take the name of the embedded volt.Client's %s (§generated-client); rename the route with %s", r.ClientName, what, r.renameWith())
 	}
 
 	r.ord = len(c.pkg.Routes)
@@ -835,6 +854,16 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Params: r.Params, Body: r.Body, Loads: r.Loads, ScopeLoads: r.ScopeLoads, Routes: []*RouteInfo{&r}})
 	}
 	c.routeAccept(&r)
+}
+
+func (r *RouteInfo) renameWith() string {
+	switch {
+	case r.FromDataset, r.collection:
+		return "a scope name"
+	case r.FromResources:
+		return "[singular:] or a scope name"
+	}
+	return "[name:] or a scope name"
 }
 
 func (c *checker) routeAccept(r *RouteInfo) {
@@ -1107,6 +1136,7 @@ var voltClientNames = map[string]string{
 	"Base":   "field Base",
 	"HTTP":   "field HTTP",
 	"Format": "field Format",
+	"Header": "field Header",
 	"Do":     "method Do",
 	"Raw":    "method Raw",
 	"Stream": "method Stream",

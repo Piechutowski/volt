@@ -14,12 +14,15 @@ const (
 	SymPartial
 	SymColumn
 	SymType
+	SymRelation
 )
 
 // SymbolID names one symbol. Tables, partials and declared types use
 // their name; columns live in a container, "table:<name>" for direct
 // definitions or "partial:<name>" for columns defined in a TablePartial,
-// so every table sharing the partial shares the symbol.
+// so every table sharing the partial shares the symbol; a relation a
+// ref's as: or reverse: names, or a column's name gives, lives in the
+// table it is a relation of (spec §relationships-ref).
 type SymbolID struct {
 	Kind      SymKind
 	Container string
@@ -43,9 +46,11 @@ type Index struct {
 	Info     *check.Info
 
 	decls map[SymbolID]*ast.Ident
+	preds map[string]*ast.Pred
 
 	declTables map[string]*tableOccs
 	recording  *[]declEntry
+	vias       map[*ast.Ident]string
 }
 
 // IndexMemo remembers a package's per-table occurrences across builds
@@ -125,6 +130,14 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		Partials: map[string]*check.PartialInfo{},
 		Info:     info,
 		decls:    map[SymbolID]*ast.Ident{},
+		preds:    map[string]*ast.Pred{},
+	}
+	for _, d := range f.Decls {
+		if p, ok := d.(*ast.Pred); ok && p.Name != nil {
+			if _, dup := ix.preds[p.Name.Name()]; !dup {
+				ix.preds[p.Name.Name()] = p
+			}
+		}
 	}
 	for _, ti := range info.Tables {
 		ix.Tables[ti.Key] = ti
@@ -215,6 +228,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		case *ast.Ref:
 			ix.walkEndpoint(n.Left)
 			ix.walkEndpoint(n.Right)
+			ix.relationDecls(n)
 		case *ast.Select:
 			if ti := ix.Tables[n.Target.Name()]; ti != nil {
 				rels := n.Joins
@@ -222,9 +236,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 					rels = append(append([]*ast.Ident{}, rels...), n.With)
 				}
 				for _, rel := range rels {
-					if r, _ := ix.Info.Relation(ti.Key, rel.Name()); r != nil {
-						ix.add(SymbolID{SymTable, "", r.Table.Key}, rel, false)
-					}
+					ix.addRelation(ti, rel)
 				}
 				for _, col := range n.Cols {
 					ix.addColRef(ti, "", col)
@@ -399,6 +411,72 @@ func (ix *Index) walkPredCols(ti *check.TableInfo, partial string, x ast.PredExp
 		ix.addColRef(ti, partial, x.Col)
 	case *ast.PredNull:
 		ix.addColRef(ti, partial, x.Col)
+	case *ast.PredExists:
+		if ti == nil || ix.Info == nil {
+			return
+		}
+		r, _ := ix.Info.Relation(ti.Key, x.Rel.Name())
+		if r == nil {
+			return
+		}
+		ix.addRelation(ti, x.Rel)
+		ix.walkPredCols(r.Table, "", x.X)
+	case *ast.PredRef:
+		ix.walkPredRelations(ti, x, map[string]bool{})
+	}
+}
+
+// walkPredRelations records the relations a pred body names where a
+// select over ti reads it (spec §predicates, §relationships-ref): the
+// relation of an exists term and the qualifier of a column, through the
+// preds it names in turn, each read once, so a rename of the relation,
+// or of the table that names it, renames them with it. The columns of a
+// pred body are left alone (editor.md section 7).
+func (ix *Index) walkPredRelations(ti *check.TableInfo, x ast.PredExpr, seen map[string]bool) {
+	if ti == nil || ix.Info == nil {
+		return
+	}
+	col := func(cr *ast.ColRef) {
+		if cr != nil && cr.Qual != nil {
+			if r, _ := ix.Info.Relation(ti.Key, cr.Qual.Name()); r != nil {
+				ix.addRelation(ti, cr.Qual)
+			}
+		}
+	}
+	switch x := x.(type) {
+	case *ast.PredBinary:
+		ix.walkPredRelations(ti, x.X, seen)
+		ix.walkPredRelations(ti, x.Y, seen)
+	case *ast.PredNot:
+		ix.walkPredRelations(ti, x.X, seen)
+	case *ast.PredParen:
+		ix.walkPredRelations(ti, x.X, seen)
+	case *ast.PredCompare:
+		for _, side := range []ast.Operand{x.X, x.Y} {
+			if cr, ok := side.(*ast.ColRef); ok {
+				col(cr)
+			}
+		}
+	case *ast.PredIn:
+		col(x.Col)
+	case *ast.PredLike:
+		col(x.Col)
+	case *ast.PredNull:
+		col(x.Col)
+	case *ast.PredExists:
+		r, _ := ix.Info.Relation(ti.Key, x.Rel.Name())
+		if r == nil {
+			return
+		}
+		ix.addRelation(ti, x.Rel)
+		ix.walkPredRelations(r.Table, x.X, seen)
+	case *ast.PredRef:
+		p := ix.preds[x.Name.Name()]
+		if p == nil || seen[p.Name.Name()] {
+			return
+		}
+		seen[p.Name.Name()] = true
+		ix.walkPredRelations(ti, p.X, seen)
 	}
 }
 
@@ -432,8 +510,101 @@ func (ix *Index) addColRef(ti *check.TableInfo, partial string, cr *ast.ColRef) 
 	if r == nil {
 		return
 	}
-	ix.add(SymbolID{SymTable, "", r.Table.Key}, cr.Qual, false)
+	ix.addRelation(ti, cr.Qual)
 	ix.addColumnRef(r.Table, "", cr.Name)
+}
+
+// addRelation records a use of the relation of ti that id names (spec
+// §relationships-ref): of the relation itself when a ref's as: or
+// reverse: names it or a column's name gives it, and of the table it
+// leads to when the name is that table's, so a rename of the table
+// renames the relation it names with it.
+func (ix *Index) addRelation(ti *check.TableInfo, id *ast.Ident) {
+	r, _ := ix.Info.Relation(ti.Key, id.Name())
+	if r == nil {
+		return
+	}
+	switch named, column := relationNaming(r); {
+	case named != nil || column != "":
+		ix.add(SymbolID{SymRelation, ti.Key, r.Name}, id, false)
+	default:
+		ix.add(SymbolID{SymTable, "", r.Table.Key}, id, false)
+		if ix.vias == nil {
+			ix.vias = map[*ast.Ident]string{}
+		}
+		ix.vias[id] = ti.Key
+	}
+}
+
+// Via is the relation an occurrence of a table names when the relation
+// takes the table's name (spec §relationships-ref), the zero SymbolID
+// for any other identifier.
+func (ix *Index) Via(id *ast.Ident) SymbolID {
+	table, ok := ix.vias[id]
+	if !ok {
+		return SymbolID{}
+	}
+	return SymbolID{SymRelation, table, id.Name()}
+}
+
+// relationNaming is what gives a relation its name (spec
+// §relationships-ref): the as: or reverse: of its ref, or, for a forward
+// relation over one column, that column, whose name the relation's
+// derives from; neither when the name is the table's.
+func relationNaming(r *check.RelationInfo) (named *ast.Ident, column string) {
+	setting := "reverse"
+	if r.Forward {
+		setting = "as"
+	}
+	if ref, ok := r.Ref.Node.(*ast.Ref); ok && ref.Settings != nil {
+		if s := ref.Settings.Get(setting); s != nil {
+			if id, ok := s.Value.(*ast.Ident); ok {
+				return id, ""
+			}
+		}
+	}
+	if r.Forward && len(r.Ref.FK.Columns) == 1 {
+		return nil, r.Ref.FK.Columns[0]
+	}
+	return nil, ""
+}
+
+// relationDecls records the as: and reverse: of a ref as the
+// declarations of the relations they name (spec §relationships-ref).
+func (ix *Index) relationDecls(n *ast.Ref) {
+	if ix.Info == nil || n.Settings == nil {
+		return
+	}
+	for _, ri := range ix.Info.Refs {
+		if ri.Node != ast.Node(n) || ri.FK.Table == nil || ri.Target.Table == nil {
+			continue
+		}
+		for _, side := range []struct {
+			setting string
+			table   *check.TableInfo
+		}{{"as", ri.FK.Table}, {"reverse", ri.Target.Table}} {
+			if s := n.Settings.Get(side.setting); s != nil {
+				if id, ok := s.Value.(*ast.Ident); ok {
+					ix.add(SymbolID{SymRelation, side.table.Key, id.Name()}, id, true)
+				}
+			}
+		}
+	}
+}
+
+// RelationColumn is the column a relation's name derives from, "" when
+// a ref's as: or reverse: or the table's name gives it (spec
+// §relationships-ref): such a relation renames only by giving it as:.
+func (ix *Index) RelationColumn(id SymbolID) string {
+	if id.Kind != SymRelation || ix.Info == nil {
+		return ""
+	}
+	r, _ := ix.Info.Relation(id.Container, id.Name)
+	if r == nil {
+		return ""
+	}
+	_, column := relationNaming(r)
+	return column
 }
 
 func (ix *Index) walkSettings(s *ast.SettingList) {

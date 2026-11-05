@@ -3,7 +3,7 @@
 package db
 
 table posts {
-  id    int [pk, increment]
+  id    int [pk]
   views int
 }
 

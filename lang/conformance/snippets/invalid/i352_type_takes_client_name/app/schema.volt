@@ -6,7 +6,7 @@ type Client    string
 type NewClient string
 
 table posts {
-  id int       [pk, increment]
+  id int       [pk]
   a  Client
   b  NewClient
 }

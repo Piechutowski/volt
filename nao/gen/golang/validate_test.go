@@ -14,7 +14,7 @@ import (
 // type's driver.Valuer by rt.Blank, since the generator cannot know the
 // type's zero value.
 func TestValidateRequiredDeclaredType(t *testing.T) {
-	src := "package shop\n\ntype Cents int\n\ntable posts {\n  id int [pk, increment]\n  price Cents [required]\n  title string [required]\n}\n"
+	src := "package shop\n\ntype Cents int\n\ntable posts {\n  id int [pk]\n  price Cents [required]\n  title string [required]\n}\n"
 	f, diags := parser.ParseFile("shop.volt", src)
 	info, semDiags := check.File(f)
 	if diag.HasErrors(append(diags, semDiags...)) {

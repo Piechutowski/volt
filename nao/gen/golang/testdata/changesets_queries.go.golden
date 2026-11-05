@@ -85,3 +85,31 @@ const voltPingDeleteSQL = `DELETE FROM "pings" WHERE "id" = ?`
 func PingDelete(id int) rt.Exec {
 	return rt.Exec{SQL: voltPingDeleteSQL, Args: []any{id}, Model: "Ping", One: true}
 }
+
+const voltLevelGetSQL = `SELECT "id", "label" FROM "levels" WHERE "id" = ?`
+
+func LevelGet(id Tier) rt.Lookup[Level] {
+	return rt.Lookup[Level]{SQL: voltLevelGetSQL, Args: []any{id}, Scan: voltLevelScan}
+}
+
+func LevelGetMany(ids []Tier) rt.Query[Level] {
+	if len(ids) == 0 {
+		return rt.Query[Level]{}
+	}
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltLevelTableSQL, voltLevelColumnsSQL, []rt.Opt[Level]{LevelID.In(ids...)})
+	return rt.Query[Level]{SQL: voltSQL, Args: voltArgs, Scan: voltLevelScan, Err: voltErr}
+}
+
+const voltLevelListSQL = `SELECT "id", "label" FROM "levels"`
+
+func LevelList() rt.Query[Level] { return rt.Query[Level]{SQL: voltLevelListSQL, Scan: voltLevelScan} }
+
+func LevelCreate(c LevelChangeset) rt.Write[Level] { return rt.Insert(c.Validate().Changeset) }
+
+func LevelUpdate(c LevelChangeset) rt.Write[Level] { return rt.Update(c.Validate().Changeset) }
+
+const voltLevelDeleteSQL = `DELETE FROM "levels" WHERE "id" = ?`
+
+func LevelDelete(id Tier) rt.Exec {
+	return rt.Exec{SQL: voltLevelDeleteSQL, Args: []any{id}, Model: "Level", One: true}
+}

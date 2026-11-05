@@ -11,6 +11,7 @@ import (
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/itest/blog/app"
 	"github.com/Piechutowski/volt/itest/blog/db"
+	"github.com/Piechutowski/volt/nao/run"
 )
 
 // TestHandlersAreValues proves a handler is a function from a request
@@ -64,8 +65,10 @@ func TestEffectFailureInsideThenReachesTheSpine(t *testing.T) {
 // changeset body is decoded, loaded, cast with the narrowed allow list
 // and validated before the handler, which sees the findings and
 // decides; a struct body decodes with volt.Decode's rules; a body that
-// does not decode is a 400 before anything loads, and a missing row of
-// an update is a 404 through the scope's error handler.
+// does not decode is a 400 before anything loads, a missing row of
+// an update is a 404 through the scope's error handler, and a handler
+// that negotiates before its write answers a 406 having written nothing
+// (spec §formats).
 func TestRequestBodies(t *testing.T) {
 	h := handler()
 	post := func(method, path, contentType, body string) (*httptest.ResponseRecorder, map[string]any) {
@@ -117,6 +120,18 @@ func TestRequestBodies(t *testing.T) {
 		t.Errorf("missing row = %d via %q; want 404 through the scope's handler", rec.Code, rec.Header().Get("X-Error-Handler"))
 	}
 
+	html := httptest.NewRequest("PATCH", app.PathChangeEmail(1), strings.NewReader(`{"email": "three@example.com"}`))
+	html.Header.Set("Content-Type", "application/json")
+	html.Header.Set("Accept", "text/html")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, html)
+	if rec.Code != http.StatusNotAcceptable {
+		t.Errorf("a change that accepts HTML = %d; want 406 from the handler's Negotiate", rec.Code)
+	}
+	if rec, card := serve(t, h, "GET", app.PathCard(1)); rec.Code != 200 || card["email"] != "two@example.com" {
+		t.Errorf("after the 406 the row reads %d %v; want the email unchanged, since a 406 writes nothing", rec.Code, card)
+	}
+
 	rec, body = post("POST", app.PathLogin(), "application/json", `{"Email": "one@example.com", "Password": "open sesame"}`)
 	if rec.Code != 200 || body["email"] != "one@example.com" {
 		t.Fatalf("login = %d %v; want 200", rec.Code, body)
@@ -138,11 +153,13 @@ func TestRequestBodies(t *testing.T) {
 
 // TestScopeLoads proves spec §scope-loads end to end: the scope's load
 // halts with its own response when the header is missing, hands the
-// loaded user to the handler beneath when present, sends a failing
-// effect to the error spine, and runs for a query route beneath too.
+// loaded user to the handler beneath when present, answers a user no
+// row holds with its rescue's 401, sends any other failure of its
+// effect through the rescue's Fail to the error spine, leaves a failure
+// beneath it to the error spine, and runs for a query route beneath too.
 func TestScopeLoads(t *testing.T) {
 	h := handler()
-	get := func(path, user string) (*httptest.ResponseRecorder, map[string]any) {
+	get := func(h http.Handler, path, user string) (*httptest.ResponseRecorder, map[string]any) {
 		t.Helper()
 		req := httptest.NewRequest("GET", path, nil)
 		if user != "" {
@@ -156,25 +173,47 @@ func TestScopeLoads(t *testing.T) {
 		}
 		return rec, out
 	}
-	rec, body := get(app.PathMeShow(), "")
+	rec, body := get(h, app.PathMeShow(), "")
 	if rec.Code != http.StatusUnauthorized || body["message"] != "sign in" {
 		t.Fatalf("no user = %d %v; want the load's own 401", rec.Code, body)
 	}
-	rec, body = get(app.PathMeShow(), "1")
+	rec, body = get(h, app.PathMeShow(), "1")
 	if rec.Code != 200 || body["email"] != "one@example.com" {
 		t.Fatalf("user 1 = %d %v; want the loaded user rendered", rec.Code, body)
 	}
-	rec, _ = get(app.PathMeShow(), "999")
-	if rec.Code != http.StatusNotFound || rec.Header().Get("X-Error-Handler") != "app" {
-		t.Fatalf("unknown user = %d via %q; want 404 through the scope's error handler", rec.Code, rec.Header().Get("X-Error-Handler"))
+	rec, body = get(h, app.PathMeShow(), "999")
+	if rec.Code != http.StatusUnauthorized || body["message"] != "sign in" || rec.Header().Get("X-Error-Handler") != "" {
+		t.Fatalf("unknown user = %d %v via %q; want the rescue's own 401, not the error handler's 404", rec.Code, body, rec.Header().Get("X-Error-Handler"))
 	}
-	rec, _ = get(app.PathMeUserList(), "")
+	rec, _ = get(h, app.PathMeUserList(), "")
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("query route without a user = %d; want the load's 401", rec.Code)
 	}
-	rec, _ = get(app.PathMeUserList(), "1")
+	rec, _ = get(h, app.PathMeUserList(), "999")
+	if rec.Code != http.StatusUnauthorized || rec.Header().Get("X-Error-Handler") != "" {
+		t.Fatalf("query route with an unknown user = %d via %q; want the rescue's 401", rec.Code, rec.Header().Get("X-Error-Handler"))
+	}
+	rec, _ = get(h, app.PathMeUserList(), "1")
 	if rec.Code != 200 {
 		t.Fatalf("query route with a user = %d; want 200", rec.Code)
+	}
+
+	bare, err := run.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bare.Close()
+	rec, body = get(app.NewRouter(fixtureControllers(bare, &volt.Broker{})), app.PathMeShow(), "1")
+	if rec.Code != http.StatusInternalServerError || body["message"] != "internal server error" || rec.Header().Get("X-Error-Handler") != "app" {
+		t.Fatalf("a database failure under the rescue = %d %v via %q; want the rescue's Fail answered by the error handler", rec.Code, body, rec.Header().Get("X-Error-Handler"))
+	}
+	seeded := fixtureDB()
+	defer seeded.Close()
+	c := fixtureControllers(seeded, &volt.Broker{})
+	c.Me = meNext{}
+	rec, body = get(app.NewRouter(c), app.PathMeShow(), "1")
+	if rec.Code != http.StatusNotFound || body["message"] != "not found" || rec.Header().Get("X-Error-Handler") != "app" {
+		t.Fatalf("the handler's own miss under the rescued load = %d %v via %q; want 404 through the error handler, never the load's 401", rec.Code, body, rec.Header().Get("X-Error-Handler"))
 	}
 	r := volt.RequestOf(httptest.NewRequest("GET", "/me", nil), "GET /me", time.Unix(1700000000, 0), nil)
 	if !volt.Same(me{}.Show(r, db.User{Email: "a"}), volt.Render(db.User{Email: "a"})) {

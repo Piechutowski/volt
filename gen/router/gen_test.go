@@ -249,14 +249,16 @@ type stub struct{}
 func (stub) Index(r volt.Request) volt.Response { return volt.NoContent() }
 func (stub) About(r volt.Request) volt.Response { return volt.NoContent() }
 func (stub) Ping(r volt.Request) volt.Response { return volt.NoContent() }
-func (stub) Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts) volt.Response {
+func (stub) Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts, latest, ten, written []db.User) volt.Response {
 	return volt.NoContent()
 }
 func (stub) Serve(r volt.Request, path string) volt.Response { return volt.NoContent() }
 func (stub) Show(r volt.Request, id int) volt.Response { return volt.NoContent() }
 func (stub) Create(r volt.Request) volt.Response { return volt.NoContent() }
 func (stub) Avatar(r volt.Request, id int) volt.Response { return volt.NoContent() }
-func (stub) Profile(r volt.Request, id int, user db.User, picked, since []db.User) volt.Response {
+func (stub) Top(r volt.Request, n int, top []db.User) volt.Response { return volt.NoContent() }
+func (stub) Keys(r volt.Request, a, b []db.User) volt.Response        { return volt.NoContent() }
+func (stub) Profile(r volt.Request, id int, user db.User, picked, since, recent []db.User) volt.Response {
 	return volt.NoContent()
 }
 func (stub) ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response {
@@ -268,6 +270,9 @@ func (stub) Login(r volt.Request, body LoginForm) volt.Response        { return 
 type me struct{}
 
 func (me) Show(r volt.Request, user db.User) volt.Response { return volt.NoContent() }
+func (me) Picks(r volt.Request, user db.User, n int, picks []db.User) volt.Response {
+	return volt.NoContent()
+}
 
 func CurrentUser(r volt.Request) volt.Load[db.User] { return volt.LoadWith(db.UserGet(1)) }
 
@@ -376,7 +381,7 @@ func TestMainPackageCompiles(t *testing.T) {
 		"schema.volt": `package main
 
 table posts {
-  id    int [pk, increment]
+  id    int [pk]
   title string
 }
 
@@ -609,4 +614,101 @@ func snippetCompiles(t *testing.T, name string) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%s does not compile:\n%s", name, out)
 	}
+}
+
+// TestClientImportsTimeForTimeParamsAlone proves the client imports time
+// only for a query parameter of that type: a route's timeout: is the
+// router's business (spec §route-loads, §generated-client), and a client
+// importing time for it alone does not compile.
+func TestClientImportsTimeForTimeParamsAlone(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "go.mod"), []byte("module timeouts\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(src, "app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	routes := "package app\n\ntable metrics {\n\tid int [pk]\n}\n\nscope / {\n\tget /metrics MetricList [timeout: 5]\n\tget /slow Metrics.Slow [timeout: 2]\n}\n"
+	if err := os.WriteFile(filepath.Join(src, "app", "r.volt"), []byte(routes), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pr, err := lang.Load(disk.Source{}, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags := lang.Check(pr); diag.HasErrors(diags) {
+		t.Fatalf("fixture has errors: %v", diags)
+	}
+	files, err := Generate(pr.Packages["app"], Options{Source: "package app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(files["volt_router.go"]), "\t\"time\"\n") {
+		t.Errorf("volt_router.go does not import time for its timeouts:\n%s", files["volt_router.go"])
+	}
+	if strings.Contains(string(files[filepath.Join("client", "volt_client.go")]), "\t\"time\"\n") {
+		t.Errorf("volt_client.go imports time with no time parameter to use it:\n%s", files[filepath.Join("client", "volt_client.go")])
+	}
+}
+
+// TestLoadTimeParamCompiles proves a controller route whose load binds a
+// time.Time from the query string imports time in its router, with no
+// timeout to import it, and the generated program builds (spec
+// §route-loads).
+func TestLoadTimeParamCompiles(t *testing.T) {
+	snippetCompiles(t, "v108_route_load_time_param")
+}
+
+// TestPackageNamedHTTPClientCompiles proves a package named http that
+// routes its own tables through query routes alone generates a client
+// that builds, importing the package as voltHttp beside no net/http (spec
+// §generated-client, §projects-and-packages).
+func TestPackageNamedHTTPClientCompiles(t *testing.T) {
+	snippetCompiles(t, "v112_package_named_http")
+}
+
+// TestOptionalQueryRouteCompiles proves a query route and a load over a
+// select with optional parameters generate a router and a client that
+// build, the client spelling rt.Null (spec §query-routes, §route-loads,
+// §generated-client).
+func TestOptionalQueryRouteCompiles(t *testing.T) {
+	snippetCompiles(t, "v117_optional_query_route")
+}
+
+// TestDatasetOptionalParamCompiles proves a dataset over a group select
+// with an optional parameter beside a prefix parameter generates routes
+// and a client that build (spec §dataset-declaration).
+func TestDatasetOptionalParamCompiles(t *testing.T) {
+	snippetCompiles(t, "v118_dataset_optional")
+}
+
+// TestPredicateWordsProjectedCompiles proves columns named like
+// predicate keywords project, aggregate and compute into code that
+// builds (spec §keywords, §selects-over-groups).
+func TestPredicateWordsProjectedCompiles(t *testing.T) {
+	snippetCompiles(t, "v119_predicate_words_projected")
+}
+
+// TestLoadKeyBindsTwiceCompiles proves one query key binding several load
+// arguments, optional and required, and loads whose names and keys join
+// alike, each bind under a local of their own and build (spec
+// §route-loads).
+func TestLoadKeyBindsTwiceCompiles(t *testing.T) {
+	snippetCompiles(t, "v120_load_key_twice")
+}
+
+// TestParamNamedQCompiles proves a select parameter and a key column
+// named q generate a data package, a router and a client that build
+// (spec §predicates, §generated-query-surface).
+func TestParamNamedQCompiles(t *testing.T) {
+	snippetCompiles(t, "v127_param_named_q")
+}
+
+// TestPackagesNamedLikeImportsCompile proves packages named context, http,
+// rt and time route their own tables, a changeset body among them, into
+// clients that import them as volt and the name and build, and that one
+// imported under an alias routes from another package (spec §imports,
+// §generated-client).
+func TestPackagesNamedLikeImportsCompile(t *testing.T) {
+	snippetCompiles(t, "v121_packages_named_like_imports")
 }

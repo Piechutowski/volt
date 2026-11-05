@@ -6,7 +6,6 @@ package run
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"fmt"
 	"sort"
 	"time"
@@ -232,11 +231,8 @@ func migrationRun(ctx context.Context, conn *sql.Conn, m rt.Migration, direction
 	}
 	committed := false
 	defer func() {
-		if committed {
-			return
-		}
-		if _, e := conn.ExecContext(context.Background(), "ROLLBACK"); e != nil {
-			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+		if !committed {
+			rollback(conn)
 		}
 	}()
 	has, err := ledgerHas(ctx, conn, m.Name)
@@ -280,8 +276,8 @@ func statementsRun(ctx context.Context, conn *sql.Conn, m rt.Migration, directio
 }
 
 // foreignKeyCheck fails when PRAGMA foreign_key_check reports a row,
-// naming the migration and the first offending table (spec §migrations
-// rule 13).
+// naming the migration and the first offending table (spec
+// §migrations).
 func foreignKeyCheck(ctx context.Context, conn *sql.Conn, name, direction string) error {
 	rows, err := conn.QueryContext(ctx, "PRAGMA foreign_key_check")
 	if err != nil {

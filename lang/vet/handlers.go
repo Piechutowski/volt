@@ -31,15 +31,38 @@ type GoRule interface {
 }
 
 // GoFile is one parsed hand-written Go file with what the Go rules
-// read: whether it declares a handler, the package-level variables and
-// type declarations of the whole package, and a way to place a node.
+// read: whether it declares a handler or a scope-load function, which
+// the rules hold pure alike, the package-level variables and type
+// declarations of the whole package, and a way to place a node.
 type GoFile struct {
 	Name     string
 	File     *goast.File
 	Handlers bool
 	Vars     map[string]bool
 	Types    map[string]*goast.TypeSpec
+	Bodies   []Body
 	fset     *gotoken.FileSet
+}
+
+// Body is where an action of the routes package receives its request
+// body, as the generated interface declares it (spec §request-bodies):
+// the action's name, the body's position among its parameters, the
+// request at 0, and the Go type it spells.
+type Body struct {
+	Action string
+	At     int
+	Type   string
+}
+
+// bodyAt reports whether the parameter at position at of the method,
+// of the spelled type, is the request body of an action of its name.
+func (f *GoFile) bodyAt(method string, at int, typ string) bool {
+	for _, b := range f.Bodies {
+		if b.Action == method && b.At == at && b.Type == typ {
+			return true
+		}
+	}
+	return false
 }
 
 // Pos is the position of n in the file, as diagnostics carry it.
@@ -50,9 +73,10 @@ func (f *GoFile) Pos(n goast.Node) token.Position {
 
 // RunGo parses the sources of the routes package at dir and runs every
 // Go rule among analyzers (all registered ones if none are named) over
-// each file; a file that does not parse is skipped, the compiler
-// reporting it. The warnings come file by file, sorted by position.
-func RunGo(dir string, srcs []GoSource, analyzers ...Analyzer) []diag.Diagnostic {
+// each file, bodies telling where its actions receive a request body; a
+// file that does not parse is skipped, the compiler reporting it. The
+// warnings come file by file, sorted by position.
+func RunGo(dir string, srcs []GoSource, bodies []Body, analyzers ...Analyzer) []diag.Diagnostic {
 	if len(analyzers) == 0 {
 		analyzers = All()
 	}
@@ -96,7 +120,7 @@ func RunGo(dir string, srcs []GoSource, analyzers ...Analyzer) []diag.Diagnostic
 	}
 	var out []diag.Diagnostic
 	for _, f := range files {
-		f.Vars, f.Types = vars, types
+		f.Vars, f.Types, f.Bodies = vars, types, bodies
 		for _, r := range rules {
 			out = append(out, r.Go(f)...)
 		}
@@ -107,11 +131,22 @@ func RunGo(dir string, srcs []GoSource, analyzers ...Analyzer) []diag.Diagnostic
 
 func declaresHandler(f *goast.File) bool {
 	for _, d := range f.Decls {
-		if fd, ok := d.(*goast.FuncDecl); ok && handlerShaped(fd) {
+		if fd, ok := d.(*goast.FuncDecl); ok && (handlerShaped(fd) || scopeLoadShaped(fd)) {
 			return true
 		}
 	}
 	return false
+}
+
+// scopeLoadShaped reports whether fd is a function of the package of the
+// shape a scope load names (spec §scope-loads), func(volt.Request)
+// volt.Load[T], a pure function of the request like a handler.
+func scopeLoadShaped(fd *goast.FuncDecl) bool {
+	if fd.Recv != nil || fd.Type.Params.NumFields() != 1 || fd.Type.Results == nil || len(fd.Type.Results.List) != 1 {
+		return false
+	}
+	res, ok := fd.Type.Results.List[0].Type.(*goast.IndexExpr)
+	return ok && spelled(fd.Type.Params.List[0].Type) == "volt.Request" && spelled(res.X) == "volt.Load"
 }
 
 // handlerShaped reports whether fd is a method taking a volt.Request
@@ -191,7 +226,7 @@ type handlerImportsRule struct{ meta }
 
 var handlerImports = &handlerImportsRule{meta{
 	name: "handlerimports",
-	doc:  "reports a file that declares a handler and imports a package that touches the world: the runner, database/sql, net, os, os/exec or a random source",
+	doc:  "reports a file that declares a handler or a scope load and imports a package that touches the world: the runner, database/sql, net, os, os/exec or a random source",
 }}
 
 func (r *handlerImportsRule) Go(f *GoFile) []diag.Diagnostic {
@@ -203,7 +238,7 @@ func (r *handlerImportsRule) Go(f *GoFile) []diag.Diagnostic {
 		p := strings.Trim(imp.Path.Value, `"`)
 		for _, w := range worldImports {
 			if p == w {
-				out = append(out, r.warnf(f.Pos(imp), "a file that declares a handler imports %s; a handler describes its effects and the shim performs them (§requests-and-responses)", p))
+				out = append(out, r.warnf(f.Pos(imp), "a file that declares a handler or a scope load imports %s; a handler describes its effects and the shim performs them (§requests-and-responses, §scope-loads)", p))
 			}
 		}
 	}
@@ -214,7 +249,7 @@ type handlerClockRule struct{ meta }
 
 var handlerClock = &handlerClockRule{meta{
 	name: "handlerclock",
-	doc:  "reports time.Now, time.Since and time.Until in a file that declares a handler, which reads the clock from the request instead",
+	doc:  "reports time.Now, time.Since and time.Until in a file that declares a handler or a scope load, which reads the clock from the request instead",
 }}
 
 func (r *handlerClockRule) Go(f *GoFile) []diag.Diagnostic {
@@ -341,6 +376,170 @@ func (r *goroutineRule) Go(f *GoFile) []diag.Diagnostic {
 	goast.Inspect(f.File, func(n goast.Node) bool {
 		if s, ok := n.(*goast.GoStmt); ok {
 			out = append(out, r.warnf(f.Pos(s), "starts a goroutine; a handler owns no lifetime, so parallel effects go through rt.All and work after the request to a job (§values-and-effects)"))
+		}
+		return true
+	})
+	return out
+}
+
+type capturedWriteRule struct{ meta }
+
+var capturedWrite = &capturedWriteRule{meta{
+	name: "capturedwrite",
+	doc:  "reports a function the runner calls, the next of an rt.Then or the f of an rt.Map or an rt.ParallelMap, that writes a variable it captures",
+}}
+
+var runnerCalled = map[string]string{
+	"rt.Then":        "the next of rt.Then",
+	"rt.Map":         "the f of rt.Map",
+	"rt.ParallelMap": "the f of rt.ParallelMap",
+}
+
+func (r *capturedWriteRule) Go(f *GoFile) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	for _, d := range f.File.Decls {
+		fd, ok := d.(*goast.FuncDecl)
+		if !ok || fd.Body == nil {
+			continue
+		}
+		bound := map[string]*goast.FuncLit{}
+		goast.Inspect(fd.Body, func(n goast.Node) bool {
+			switch s := n.(type) {
+			case *goast.AssignStmt:
+				for i, rhs := range s.Rhs {
+					if lit, ok := rhs.(*goast.FuncLit); ok && i < len(s.Lhs) {
+						if id, ok := s.Lhs[i].(*goast.Ident); ok {
+							bound[id.Name] = lit
+						}
+					}
+				}
+			case *goast.ValueSpec:
+				for i, v := range s.Values {
+					if lit, ok := v.(*goast.FuncLit); ok && i < len(s.Names) {
+						bound[s.Names[i].Name] = lit
+					}
+				}
+			}
+			return true
+		})
+		seen := map[gotoken.Pos]bool{}
+		goast.Inspect(fd.Body, func(n goast.Node) bool {
+			call, ok := n.(*goast.CallExpr)
+			if !ok || len(call.Args) != 2 {
+				return true
+			}
+			role, ok := runnerCalled[spelled(calleeGeneric(call.Fun))]
+			if !ok {
+				return true
+			}
+			lit := funcLitBound(call.Args[1], bound)
+			if lit == nil {
+				return true
+			}
+			for _, w := range capturedWrites(lit, f.Vars) {
+				if seen[w.at.Pos()] {
+					continue
+				}
+				seen[w.at.Pos()] = true
+				out = append(out, r.warnf(f.Pos(w.at), "%s writes %s, a variable it captures; a function the runner calls is pure, so performing its effect twice gives the same result and the steps of an rt.All never race on it (§values-and-effects)", role, w.name))
+			}
+			return true
+		})
+	}
+	return out
+}
+
+func calleeGeneric(e goast.Expr) goast.Expr {
+	switch x := e.(type) {
+	case *goast.IndexExpr:
+		return x.X
+	case *goast.IndexListExpr:
+		return x.X
+	}
+	return e
+}
+
+func funcLitBound(e goast.Expr, bound map[string]*goast.FuncLit) *goast.FuncLit {
+	for {
+		p, ok := e.(*goast.ParenExpr)
+		if !ok {
+			break
+		}
+		e = p.X
+	}
+	switch x := e.(type) {
+	case *goast.FuncLit:
+		return x
+	case *goast.Ident:
+		return bound[x.Name]
+	}
+	return nil
+}
+
+type capturedWriteAt struct {
+	at   goast.Node
+	name string
+}
+
+func capturedWrites(lit *goast.FuncLit, pkgVars map[string]bool) []capturedWriteAt {
+	own := map[string]bool{}
+	fields := func(fl *goast.FieldList) {
+		if fl == nil {
+			return
+		}
+		for _, field := range fl.List {
+			for _, id := range field.Names {
+				own[id.Name] = true
+			}
+		}
+	}
+	goast.Inspect(lit, func(n goast.Node) bool {
+		switch s := n.(type) {
+		case *goast.FuncLit:
+			fields(s.Type.Params)
+			fields(s.Type.Results)
+		case *goast.AssignStmt:
+			if s.Tok == gotoken.DEFINE {
+				for _, l := range s.Lhs {
+					if id, ok := l.(*goast.Ident); ok {
+						own[id.Name] = true
+					}
+				}
+			}
+		case *goast.RangeStmt:
+			if s.Tok == gotoken.DEFINE {
+				for _, e := range []goast.Expr{s.Key, s.Value} {
+					if id, ok := e.(*goast.Ident); ok {
+						own[id.Name] = true
+					}
+				}
+			}
+		case *goast.ValueSpec:
+			for _, id := range s.Names {
+				own[id.Name] = true
+			}
+		}
+		return true
+	})
+	var out []capturedWriteAt
+	written := func(at goast.Node, target goast.Expr) {
+		name := rootIdent(target)
+		if name == "" || name == "_" || own[name] || pkgVars[name] {
+			return
+		}
+		out = append(out, capturedWriteAt{at, name})
+	}
+	goast.Inspect(lit.Body, func(n goast.Node) bool {
+		switch s := n.(type) {
+		case *goast.AssignStmt:
+			if s.Tok == gotoken.DEFINE {
+				return true
+			}
+			for _, l := range s.Lhs {
+				written(s, l)
+			}
+		case *goast.IncDecStmt:
+			written(s, s.X)
 		}
 		return true
 	})

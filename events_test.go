@@ -2,7 +2,11 @@ package volt
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -27,8 +31,8 @@ func TestBrokerFanOutReplayAndReconnect(t *testing.T) {
 	z := c.Stream(ctx, "/events")
 
 	first := <-a
-	if first.Name != "compute.started" || first.ID != 1 {
-		t.Fatalf("replayed event = %+v", first)
+	if first.Name != "compute.started" || first.ID != 1 || !first.Replayed || first.Epoch != b.epochOf() {
+		t.Fatalf("replayed event = %+v, want ID 1 of this broker marked replayed", first)
 	}
 	<-z
 
@@ -39,7 +43,7 @@ func TestBrokerFanOutReplayAndReconnect(t *testing.T) {
 			select {
 			case ev := <-ch:
 				var p progress
-				if err := ev.Decode(&p); err != nil || ev.Name != "compute.progress" || p.Done != want {
+				if err := ev.Decode(&p); err != nil || ev.Name != "compute.progress" || p.Done != want || ev.Replayed {
 					t.Fatalf("%s: event %d = %+v (%v)", name, want, ev, err)
 				}
 			case <-time.After(2 * time.Second):
@@ -49,13 +53,13 @@ func TestBrokerFanOutReplayAndReconnect(t *testing.T) {
 	}
 
 	b.Publish("compute.finished", progress{3, 3})
-	resumed := c.streamAfter(t, srv.URL, 3)
+	resumed := c.streamAfter(t, srv.URL, Event{ID: 3, Epoch: b.epochOf()}.WireID())
 	if resumed.ID != 4 || resumed.Name != "compute.finished" {
 		t.Fatalf("resumed event = %+v", resumed)
 	}
 }
 
-func (c *Client) streamAfter(t *testing.T, base string, last uint64) Event {
+func (c *Client) streamAfter(t *testing.T, base string, last string) Event {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -116,4 +120,76 @@ func TestStreamReconnectsAfterServerRestart(t *testing.T) {
 	for range events {
 	}
 	srv.Close()
+}
+
+// TestStreamResumesAcrossABrokerRestart proves a client resuming with an
+// ID from a broker that is gone sees everything the new broker published
+// before it reconnected, however far the new broker has counted, and
+// then resumes on the new broker's IDs without a repeat (spec
+// §event-routes): a wire ID names its broker, so the new one never
+// mistakes an old ID for its own.
+func TestStreamResumesAcrossABrokerRestart(t *testing.T) {
+	var current atomic.Pointer[Broker]
+	before := NewBroker()
+	current.Store(before)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		EventsHandler(current.Load()).ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	events := (&Client{Base: srv.URL}).Stream(ctx, "/events")
+	names := func(n int) []string {
+		t.Helper()
+		var got []string
+		for len(got) < n {
+			select {
+			case ev := <-events:
+				got = append(got, ev.Name)
+			case <-ctx.Done():
+				t.Fatalf("after %q no further event", got)
+			}
+		}
+		return got
+	}
+	for i := range 6 {
+		before.Publish(fmt.Sprintf("old%d", i), i)
+	}
+	if got := strings.Join(names(6), " "); got != "old0 old1 old2 old3 old4 old5" {
+		t.Fatalf("before the restart = %q", got)
+	}
+
+	after := NewBroker()
+	current.Store(after)
+	for i := range 7 {
+		after.Publish(fmt.Sprintf("new%d", i), i)
+	}
+	srv.CloseClientConnections()
+	if got := strings.Join(names(7), " "); got != "new0 new1 new2 new3 new4 new5 new6" {
+		t.Errorf("resuming on a restarted broker that counted past the old ID = %q, want new0 to new6", got)
+	}
+
+	srv.CloseClientConnections()
+	after.Publish("new7", 7)
+	if got := names(1); got[0] != "new7" {
+		t.Errorf("after a second drop the client resumed at %q, want new7 and no repeat", got)
+	}
+	select {
+	case ev := <-events:
+		t.Errorf("a repeat after the second drop: %+v", ev)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	for _, last := range []string{"6", Event{ID: 6, Epoch: before.epochOf()}.WireID(), "garbage", ""} {
+		ch, stop := after.SubscribeAfter(last)
+		if ev := <-ch; ev.ID != 1 {
+			t.Errorf("Last-Event-ID %q on the new broker starts at %d, want the whole buffer", last, ev.ID)
+		}
+		stop()
+	}
+	ch, stop := after.SubscribeAfter(Event{ID: 1, Epoch: after.epochOf()}.WireID())
+	defer stop()
+	if ev := <-ch; ev.ID != 2 {
+		t.Errorf("resuming at 1, an ID this broker assigned, starts at %d, want 2", ev.ID)
+	}
 }

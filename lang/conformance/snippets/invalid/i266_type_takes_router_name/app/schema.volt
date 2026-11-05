@@ -8,7 +8,7 @@ type PagesController string
 type PathHome        string
 
 table posts {
-  id    int             [pk, increment]
+  id    int             [pk]
   a     Controllers
   b     NewRouter
   c     PagesController

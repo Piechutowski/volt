@@ -12,25 +12,6 @@ func Children(n Node) []Node {
 				out = append(out, d)
 			}
 		}
-	case *Project:
-		if n.Name != nil {
-			out = append(out, n.Name)
-		}
-		if n.Settings != nil {
-			out = append(out, n.Settings)
-		}
-		for _, p := range n.Props {
-			if p != nil {
-				out = append(out, p)
-			}
-		}
-	case *ProjectProp:
-		if n.Key != nil {
-			out = append(out, n.Key)
-		}
-		if n.Value != nil {
-			out = append(out, n.Value)
-		}
 	case *Table:
 		if n.Name != nil {
 			out = append(out, n.Name)

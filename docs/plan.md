@@ -10,9 +10,9 @@ the tooling. Steps 2, 3 (without `volt fmt`), 4 and 6 to 12 land now, in
 that order. Step 5 (the Elm client), `volt fmt` and steps 13 to 19 are
 deferred; each keeps a one-line section below so the file still says
 what is deferred and why. The deferred spec sections are not written,
-and no spec text of the steps that land mentions a session, `r.Session()`
-or the vet rule `session-csrf`: the request value gets `Now()` and
-nothing session-shaped until step 13 is reopened.
+and no spec text of the steps that land mentions a session,
+`r.Session()` or the vet rule `session-csrf`: the request value gets
+`Now()` and nothing session-shaped until step 13 is reopened.
 
 How to use it:
 
@@ -39,6 +39,15 @@ signatures and the clients as plain Go a person reads line by line.
 Nothing is resolved at run time. The generated code, the runtime and the
 tooling follow the functional style: no mutation, no side effects outside
 one performer per lifetime.
+
+### Feature scope
+
+A feature lands only when a real program cannot be written well without
+it, as scopes are for routing. A convenience a handler writes in a few
+lines stays in the handler, and the language does not grow a setting or
+a binding for it: a route's default or most limit, an optional list read
+from the query string and a fixed value bound to an optional parameter
+were built and taken out on this rule.
 
 ### The functional rules
 
@@ -76,7 +85,7 @@ Go idioms chosen, one per need, so the code stays uniform:
 | Immutable records | Structs with unexported fields, exported constructors, `With*` methods on value receivers. |
 | Copy on write | `slices.Clone` before appending to a slice that came from outside; never `append` to an argument. |
 | Optional values | `rt.Null[T]`; never a pointer in a public API. |
-| Effects | A small set of effect types, each implementing a sealed `Effect[T]` with one `run` method the runner calls. |
+| Effects | A small set of effect kinds in `nao/rt`, each implementing a sealed `Effect[T]` whose methods are unexported, so a type of another package can only embed a kind or an `Effect` and is then the effect it embeds; the runner performs one through `rt.Perform`, each kind describes itself for `rt.Describe` and `rt.Same`, and a test holds the kinds to their descriptions. |
 
 ### What Go cannot check, and how Volt closes it
 
@@ -102,7 +111,8 @@ hand-written code never holds one.
 4. **No package state, no goroutines in routes packages.** Vet flags a
    package-level `var` that is not a constant table, an assignment or `++`
    whose target resolves to a package-level object, an `init` function,
-   and a `go` statement.
+   and a `go` statement, and a `next` or `f` the runner calls that writes
+   a variable it captures, which an `rt.All` would run at once.
 5. **A determinism test, generated.** For every handler, a test helper
    calls it twice with the same inputs and compares the response values.
 6. **The pure path is the easy path.** Loads, bodies, the session, the
@@ -120,11 +130,11 @@ A goroutine is an effect, owned by whoever owns a lifetime:
 | Kind | Owner |
 |---|---|
 | Serving requests in parallel | `net/http`, one goroutine per request; pure handlers make it lock-free |
-| Parallel effects inside one request | the shim, through `volt.All(e1, e2, ...)` over `errgroup` |
+| Parallel effects inside one request | the runner, through `rt.All(e1, e2, ...)` over `sync.WaitGroup.Go`, which joins every step and raises a step's panic again on the goroutine that performs it; inside a transaction the steps run in order on its one connection, so a failure never leaves a sibling writing outside it |
 | Work after the request | a job row written in the handler's transaction, run by the worker |
 | Periodic loops | `main`, through `volt.Every` |
 | Push to clients | the event broker; `volt.Publish` is an effect performed after commit |
-| CPU parallelism inside pure code | `rt.ParallelMap` over `sync.WaitGroup.Go`, which joins before returning |
+| CPU parallelism inside pure code | `rt.ParallelMap` over `sync.WaitGroup.Go`, which joins before returning and raises a panic of `f` again on the caller's goroutine |
 | Cancellation and timeouts | the shim's loop, which is the only holder of the context |
 
 Handlers own no lifetime, so they start nothing.
@@ -238,9 +248,7 @@ section 8 marked unverified for that step.
 
 ## Step 19. The example applications
 
-Deferred: the language first, then non-core features and tooling. The
-blog fixture under `itest/blog` is the application every step rebuilds
-until then, and the line counts below are measured on it.
+Deferred: the language first, then non-core features and tooling.
 
 ---
 
@@ -266,6 +274,7 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 |---|---|---|
 | 5, 13 to 19 | | deferred |
 
-Measured at each step on the blog fixture and recorded in the commit
+The blog fixture under `itest/blog` is the application every step
+rebuilds. Measured at each step on it and recorded in the commit
 message: Volt lines, hand-written Go lines, generated Go lines. The
 thesis is that the first two fall while the third is paid for once.

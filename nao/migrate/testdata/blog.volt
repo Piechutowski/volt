@@ -4,7 +4,7 @@
 package blog
 
 table posts {
-  id         int       [pk, increment]
+  id         int       [pk]
   slug       string    [unique]
   title      string
   body       string    [null]
@@ -19,7 +19,7 @@ table posts {
 }
 
 table comments {
-  id       int    [pk, increment]
+  id       int    [pk]
   post_id  int    [ref: posts.id]
   author   string
   body     string
@@ -37,14 +37,14 @@ table post_tags {
 }
 
 table post_details {
-  id      int    [pk, increment]
+  id      int    [pk]
   post_id int    [unique, ref: posts.id]
   summary string [null]
 }
 
 migration 0001__create_posts {
   create table articles {
-    id    int    [pk, increment]
+    id    int    [pk]
     slug  string [unique]
     title string
     body  string [null]
@@ -69,7 +69,7 @@ migration 0001__create_posts {
 
 migration 0002__comments_and_tags {
   create table comments {
-    id      int    [pk, increment]
+    id      int    [pk]
     post_id int    [ref: posts.id]
     author  string
     body    string
@@ -92,7 +92,7 @@ migration 0002__comments_and_tags {
 
 migration 0003__posts_created_at [irreversible] {
   rebuild table posts {
-    id         int       [pk, increment]
+    id         int       [pk]
     slug       string    [unique]
     title      string
     body       string    [null]
@@ -131,7 +131,7 @@ migration 0006__nicknames_and_details {
     add nickname string [null, unique]
   }
   create table post_details {
-    id      int    [pk, increment]
+    id      int    [pk]
     post_id int    [unique, ref: posts.id]
     summary string [null]
   }

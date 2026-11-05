@@ -29,7 +29,7 @@ func TestGenConstructorsMatchTypedHandles(t *testing.T) {
 		{"ltcol", id.LtCol(parent), func() (GenPred, error) { return PredColCmp("id", "<", "parent_id") }},
 		{"in", id.In(1, 2), func() (GenPred, error) { return PredIn("id", int64(1), int64(2)), nil }},
 		{"in empty", id.In(), func() (GenPred, error) { return PredIn("id"), nil }},
-		{"inlist", id.InList([]int64{1, 2}), func() (GenPred, error) { return PredInList("id", "[1,2]"), nil }},
+		{"inlist", id.InList([]int64{1, 2}), func() (GenPred, error) { return PredInList("id", JSONList([]int64{1, 2})), nil }},
 		{"like", email.Like("%a"), func() (GenPred, error) { return PredLike("email", "%a"), nil }},
 		{"isnull", bio.IsNull(), func() (GenPred, error) { return PredNull("bio"), nil }},
 		{"isnotnull", bio.IsNotNull(), func() (GenPred, error) { return PredNotNull("bio"), nil }},
@@ -116,5 +116,53 @@ func TestRendererSpellsOneInequality(t *testing.T) {
 			}
 			return true
 		})
+	}
+}
+
+func TestGenExistsAndOptionalSpellings(t *testing.T) {
+	tag, _ := PredCmp("tags.tag", "=", "tag")
+	other, _ := PredCmp("tags.tag", "!=", "draft")
+	before, _ := PredCmp("published_at", "<", "at")
+	on := [][2]string{{"tags.post_id", "posts.id"}}
+	cases := []struct {
+		name string
+		pred GenPred
+		sql  string
+		args []any
+	}{
+		{"exists", PredExists("post_tags", "tags", on, tag),
+			`EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ("tags"."tag" = ?))`, []any{"tag"}},
+		{"exists over a group", PredExists("post_tags", "tags", on, Or(tag, other)),
+			`EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ("tags"."tag" = ? OR "tags"."tag" != ?))`, []any{"tag", "draft"}},
+		{"exists composite key", PredExists("lines", "lines", [][2]string{{"lines.order_id", "orders.id"}, {"lines.shop", "orders.shop"}}, PredNull("lines.note")),
+			`EXISTS (SELECT 1 FROM "lines" AS "lines" WHERE "lines"."order_id" = "orders"."id" AND "lines"."shop" = "orders"."shop" AND ("lines"."note" IS NULL))`, nil},
+		{"exists without a filter", PredExists("post_tags", "tags", on, GenPred{}),
+			`EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id")`, nil},
+		{"not exists", Not(PredExists("post_tags", "tags", on, tag)),
+			`NOT (EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ("tags"."tag" = ?)))`, []any{"tag"}},
+		{"optional", PredOptional([]any{"at"}, before),
+			`(? IS NULL OR "published_at" < ?)`, []any{"at", "at"}},
+		{"optional exists", PredOptional([]any{"tag", "kind"}, PredExists("post_tags", "tags", on, tag)),
+			`(? IS NULL OR ? IS NULL OR EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ("tags"."tag" = ?)))`, []any{"tag", "kind", "tag"}},
+		{"optional without guards", PredOptional(nil, before), `"published_at" < ?`, []any{"at"}},
+		{"optional in a chain", And(PredOptional([]any{"at"}, before), tag),
+			`((? IS NULL OR "published_at" < ?) AND "tags"."tag" = ?)`, []any{"at", "at", "tag"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sql, args, err := WhereRender([]GenPred{tc.pred})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if sql != tc.sql {
+				t.Errorf("renders\n\t%s\nwant\n\t%s", sql, tc.sql)
+			}
+			if !reflect.DeepEqual(args, tc.args) {
+				t.Errorf("binds %#v, want %#v", args, tc.args)
+			}
+		})
+	}
+	if p := PredOptional([]any{"at"}, GenPred{}); p.kind != predEmpty {
+		t.Errorf("an optional guard over the empty predicate is %v, want it empty", p.kind)
 	}
 }

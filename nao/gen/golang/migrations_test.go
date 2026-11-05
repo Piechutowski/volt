@@ -29,7 +29,7 @@ func TestMigrationsGolden(t *testing.T) {
 }
 
 func TestMigrationsEmptyAndQuoted(t *testing.T) {
-	src := "package db\n\ntable t {\n  id int [pk, increment]\n  s string [default: \"a`b\"]\n}\n\n" +
+	src := "package db\n\ntable t {\n  id int [pk]\n  s string [default: \"a`b\"]\n}\n\n" +
 		"migration 0001__init {\n}\n\n" +
 		"migration 0002__tick [no_transaction] {\n  up {\n    exec `SELECT \"x\"`\n  }\n}\n\n" +
 		"migration 0003__s {\n  alter table t {\n    add s string [default: \"a`b\"]\n  }\n}\n"

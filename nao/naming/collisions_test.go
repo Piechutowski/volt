@@ -120,7 +120,7 @@ table nokey {
   b int
 }
 table allgen {
-  id int [pk, increment]
+  id int [pk]
 }
 table user_offsets [model: "UserOffset"] {
   id int [pk]

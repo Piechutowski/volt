@@ -26,8 +26,8 @@ var voltCurrencyDesc = &rt.Desc[Currency]{
 	Table:   `"currencies"`,
 	Columns: `"code", "name"`,
 	Fields: []rt.FieldDesc{
-		{Column: "code", Wire: "code", Key: true, Settable: true},
-		{Column: "name", Wire: "name", Settable: true},
+		{Column: "code", Wire: "code", Key: true},
+		{Column: "name", Wire: "name"},
 	},
 	Scan:   voltCurrencyScan,
 	Values: voltCurrencyValues,
@@ -128,12 +128,12 @@ var voltRateDesc = &rt.Desc[Rate]{
 	Table:   `"rates"`,
 	Columns: `"id", "currency_code", "rate", "fetched_at", "active", "comment"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "currency_code", Wire: "currency_code", Settable: true},
-		{Column: "rate", Wire: "rate", Settable: true},
-		{Column: "fetched_at", Wire: "fetched_at", Settable: true},
-		{Column: "active", Wire: "active", Settable: true},
-		{Column: "comment", Wire: "comment", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
+		{Column: "currency_code", Wire: "currency_code"},
+		{Column: "rate", Wire: "rate"},
+		{Column: "fetched_at", Wire: "fetched_at"},
+		{Column: "active", Wire: "active"},
+		{Column: "comment", Wire: "comment"},
 	},
 	Scan:   voltRateScan,
 	Values: voltRateValues,
@@ -148,6 +148,10 @@ func RateNew() RateChangeset { return RateChangeset{rt.NewChangeset(voltRateDesc
 func (r Rate) Changeset() RateChangeset { return RateChangeset{rt.ChangesetOf(voltRateDesc, r)} }
 
 func (c RateChangeset) From(r Rate) RateChangeset { return RateChangeset{c.Changeset.From(r)} }
+
+func (c RateChangeset) IDSet(v int) RateChangeset {
+	return RateChangeset{rt.Set(c.Changeset, 0, func(voltR *Rate) { voltR.ID = v })}
+}
 
 func (c RateChangeset) CurrencyCodeSet(v string) RateChangeset {
 	return RateChangeset{rt.Set(c.Changeset, 1, func(voltR *Rate) { voltR.CurrencyCode = v })}
@@ -179,7 +183,7 @@ func (c RateChangeset) ErrorAdd(col RateColumn, msg string) RateChangeset {
 
 func voltRateScan(r rt.Row) (Rate, error) {
 	var voltV Rate
-	voltErr := r.Scan(&voltV.ID, &voltV.CurrencyCode, &voltV.Rate, &voltV.FetchedAt, &voltV.Active, &voltV.Comment)
+	voltErr := r.Scan(&voltV.ID, &voltV.CurrencyCode, &voltV.Rate, (*rt.Time)(&voltV.FetchedAt), &voltV.Active, &voltV.Comment)
 	return voltV, rt.Refused("Rate", voltErr)
 }
 
@@ -189,6 +193,9 @@ func voltRateValues(voltR Rate) []any {
 
 func voltRateApply(voltData, voltVals Rate, voltSet []bool) Rate {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.CurrencyCode = voltVals.CurrencyCode
 	}
@@ -209,6 +216,12 @@ func voltRateApply(voltData, voltVals Rate, voltSet []bool) Rate {
 
 func voltRateCast(c rt.Changeset[Rate], p rt.Params[Rate], i int) (rt.Changeset[Rate], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Rate) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return RateChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "currency_code", "string", false, func(voltR *Rate) string { return voltR.CurrencyCode })
 		if voltErr != nil || !voltOK {

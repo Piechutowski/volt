@@ -25,8 +25,8 @@ var voltUserDesc = &rt.Desc[User]{
 	Table:   `"users"`,
 	Columns: `"id", "email"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Settable: true},
-		{Column: "email", Wire: "email", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
+		{Column: "email", Wire: "email"},
 	},
 	Scan:   voltUserScan,
 	Values: voltUserValues,
@@ -117,9 +117,9 @@ var voltUserProfileDesc = &rt.Desc[UserProfile]{
 	Table:   `"user_profiles"`,
 	Columns: `"user_id", "bio", "avatar_url"`,
 	Fields: []rt.FieldDesc{
-		{Column: "user_id", Wire: "user_id", Key: true, Settable: true},
-		{Column: "bio", Wire: "bio", Settable: true},
-		{Column: "avatar_url", Wire: "avatar_url", Settable: true},
+		{Column: "user_id", Wire: "user_id", Key: true, RowidAlias: true},
+		{Column: "bio", Wire: "bio"},
+		{Column: "avatar_url", Wire: "avatar_url"},
 	},
 	Scan:   voltUserProfileScan,
 	Values: voltUserProfileValues,

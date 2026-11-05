@@ -28,9 +28,9 @@ var voltEmployeeDesc = &rt.Desc[Employee]{
 	Table:   `"employees"`,
 	Columns: `"id", "full_name", "manager_id"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "full_name", Wire: "full_name", Settable: true},
-		{Column: "manager_id", Wire: "manager_id", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true, Assigned: true},
+		{Column: "full_name", Wire: "full_name"},
+		{Column: "manager_id", Wire: "manager_id"},
 	},
 	Scan:   voltEmployeeScan,
 	Values: voltEmployeeValues,
@@ -48,6 +48,10 @@ func (r Employee) Changeset() EmployeeChangeset {
 
 func (c EmployeeChangeset) From(r Employee) EmployeeChangeset {
 	return EmployeeChangeset{c.Changeset.From(r)}
+}
+
+func (c EmployeeChangeset) IDSet(v int) EmployeeChangeset {
+	return EmployeeChangeset{rt.Set(c.Changeset, 0, func(voltR *Employee) { voltR.ID = v })}
 }
 
 func (c EmployeeChangeset) FullNameSet(v string) EmployeeChangeset {
@@ -78,6 +82,9 @@ func voltEmployeeValues(voltR Employee) []any {
 
 func voltEmployeeApply(voltData, voltVals Employee, voltSet []bool) Employee {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.FullName = voltVals.FullName
 	}
@@ -89,6 +96,12 @@ func voltEmployeeApply(voltData, voltVals Employee, voltSet []bool) Employee {
 
 func voltEmployeeCast(c rt.Changeset[Employee], p rt.Params[Employee], i int) (rt.Changeset[Employee], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Employee) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return EmployeeChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "full_name", "string", false, func(voltR *Employee) string { return voltR.FullName })
 		if voltErr != nil || !voltOK {

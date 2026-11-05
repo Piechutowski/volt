@@ -6,9 +6,10 @@ import "context"
 // reverse relation leads to (spec §selects-over-groups): two statements
 // in one transaction, so both read one snapshot, the children grouped
 // by key in memory, in parent order, and each parent built into R with
-// its children. Child is the child statement with one placeholder, the
-// JSON array of the parent keys; no child statement runs for no
-// parents, and a parent without children is built with an empty slice.
+// its children, an empty slice for none. Child is the child statement,
+// run only when there are parents, with one placeholder, the JSON array
+// of their keys; the result is an empty slice, never nil, unless the
+// parent query has no statement.
 type With[P, C any, K comparable, R any] struct {
 	Parent    Query[P]
 	Child     string
@@ -18,12 +19,7 @@ type With[P, C any, K comparable, R any] struct {
 	Build     func(P, []C) R
 }
 
-func (With[P, C, K, R]) effect() {}
-
-// Perform runs both statements in one transaction and nests the
-// children under their parents; the result is an empty slice, never
-// nil, unless the parent query has no statement.
-func (w With[P, C, K, R]) Perform(ctx context.Context, x Executor) ([]R, error) {
+func (w With[P, C, K, R]) perform(ctx context.Context, x Executor) ([]R, error) {
 	if w.Parent.Err != nil {
 		return nil, w.Parent.Err
 	}
@@ -31,8 +27,8 @@ func (w With[P, C, K, R]) Perform(ctx context.Context, x Executor) ([]R, error) 
 		return nil, nil
 	}
 	var out []R
-	err := x.Transaction(ctx, func(tx Executor) error {
-		parents, err := w.Parent.Perform(ctx, tx)
+	err := txRun(ctx, x, false, func(tx Executor) error {
+		parents, err := w.Parent.perform(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -44,7 +40,7 @@ func (w With[P, C, K, R]) Perform(ctx context.Context, x Executor) ([]R, error) 
 		for i, p := range parents {
 			keys[i] = w.ParentKey(p)
 		}
-		children, err := Query[C]{SQL: w.Child, Args: []any{JSONList(keys)}, Scan: w.ChildScan}.Perform(ctx, tx)
+		children, err := Query[C]{SQL: w.Child, Args: []any{JSONList(keys)}, Scan: w.ChildScan}.perform(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -68,11 +64,16 @@ func (w With[P, C, K, R]) Perform(ctx context.Context, x Executor) ([]R, error) 
 	return out, nil
 }
 
-// PerformAny is Perform with its result as any.
-func (w With[P, C, K, R]) PerformAny(ctx context.Context, x Executor) (any, error) {
-	return w.Perform(ctx, x)
+func (w With[P, C, K, R]) performAny(ctx context.Context, x Executor) (any, error) {
+	return w.perform(ctx, x)
 }
 
-func (w With[P, C, K, R]) describe() string {
-	return describeStatement("with", w.Parent.SQL, w.Parent.Args, w.Parent.Err) + "; " + describeStatement("children", w.Child, nil, nil)
+func (w With[P, C, K, R]) writes() bool { return false }
+
+func (w With[P, C, K, R]) describe() description {
+	d := statementDescribe("with", w.Parent.SQL, w.Parent.Args, w.Parent.Err)
+	children := statementDescribe("children", w.Child, nil, nil)
+	d.kind += "; " + children.kind
+	d.spelled += "; " + children.spelled
+	return d
 }

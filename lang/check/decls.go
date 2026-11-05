@@ -9,8 +9,6 @@ import (
 func (c *checker) declsCheck(f *ast.File) {
 	for _, d := range f.Decls {
 		switch d := d.(type) {
-		case *ast.Project:
-			c.settingsCheck(d.Settings, "project", projectSettings)
 		case *ast.Table:
 			if ti := c.info.byName[d.Name.Name()]; ti == nil || ti.Decl != d {
 				c.tableBodyCheck(d.Name.Name(), d.Settings, d.Body, true)

@@ -45,15 +45,17 @@ green.
 
 Three Go modules under `go.work`: the library at the root (runtime,
 `lang/`, `gen/`, `nao/` with the value runtime `nao/rt` and the runner
-`nao/run`, `itest/`; stdlib only, sqlite3 test-only) and
-the tools `lsp/` and `cmd/volt/`, which carry the third-party
-dependencies; `cmd/volt` carries the `mattn/go-sqlite3` driver for the
-fold and `volt migration up`, so the tool is built with cgo (a C
-compiler on the path; without it the driver is a stub and `volt`
-refuses the fold and the migration commands with exit 2), while the
-library and the runtime register none. Go floor is the newest stable
-Go, declared in all three `go.mod` files. `grammar/`,
-`zed-extension/` and `scripts/sync-grammar.sh` are the editor stack.
+`nao/run`, `itest/`; stdlib only, sqlite3 test-only) and the tools
+`lsp/` and `cmd/volt/`, which carry the third-party dependencies;
+`cmd/volt` carries the `mattn/go-sqlite3` driver for the fold and
+`volt migration up`, so the tool is built with cgo (a C compiler on the
+path; without it the driver is a stub and `volt` refuses the fold and
+the migration commands with exit 2), while the library and the runtime
+register none. Generated code is committed only where it is a golden:
+the generator testdata and the `itest/` and `nao/itest/` fixtures. Go
+floor is the newest stable Go, declared in all three `go.mod` files.
+`grammar/`, `zed-extension/` and `scripts/sync-grammar.sh` are the
+editor stack.
 `go test ./...` at the root does not cover the tool modules.
 
 ## Verification bar, all of it, before claiming done
@@ -67,12 +69,12 @@ gofmt -l . | grep -v zed-extension        # must be empty
 ```
 
 Golden refresh is `go test ./gen/router -update` and `go test
-./nao/gen/... -update`; read the diff, goldens exist to surface
-unintended output changes. Grammar changes also need `tree-sitter
-generate`, `tree-sitter test`, the checklist in `editor.md` section 8
-and `./scripts/sync-grammar.sh`. Anything interactive in the language
-server gets a scripted stdio session; one is a golden
-(`cmd/volt/lsp_session_test.go`).
+./nao/gen/... -update`; read the diff, goldens
+exist to surface unintended output changes. Grammar changes also need
+`tree-sitter generate`, `tree-sitter test`, the checklist in
+`editor.md` section 8 and `./scripts/sync-grammar.sh`. Anything
+interactive in the language server gets a scripted stdio session; one
+is a golden (`cmd/volt/lsp_session_test.go`).
 
 ## Conventions
 

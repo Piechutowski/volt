@@ -9,13 +9,14 @@ import (
 )
 
 const projSchema = "package db\n\n" +
-	"table page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\thits int [default: 0]\n}\n\n" +
-	"table link_clicks {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\ttarget string [default: \"\"]\n}\n\n" +
+	"table page_views {\n\tid int [pk]\n\tsite string\n\tday int\n\thits int [default: 0]\n}\n\n" +
+	"table link_clicks {\n\tid int [pk]\n\tsite string\n\tday int\n\ttarget string [default: \"\"]\n}\n\n" +
 	"group metrics {\n\tpage_views\n\tlink_clicks\n}\n\n" +
 	"select summary (site, day) for metrics where day >= :from\n" +
 	"select public (* \\ site) for link_clicks\n" +
 	"select chosen for metrics where site in :sites and day in :days\n" +
-	"select busy for page_views where hits > 10 and site = :site and day in :days\n"
+	"select busy for page_views where hits > 10 and site = :site and day in :days\n" +
+	"select leaders for page_views where site = :site [order: (hits desc, id asc), limit: :limit]\n"
 
 func projSelectDoc(t *testing.T) (*Document, string) {
 	t.Helper()
@@ -96,6 +97,26 @@ func TestSelectHoverListParam(t *testing.T) {
 	}
 }
 
+func TestSelectHoverLimit(t *testing.T) {
+	d, text := projSelectDoc(t)
+	if diags := d.LSPDiagnostics(); len(diags) != 0 {
+		t.Fatalf("the hovered project must check clean, or the hover shows a select the checker refuses: %v", diags)
+	}
+	h := d.Hover(posOf(t, text, "leaders", 0))
+	if h == nil {
+		t.Fatal("no hover for the leaders select")
+	}
+	md := h.Contents.(protocol.MarkupContent).Value
+	for _, want := range []string{
+		"```sql\nORDER BY \"hits\" DESC, \"id\" ASC\n```\n```sql\nLIMIT ?\n```\nbinds: `limit`\n",
+		"PageViewLeaders(site string, limit int) rt.Query[PageView]",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("hover missing %q (§selects-over-groups):\n%s", want, md)
+		}
+	}
+}
+
 func TestSelectHoverBindsInPlaceholderOrder(t *testing.T) {
 	d, text := projSelectDoc(t)
 	h := d.Hover(posOf(t, text, "busy", 0))
@@ -114,7 +135,7 @@ func TestSelectHoverBindsInPlaceholderOrder(t *testing.T) {
 }
 
 const unresolvedSchema = "package db\n\n" +
-	"table authors {\n\tid int [pk, increment]\n\temail string\n\trank int32\n}\n\n" +
+	"table authors {\n\tid int [pk]\n\temail string\n\trank int32\n}\n\n" +
 	"select ranked for authors where rank >= :min and email = :e [order: (rank desc)]\n" +
 	"select shown (rank, email) for authors\n" +
 	"select byemail for authors where email = :e\n"
@@ -171,7 +192,7 @@ func TestSelectHoverSpellsUnknownFieldType(t *testing.T) {
 
 func TestSelectHoverNullableUnknownFieldType(t *testing.T) {
 	schema := "package db\n\ntype Score int32\n\n" +
-		"table authors {\n\tid int [pk, increment]\n\temail string\n\trank int32 [null]\n\tscore Score [null]\n}\n\n" +
+		"table authors {\n\tid int [pk]\n\temail string\n\trank int32 [null]\n\tscore Score [null]\n}\n\n" +
 		"select shown (rank, score, email) for authors\n" +
 		"select byemail for authors where email = :e\n"
 	root := voltProject(t, map[string]string{
@@ -198,7 +219,7 @@ func TestSelectHoverNullableUnknownFieldType(t *testing.T) {
 
 func TestSelectHoverBytesFieldTypes(t *testing.T) {
 	schema := "package db\n\n" +
-		"table attachments {\n\tid int [pk, increment]\n\tname string\n\tbody []byte\n\tthumb []byte [null]\n}\n\n" +
+		"table attachments {\n\tid int [pk]\n\tname string\n\tbody []byte\n\tthumb []byte [null]\n}\n\n" +
 		"select named for attachments where name = :name\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module proj\n",
@@ -213,6 +234,62 @@ func TestSelectHoverBytesFieldTypes(t *testing.T) {
 	for _, want := range []string{"\tBody []byte\n", "\tThumb rt.Null[[]byte]\n"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
+		}
+	}
+}
+
+// A select hovers with the effect its function yields (spec
+// §selects-over-groups): rt.Lookup for one row of aggregates, and rt.With
+// with the nested row type for a with select.
+func TestSelectHoverEffectKinds(t *testing.T) {
+	schema := "package db\n\n" +
+		"table posts {\n\tid int [pk]\n\tscore int\n}\n\n" +
+		"table comments {\n\tid int [pk]\n\tpost_id int [ref: posts.id]\n\tbody string\n}\n\n" +
+		"select total (count() as n) for posts where score > :min?\n" +
+		"select nested for posts with comments [order: (id asc), limit: :limit]\n"
+	root := voltProject(t, map[string]string{"go.mod": "module proj\n", "db/schema.volt": schema})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), schema)
+	for name, wants := range map[string][]string{
+		"total":  {"func PostTotal(min rt.Null[int]) rt.Lookup[Total]"},
+		"nested": {"func PostNested(limit int) rt.With[Post, Comment, int, PostWithComments]", "type PostWithComments struct {\n\tPost\n\tComments []Comment `json:\"comments\"`\n}"},
+	} {
+		h := d.Hover(posOf(t, schema, name+" ", 0))
+		if h == nil {
+			t.Fatalf("no hover for %s", name)
+		}
+		md := h.Contents.(protocol.MarkupContent).Value
+		for _, want := range wants {
+			if !strings.Contains(md, want) {
+				t.Errorf("hover of %s missing %q:\n%s", name, want, md)
+			}
+		}
+		if strings.Contains(md, "rt.Query[") {
+			t.Errorf("hover of %s says rt.Query:\n%s", name, md)
+		}
+	}
+}
+
+// A parameter a select names hovers as the Go parameter its functions
+// take, optional or the limit (spec §predicates, §selects-over-groups).
+func TestSelectParamHover(t *testing.T) {
+	schema := "package db\n\n" +
+		"table posts {\n\tid int [pk]\n\tscore int\n}\n\n" +
+		"select page for posts where score > :min? and id < :before [order: (id desc), limit: :limit]\n"
+	root := voltProject(t, map[string]string{"go.mod": "module proj\n", "db/schema.volt": schema})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), schema)
+	for at, want := range map[string]string{
+		":min?":   "min rt.Null[int]\n```\nan optional parameter",
+		":before": "before int\n```\na parameter",
+		":limit":  "limit int\n```\nthe limit:",
+	} {
+		pos := posOf(t, schema, at, 0)
+		pos.Character++
+		h := d.Hover(pos)
+		if h == nil {
+			t.Fatalf("no hover at %s", at)
+		}
+		if md := h.Contents.(protocol.MarkupContent).Value; !strings.Contains(md, want) {
+			t.Errorf("hover at %s = %q, want %q", at, md, want)
 		}
 	}
 }

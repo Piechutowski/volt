@@ -3,7 +3,7 @@
 // declaration order, and the json key is the wire name a changeset
 // casts from (A.5, §changesets).
 table users {
-  id        int [pk, increment]
+  id        int [pk]
   user_name string [tag: "json:\"userName\"", tag: "xml:\"user-name,attr\""]
   bio       string [null, note: "NULL until written", tag: "msgpack:\"bio,omitempty\""]
 }

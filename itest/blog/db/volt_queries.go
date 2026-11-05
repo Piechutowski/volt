@@ -40,6 +40,36 @@ func UserDelete(id int) rt.Exec {
 	return rt.Exec{SQL: voltUserDeleteSQL, Args: []any{id}, Model: "User", One: true}
 }
 
+const voltProfileGetSQL = `SELECT "user_id", "bio" FROM "profiles" WHERE "user_id" = ?`
+
+func ProfileGet(userID int) rt.Lookup[Profile] {
+	return rt.Lookup[Profile]{SQL: voltProfileGetSQL, Args: []any{userID}, Scan: voltProfileScan}
+}
+
+func ProfileGetMany(userIDs []int) rt.Query[Profile] {
+	if len(userIDs) == 0 {
+		return rt.Query[Profile]{}
+	}
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltProfileTableSQL, voltProfileColumnsSQL, []rt.Opt[Profile]{ProfileUserID.In(userIDs...)})
+	return rt.Query[Profile]{SQL: voltSQL, Args: voltArgs, Scan: voltProfileScan, Err: voltErr}
+}
+
+const voltProfileListSQL = `SELECT "user_id", "bio" FROM "profiles"`
+
+func ProfileList() rt.Query[Profile] {
+	return rt.Query[Profile]{SQL: voltProfileListSQL, Scan: voltProfileScan}
+}
+
+func ProfileCreate(c ProfileChangeset) rt.Write[Profile] { return rt.Insert(c.Validate().Changeset) }
+
+func ProfileUpdate(c ProfileChangeset) rt.Write[Profile] { return rt.Update(c.Validate().Changeset) }
+
+const voltProfileDeleteSQL = `DELETE FROM "profiles" WHERE "user_id" = ?`
+
+func ProfileDelete(userID int) rt.Exec {
+	return rt.Exec{SQL: voltProfileDeleteSQL, Args: []any{userID}, Model: "Profile", One: true}
+}
+
 const voltTagGetSQL = `SELECT "slug", "name" FROM "tags" WHERE "slug" = ?`
 
 func TagGet(slug string) rt.Lookup[Tag] {

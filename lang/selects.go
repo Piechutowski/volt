@@ -6,6 +6,7 @@ package lang
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strconv"
@@ -29,8 +30,18 @@ type GroupInfo struct {
 // SelectParam is one parameter of a generated select method, in first
 // appearance order (§selects-over-groups).
 type SelectParam struct {
-	GoName string // Go parameter name, the name written after ':'
-	GoType string // e.g. "string", "int64", "time.Time"
+	GoName   string // Go parameter name, the name written after ':'
+	GoType   string // e.g. "string", "int64", "time.Time"; the type an optional parameter would have
+	Optional bool   // written :name?, so the method takes rt.Null[GoType] (§predicates)
+}
+
+// Type is the parameter's Go type in the generated signature: GoType,
+// or rt.Null of it when the parameter is optional (spec §predicates).
+func (p SelectParam) Type() string {
+	if p.Optional {
+		return "rt.Null[" + p.GoType + "]"
+	}
+	return p.GoType
 }
 
 // SelectInfo is one checked Select (§selects-over-groups), lowered to the
@@ -46,6 +57,8 @@ type SelectInfo struct {
 	WhereSQL     string        // Where as the renderer spells it; "" when none
 	Binds        []string      // the Go expressions behind WhereSQL's placeholders, in order
 	OrderSQL     string        // Order as the renderer spells it; "" when none
+	Limit        string        // the Go expression LIMIT ? binds, the literal or the parameter; "" when none (§selects-over-groups)
+	LimitParam   string        // the limit parameter, "" when the limit is a literal or absent
 	Params       []SelectParam
 	Items        []naming.SelectItem // explicit projection, declared order (§selects-over-groups)
 	Group        []string            // the group: items as the statement names them (§selects-over-groups)
@@ -98,6 +111,17 @@ type joinTarget struct {
 	rel   *check.RelationInfo
 	why   string
 	model memberModel
+}
+
+type existsTarget struct {
+	name string
+	rel  *check.RelationInfo
+	why  string
+}
+
+type existsScope struct {
+	name  string
+	table *check.TableInfo
 }
 
 func (c *checker) dataQueries(pkg *Package) {
@@ -204,7 +228,8 @@ type selectEntry struct {
 	joined  []any
 	with    *check.RelationInfo
 	withRef any
-	whys    []string // why each join or the with resolved to no relation, the relation names last
+	exists  []*check.RelationInfo
+	whys    []string // why each join, the with and each exists resolved to no relation, the relation names last
 	preds   map[string]*ast.Pred
 	lookups []nameLookup
 	adds    []nameAdd
@@ -212,12 +237,17 @@ type selectEntry struct {
 	diags   []diag.Diagnostic
 }
 
-func (e *selectEntry) holds(members []*check.TableInfo, models []any, joins []*check.RelationInfo, joined []any, with *check.RelationInfo, withRef any, whys []string, preds map[string]*ast.Pred, names *naming.Names) bool {
-	if len(members) != len(e.members) || len(preds) != len(e.preds) || len(joins) != len(e.joins) || !slices.Equal(whys, e.whys) {
+func (e *selectEntry) holds(members []*check.TableInfo, models []any, joins []*check.RelationInfo, joined []any, with *check.RelationInfo, withRef any, exists []*check.RelationInfo, whys []string, preds map[string]*ast.Pred, names *naming.Names) bool {
+	if len(members) != len(e.members) || len(preds) != len(e.preds) || len(joins) != len(e.joins) || len(exists) != len(e.exists) || !slices.Equal(whys, e.whys) {
 		return false
 	}
 	if !relationEqual(with, e.with) || withRef != e.withRef {
 		return false
+	}
+	for i, r := range exists {
+		if !relationEqual(r, e.exists[i]) {
+			return false
+		}
 	}
 	for i, m := range members {
 		if m != e.members[i] || models[i] != e.models[i] {
@@ -288,17 +318,36 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *nam
 		where = append(where, sel.Where)
 	}
 	preds := predsIn(where, c.pkg.Preds)
+	existsNamed := existsNames(where, preds)
+	exists := make([]existsTarget, len(existsNamed))
+	existsRels := make([]*check.RelationInfo, len(existsNamed))
+	for i, name := range existsNamed {
+		exists[i].name = name
+		if info.Table(sel.Target.Name()) == nil {
+			continue
+		}
+		rel, named := info.Relation(members[0].Key, name)
+		if rel == nil {
+			exists[i].why = relationAmbiguity(members[0].Key, name, named)
+			continue
+		}
+		exists[i].rel, existsRels[i] = rel, rel
+	}
 	var relationNames []string
-	if len(sel.Joins) > 0 || sel.With != nil {
+	if len(sel.Joins) > 0 || sel.With != nil || len(exists) > 0 {
 		relationNames = info.RelationNames(members[0].Key)
 	}
-	whys := make([]string, 0, len(joins)+2)
+	whys := make([]string, 0, len(joins)+len(exists)+2)
 	for _, j := range joins {
 		whys = append(whys, j.why)
 	}
-	whys = append(whys, with.why, strings.Join(relationNames, ","))
+	whys = append(whys, with.why)
+	for _, x := range exists {
+		whys = append(whys, x.name+":"+x.why)
+	}
+	whys = append(whys, strings.Join(relationNames, ","))
 	if memo != nil {
-		if e := memo.prev[sel]; e != nil && e.holds(members, refs, rels, joined, withRel, withRef, whys, preds, minted) {
+		if e := memo.prev[sel]; e != nil && e.holds(members, refs, rels, joined, withRel, withRef, existsRels, whys, preds, minted) {
 			for _, a := range e.adds {
 				minted.Add(a.name, a.desc)
 			}
@@ -308,13 +357,13 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *nam
 			return e.si
 		}
 	}
-	si, lookups, adds, diags := selectCheck(sel, members, models, joins, with, relationNames, preds, minted)
+	si, lookups, adds, diags := selectCheck(sel, members, models, joins, with, exists, relationNames, preds, minted)
 	for _, a := range adds {
 		minted.Add(a.name, a.desc)
 	}
 	c.diags = append(c.diags, diags...)
 	if memo != nil {
-		memo.next[sel] = &selectEntry{members: members, models: refs, joins: rels, joined: joined, with: withRel, withRef: withRef, whys: whys, preds: preds, lookups: lookups, adds: adds, si: si, diags: diags}
+		memo.next[sel] = &selectEntry{members: members, models: refs, joins: rels, joined: joined, with: withRel, withRef: withRef, exists: existsRels, whys: whys, preds: preds, lookups: lookups, adds: adds, si: si, diags: diags}
 		memo.Misses++
 	}
 	return si
@@ -351,6 +400,7 @@ type selectLowering struct {
 	with          joinTarget
 	goFields      map[string]string // the Go fields projected so far, by name
 	joins         []joinTarget
+	exists        []existsTarget
 	relationNames string // the target table's relations, for the join diagnostics
 	sel           *ast.Select
 	members       []*check.TableInfo
@@ -362,10 +412,33 @@ type selectLowering struct {
 	adds    []nameAdd
 	diags   []diag.Diagnostic
 	unknown []string
+	ordered map[string]map[string]bool // the names order: lists, by qualifier, "" for the target's own and the aliases, and the column an alias of a lone column renames
 }
 
 func (l *selectLowering) errorf(pos token.Position, format string, args ...any) {
-	l.diags = append(l.diags, diag.Errorf(pos, "spec/selects-over-groups", format, args...))
+	msg := fmt.Sprintf(format, args...)
+	l.diags = append(l.diags, diag.Errorf(pos, "spec/"+sectionEnforced(msg, "selects-over-groups"), "%s", msg))
+}
+
+// sectionEnforced is the anchor a diagnostic's code names (spec
+// §conformance-and-the-proof-chain): fallback when the message cites it
+// or cites nothing, else the first section its closing citation names.
+func sectionEnforced(msg, fallback string) string {
+	i := strings.LastIndex(msg, "(§")
+	if i < 0 || !strings.HasSuffix(msg, ")") {
+		return fallback
+	}
+	var first string
+	for _, c := range strings.Split(msg[i+1:len(msg)-1], ",") {
+		anchor := strings.TrimPrefix(strings.TrimSpace(c), "§")
+		if anchor == fallback {
+			return fallback
+		}
+		if first == "" {
+			first = anchor
+		}
+	}
+	return first
 }
 
 func (l *selectLowering) lookup(name string) (string, bool) {
@@ -498,25 +571,29 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 
 func (c *checker) nameMiss(id *ast.Ident, info *check.Info, section, what string) {
 	want := id.Name()
+	cite := "(§groups)"
+	if section != "groups" {
+		cite = "(§" + section + ", §groups)"
+	}
 	for _, ti := range info.Tables {
 		if strings.EqualFold(ti.Decl.Name.Name(), want) {
-			c.errorf(id.Pos(), section, "unknown %s %q; did you mean %q? names are case-sensitive (§groups)", what, want, ti.Decl.Name.Name())
+			c.errorf(id.Pos(), section, "unknown %s %q; did you mean %q? names are case-sensitive %s", what, want, ti.Decl.Name.Name(), cite)
 			return
 		}
 	}
 	for _, d := range c.pkg.merged.Decls {
 		if g, ok := d.(*ast.Group); ok && strings.EqualFold(g.Name.Name(), want) {
-			c.errorf(id.Pos(), section, "unknown %s %q; did you mean the group %q? names are case-sensitive (§groups)", what, want, g.Name.Name())
+			c.errorf(id.Pos(), section, "unknown %s %q; did you mean the group %q? names are case-sensitive %s", what, want, g.Name.Name(), cite)
 			return
 		}
 	}
 	for _, ti := range info.Tables {
 		if m, err := naming.ModelName(ti.Decl); err == nil && m == want {
-			c.errorf(id.Pos(), section, "unknown %s %q; %q is the model of table %q: name the table (§groups)", what, want, want, ti.Decl.Name.Name())
+			c.errorf(id.Pos(), section, "unknown %s %q; %q is the model of table %q: name the table %s", what, want, want, ti.Decl.Name.Name(), cite)
 			return
 		}
 	}
-	c.errorf(id.Pos(), section, "unknown %s %q: no such table or group in package %q (§groups)", what, want, c.pkg.Path)
+	c.errorf(id.Pos(), section, "unknown %s %q: no such table or group in package %q %s", what, want, c.pkg.Path, cite)
 }
 
 func (c *checker) predRefCycles(pkg *Package) {
@@ -561,9 +638,39 @@ func predWalk(x ast.PredExpr, f func(*ast.PredRef)) {
 		predWalk(x.X, f)
 	case *ast.PredParen:
 		predWalk(x.X, f)
+	case *ast.PredExists:
+		predWalk(x.X, f)
 	case *ast.PredRef:
 		f(x)
 	}
+}
+
+func existsNames(where []ast.PredExpr, preds map[string]*ast.Pred) []string {
+	var names []string
+	for _, x := range where {
+		names = existsCollect(x, names)
+	}
+	for _, d := range preds {
+		if d != nil {
+			names = existsCollect(d.X, names)
+		}
+	}
+	sort.Strings(names)
+	return slices.Compact(names)
+}
+
+func existsCollect(x ast.PredExpr, acc []string) []string {
+	switch x := x.(type) {
+	case *ast.PredBinary:
+		return existsCollect(x.Y, existsCollect(x.X, acc))
+	case *ast.PredNot:
+		return existsCollect(x.X, acc)
+	case *ast.PredParen:
+		return existsCollect(x.X, acc)
+	case *ast.PredExists:
+		return existsCollect(x.X, append(acc, x.Rel.Name()))
+	}
+	return acc
 }
 
 type typeClass int
@@ -616,8 +723,8 @@ func (b *colBinding) litClass() typeClass {
 	return b.storage
 }
 
-func selectCheck(sel *ast.Select, members []*check.TableInfo, models []memberModel, joins []joinTarget, with joinTarget, relationNames []string, preds map[string]*ast.Pred, names nameScope) (*SelectInfo, []nameLookup, []nameAdd, []diag.Diagnostic) {
-	l := &selectLowering{sel: sel, members: members, models: models, joins: joins, with: with, relationNames: relationList(relationNames), preds: preds, names: names}
+func selectCheck(sel *ast.Select, members []*check.TableInfo, models []memberModel, joins []joinTarget, with joinTarget, exists []existsTarget, relationNames []string, preds map[string]*ast.Pred, names nameScope) (*SelectInfo, []nameLookup, []nameAdd, []diag.Diagnostic) {
+	l := &selectLowering{sel: sel, members: members, models: models, joins: joins, with: with, exists: exists, relationNames: relationList(relationNames), preds: preds, names: names}
 	si := l.check()
 	return si, l.lookups, l.adds, l.diags
 }
@@ -648,6 +755,7 @@ func (l *selectLowering) check() *SelectInfo {
 		joins:   si.Joins,
 		cols:    map[string]*colBinding{},
 		params:  map[string]*SelectParam{},
+		paramAt: map[string]*ast.Param{},
 		aliases: map[string]*ast.ProjItem{},
 	}
 	if len(si.Joins) > 0 {
@@ -663,7 +771,7 @@ func (l *selectLowering) check() *SelectInfo {
 
 	var where rt.GenPred
 	if sel.Where != nil {
-		where = env.exprLower(sel.Where, map[string]bool{})
+		where = rt.PredVanish(env.exprLower(sel.Where, map[string]bool{}))
 	}
 	si.droppedParams = env.dropped
 
@@ -676,9 +784,26 @@ func (l *selectLowering) check() *SelectInfo {
 			si.Lookup = true
 		}
 	}
-	if si.Lookup && len(order) > 0 {
-		l.errorf(sel.Settings.Get("order").Pos(), "select %q aggregates without group:, so it yields one row, which order: cannot sort (§selects-over-groups)", sel.Name.Name())
-		return nil
+	if si.Lookup {
+		one := false
+		if len(order) > 0 {
+			l.errorf(sel.Settings.Get("order").Pos(), "select %q aggregates without group:, so it yields one row, which order: cannot sort (§selects-over-groups)", sel.Name.Name())
+			one = true
+		}
+		if si.Limit != "" {
+			l.errorf(sel.Settings.Get("limit").Pos(), "select %q aggregates without group:, so it yields one row, which limit: has nothing to cap (§selects-over-groups)", sel.Name.Name())
+			one = true
+		}
+		if one {
+			return nil
+		}
+	}
+	if si.Limit != "" {
+		if sel.Settings.Get("order") == nil {
+			l.errorf(sel.Settings.Get("limit").Pos(), "select %q takes limit: without order:, so the rows it keeps would be arbitrary; order them, [order: (...), limit: ...] (§selects-over-groups)", sel.Name.Name())
+		} else {
+			l.limitOrderTotal()
+		}
 	}
 	if len(l.unknown) > 0 {
 		si.Unresolved = true
@@ -756,10 +881,14 @@ func (l *selectLowering) joinsCheck(si *SelectInfo) bool {
 }
 
 // relationAmbiguity says why a relation name cannot be joined (spec
-// §relationships-ref): "" when the table simply has none.
+// §relationships-ref): "" when the table simply has none, and the one
+// relation it misspells in case when it names one.
 func relationAmbiguity(table, name string, named []*check.RelationInfo) string {
 	if len(named) == 0 {
 		return ""
+	}
+	if len(named) == 1 && named[0].Name != name && !strings.EqualFold(name, table) {
+		return fmt.Sprintf("table %q has no relation %q; did you mean %q? names are case-sensitive", table, name, named[0].Name)
 	}
 	parts := make([]string, len(named))
 	for i, r := range named {
@@ -824,7 +953,7 @@ func (l *selectLowering) withCheck(si *SelectInfo) bool {
 		case cd.Nullable:
 			l.errorf(id.Pos(), "with %s matches the parent's %q, which carries null; a NULL key matches no child, so the key is a column that is never NULL (§selects-over-groups)", name, parentKey)
 			return false
-		case cd.Type.Known() && (cd.Type.Storage == "time.Time" || cd.Type.Storage == "[]byte"):
+		case cd.Type.Known() && cd.Type.Storage == "[]byte":
 			l.errorf(id.Pos(), "with %s matches the parent's %q (%s), whose keys cannot travel as one JSON list, as a list parameter cannot (§selects-over-groups, §predicates)", name, parentKey, cd.Col.Type.String())
 			return false
 		}
@@ -1260,13 +1389,17 @@ func (e *selectEnv) arithLower(x ast.ArithExpr, typ *colBinding) (rt.Expr, bool)
 			e.errorf(x.Pos(), "arithmetic takes numbers; found %s (§selects-over-groups)", x.String())
 			return rt.Expr{}, false
 		}
-		slot, err := numberGo(x.Tok.Val, typ.storageGo)
+		slot, err := argNumberGo(x.Tok.Val, typ.storageGo)
 		if err != nil {
 			e.errorf(x.Pos(), "literal %s does not fit %s, the type of the expression (§selects-over-groups)", x.Tok.Val, typ.storageGo)
 			return rt.Expr{}, false
 		}
 		return rt.ExprVal(slot), true
 	case *ast.Param:
+		if x.Optional {
+			e.predErrorf(x.Pos(), "the optional parameter %s stands in a projection; an optional parameter stands in a predicate term only (§predicates)", x.String())
+			return rt.Expr{}, false
+		}
 		return rt.ExprVal(e.paramBind(x, typ.goType)), true
 	case *ast.ArithParen:
 		return e.arithLower(x.X, typ)
@@ -1313,6 +1446,8 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 		return nil
 	}
 	var terms []rt.GenOrder
+	var limitParam *ast.Param
+	var limitSeen bool
 	repeated, dupDiags := settingsRepeated(sel.Settings, "order", "group")
 	l.diags = append(l.diags, dupDiags...)
 	for _, s := range sel.Settings.Settings {
@@ -1320,6 +1455,13 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 			continue
 		}
 		switch s.Name {
+		case "limit":
+			if limitSeen {
+				l.errorf(s.Pos(), "select %q takes limit: twice; a select keeps one count of rows (§selects-over-groups)", sel.Name.Name())
+				continue
+			}
+			limitSeen = true
+			limitParam = l.limitSetting(s)
 		case "group":
 			l.groupSetting(env, s)
 		case "order":
@@ -1347,6 +1489,12 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 					continue
 				}
 				seenOrder[name] = true
+				l.orderedNote(cr)
+				if item, isAlias := env.aliases[id.Name()]; isAlias && cr.Qual == nil {
+					if col, renamed := item.Expr.(*ast.ColRef); renamed {
+						l.orderedNote(col)
+					}
+				}
 				if b != nil && b.class == classEqOnly {
 					l.errorf(id.Pos(), "column %q has declared type %s; a declared type cannot be ordered (§selects-over-groups)", b.name, b.goType)
 					continue
@@ -1374,10 +1522,166 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 				}
 			}
 		default:
-			l.errorf(s.Pos(), "unknown select setting %q; selects take [order: (...)] and [group: (...)] (§selects-over-groups)", s.Name)
+			l.errorf(s.Pos(), "unknown select setting %q; selects take [order: (...)], [group: (...)] and [limit: ...] (§selects-over-groups)", s.Name)
+		}
+	}
+	if limitParam != nil {
+		name := limitParam.Name.Name()
+		if limitParam.Optional {
+			env.predErrorf(limitParam.Pos(), "limit: takes the optional parameter %s; a limit is never optional, and an optional parameter stands in a predicate term only (§predicates, §selects-over-groups)", limitParam.String())
+		} else if _, used := env.params[name]; used || env.dropped[name] {
+			l.errorf(limitParam.Pos(), "parameter :%s is the limit and a parameter of the select besides; a limit takes a parameter of its own (§selects-over-groups)", name)
+		} else {
+			env.paramBind(limitParam, "int")
+			l.si.Limit, l.si.LimitParam = name, name
 		}
 	}
 	return terms
+}
+
+// orderedNote records a name order: lists under its qualifier, the
+// relation joined or "" for the target's own columns and the aliases.
+func (l *selectLowering) orderedNote(cr *ast.ColRef) {
+	qual := ""
+	if cr.Qual != nil {
+		qual = cr.Qual.Name()
+	}
+	if l.ordered == nil {
+		l.ordered = map[string]map[string]bool{}
+	}
+	if l.ordered[qual] == nil {
+		l.ordered[qual] = map[string]bool{}
+	}
+	l.ordered[qual][cr.Name.Name()] = true
+}
+
+// limitOrderTotal reports an order: that leaves ties under a limit:
+// (spec §selects-over-groups). Without group: a row is a row of each
+// member and of each joined relation of many rows, so the order names a
+// key of each; with group: a row is a group, so the order names every
+// group: item, or a key of the target that group: holds when no item
+// reaches a relation of many rows.
+func (l *selectLowering) limitOrderTotal() {
+	sel, at := l.sel, l.sel.Settings.Get("limit").Pos()
+	var many []int
+	for i := range sel.Joins {
+		if rel := l.joins[i].rel; rel != nil && !rel.Forward {
+			many = append(many, i)
+		}
+	}
+	own := l.ordered[""]
+	if l.si.Group != nil {
+		if l.groupKeyed(many) {
+			return
+		}
+		for _, item := range sel.Items {
+			if item.Agg == nil && !own[item.Name()] {
+				l.errorf(at, "select %q takes limit: over an order that leaves ties: order: does not name the group: item %q, so two groups can tie and the ones kept at the cut would be arbitrary; name every group: item in order:, or a key of the target that group: holds (§selects-over-groups)", sel.Name.Name(), item.Name())
+				return
+			}
+		}
+		return
+	}
+	for _, ti := range l.members {
+		if !ti.ColumnsKeyed(own) {
+			l.errorf(at, "select %q takes limit: over an order that leaves ties: order: names no key of %s, so two rows can tie and the ones kept at the cut would be arbitrary; %s (§selects-over-groups)", sel.Name.Name(), ti.Decl.Name.Name(), keyHint(ti, ""))
+			return
+		}
+	}
+	for _, i := range many {
+		name, ti := sel.Joins[i].Name(), l.joins[i].rel.Table
+		if !ti.ColumnsKeyed(l.ordered[name]) {
+			l.errorf(at, "select %q takes limit: over an order that leaves ties: the join of %q repeats a row of %s for each of its rows, and order: names no key of %s, so two rows can tie and the ones kept at the cut would be arbitrary; %s (§selects-over-groups)", sel.Name.Name(), name, l.members[0].Decl.Name.Name(), ti.Decl.Name.Name(), keyHint(ti, name+"."))
+			return
+		}
+	}
+}
+
+// groupKeyed reports whether a grouped select's order names a key of
+// every member that group: holds as its own columns, bare or under the
+// alias of a lone column, while no group: item reaches a joined relation
+// of many rows (spec §selects-over-groups): one group is then one row of
+// the target.
+func (l *selectLowering) groupKeyed(many []int) bool {
+	sel := l.sel
+	reverse := map[string]bool{}
+	for _, i := range many {
+		reverse[sel.Joins[i].Name()] = true
+	}
+	held := map[string]bool{}
+	for _, item := range sel.Items {
+		if item.Agg != nil {
+			continue
+		}
+		col := item.Col
+		if item.Expr != nil {
+			for _, cr := range arithCols(item.Expr, nil) {
+				if cr.Qual != nil && reverse[cr.Qual.Name()] {
+					return false
+				}
+			}
+			renamed, ok := item.Expr.(*ast.ColRef)
+			if !ok {
+				continue
+			}
+			col = renamed
+		}
+		if col.Qual == nil && l.ordered[""][col.Name.Name()] {
+			held[col.Name.Name()] = true
+		}
+	}
+	for _, ti := range l.members {
+		if !ti.ColumnsKeyed(held) {
+			return false
+		}
+	}
+	return true
+}
+
+// keyHint suggests the first of the table's keys to end an order with,
+// qualified by prefix for a joined relation (spec §selects-over-groups).
+func keyHint(ti *check.TableInfo, prefix string) string {
+	keys := ti.Keys()
+	if len(keys) == 0 {
+		return "a table without a key, a primary key or a unique column or index whose columns are never NULL, takes no limit:"
+	}
+	names := make([]string, len(keys[0]))
+	for i, n := range keys[0] {
+		names[i] = prefix + n + " asc"
+	}
+	which := "the primary key"
+	if pk := ti.PK(); len(pk) == 0 || pk[0].Col.Name.Name() != keys[0][0] {
+		which = "a key of " + ti.Decl.Name.Name()
+	}
+	return "end it in " + which + ", (..., " + strings.Join(names, ", ") + ")"
+}
+
+// limitSetting reads a select's limit: (spec §selects-over-groups): a
+// positive integer literal, which it records in canonical form, or a
+// parameter, which it returns for the caller to bind after every other.
+func (l *selectLowering) limitSetting(s *ast.Setting) *ast.Param {
+	switch v := s.Value.(type) {
+	case *ast.Param:
+		return v
+	case *ast.NegNumber:
+		l.errorf(v.Pos(), "limit: keeps at least 1 row, not -%s (§selects-over-groups)", v.Num.Tok.Val)
+		return nil
+	case *ast.BasicLit:
+		if v.Tok.Kind == token.NUMBER && strings.Trim(v.Tok.Val, "0123456789") == "" {
+			n, err := strconv.ParseInt(v.Tok.Val, 10, 64)
+			switch {
+			case err != nil:
+				l.errorf(v.Pos(), "limit: %s does not fit int64 (§selects-over-groups)", v.Tok.Val)
+			case n < 1:
+				l.errorf(v.Pos(), "limit: keeps at least 1 row, not %s (§selects-over-groups)", v.Tok.Val)
+			default:
+				l.si.Limit = intArgGo(n)
+			}
+			return nil
+		}
+	}
+	l.errorf(s.Pos(), "limit: takes a positive integer or a parameter, :name (§selects-over-groups)")
+	return nil
 }
 
 // aliasBinding is the binding an order: term takes for a derived item
@@ -1491,14 +1795,41 @@ type selectEnv struct {
 	aliases   map[string]*ast.ProjItem
 	cols      map[string]*colBinding
 	params    map[string]*SelectParam
+	paramAt   map[string]*ast.Param // the first use of each parameter
 	paramList []SelectParam
 	failed    bool
 	dropped   map[string]bool
+	scope     *existsScope   // the exists term being lowered, nil outside one (§predicates)
+	reads     []string       // the optional parameters the term being lowered reads, in first-appearance order
+	via       []*ast.PredRef // the pred references being expanded, the select's own first
 }
 
 func (e *selectEnv) errorf(pos token.Position, format string, args ...any) {
 	e.failed = true
+	pos, format, args = e.viaSite(pos, format, args)
 	e.l.errorf(pos, format, args...)
+}
+
+func (e *selectEnv) predErrorf(pos token.Position, format string, args ...any) {
+	e.failed = true
+	pos, format, args = e.viaSite(pos, format, args)
+	e.l.diags = append(e.l.diags, diag.Errorf(pos, "spec/predicates", format, args...))
+}
+
+// viaSite moves a fault found inside a pred to where the select names
+// the pred (spec §predicates): a pred is typed at each use site, so the
+// select is what the fault is about, and the message names the select,
+// the preds it went through and where in them the fault stands.
+func (e *selectEnv) viaSite(pos token.Position, format string, args []any) (token.Position, string, []any) {
+	if len(e.via) == 0 {
+		return pos, format, args
+	}
+	names := make([]string, len(e.via))
+	for i, r := range e.via {
+		names[i] = r.Name.Name()
+	}
+	prefix := fmt.Sprintf("select %s reads pred %s here, where at %s: ", e.sel.Name.Name(), strings.Join(names, " through pred "), pos)
+	return e.via[0].Name.Pos(), strings.ReplaceAll(prefix, "%", "%%") + format, args
 }
 
 func (e *selectEnv) join(name string) *JoinInfo {
@@ -1532,6 +1863,9 @@ func fieldByCol(fields []naming.FieldSig, col string) (naming.FieldSig, bool) {
 // over the joined relation's table; the binding's name is what the
 // statement spells, qualified once a join is present.
 func (e *selectEnv) columnBind(cr *ast.ColRef) (b *colBinding, unknown bool) {
+	if e.scope != nil {
+		return e.existsColumnBind(cr)
+	}
 	written := cr.String()
 	if b, done := e.cols[written]; done {
 		return b, false
@@ -1635,6 +1969,37 @@ func (e *selectEnv) columnBind(cr *ast.ColRef) (b *colBinding, unknown bool) {
 	return b, false
 }
 
+func (e *selectEnv) existsColumnBind(cr *ast.ColRef) (*colBinding, bool) {
+	sc := e.scope
+	if cr.Qual != nil {
+		e.predErrorf(cr.Pos(), "inside exists %s a column is one of table %q's, named bare; %s is qualified (§predicates)", sc.name, sc.table.Key, cr.String())
+		return nil, false
+	}
+	name := cr.Name.Name()
+	sqlName := sc.name + "." + name
+	key := "exists " + sqlName
+	if b, done := e.cols[key]; done {
+		return b, false
+	}
+	cd := sc.table.Column(name)
+	if cd == nil {
+		e.predErrorf(cr.Name.Pos(), "table %q, which exists %s reaches, has no column %q; inside exists a bare name is a column of the relation's table (§predicates)", sc.table.Key, sc.name, name)
+		return nil, false
+	}
+	if !cd.Type.Known() {
+		e.l.unknownAdd(sqlName)
+		return nil, true
+	}
+	class := classOfType(cd.Type)
+	if class == classForbidden {
+		e.errorf(cr.Name.Pos(), "column %q (%s) cannot appear in a predicate (§predicates)", sqlName, cd.Col.Type.String())
+		return nil, false
+	}
+	b := &colBinding{name: sqlName, goType: cd.Type.Go, storageGo: cd.Type.Storage, class: class, storage: classOfName(cd.Type.StorageClass()), nullable: cd.Nullable}
+	e.cols[key] = b
+	return b, false
+}
+
 func (e *selectEnv) paramsDrop(ops ...ast.Operand) {
 	for _, op := range ops {
 		if p, ok := op.(*ast.Param); ok {
@@ -1656,29 +2021,128 @@ func tableList(names []string) string {
 func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 	name := p.Name.Name()
 	if prev, seen := e.params[name]; seen {
-		if prev.GoType != goType {
+		switch first := e.paramAt[name]; {
+		case prev.Optional != p.Optional:
+			e.predErrorf(p.Pos(), "parameter %s here is %s at %s: a parameter is optional at every use in a select, the preds it uses included, or at none (§predicates)", p.String(), first.String(), first.Pos())
+		case prev.GoType != goType:
 			e.errorf(p.Pos(), "parameter :%s used as %s here but %s earlier — one name, one type (§predicates)", name, goType, prev.GoType)
 		}
+		e.paramRead(p)
 		return name
 	}
-	if !goParamOK(name) {
-		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)", name)
+	if why := goParamWhy(name); why != "" {
+		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: %s (§predicates)", name, why)
 		return name
 	}
-	sp := SelectParam{GoName: name, GoType: goType}
+	sp := SelectParam{GoName: name, GoType: goType, Optional: p.Optional}
 	e.params[name] = &sp
+	e.paramAt[name] = p
 	e.paramList = append(e.paramList, sp)
+	e.paramRead(p)
 	return name
 }
 
-func goParamOK(name string) bool {
-	if name == "" || goKeywords[name] || naming.RouteSignatureName(name) || naming.BodyBuiltin(name) || selectMethodNames[name] || naming.LocalName(name) {
-		return false
+func (e *selectEnv) paramRead(p *ast.Param) {
+	if !p.Optional {
+		return
 	}
-	return goIdentOK(name)
+	name := p.Name.Name()
+	for _, read := range e.reads {
+		if read == name {
+			return
+		}
+	}
+	e.reads = append(e.reads, name)
 }
 
-var selectMethodNames = map[string]bool{"q": true, "rt": true}
+func (e *selectEnv) paramSlot(name string) string {
+	if prm := e.params[name]; prm != nil && strings.HasPrefix(prm.GoType, "[]") {
+		return e.listSlot(name, prm.Optional)
+	}
+	return name
+}
+
+func (e *selectEnv) listSlot(name string, optional bool) string {
+	if optional {
+		return "rt.JSONListOptional(" + name + ")"
+	}
+	return "rt.JSONList(" + name + ")"
+}
+
+func (e *selectEnv) termBegin() bool {
+	e.reads = nil
+	return true
+}
+
+func (e *selectEnv) termEnd(own bool, p rt.GenPred) rt.GenPred {
+	if !own {
+		return p
+	}
+	guards := make([]any, 0, len(e.reads))
+	for _, name := range e.reads {
+		guards = append(guards, e.paramSlot(name))
+	}
+	e.reads = nil
+	return rt.PredOptional(guards, p)
+}
+
+func (e *selectEnv) existsLower(x *ast.PredExists, preds map[string]bool) rt.GenPred {
+	name := x.Rel.Name()
+	if e.scope != nil {
+		e.predErrorf(x.Pos(), "exists %s stands inside exists %s: exists does not nest, the depth is one (§predicates)", name, e.scope.name)
+		return rt.GenPred{}
+	}
+	target := e.sel.Target.Name()
+	if len(e.members) != 1 || e.members[0].Key != target {
+		e.predErrorf(x.Rel.Pos(), "exists needs a table: %q is a group, and a group has no relations (§predicates)", target)
+		return rt.GenPred{}
+	}
+	var et *existsTarget
+	for i := range e.l.exists {
+		if e.l.exists[i].name == name {
+			et = &e.l.exists[i]
+		}
+	}
+	switch {
+	case et != nil && et.rel == nil && et.why != "":
+		e.predErrorf(x.Rel.Pos(), "%s (§relationships-ref, §predicates)", et.why)
+		return rt.GenPred{}
+	case et == nil || et.rel == nil:
+		e.predErrorf(x.Rel.Pos(), "table %q has no relation %q for exists to reach; its relations: %s (§predicates, §relationships-ref)", target, name, e.l.relationNames)
+		return rt.GenPred{}
+	}
+	rel := et.rel
+	e.scope = &existsScope{name: name, table: rel.Table}
+	inner := e.exprLower(x.X, preds)
+	e.scope = nil
+	on := make([][2]string, len(rel.On))
+	for i, pair := range rel.On {
+		on[i] = [2]string{name + "." + pair[1], target + "." + pair[0]}
+	}
+	return rt.PredExists(rel.Table.Key, name, on, inner)
+}
+
+func goParamOK(name string) bool { return goParamWhy(name) == "" }
+
+// goParamWhy is the one reason a select parameter cannot take name as
+// its Go name (spec §predicates), "" when it can.
+func goParamWhy(name string) string {
+	switch {
+	case name == "_":
+		return "it is the blank identifier _, which no expression reads"
+	case goKeywords[name]:
+		return "it is a Go keyword"
+	case !goIdentOK(name):
+		return "it is not an ASCII identifier"
+	case naming.RouteSignatureName(name) || name == "rt":
+		return "it is a name the generated signatures use (ctx, rt, w, r, opts, volt, cs, c, body)"
+	case naming.BodyBuiltin(name):
+		return "it is nil, append, any or true, which the generated functions use"
+	case naming.LocalName(name):
+		return "it has the form of the generated locals, volt followed by an upper-case letter and no underscore"
+	}
+	return ""
+}
 
 func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred {
 	switch x := x.(type) {
@@ -1692,6 +2156,8 @@ func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred 
 		return rt.Not(e.exprLower(x.X, preds))
 	case *ast.PredParen:
 		return e.exprLower(x.X, preds)
+	case *ast.PredExists:
+		return e.existsLower(x, preds)
 	case *ast.PredRef:
 		name := x.Name.Name()
 		d := e.l.preds[name]
@@ -1703,15 +2169,20 @@ func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred 
 			return rt.GenPred{}
 		}
 		preds[name] = true
+		e.via = append(e.via, x)
 		p := e.exprLower(d.X, preds)
+		e.via = e.via[:len(e.via)-1]
 		delete(preds, name)
 		return p
 	case *ast.PredCompare:
-		return e.compareLower(x)
+		own := e.termBegin()
+		return e.termEnd(own, e.compareLower(x))
 	case *ast.PredIn:
-		return e.inLower(x)
+		own := e.termBegin()
+		return e.termEnd(own, e.inLower(x))
 	case *ast.PredLike:
-		return e.likeLower(x)
+		own := e.termBegin()
+		return e.termEnd(own, e.likeLower(x))
 	case *ast.PredNull:
 		b, _ := e.columnBind(x.Col)
 		if b == nil {
@@ -1833,7 +2304,7 @@ func (e *selectEnv) litSlot(l *ast.Lit, b *colBinding) (string, bool) {
 			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the number %s (§predicates)", b.name, b.goType, l.Tok.Val)
 			return "", false
 		}
-		slot, err := numberGo(l.Tok.Val, b.storageGo)
+		slot, err := argNumberGo(l.Tok.Val, b.storageGo)
 		if err != nil {
 			e.errorf(l.Pos(), "literal %s does not fit %s, the storage type of column %q (§predicates)", l.Tok.Val, b.storageGo, b.name)
 			return "", false
@@ -1859,6 +2330,29 @@ func (e *selectEnv) litSlot(l *ast.Lit, b *colBinding) (string, bool) {
 		}
 		return "false", true
 	}
+}
+
+// argNumberGo is numberGo for a literal a generated statement binds as
+// an argument (spec §predicates): an int beyond 32 bits is spelled
+// int64(n), since an untyped constant in []any is an int, which is 32
+// bits on some targets.
+func argNumberGo(val, storage string) (string, error) {
+	s, err := numberGo(val, storage)
+	if err != nil || storage == "float64" {
+		return s, err
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return "", err
+	}
+	return intArgGo(n), nil
+}
+
+func intArgGo(n int64) string {
+	if n < math.MinInt32 || n > math.MaxInt32 {
+		return "int64(" + strconv.FormatInt(n, 10) + ")"
+	}
+	return strconv.FormatInt(n, 10)
 }
 
 func numberGo(val, storage string) (string, error) {
@@ -1889,19 +2383,11 @@ func (e *selectEnv) inLower(x *ast.PredIn) rt.GenPred {
 		return rt.GenPred{}
 	}
 	if x.List != nil {
-		if b.class == classTime {
-			e.errorf(x.Col.Pos(), "column %q (%s) cannot take a list parameter: JSON carries no date/time value (§predicates)", b.name, b.goType)
-			return rt.GenPred{}
-		}
-		if b.class == classEqOnly && b.storage == classTime {
-			e.errorf(x.Col.Pos(), "column %q has declared type %s stored as time.Time; it cannot take a list parameter: JSON carries no date/time value (§predicates)", b.name, b.goType)
-			return rt.GenPred{}
-		}
 		if b.class == classEqOnly && b.storage == classForbidden {
 			e.errorf(x.Col.Pos(), "column %q has declared type %s stored as []byte; it cannot take a list parameter: JSON carries no blob, and its text never equals the stored bytes (§predicates)", b.name, b.goType)
 			return rt.GenPred{}
 		}
-		return rt.PredInList(b.name, "rt.JSONList("+e.paramBind(x.List, "[]"+b.goType)+")")
+		return rt.PredInList(b.name, e.listSlot(e.paramBind(x.List, "[]"+b.goType), x.List.Optional))
 	}
 	slots := make([]any, 0, len(x.Items))
 	ok := true
@@ -1979,6 +2465,8 @@ func (p *Package) SelectFns() []naming.SelectFn {
 				MethodSuffix: si.MethodSuffix,
 				Where:        si.Where,
 				Order:        si.Order,
+				Limit:        si.Limit,
+				LimitParam:   si.LimitParam,
 				Items:        si.Items,
 				Excluded:     si.Excluded,
 				SharedType:   si.Shared,
@@ -2007,6 +2495,8 @@ func predsIn(exprs []ast.PredExpr, all map[string]*ast.Pred) map[string]*ast.Pre
 		case *ast.PredNot:
 			walk(x.X)
 		case *ast.PredParen:
+			walk(x.X)
+		case *ast.PredExists:
 			walk(x.X)
 		case *ast.PredRef:
 			name := x.Name.Name()

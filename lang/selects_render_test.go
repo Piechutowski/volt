@@ -115,7 +115,8 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 		{"negative leading zero literal", "day = -010", "", typed(rDay.Eq(0)), []string{"-10"}},
 		{"negative octal-looking literal", "day = -08", "", typed(rDay.Eq(0)), []string{"-8"}},
 		{"negative literal", "day > -1", "", typed(rDay.Gt(0)), []string{"-1"}},
-		{"int64 bounds", "day in (9223372036854775807, -9223372036854775808)", "", typed(rDay.In(0, 0)), []string{"9223372036854775807", "-9223372036854775808"}},
+		{"int64 bounds", "day in (9223372036854775807, -9223372036854775808)", "", typed(rDay.In(0, 0)), []string{"int64(9223372036854775807)", "int64(-9223372036854775808)"}},
+		{"int32 bounds", "day in (2147483647, -2147483648)", "", typed(rDay.In(0, 0)), []string{"2147483647", "-2147483648"}},
 		{"bool literal", "flag = true", "", typed(rFlag.Eq(false)), []string{"true"}},
 		{"string escape", `site = "it's \"x\""`, "", typed(rSite.Eq("")), []string{`"it's \"x\""`}},
 		{"two columns", "day < hits", "", typed(rDay.LtCol(rHits)), nil},
@@ -127,7 +128,7 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 	}
 
 	var schema strings.Builder
-	schema.WriteString("package db\n\ntable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\thits int\n\tscore float64\n\tflag bool\n\tnote string [null]\n\torder int\n}\n\n")
+	schema.WriteString("package db\n\ntable page_views {\n\tid int [pk]\n\tsite string\n\tday int\n\thits int\n\tscore float64\n\tflag bool\n\tnote string [null]\n\torder int\n}\n\n")
 	schema.WriteString("pred at { site = :site and day = :day }\npred since { day >= :from }\n\n")
 	for i, tc := range cases {
 		fmt.Fprintf(&schema, "select c%d for page_views", i)
@@ -180,7 +181,7 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 func TestSelectInfoCarriesRendererFragments(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\ntable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n}\n\n" +
+		"db/schema.volt": "package db\n\ntable page_views {\n\tid int [pk]\n\tsite string\n\tday int\n}\n\n" +
 			"select rows for page_views where site = :site and day in :days [order: (day desc, id asc)]\n",
 	})
 	wantClean(t, diags)
@@ -214,7 +215,7 @@ func TestSelectLiteralOutsideStorageRefused(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, diags := project(t, map[string]string{
 				"go.mod": modFile,
-				"db/schema.volt": "package db\n\ntype Money int\n\ntable page_views {\n\tid int [pk, increment]\n\thits int\n\tscore float64\n\tcents Money\n}\n\n" +
+				"db/schema.volt": "package db\n\ntype Money int\n\ntable page_views {\n\tid int [pk]\n\thits int\n\tscore float64\n\tcents Money\n}\n\n" +
 					"select c for page_views where " + tc.where + "\n",
 			})
 			wantError(t, diags, tc.want)
@@ -225,7 +226,7 @@ func TestSelectLiteralOutsideStorageRefused(t *testing.T) {
 func TestSelectUnresolvedKeptNotGenerated(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\ntable authors {\n\tid int [pk, increment]\n\temail string\n\trank int32\n}\n\n" +
+		"db/schema.volt": "package db\n\ntable authors {\n\tid int [pk]\n\temail string\n\trank int32\n}\n\n" +
 			"select ranked for authors where rank >= :min and email = :e [order: (rank desc)]\n" +
 			"select shown (rank, email) for authors\n" +
 			"select brief (* \\ rank) for authors\n" +
@@ -275,7 +276,7 @@ func TestSelectUnresolvedKeptNotGenerated(t *testing.T) {
 func TestSelectDroppedTermsNameTheirParams(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\ntable authors {\n\tid int [pk, increment]\n\temail string\n\trank int32 [null]\n}\n\n" +
+		"db/schema.volt": "package db\n\ntable authors {\n\tid int [pk]\n\temail string\n\trank int32 [null]\n}\n\n" +
 			"pred floor { rank >= :min }\n\n" +
 			"select listed for authors where rank in :ranks and email = :e\n" +
 			"select liked for authors where rank like :pat or email like :e\n" +
@@ -321,5 +322,73 @@ func TestSelectDroppedTermsNameTheirParams(t *testing.T) {
 		if !reflect.DeepEqual(si.droppedParams, tc.dropped) || !reflect.DeepEqual(si.Params, tc.params) {
 			t.Errorf("select %s: dropped %v Params %+v; want %v %+v", tc.name, si.droppedParams, si.Params, tc.dropped, tc.params)
 		}
+	}
+}
+
+// An optional parameter guards every term that reads it, true under and
+// and false under or when absent, a connective or an exists term all of
+// whose terms vanished vanishing with them, an exists term renders as a
+// subquery over its relation, and all of it binds in the order of the
+// text (spec §predicates, rendering). The typed handles have neither,
+// so the spelling is pinned here.
+func TestSelectRenderOptionalAndExists(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod": modFile,
+		"db/schema.volt": "package db\n\ntable members {\n\tid int [pk]\n\tname string\n}\n\n" +
+			"table posts {\n\tid int [pk]\n\tauthor_id int [ref: members.id]\n\tat time.Time [null]\n}\n\n" +
+			"table post_tags {\n\tpost_id int [pk]\n\ttag string [pk]\n\tkind string\n}\n\n" +
+			"ref: post_tags.post_id > posts.id [as: post, reverse: tags]\n\n" +
+			"table comments {\n\tid int [pk]\n\tpost_id int [ref: posts.id]\n}\n\n" +
+			"pred before { at < :at? or (at = :at? and id < :id?) }\n\n" +
+			"select keyset for posts where before\n" +
+			"select tagged for posts where exists tags (tag = :tag? and kind = :kind?) and id > 0\n" +
+			"select listed for posts where id in :ids?\n" +
+			"select byname for posts where exists author (name like :pat)\n" +
+			"select joined (id, count(comments.id) as n) for posts join comments where exists tags (tag = :tag) [group: (id)]\n",
+	})
+	wantClean(t, diags)
+	got := map[string]*SelectInfo{}
+	for _, si := range pr.Packages["db"].Selects {
+		got[si.Decl.Name.Name()] = si
+	}
+	for _, tc := range []struct {
+		name   string
+		where  string
+		binds  []string
+		params []SelectParam
+	}{
+		{"keyset", `((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "at" < ?) OR (NOT (? IS NULL AND ? IS NULL) AND ((? IS NULL OR "at" = ?) AND (? IS NULL OR "id" < ?)))))`,
+			[]string{"at", "id", "at", "at", "at", "id", "at", "at", "id", "id"},
+			[]SelectParam{{GoName: "at", GoType: "time.Time", Optional: true}, {GoName: "id", GoType: "int", Optional: true}}},
+		{"tagged", `(((? IS NULL AND ? IS NULL) OR EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ((? IS NULL OR "tags"."tag" = ?) AND (? IS NULL OR "tags"."kind" = ?)))) AND "id" > ?)`,
+			[]string{"tag", "kind", "tag", "tag", "kind", "kind", "0"},
+			[]SelectParam{{GoName: "tag", GoType: "string", Optional: true}, {GoName: "kind", GoType: "string", Optional: true}}},
+		{"listed", `(? IS NULL OR "id" IN (SELECT value FROM json_each(?)))`,
+			[]string{"rt.JSONListOptional(ids)", "rt.JSONListOptional(ids)"},
+			[]SelectParam{{GoName: "ids", GoType: "[]int", Optional: true}}},
+		{"byname", `EXISTS (SELECT 1 FROM "members" AS "author" WHERE "author"."id" = "posts"."author_id" AND ("author"."name" LIKE ?))`,
+			[]string{"pat"},
+			[]SelectParam{{GoName: "pat", GoType: "string"}}},
+		{"joined", `EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ("tags"."tag" = ?))`,
+			[]string{"tag"},
+			[]SelectParam{{GoName: "tag", GoType: "string"}}},
+	} {
+		si := got[tc.name]
+		if si == nil {
+			t.Errorf("select %s not lowered", tc.name)
+			continue
+		}
+		if si.WhereSQL != tc.where {
+			t.Errorf("select %s: WhereSQL\n\t%s\nwant\n\t%s", tc.name, si.WhereSQL, tc.where)
+		}
+		if !reflect.DeepEqual(si.Binds, tc.binds) {
+			t.Errorf("select %s: Binds %q, want %q", tc.name, si.Binds, tc.binds)
+		}
+		if !reflect.DeepEqual(si.Params, tc.params) {
+			t.Errorf("select %s: Params %+v, want %+v", tc.name, si.Params, tc.params)
+		}
+	}
+	if typ := got["listed"].Params[0].Type(); typ != "rt.Null[[]int]" {
+		t.Errorf("an optional list parameter is %s, want rt.Null[[]int]", typ)
 	}
 }

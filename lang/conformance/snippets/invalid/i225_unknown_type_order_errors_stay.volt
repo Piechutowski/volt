@@ -3,13 +3,13 @@
 package db
 
 table page_views {
-  id   int    [pk, increment]
+  id   int    [pk]
   hits int32
   body []byte
 }
 
 table link_clicks {
-  id   int    [pk, increment]
+  id   int    [pk]
   body int64
 }
 

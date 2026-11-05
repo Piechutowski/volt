@@ -467,3 +467,131 @@ func PostFlagUpdateWhere(set []rt.Assign[PostFlag], preds ...rt.Pred[PostFlag]) 
 	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltPostFlagTableSQL, set, preds)
 	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
+
+const (
+	voltBatchTableSQL   = `"batches"`
+	voltBatchColumnsSQL = `"opened_at", "label"`
+)
+
+func BatchLimit(n int) rt.Opt[Batch] { return rt.Limit[Batch](n) }
+
+func BatchOffset(n int) rt.Opt[Batch] { return rt.Offset[Batch](n) }
+
+func BatchDistinct() rt.Opt[Batch] { return rt.Distinct[Batch]() }
+
+func BatchOrderBy(terms ...rt.Order[Batch]) rt.Opt[Batch] { return rt.OrderBy(terms...) }
+
+func BatchAfter(key ...any) rt.Opt[Batch] { return rt.After[Batch](key...) }
+
+func BatchSet(assigns ...rt.Assign[Batch]) []rt.Assign[Batch] { return assigns }
+
+func BatchQuery(opts ...rt.Opt[Batch]) rt.Query[Batch] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltBatchTableSQL, voltBatchColumnsSQL, opts)
+	return rt.Query[Batch]{SQL: voltSQL, Args: voltArgs, Scan: voltBatchScan, Err: voltErr}
+}
+
+func BatchCount(preds ...rt.Pred[Batch]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltBatchTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func BatchExists(preds ...rt.Pred[Batch]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltBatchTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func BatchDeleteWhere(preds ...rt.Pred[Batch]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltBatchTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func BatchUpdateWhere(set []rt.Assign[Batch], preds ...rt.Pred[Batch]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltBatchTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+const (
+	voltBatchItemTableSQL   = `"batch_items"`
+	voltBatchItemColumnsSQL = `"id", "opened_at"`
+)
+
+func BatchItemLimit(n int) rt.Opt[BatchItem] { return rt.Limit[BatchItem](n) }
+
+func BatchItemOffset(n int) rt.Opt[BatchItem] { return rt.Offset[BatchItem](n) }
+
+func BatchItemDistinct() rt.Opt[BatchItem] { return rt.Distinct[BatchItem]() }
+
+func BatchItemOrderBy(terms ...rt.Order[BatchItem]) rt.Opt[BatchItem] { return rt.OrderBy(terms...) }
+
+func BatchItemAfter(key ...any) rt.Opt[BatchItem] { return rt.After[BatchItem](key...) }
+
+func BatchItemSet(assigns ...rt.Assign[BatchItem]) []rt.Assign[BatchItem] { return assigns }
+
+func BatchItemQuery(opts ...rt.Opt[BatchItem]) rt.Query[BatchItem] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltBatchItemTableSQL, voltBatchItemColumnsSQL, opts)
+	return rt.Query[BatchItem]{SQL: voltSQL, Args: voltArgs, Scan: voltBatchItemScan, Err: voltErr}
+}
+
+func BatchItemCount(preds ...rt.Pred[BatchItem]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltBatchItemTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func BatchItemExists(preds ...rt.Pred[BatchItem]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltBatchItemTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func BatchItemDeleteWhere(preds ...rt.Pred[BatchItem]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltBatchItemTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func BatchItemUpdateWhere(set []rt.Assign[BatchItem], preds ...rt.Pred[BatchItem]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltBatchItemTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+const (
+	voltMetricEventTableSQL   = `"metric_events"`
+	voltMetricEventColumnsSQL = `"id", "name"`
+)
+
+func MetricEventLimit(n int) rt.Opt[MetricEvent] { return rt.Limit[MetricEvent](n) }
+
+func MetricEventOffset(n int) rt.Opt[MetricEvent] { return rt.Offset[MetricEvent](n) }
+
+func MetricEventDistinct() rt.Opt[MetricEvent] { return rt.Distinct[MetricEvent]() }
+
+func MetricEventOrderBy(terms ...rt.Order[MetricEvent]) rt.Opt[MetricEvent] {
+	return rt.OrderBy(terms...)
+}
+
+func MetricEventAfter(key ...any) rt.Opt[MetricEvent] { return rt.After[MetricEvent](key...) }
+
+func MetricEventSet(assigns ...rt.Assign[MetricEvent]) []rt.Assign[MetricEvent] { return assigns }
+
+func MetricEventQuery(opts ...rt.Opt[MetricEvent]) rt.Query[MetricEvent] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltMetricEventTableSQL, voltMetricEventColumnsSQL, opts)
+	return rt.Query[MetricEvent]{SQL: voltSQL, Args: voltArgs, Scan: voltMetricEventScan, Err: voltErr}
+}
+
+func MetricEventCount(preds ...rt.Pred[MetricEvent]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltMetricEventTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func MetricEventExists(preds ...rt.Pred[MetricEvent]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltMetricEventTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func MetricEventDeleteWhere(preds ...rt.Pred[MetricEvent]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltMetricEventTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func MetricEventUpdateWhere(set []rt.Assign[MetricEvent], preds ...rt.Pred[MetricEvent]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltMetricEventTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}

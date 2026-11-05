@@ -25,6 +25,7 @@ type Info struct {
 
 	byName    map[string]*TableInfo
 	relations map[string][]*RelationInfo
+	assigned  map[string]*ColumnDef
 }
 
 // Table is the table of that name, or nil (spec §namespaces-and-uniqueness).
@@ -121,6 +122,8 @@ func FileGo(f *ast.File, memo *Memo, goTypes GoTypes) (*Info, []diag.Diagnostic)
 	c.migrationsCheck(f)
 	c.declsCheck(f)
 	c.resolve(f)
+	c.keysAssign()
+	c.keysAssignedCheck(f)
 	c.relationsBuild()
 	if memo != nil {
 		memo.finish()
@@ -139,7 +142,6 @@ type checker struct {
 	types    map[string]*TypeInfo
 	aliases  map[string]*ast.TypeDecl
 	goTypes  GoTypes
-	project  *ast.Project
 }
 
 func (c *checker) errorf(pos token.Position, section, format string, args ...any) {
@@ -176,12 +178,6 @@ func (c *checker) collect(f *ast.File) {
 			c.info.Tables = append(c.info.Tables, ti)
 		case *ast.TypeDecl:
 			typeDecls = append(typeDecls, d)
-		case *ast.Project:
-			if c.project != nil {
-				c.errorf(d.Pos(), "project", "at most one project element per package (§project)")
-				continue
-			}
-			c.project = d
 		}
 	}
 	for _, pi := range c.partials {
@@ -398,7 +394,8 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 			c.recordsCoverageCheck(ti, r)
 		}
 	}
-	c.incrementCheck(ti)
+	c.autoincrementCheck(ti)
+	c.rowidAliasDefaultCheck(ti)
 	c.requiredCheck(ti)
 }
 

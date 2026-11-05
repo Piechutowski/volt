@@ -9,6 +9,7 @@ import (
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/itest/blog/db"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 type Client struct {
@@ -16,7 +17,7 @@ type Client struct {
 }
 
 func New(base string) *Client {
-	return &Client{volt.Client{Base: base}}
+	return &Client{volt.Client{Base: base, Header: map[string][]string{}}}
 }
 
 func (c *Client) Root(ctx context.Context) (*http.Response, error) {
@@ -67,6 +68,19 @@ func (c *Client) Card(ctx context.Context, id int) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/card"), nil)
 }
 
+func (c *Client) Peers(ctx context.Context, id int, n int, count int) (*http.Response, error) {
+	voltQ := []volt.URLOption{volt.Query("count", volt.FormatQuery(count))}
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/peers/"+volt.SegInt(n), voltQ...), nil)
+}
+
+func (c *Client) Both(ctx context.Context, id int, count int, bio rt.Null[string]) (*http.Response, error) {
+	voltQ := []volt.URLOption{volt.Query("count", volt.FormatQuery(count))}
+	if bio.Valid {
+		voltQ = append(voltQ, volt.Query("bio", volt.FormatQuery(bio.V)))
+	}
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/both", voltQ...), nil)
+}
+
 func (c *Client) ChangeEmail(ctx context.Context, id int, cs db.UserChangeset) (*http.Response, error) {
 	return c.Raw(ctx, "PATCH", volt.URL("/users/"+volt.SegInt(id)+"/email"), cs.Params())
 }
@@ -86,6 +100,23 @@ func (c *Client) MeShow(ctx context.Context) (*http.Response, error) {
 func (c *Client) MeUserList(ctx context.Context) ([]db.User, error) {
 	var voltOut []db.User
 	voltErr := c.Do(ctx, "GET", volt.URL("/me/peers"), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) MePicks(ctx context.Context, n int) (*http.Response, error) {
+	return c.Raw(ctx, "GET", volt.URL("/me/picks/"+volt.SegInt(n)), nil)
+}
+
+func (c *Client) MeUserLatest(ctx context.Context, limit int) ([]db.User, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/me/latest", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) MeTop(ctx context.Context, limit int) ([]db.User, error) {
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/me/top/"+volt.SegInt(limit)), nil, &voltOut)
 	return voltOut, voltErr
 }
 
@@ -143,6 +174,26 @@ func (c *Client) APIUserSince(ctx context.Context, since time.Time) ([]db.User, 
 	voltQ := []volt.URLOption{volt.Query("since", volt.FormatQuery(since))}
 	var voltOut []db.User
 	voltErr := c.Do(ctx, "GET", volt.URL("/api/since", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) APIUserLatest(ctx context.Context, limit int) ([]db.User, error) {
+	voltQ := []volt.URLOption{volt.Query("limit", volt.FormatQuery(limit))}
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/latest", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) APIUserDescribed(ctx context.Context, bio rt.Null[string], from rt.Null[int]) ([]db.User, error) {
+	voltQ := []volt.URLOption{}
+	if bio.Valid {
+		voltQ = append(voltQ, volt.Query("bio", volt.FormatQuery(bio.V)))
+	}
+	if from.Valid {
+		voltQ = append(voltQ, volt.Query("from", volt.FormatQuery(from.V)))
+	}
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/described", voltQ...), nil, &voltOut)
 	return voltOut, voltErr
 }
 
@@ -214,6 +265,34 @@ func (c *Client) RefUpdateTag(ctx context.Context, slug string, cs db.TagChanges
 
 func (c *Client) RefDeleteTag(ctx context.Context, slug string) error {
 	return c.Do(ctx, "DELETE", volt.URL("/ref/tags/"+volt.Seg(slug)), nil, nil)
+}
+
+func (c *Client) RefProfiles(ctx context.Context) ([]db.Profile, error) {
+	var voltOut []db.Profile
+	voltErr := c.Do(ctx, "GET", volt.URL("/ref/profiles"), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) RefCreateProfile(ctx context.Context, cs db.ProfileChangeset) (db.Profile, error) {
+	var voltOut db.Profile
+	voltErr := c.Do(ctx, "POST", volt.URL("/ref/profiles"), cs.Params(), &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) RefProfile(ctx context.Context, userID int) (db.Profile, error) {
+	var voltOut db.Profile
+	voltErr := c.Do(ctx, "GET", volt.URL("/ref/profiles/"+volt.SegInt(userID)), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) RefUpdateProfile(ctx context.Context, userID int, cs db.ProfileChangeset) (db.Profile, error) {
+	var voltOut db.Profile
+	voltErr := c.Do(ctx, "PATCH", volt.URL("/ref/profiles/"+volt.SegInt(userID)), cs.Params(), &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) RefDeleteProfile(ctx context.Context, userID int) error {
+	return c.Do(ctx, "DELETE", volt.URL("/ref/profiles/"+volt.SegInt(userID)), nil, nil)
 }
 
 func (c *Client) Events(ctx context.Context) <-chan volt.Event {

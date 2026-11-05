@@ -5,6 +5,7 @@ package itest
 import (
 	pay "github.com/Piechutowski/volt/nao/itest/pay"
 	"github.com/Piechutowski/volt/nao/rt"
+	"time"
 )
 
 const voltOrderByFeeSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "fee" = ?`
@@ -226,6 +227,24 @@ func PageViewTotals() rt.Lookup[Totals] {
 	return rt.Lookup[Totals]{SQL: voltPageViewTotalsSQL, Args: nil, Scan: voltTotalsScan}
 }
 
+type Joined struct {
+	Name  string    `db:"name" json:"name"`
+	First time.Time `db:"first" json:"first"`
+	Last  time.Time `db:"last" json:"last"`
+}
+
+func voltJoinedScan(r rt.Row) (Joined, error) {
+	var voltV Joined
+	voltErr := r.Scan(&voltV.Name, (*rt.Time)(&voltV.First), (*rt.Time)(&voltV.Last))
+	return voltV, voltErr
+}
+
+const voltUserJoinedSQL = `SELECT "name", min("created_at") AS "first", max("created_at") AS "last" FROM "users" GROUP BY "name" ORDER BY "name" ASC`
+
+func UserJoined() rt.Query[Joined] {
+	return rt.Query[Joined]{SQL: voltUserJoinedSQL, Args: nil, Scan: voltJoinedScan}
+}
+
 const voltUserCartsSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "id" = ?`
 
 func UserCarts(id int) rt.With[User, Order, int, UserWithOrders] {
@@ -243,7 +262,7 @@ func UserCarts(id int) rt.With[User, Order, int, UserWithOrders] {
 
 type UserWithOrders struct {
 	User
-	Orders []Order
+	Orders []Order `json:"orders"`
 }
 
 const voltUserCartsChildrenSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "user_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
@@ -264,3 +283,207 @@ func UserEveryone() rt.With[User, Order, int, UserWithOrders] {
 }
 
 const voltUserEveryoneChildrenSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "user_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+
+const voltPageViewFirstDaysSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" ORDER BY "day" ASC, "id" ASC LIMIT ?`
+
+func PageViewFirstDays() rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewFirstDaysSQL, Args: []any{2}, Scan: voltPageViewScan}
+}
+
+const voltLinkClickFirstDaysSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" ORDER BY "day" ASC, "id" ASC LIMIT ?`
+
+func LinkClickFirstDays() rt.Query[LinkClick] {
+	return rt.Query[LinkClick]{SQL: voltLinkClickFirstDaysSQL, Args: []any{2}, Scan: voltLinkClickScan}
+}
+
+const voltPageViewTopHitsSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE "site" = ? ORDER BY "hits" DESC, "id" ASC LIMIT ?`
+
+func PageViewTopHits(site string, limit int) rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewTopHitsSQL, Args: []any{site, limit}, Scan: voltPageViewScan, Err: rt.LimitCheck(limit)}
+}
+
+type TopSites struct {
+	Site  string `db:"site" json:"site"`
+	Total int    `db:"total" json:"total"`
+}
+
+func voltTopSitesScan(r rt.Row) (TopSites, error) {
+	var voltV TopSites
+	voltErr := r.Scan(&voltV.Site, &voltV.Total)
+	return voltV, voltErr
+}
+
+const voltPageViewTopSitesSQL = `SELECT "site", sum("hits") AS "total" FROM "page_views" GROUP BY "site" ORDER BY "total" DESC, "site" ASC LIMIT ?`
+
+func PageViewTopSites(limit int) rt.Query[TopSites] {
+	return rt.Query[TopSites]{SQL: voltPageViewTopSitesSQL, Args: []any{limit}, Scan: voltTopSitesScan, Err: rt.LimitCheck(limit)}
+}
+
+const voltUserNewestSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" ORDER BY "id" DESC LIMIT ?`
+
+func UserNewest(limit int) rt.With[User, Order, int, UserWithOrders] {
+	return rt.With[User, Order, int, UserWithOrders]{
+		Parent:    rt.Query[User]{SQL: voltUserNewestSQL, Args: []any{limit}, Scan: voltUserScan, Err: rt.LimitCheck(limit)},
+		Child:     voltUserNewestChildrenSQL,
+		ChildScan: voltOrderScan,
+		ParentKey: func(voltP User) int { return voltP.ID },
+		ChildKey:  func(voltC Order) int { return voltC.UserID },
+		Build: func(voltP User, voltCs []Order) UserWithOrders {
+			return UserWithOrders{User: voltP, Orders: voltCs}
+		},
+	}
+}
+
+const voltUserNewestChildrenSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "user_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+
+const voltUserStampedSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "created_at" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+
+func UserStamped(stamps []time.Time) rt.Query[User] {
+	return rt.Query[User]{SQL: voltUserStampedSQL, Args: []any{rt.JSONList(stamps)}, Scan: voltUserScan}
+}
+
+const voltBatchTrailSQL = `SELECT "opened_at", "label" FROM "batches" ORDER BY "opened_at" ASC`
+
+func BatchTrail() rt.With[Batch, BatchItem, time.Time, BatchWithBatchItems] {
+	return rt.With[Batch, BatchItem, time.Time, BatchWithBatchItems]{
+		Parent:    rt.Query[Batch]{SQL: voltBatchTrailSQL, Args: nil, Scan: voltBatchScan},
+		Child:     voltBatchTrailChildrenSQL,
+		ChildScan: voltBatchItemScan,
+		ParentKey: func(voltP Batch) time.Time { return voltP.OpenedAt },
+		ChildKey:  func(voltC BatchItem) time.Time { return voltC.OpenedAt },
+		Build: func(voltP Batch, voltCs []BatchItem) BatchWithBatchItems {
+			return BatchWithBatchItems{Batch: voltP, BatchItems: voltCs}
+		},
+	}
+}
+
+type BatchWithBatchItems struct {
+	Batch
+	BatchItems []BatchItem `json:"batch_items"`
+}
+
+const voltBatchTrailChildrenSQL = `SELECT "id", "opened_at" FROM "batch_items" WHERE "opened_at" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+
+const voltPageViewKeysetSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE ((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "day" < ?) OR (NOT (? IS NULL AND ? IS NULL) AND ((? IS NULL OR "day" = ?) AND (? IS NULL OR "id" < ?))))) ORDER BY "day" DESC, "id" DESC LIMIT ?`
+
+func PageViewKeyset(day rt.Null[int], id rt.Null[int], limit int) rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewKeysetSQL, Args: []any{day, id, day, day, day, id, day, day, id, id, limit}, Scan: voltPageViewScan, Err: rt.LimitCheck(limit)}
+}
+
+const voltOrderPlacedKeysetSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ("placed_at" IS NOT NULL AND ((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "placed_at" < ?) OR (NOT (? IS NULL AND ? IS NULL) AND ((? IS NULL OR "placed_at" = ?) AND (? IS NULL OR "id" < ?)))))) ORDER BY "placed_at" DESC, "id" DESC LIMIT ?`
+
+func OrderPlacedKeyset(at rt.Null[time.Time], id rt.Null[int], limit int) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderPlacedKeysetSQL, Args: []any{at, id, at, at, at, id, at, at, id, id, limit}, Scan: voltOrderScan, Err: rt.LimitCheck(limit)}
+}
+
+const voltOrderPlacedKeysetLooseSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "placed_at" < ?) OR (NOT (? IS NULL AND ? IS NULL) AND ((? IS NULL OR "placed_at" = ?) AND (? IS NULL OR "id" < ?))))) ORDER BY "placed_at" DESC, "id" DESC LIMIT ?`
+
+func OrderPlacedKeysetLoose(at rt.Null[time.Time], id rt.Null[int], limit int) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderPlacedKeysetLooseSQL, Args: []any{at, id, at, at, at, id, at, at, id, id, limit}, Scan: voltOrderScan, Err: rt.LimitCheck(limit)}
+}
+
+const voltPageViewPickedSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE ((? IS NULL OR "site" = ?) AND (? IS NULL OR "hits" >= ?)) ORDER BY "id" ASC`
+
+func PageViewPicked(site rt.Null[string], min rt.Null[int]) rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewPickedSQL, Args: []any{site, site, min, min}, Scan: voltPageViewScan}
+}
+
+const voltPageViewInSitesSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (? IS NULL OR "site" IN (SELECT value FROM json_each(?))) ORDER BY "id" ASC`
+
+func PageViewInSites(sites rt.Null[[]string]) rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewInSitesSQL, Args: []any{rt.JSONListOptional(sites), rt.JSONListOptional(sites)}, Scan: voltPageViewScan}
+}
+
+const voltOrderPlacedBySQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE (? IS NULL OR "placed_at" < ?) ORDER BY "id" ASC`
+
+func OrderPlacedBy(before rt.Null[time.Time]) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderPlacedBySQL, Args: []any{before, before}, Scan: voltOrderScan}
+}
+
+const voltOrderCostingSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE (? IS NULL OR "total" >= ?) ORDER BY "id" ASC`
+
+func OrderCosting(min rt.Null[float64]) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderCostingSQL, Args: []any{min, min}, Scan: voltOrderScan}
+}
+
+const voltUserTaggedSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE (? IS NULL OR EXISTS (SELECT 1 FROM "user_tags" AS "user_tags" WHERE "user_tags"."user_id" = "users"."id" AND (? IS NULL OR "user_tags"."tag" = ?))) ORDER BY "id" ASC`
+
+func UserTagged(tag rt.Null[string]) rt.Query[User] {
+	return rt.Query[User]{SQL: voltUserTaggedSQL, Args: []any{tag, tag, tag}, Scan: voltUserScan}
+}
+
+const voltOrderBoughtBySQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE EXISTS (SELECT 1 FROM "users" AS "user" WHERE "user"."id" = "orders"."user_id" AND ("user"."name" = ?)) ORDER BY "id" ASC`
+
+func OrderBoughtBy(name string) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderBoughtBySQL, Args: []any{name}, Scan: voltOrderScan}
+}
+
+const voltOrderEitherSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "user_id" = ?) OR (? IS NOT NULL AND "total" > ?))) ORDER BY "id" ASC`
+
+func OrderEither(buyer rt.Null[int], over rt.Null[float64]) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderEitherSQL, Args: []any{buyer, over, buyer, buyer, over, over}, Scan: voltOrderScan}
+}
+
+const voltOrderNeitherSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ((? IS NULL AND ? IS NULL) OR NOT ((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "user_id" = ?) OR (? IS NOT NULL AND "total" > ?)))) ORDER BY "id" ASC`
+
+func OrderNeither(buyer rt.Null[int], over rt.Null[float64]) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderNeitherSQL, Args: []any{buyer, over, buyer, over, buyer, buyer, over, over}, Scan: voltOrderScan}
+}
+
+const voltOrderEitherNotSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ((? IS NULL AND ? IS NULL) OR ((? IS NOT NULL AND "user_id" = ?) OR (NOT (? IS NULL) AND NOT (? IS NULL OR "total" > ?)))) ORDER BY "id" ASC`
+
+func OrderEitherNot(buyer rt.Null[int], over rt.Null[float64]) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderEitherNotSQL, Args: []any{buyer, over, buyer, buyer, over, over, over}, Scan: voltOrderScan}
+}
+
+const voltUserUntaggedSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE (? IS NULL OR NOT (? IS NULL OR EXISTS (SELECT 1 FROM "user_tags" AS "user_tags" WHERE "user_tags"."user_id" = "users"."id" AND (? IS NULL OR "user_tags"."tag" = ?)))) ORDER BY "id" ASC`
+
+func UserUntagged(tag rt.Null[string]) rt.Query[User] {
+	return rt.Query[User]{SQL: voltUserUntaggedSQL, Args: []any{tag, tag, tag, tag}, Scan: voltUserScan}
+}
+
+const voltOrderPlacedBeforeOrNeverSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE ((? IS NOT NULL AND "placed_at" < ?) OR "placed_at" IS NULL) ORDER BY "id" ASC`
+
+func OrderPlacedBeforeOrNever(before rt.Null[time.Time]) rt.Query[Order] {
+	return rt.Query[Order]{SQL: voltOrderPlacedBeforeOrNeverSQL, Args: []any{before, before}, Scan: voltOrderScan}
+}
+
+const voltUserSpendersSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE ((? IS NULL AND ? IS NULL) OR EXISTS (SELECT 1 FROM "orders" AS "orders" WHERE "orders"."user_id" = "users"."id" AND ((? IS NULL OR "orders"."status" = ?) AND (? IS NULL OR "orders"."total" > ?)))) ORDER BY "id" ASC`
+
+func UserSpenders(state rt.Null[OrderState], above rt.Null[float64]) rt.Query[User] {
+	return rt.Query[User]{SQL: voltUserSpendersSQL, Args: []any{state, above, state, state, above, above}, Scan: voltUserScan}
+}
+
+type OrderCounts struct {
+	ID int `db:"id" json:"id"`
+	N  int `db:"n" json:"n"`
+}
+
+func voltOrderCountsScan(r rt.Row) (OrderCounts, error) {
+	var voltV OrderCounts
+	voltErr := r.Scan(&voltV.ID, &voltV.N)
+	return voltV, voltErr
+}
+
+const voltUserOrderCountsSQL = `SELECT "users"."id", count("orders"."id") AS "n" FROM "users" LEFT JOIN "orders" AS "orders" ON "orders"."user_id" = "users"."id" WHERE EXISTS (SELECT 1 FROM "user_tags" AS "user_tags" WHERE "user_tags"."user_id" = "users"."id" AND ("user_tags"."tag" IN (SELECT value FROM json_each(?)))) GROUP BY "users"."id" ORDER BY "users"."id" ASC`
+
+func UserOrderCounts(tags []string) rt.Query[OrderCounts] {
+	return rt.Query[OrderCounts]{SQL: voltUserOrderCountsSQL, Args: []any{rt.JSONList(tags)}, Scan: voltOrderCountsScan}
+}
+
+type JoinedCounts struct {
+	ID int `db:"id" json:"id"`
+	N  int `db:"n" json:"n"`
+}
+
+func voltJoinedCountsScan(r rt.Row) (JoinedCounts, error) {
+	var voltV JoinedCounts
+	voltErr := r.Scan(&voltV.ID, &voltV.N)
+	return voltV, voltErr
+}
+
+const voltUserJoinedCountsSQL = `SELECT "users"."id", count("orders"."id") AS "n" FROM "users" LEFT JOIN "orders" AS "orders" ON "orders"."user_id" = "users"."id" LEFT JOIN "user_tags" AS "user_tags" ON "user_tags"."user_id" = "users"."id" WHERE "user_tags"."tag" IN (SELECT value FROM json_each(?)) GROUP BY "users"."id" ORDER BY "users"."id" ASC`
+
+func UserJoinedCounts(tags []string) rt.Query[JoinedCounts] {
+	return rt.Query[JoinedCounts]{SQL: voltUserJoinedCountsSQL, Args: []any{rt.JSONList(tags)}, Scan: voltJoinedCountsScan}
+}

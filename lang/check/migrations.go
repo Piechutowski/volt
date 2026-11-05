@@ -31,7 +31,7 @@ var (
 	}
 	migrationColumnKinds = map[string]valueKind{
 		"pk": flagOnly, "null": flagOnly,
-		"unique": flagOnly, "index": flagOnly, "increment": flagOnly,
+		"unique": flagOnly, "index": flagOnly, "autoincrement": flagOnly,
 		"default": defaultVal, "ref": refVal,
 		"delete": actionValue, "update": actionValue,
 	}
@@ -269,7 +269,9 @@ func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []
 		c.errorf(pos, "migrations", "%s %q: the body must declare at least one column (§migrations)", what, table)
 	}
 	c.indexNamesCheck(table, ti.Columns, named)
-	c.incrementCheck(ti)
+	c.autoincrementCheck(ti)
+	c.rowidAliasDefaultCheck(ti)
+	c.keyAssignedCheck(ti, shapeKeyAssigned(ti), nil)
 	return ti
 }
 
@@ -341,7 +343,7 @@ func refActionOf(s *ast.Setting) string {
 func (c *checker) addColumnCheck(col *ast.Column, head string, noTx bool) {
 	cd := c.migrationColumnCheck(col, migrationColumnSettings)
 	keyed := false
-	for _, s := range []string{"pk", "increment"} {
+	for _, s := range []string{"pk", "autoincrement"} {
 		if setting := col.Settings.Get(s); setting != nil {
 			keyed = true
 			c.errorf(setting.Pos(), "migrations", "%s: %s cannot be added to an existing table; use rebuild table (§migrations)", head, s)
@@ -409,8 +411,9 @@ func indexKeyString(ix *ast.Index) string {
 // rebuildSourcesCheck follows the column names of every table through
 // the package's migrations in name order, so that a rebuild's NOT NULL
 // column whose source would be NULL, no from:, no default:, no old
-// column of its name, is an error (spec §migrations). A rowid
-// alias (int [pk, increment]) takes NULL and the database assigns it.
+// column of its name, is an error (spec §migrations). The
+// database-assigned key (int [pk], with or without autoincrement, and
+// no ref:) takes NULL and the database assigns it.
 // A table no create table operation made is unknown and goes unchecked.
 func (c *checker) rebuildSourcesCheck() {
 	tables := map[string][]string{}
@@ -453,17 +456,42 @@ func (c *checker) rebuildSourcesCheck() {
 }
 
 func (c *checker) rebuildSourceCheck(mig string, op *ast.RebuildTable, old []string) {
+	alias, assigned := shapeKeyColumns(op.Body)
 	for _, item := range op.Body {
 		col, ok := item.(*ast.Column)
 		if !ok {
 			continue
 		}
 		name := col.Name.Name()
-		if isNullable(col) || col.Settings.Get("increment") != nil || col.Settings.Get("from") != nil || col.Settings.Get("default") != nil || contains(old, name) {
+		if isNullable(col) || col == assigned || col.Settings.Get("from") != nil || col.Settings.Get("default") != nil || contains(old, name) {
+			continue
+		}
+		if col == alias {
+			c.errorf(col.Pos(), "migrations", "rebuild table %q in migration %q: column %q is the rowid alias and a foreign key, but its source is NULL, since no column of that name exists before the rebuild, and the database would assign it ids the referenced table never held; give it a from: (§migrations, §columns)", op.Name.Name(), mig, name)
 			continue
 		}
 		c.errorf(col.Pos(), "migrations", "rebuild table %q in migration %q: column %q is NOT NULL but its source is NULL, since no column of that name exists before the rebuild; give it a from: or a default: (§migrations)", op.Name.Name(), mig, name)
 	}
+}
+
+// shapeKeyColumns are the rowid alias of a shape body and its
+// database-assigned key (spec §columns, §migrations): the one pk column
+// when it is the only one and of type int, and that column again when
+// it carries no ref:; nil for either when there is none.
+func shapeKeyColumns(body []ast.TableItem) (alias, assigned *ast.Column) {
+	var key []*ast.Column
+	for _, item := range body {
+		if col, ok := item.(*ast.Column); ok && col.Settings.Get("pk") != nil {
+			key = append(key, col)
+		}
+	}
+	if len(key) != 1 || key[0].Type.String() != "int" {
+		return nil, nil
+	}
+	if key[0].Settings.Get("ref") != nil {
+		return key[0], nil
+	}
+	return key[0], key[0]
 }
 
 func shapeColumnNames(body []ast.TableItem) []string {

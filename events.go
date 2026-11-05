@@ -9,17 +9,26 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 // Event is one server-sent event (spec §event-routes): a name the client
-// dispatches on and a JSON payload. The broker assigns IDs in
-// publication order.
+// dispatches on and a JSON payload, numbered in publication order by the
+// broker its Epoch names, so the pair tells a restart and deduplicates.
+// Replayed marks an event delivered from the replay buffer, published
+// before the stream opened.
 type Event struct {
-	ID   uint64
-	Name string
-	Data json.RawMessage
+	ID       uint64
+	Epoch    string
+	Name     string
+	Data     json.RawMessage
+	Replayed bool
 }
+
+// WireID is the event's ID as Serve writes it, the broker's epoch, a dash
+// and the position (spec §event-routes).
+func (e Event) WireID() string { return e.Epoch + "-" + strconv.FormatUint(e.ID, 10) }
 
 // Decode unmarshals the payload into v.
 func (e Event) Decode(v any) error { return json.Unmarshal(e.Data, v) }
@@ -39,6 +48,23 @@ type Broker struct {
 	subs   map[chan Event]struct{}
 	buffer []Event
 	next   uint64
+	epoch  string
+}
+
+var epochLast atomic.Int64
+
+func (b *Broker) epochOf() string {
+	if b.epoch == "" {
+		for {
+			old := epochLast.Load()
+			n := max(time.Now().UnixNano(), old+1)
+			if epochLast.CompareAndSwap(old, n) {
+				b.epoch = strconv.FormatInt(n, 36)
+				break
+			}
+		}
+	}
+	return b.epoch
 }
 
 // NewBroker returns a broker with the default replay depth.
@@ -62,7 +88,7 @@ func (b *Broker) Publish(name string, data any) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.next++
-	ev := Event{ID: b.next, Name: name, Data: raw}
+	ev := Event{ID: b.next, Epoch: b.epochOf(), Name: name, Data: raw}
 	b.buffer = append(b.buffer, ev)
 	if n := b.replay(); len(b.buffer) > n {
 		b.buffer = b.buffer[len(b.buffer)-n:]
@@ -78,15 +104,40 @@ func (b *Broker) Publish(name string, data any) error {
 	return nil
 }
 
-// Subscribe returns a channel of events after the given ID (0 for
-// none), replaying the buffer first, and a cancel to unsubscribe. The
-// channel is closed when the subscriber falls too far behind.
+// Subscribe returns a channel of events after the given position (0 for
+// none), replaying the buffer first, each replayed event marked so, and
+// a cancel to unsubscribe. A position this broker never assigned
+// replays the whole buffer. The channel is closed when the subscriber
+// falls too far behind.
 func (b *Broker) Subscribe(after uint64) (<-chan Event, func()) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	return b.subscribe(after)
+}
+
+// SubscribeAfter is Subscribe from a Last-Event-ID as Serve writes IDs
+// (spec §event-routes): an ID of this broker resumes after it, and any
+// other, none, one of an earlier process or a bare position, replays
+// the whole buffer, so a client never misses what this process
+// published.
+func (b *Broker) SubscribeAfter(lastEventID string) (<-chan Event, func()) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var after uint64
+	if epoch, n, ok := strings.Cut(lastEventID, "-"); ok && epoch == b.epochOf() {
+		after, _ = strconv.ParseUint(n, 10, 64)
+	}
+	return b.subscribe(after)
+}
+
+func (b *Broker) subscribe(after uint64) (<-chan Event, func()) {
+	if after > b.next {
+		after = 0
+	}
 	ch := make(chan Event, b.replay()+64)
 	for _, ev := range b.buffer {
 		if ev.ID > after {
+			ev.Replayed = true
 			ch <- ev
 		}
 	}
@@ -111,10 +162,6 @@ func (b *Broker) Subscribe(after uint64) (<-chan Event, func()) {
 // the client goes away, with keep-alive comments in between.
 func (b *Broker) Serve(w http.ResponseWriter, r *http.Request) error {
 	flusher, _ := w.(http.Flusher)
-	var after uint64
-	if v := r.Header.Get("Last-Event-ID"); v != "" {
-		after, _ = strconv.ParseUint(v, 10, 64)
-	}
 	h := w.Header()
 	h.Set("Content-Type", "text/event-stream")
 	h.Set("Cache-Control", "no-cache")
@@ -125,7 +172,7 @@ func (b *Broker) Serve(w http.ResponseWriter, r *http.Request) error {
 		flusher.Flush()
 	}
 
-	ch, cancel := b.Subscribe(after)
+	ch, cancel := b.SubscribeAfter(r.Header.Get("Last-Event-ID"))
 	defer cancel()
 	hb := b.Heartbeat
 	if hb <= 0 {
@@ -158,7 +205,10 @@ func (b *Broker) Serve(w http.ResponseWriter, r *http.Request) error {
 
 func writeEvent(w http.ResponseWriter, ev Event) error {
 	var b strings.Builder
-	fmt.Fprintf(&b, "id: %d\nevent: %s\n", ev.ID, ev.Name)
+	if ev.Replayed {
+		b.WriteString(": replayed\n")
+	}
+	fmt.Fprintf(&b, "id: %s\nevent: %s\n", ev.WireID(), ev.Name)
 	for _, line := range strings.Split(string(ev.Data), "\n") {
 		fmt.Fprintf(&b, "data: %s\n", line)
 	}
@@ -169,16 +219,20 @@ func writeEvent(w http.ResponseWriter, ev Event) error {
 
 // Stream is the client side of an event route: it connects to url,
 // delivers every event on the returned channel, and on any drop
-// reconnects with Last-Event-ID and exponential backoff (1s to 30s)
-// until ctx is done, when the channel closes.
+// reconnects with exponential backoff (1s to 30s), sending back as
+// Last-Event-ID the ID of the last event it delivered, until ctx is
+// done, when the channel closes. It reads the client, Header among it,
+// once when called (spec §generated-client).
 func (c *Client) Stream(ctx context.Context, url string) <-chan Event {
+	snapshot := *c
+	snapshot.Header = c.Header.Clone()
 	out := make(chan Event, 64)
 	go func() {
 		defer close(out)
-		var last uint64
+		var last string
 		delay := time.Second
 		for {
-			ok := c.streamOnce(ctx, url, &last, out)
+			ok := snapshot.streamOnce(ctx, url, &last, out)
 			if ctx.Err() != nil {
 				return
 			}
@@ -198,20 +252,17 @@ func (c *Client) Stream(ctx context.Context, url string) <-chan Event {
 	return out
 }
 
-func (c *Client) streamOnce(ctx context.Context, url string, last *uint64, out chan<- Event) bool {
-	req, err := http.NewRequestWithContext(ctx, "GET", c.Base+url, nil)
+func (c *Client) streamOnce(ctx context.Context, url string, last *string, out chan<- Event) bool {
+	req, err := c.requestNew(ctx, "GET", url, nil)
 	if err != nil {
 		return false
 	}
 	req.Header.Set("Accept", "text/event-stream")
-	if *last > 0 {
-		req.Header.Set("Last-Event-ID", strconv.FormatUint(*last, 10))
+	req.Header.Del("Last-Event-ID")
+	if *last != "" {
+		req.Header.Set("Last-Event-ID", *last)
 	}
-	hc := c.HTTP
-	if hc == nil {
-		hc = http.DefaultClient
-	}
-	resp, err := hc.Do(req)
+	resp, err := c.httpClient().Do(req)
 	if err != nil {
 		return false
 	}
@@ -223,6 +274,7 @@ func (c *Client) streamOnce(ctx context.Context, url string, last *uint64, out c
 	sc := bufio.NewScanner(resp.Body)
 	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	var ev Event
+	var id string
 	var data []string
 	for sc.Scan() {
 		line := sc.Text()
@@ -230,8 +282,8 @@ func (c *Client) streamOnce(ctx context.Context, url string, last *uint64, out c
 		case line == "":
 			if ev.Name != "" || len(data) > 0 {
 				ev.Data = json.RawMessage(strings.Join(data, "\n"))
-				if ev.ID > *last {
-					*last = ev.ID
+				if id != "" {
+					*last = id
 				}
 				got = true
 				select {
@@ -240,10 +292,17 @@ func (c *Client) streamOnce(ctx context.Context, url string, last *uint64, out c
 					return got
 				}
 			}
-			ev, data = Event{}, nil
+			ev, id, data = Event{}, "", nil
+		case line == ": replayed":
+			ev.Replayed = true
 		case strings.HasPrefix(line, ":"):
 		case strings.HasPrefix(line, "id:"):
-			ev.ID, _ = strconv.ParseUint(strings.TrimSpace(line[3:]), 10, 64)
+			id = strings.TrimSpace(line[3:])
+			n := id
+			if i := strings.LastIndexByte(id, '-'); i >= 0 {
+				ev.Epoch, n = id[:i], id[i+1:]
+			}
+			ev.ID, _ = strconv.ParseUint(n, 10, 64)
 		case strings.HasPrefix(line, "event:"):
 			ev.Name = strings.TrimSpace(line[6:])
 		case strings.HasPrefix(line, "data:"):

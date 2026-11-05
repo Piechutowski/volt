@@ -17,6 +17,16 @@ scope / [pipe: api, error_handler: Errors] {
 		get /stats Admin.Stats {
 			totals db.UserTotals()
 			feed   db.UserFeed()
+			latest db.UserLatest(5)
+			ten    db.UserLatest(010)
+			written db.UserWritten(title, after)
+		}
+		get /top/:n(int) Admin.Top {
+			top db.UserLatest(n)
+		}
+		get /keys Admin.Keys {
+			a db.UserLatest(ctx)
+			b db.UserSince(ctx_)
 		}
 	}
 
@@ -28,6 +38,7 @@ scope / [pipe: api, error_handler: Errors] {
 		user   db.UserGet(id)
 		picked db.UserPicked(ids)
 		since  db.UserSince(since)
+		recent db.UserLatest(count)
 	}
 	patch /users/:id(int)/email Users.ChangeEmail [body: db.UserUpdate(id), only: (email)]
 	post  /signup                Users.Signup      [body: db.UserCreate]
@@ -38,6 +49,10 @@ scope / [pipe: api, error_handler: Errors] {
 		load user CurrentUser
 		get /      Me.Show
 		get /peers db.UserList
+		get /picks/:n(int) Me.Picks {
+			picks db.UserLatest(n)
+		}
+		get /latest db.UserLatest
 	}
 
 	scope /api [name: api] {
@@ -50,6 +65,9 @@ scope / [pipe: api, error_handler: Errors] {
 		get    /since            db.UserSince
 		get    /totals           db.UserTotals
 		get    /feed             db.UserFeed
+		get    /latest           db.UserLatest
+		get    /written          db.UserWritten
+		get    /bydb             db.UserBydb
 		get    /roles/:userID(int)/:roleID(int) db.UserRoleGet
 		patch  /roles/:userID(int)/:roleID(int) db.UserRoleUpdate
 	}
@@ -57,6 +75,9 @@ scope / [pipe: api, error_handler: Errors] {
 	// A dataset (§datasets): one query route per member of the group select.
 	scope /ms {
 		dataset db.browse [strip: "ms_"]
+	}
+	scope /msr [name: msr] {
+		dataset db.recent [strip: "ms_"]
 	}
 
 	// Default handlers (§default-handlers): every action is a query route over

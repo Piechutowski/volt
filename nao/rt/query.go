@@ -1,5 +1,4 @@
-// The dynamic query layer and the one SQL renderer (spec §predicates
-// rule 6): predicates, orderings, limits and assignments as inert data,
+// The dynamic query layer and the one SQL renderer (spec §predicates): predicates, orderings, limits and assignments as inert data,
 // plain values forming a small expression tree, never closures and never
 // a mutable builder. The interpreter is deterministic: identical trees
 // render identical SQL, which is what makes the rendered text a
@@ -39,8 +38,8 @@ func (c Column[M, T]) cmp(op string, v T) Pred[M] {
 // NULL with IsNull.
 func (c Column[M, T]) Eq(v T) Pred[M] { return c.cmp("=", v) }
 
-// Ne is "column != v", the one spelling of inequality (spec §predicates
-// rule 6). Rows where the column is NULL never match.
+// Ne is "column != v", the one spelling of inequality (spec
+// §predicates). Rows where the column is NULL never match.
 func (c Column[M, T]) Ne(v T) Pred[M] { return c.cmp("!=", v) }
 
 // Gt is "column > v".
@@ -159,14 +158,15 @@ func valsAny[T any](vs []T) []any {
 // The zero value is the empty predicate: it filters nothing and vanishes
 // from And, Or, Not and WHERE clauses.
 type Pred[M any] struct {
-	kind predKind
-	col  string
-	op   string
-	col2 string
-	vals []any
-	not  bool
-	raw  string
-	kids []Pred[M]
+	kind  predKind
+	col   string
+	op    string
+	col2  string
+	vals  []any
+	not   bool
+	raw   string
+	kids  []Pred[M]
+	pairs [][2]string
 }
 
 type predKind uint8
@@ -182,6 +182,10 @@ const (
 	predAnd
 	predOr
 	predNot
+	predExists
+	predOptional
+	predNullSlot
+	predVanish
 )
 
 // And is the conjunction of the given predicates. Empty predicates are
@@ -277,19 +281,76 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 		}
 		b.WriteString(")")
 	case predNot:
-		k := p.kids[0]
-		if k.kind == predAnd || k.kind == predOr || k.kind == predRaw {
-			b.WriteString("NOT ")
-			return k.render(b, args)
+		b.WriteString("NOT ")
+		return p.kids[0].parenRender(b, args)
+	case predExists:
+		b.WriteString("EXISTS (SELECT 1 FROM " + Ident(p.col) + " AS " + Ident(p.col2) + " WHERE ")
+		for i, pair := range p.pairs {
+			if i > 0 {
+				b.WriteString(" AND ")
+			}
+			b.WriteString(Ident(pair[0]) + " = " + Ident(pair[1]))
 		}
-		b.WriteString("NOT (")
-		if err := k.render(b, args); err != nil {
+		if len(p.kids) > 0 {
+			b.WriteString(" AND ")
+			if err := p.kids[0].parenRender(b, args); err != nil {
+				return err
+			}
+		}
+		b.WriteString(")")
+	case predOptional:
+		guard, sep := "? IS NULL OR ", ""
+		if p.not {
+			guard, sep = "? IS NOT NULL AND ", ""
+		}
+		b.WriteString("(" + sep)
+		for _, v := range p.vals {
+			b.WriteString(guard)
+			*args = argsAppend(*args, v)
+		}
+		if err := p.kids[0].render(b, args); err != nil {
+			return err
+		}
+		b.WriteString(")")
+	case predNullSlot:
+		b.WriteString("? IS NULL")
+		*args = argsAppend(*args, p.vals[0])
+	case predVanish:
+		b.WriteString("(")
+		var err error
+		if p.not {
+			b.WriteString("NOT ")
+			err = p.kids[0].parenRender(b, args)
+		} else {
+			err = p.kids[0].render(b, args)
+		}
+		if err != nil {
+			return err
+		}
+		if p.not {
+			b.WriteString(" AND ")
+		} else {
+			b.WriteString(" OR ")
+		}
+		if err := p.kids[1].render(b, args); err != nil {
 			return err
 		}
 		b.WriteString(")")
 	default:
 		return errors.New("rt: cannot render an empty predicate")
 	}
+	return nil
+}
+
+func (p Pred[M]) parenRender(b *strings.Builder, args *[]any) error {
+	if p.kind == predAnd || p.kind == predOr || p.kind == predRaw || p.kind == predOptional || p.kind == predVanish {
+		return p.render(b, args)
+	}
+	b.WriteString("(")
+	if err := p.render(b, args); err != nil {
+		return err
+	}
+	b.WriteString(")")
 	return nil
 }
 
@@ -315,7 +376,7 @@ type Opt[M any] interface{ optApply(*querySpec[M]) }
 type querySpec[M any] struct {
 	preds     []Pred[M]
 	orders    []Order[M]
-	limit     int
+	limit     any
 	limitSet  bool
 	offset    int
 	offsetSet bool
@@ -335,14 +396,38 @@ func (o orderOpt[M]) optApply(s *querySpec[M]) { s.orders = append(s.orders, o.t
 // OrderBy options append.
 func OrderBy[M any](terms ...Order[M]) Opt[M] { return orderOpt[M]{terms: terms} }
 
-type limitOpt[M any] struct{ n int }
+type limitOpt[M any] struct{ n any }
 
 func (o limitOpt[M]) optApply(s *querySpec[M]) { s.limit, s.limitSet = o.n, true }
 
 // Limit caps the number of rows returned; the last Limit wins. The value
 // is bound as a parameter, so page size does not change the SQL text
-// (one cached statement).
+// (one cached statement). A limit below 1 is a rendering that fails with
+// ErrLimit (spec §generated-query-surface), since SQLite reads a negative
+// limit as none.
 func Limit[M any](n int) Opt[M] { return limitOpt[M]{n: n} }
+
+// LimitVal is a limit over a value slot (spec §selects-over-groups), the
+// option a select's limit: lowers to: the literal or the parameter the
+// generated function binds behind LIMIT ?.
+func LimitVal(v any) Opt[Gen] { return limitOpt[Gen]{n: v} }
+
+// ErrLimit is what a select's effect carries when its limit parameter is
+// below 1, and what a dynamic Limit below 1 fails to render with (spec
+// §selects-over-groups, §generated-query-surface): SQLite reads a negative
+// LIMIT as no limit at all, so the runner returns it without running a
+// statement.
+var ErrLimit = errors.New("rt: a limit is at least 1")
+
+// LimitCheck is nil for a limit of at least 1 and ErrLimit, naming n,
+// otherwise (spec §selects-over-groups); a generated select sets its
+// effect's Err to it.
+func LimitCheck(n int) error {
+	if n >= 1 {
+		return nil
+	}
+	return fmt.Errorf("%w, not %d", ErrLimit, n)
+}
 
 type offsetOpt[M any] struct{ n int }
 
@@ -445,6 +530,11 @@ func selectRenderOver[M any](table, columns string, columnArgs []any, opts []Opt
 
 	switch {
 	case s.limitSet:
+		if n, ok := s.limit.(int); ok {
+			if err := LimitCheck(n); err != nil {
+				return "", nil, err
+			}
+		}
 		b.WriteString(" LIMIT ?")
 		args = append(args, s.limit)
 		if s.offsetSet {

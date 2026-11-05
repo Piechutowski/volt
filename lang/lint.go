@@ -70,9 +70,25 @@ func vetPackage(pr *Project, pkg *Package, memo *vet.Memo) []diag.Diagnostic {
 				srcs = append(srcs, vet.GoSource{Name: s.Name, Text: s.Text})
 			}
 		}
-		out = append(out, vet.RunGo(pkg.Dir, srcs)...)
+		out = append(out, vet.RunGo(pkg.Dir, srcs, bodiesOf(pkg))...)
 	}
 	return append(out, vetUnusedPipelines(pkg)...)
+}
+
+// bodiesOf is where each action of pkg receives its request body, as the
+// generated interface declares it (spec §handler-references,
+// §request-bodies): after the request, the scope loads and the route's
+// parameters.
+func bodiesOf(pkg *Package) []vet.Body {
+	var out []vet.Body
+	for _, c := range pkg.Controllers {
+		for _, a := range c.Actions {
+			if a.Body != nil {
+				out = append(out, vet.Body{Action: a.Name, At: 1 + len(a.ScopeLoads) + len(a.Params), Type: a.Body.GoType()})
+			}
+		}
+	}
+	return out
 }
 
 func vetUnusedPipelines(pkg *Package) []diag.Diagnostic {

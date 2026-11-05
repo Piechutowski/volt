@@ -73,6 +73,11 @@ A hand-written handler is a function from a request value to a
 response value (§requests-and-responses): it holds no database, reads
 the clock from the request, and describes its effects for the
 generated shim to perform; the vet rules of `lint.md` hold it to that.
+An effect that uses an earlier effect's result carries a function, the
+`next` of `rt.Then`, from a value to a description, or the `f` of
+`rt.Map`, from a value to a value (§generated-query-surface): that
+function is pure too, the runner calls it between the statements,
+nothing performs inside it, and it writes no variable it captures.
 
 ---
 
@@ -129,7 +134,6 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Settings Lists](#settings-lists)
   - [Program Structure](#program-structure)
   - [Element Definitions](#element-definitions)
-    - [Project](#project)
     - [Table](#table)
     - [Columns](#columns)
     - [Default Values](#default-values)
@@ -339,7 +343,7 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
    positions counts its byte in offsets and gives it no column, so every
    position points into the file as written.
 2. Volt is **newline-sensitive**: a line break terminates statements such as
-   column definitions, record rows and project properties. Productions
+   column definitions and record rows. Productions
    in this specification reference `newline` explicitly wherever it is
    syntactically significant, except before a settings list
    (§settings-lists). A production that ends with
@@ -452,9 +456,10 @@ Volt reserves no word outside a predicate. Every keyword is
 contextual: a word acts as a keyword only in keyword position, where
 the grammar places it, and is an ordinary identifier everywhere else (a
 column may be named `table`, `indexes` or `type`). Inside a predicate
-expression the words `and`, `or`, `not`, `in`, `like`, `is` and
-`null`, in any case, and `true` and `false` where an operand stands,
-are reserved: they name no column and no `pred` there (§predicates).
+expression the words `and`, `or`, `not`, `in`, `like`, `is`,
+`exists` and `null`, in any case, and `true` and `false` where an
+operand stands, are reserved: they name no column, no relation and no
+`pred` there (§predicates).
 
 Keywords are case-sensitive (§case-sensitivity-and-terminology), and
 each has one spelling, all lowercase: the element and block words of
@@ -467,14 +472,14 @@ then reads it as that keyword, so the error is reported once.
 
 | Class | Keywords | Section |
 |---|---|---|
-| element and block words | `project`, `table`, `table_partial`, `type`, `ref`, `records`, `group`, `pred`, `select`, `migration`, `pipeline`, `scope`, `indexes`, `validators` | §program-structure, §indexes, §validators |
+| element and block words | `table`, `table_partial`, `type`, `ref`, `records`, `group`, `pred`, `select`, `migration`, `pipeline`, `scope`, `indexes`, `validators` | §program-structure, §indexes, §validators |
 | package words | `package`, `import` | §projects-and-packages, §imports |
-| setting names | `pk`, `null`, `unique`, `index`, `increment`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `group`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
+| setting names | `pk`, `null`, `unique`, `index`, `autoincrement`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `group`, `limit`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
 | referential actions | `cascade`, `restrict`, `set_null`, `set_default` | §relationships-ref |
 | resource actions | `index`, `new`, `create`, `show`, `edit`, `update`, `delete` | §the-action-table |
 | order directions | `asc`, `desc` | §selects-over-groups |
 | literal words | `true`, `false`, `null` | §boolean-and-null-literals |
-| clause words | `from`, `for`, `join`, `with`, `where`, `as`, `and`, `or`, `not`, `in`, `like`, `is` | §types, §selects-over-groups, §predicates |
+| clause words | `from`, `for`, `join`, `with`, `where`, `as`, `and`, `or`, `not`, `in`, `like`, `is`, `exists` | §types, §selects-over-groups, §predicates |
 | aggregate words | `count`, `sum`, `avg`, `min`, `max` | §selects-over-groups |
 | route words | `get`, `post`, `patch`, `delete`, `options`, `head`, `any`, `resources`, `dataset`, `use`, `load` | §routes, §resources, §datasets, §pipelines, §scope-loads |
 | parameter types | `int` | §route-paths |
@@ -631,7 +636,7 @@ expression literal = "`", { any char - "`" }, "`" ;
 punct = "{" | "}" | "[" | "]" | "(" | ")"
       | "," | ":" | "." | "~" | "*" | "/"
       | "<" | ">" | "-" | "+" | "\" | "="
-      | "!=" | "<=" | ">=" ;
+      | "!=" | "<=" | ">=" | "?" ;
 ```
 
 These are every token that is neither a name nor a literal; any other
@@ -642,8 +647,8 @@ comment, `;`, `#` and `'` among them, is a lexical error. Their roles:
 |---------|-------------------------------------------------------------|
 | `{ }`   | element bodies and the blocks inside them                   |
 | `[ ]`   | settings lists, and the `[]` of the type `[]byte`           |
-| `( )`   | composite column lists (index keys, `table.(a, b)` endpoints), records column lists, group sets (§groups), select projections and their exclusion sets (§selects-over-groups), import blocks (§imports), a path parameter's type (§route-paths), validator arguments (§validators), the lists of `only:`, `except:` and `order:` (§settings-whitelists), predicate grouping and `in` lists (§predicates) |
-| `:`     | a setting value, a project property, the body of `ref:`, a route parameter (§route-paths), a query parameter (§predicates) |
+| `( )`   | composite column lists (index keys, `table.(a, b)` endpoints), records column lists, group sets (§groups), select projections and their exclusion sets (§selects-over-groups), import blocks (§imports), a path parameter's type (§route-paths), validator arguments (§validators), the lists of `only:`, `except:`, `group:` and `order:` (§settings-whitelists), predicate grouping and `in` lists (§predicates) |
+| `:`     | a setting value, the body of `ref:`, a route parameter (§route-paths), a query parameter (§predicates), also as a select's `limit:` (§selects-over-groups) |
 | `,`     | separator inside `[ ]`, `( )` and record rows               |
 | `.`     | qualification: `table.column`, `pkg.Name` (§types), `pkg.name` (§imports), `Controller.Action` (§handler-references); three contiguous `.` end a wildcard, `:name...` (§route-paths) |
 | `~`     | `table_partial` injection prefix                               |
@@ -653,6 +658,7 @@ comment, `;`, `#` and `'` among them, is a lexical error. Their roles:
 | `/`     | route paths (§route-paths) and import paths (§imports)      |
 | `+ \`   | group union and difference (§groups); `\` also leaves columns out of a star projection, `(* \ a)` (§selects-over-groups) |
 | `= != < <= >=` | comparisons in a predicate (§predicates); `=` also defines a group by expression, `Group g = a + b` (§groups) |
+| `?`     | an optional query parameter, written directly after its name, `:name?` (§predicates) |
 
 ---
 
@@ -717,8 +723,7 @@ setting value = string | number | boolean | null
 ```ebnf
 program = { element } ;
 
-element = project
-        | table
+element = table
         | table partial
         | type decl
         | ref element
@@ -742,30 +747,6 @@ element = project
 ---
 
 ## Element Definitions
-
-### Project
-
-Declares project-level metadata. There MUST be at most one `project` element
-per package (§projects-and-packages).
-
-```ebnf
-project          = "project", [ name ], [ project settings ],
-                   "{", project body, "}" ;
-project settings = "[", "note", ":", string, "]" ;
-project body     = { project property } ;
-project property = identifier, ":", string, newline ;
-```
-
-1. `name` names the project; it MAY be omitted.
-2. Each property is a free-form key with a string value, one per line.
-   Any key is accepted and none is read: of a `project`, only the
-   `note:` setting reaches the generated files.
-3. The `note:` setting (§notes) documents the project.
-
-```volt
-project ecommerce [note: "E-commerce database schema"] {
-}
-```
 
 ### Table
 
@@ -817,7 +798,7 @@ column setting  = "pk"
                 | "null"
                 | "unique"
                 | "index"
-                | "increment"
+                | "autoincrement"
                 | "required"
                 | "default", ":", default value
                 | "note", ":", string
@@ -883,15 +864,47 @@ column setting  = "pk"
    (§generated-query-surface). A primary key is a table constraint, not
    an index: no migration adds it to a table or drops it from one, and
    changing it is a `rebuild table` (§migrations).
-4. **`increment`** marks the column auto-increment: the database
-   assigns its value, and a changeset has no setter for it
-   (§changesets). It is valid in exactly one shape, the table's
-   single-column primary key of type `int`, which becomes the rowid
-   alias (§mapping-to-sqlite-ddl), and is an **error** anywhere else:
-   on a non-integer column, on a column that is not the primary key,
-   or on a member of a composite key. A keyword that is typed MUST be
-   applied; silently ignoring it while no changeset ever marks the
-   column would insert NULL into a NOT NULL column at run time.
+4. **The rowid alias, the database-assigned key and `autoincrement`.**
+   The **rowid alias** is the DDL fact: a table whose primary key is
+   exactly one column stored as `int`, of the built-in `int` or of a
+   declared type (§types), makes that column SQLite's rowid alias,
+   `INTEGER PRIMARY KEY` without `NOT NULL` (§mapping-to-sqlite-ddl).
+   An insert that marks it stores the value given, one that leaves it
+   unmarked gets a rowid SQLite picks, and SQLite ignores a `DEFAULT`
+   on it, so `default:` on the rowid alias is an **error**
+   (§default-values): Volt accepts no setting the database would not
+   apply. The **database-assigned key** is the rowid alias of the
+   built-in `int` that is no foreign key, neither carrying `ref:` nor
+   a column of the left endpoint of a `ref` element
+   (§relationships-ref): the database assigns it whenever an insert
+   leaves it unmarked (§changesets), and `id int [pk]` is the key most
+   tables want. Every other rowid alias is an **ordinary key**, whose
+   value the row gives: a key of a declared type stored as `int`, and
+   a key that is also a foreign key, as in the shared-key one-to-one
+   `user_id int [pk, ref: users.id]`, whose value comes from the
+   referenced row. `From` marks an ordinary key, a generated create
+   casts it, a records list names it, `required` may be written on it,
+   and an insert that leaves it unmarked is refused as `not_null`
+   rather than given a rowid SQLite picks (§changesets). `required` on the database-assigned key is an **error**, since
+   the database may assign it, so its zero value is no missing value
+   (rule 8). A records list may leave the database-assigned key out
+   (§records-sample-data).
+
+   **`autoincrement`** is SQLite's `AUTOINCREMENT` and does what
+   SQLite says it does: the database-assigned key becomes `INTEGER
+   PRIMARY KEY AUTOINCREMENT`, so the database never reuses an id, not
+   even the largest one after its row is deleted, and SQLite keeps the
+   high-water mark in its `sqlite_sequence` table, which a `rebuild
+   table` that keeps `autoincrement` carries over (§migrations). It
+   does nothing else: the key is the database-assigned key with or
+   without it. It is valid only on the database-assigned key and is
+   an **error** anywhere else: on a column that is not of type `int`,
+   on a column that is not the primary key and on a member of a
+   composite key, where SQLite refuses it; on a declared type stored
+   as `int`, which SQLite would accept but Volt refuses, since it
+   treats that key as an ordinary key (above); and on a rowid alias
+   that is a foreign key, whose values come from another table, so
+   the never-reuse bookkeeping has nothing to assign.
 5. **`ref: table.column`** declares a relationship whose foreign key
    is this column (§relationships-ref). It appears at most once on a
    column (§settings-lists) and carries no referential actions; a
@@ -922,8 +935,8 @@ column setting  = "pk"
    `[]byte` (nil or empty, and no other value), and for a declared type
    the empty value of its storage type. It is an error on a `null`
    column, which has no empty value to refuse since NULL is absence, on
-   a `default:` or `increment` column, and on `bool` and `time.Time`,
-   where every value is a value.
+   a `default:` column, on the database-assigned key (rule 4), and on
+   `bool` and `time.Time`, where every value is a value.
 9. **`tag: string`** (repeatable) passes one Go struct tag through to
    the generated field verbatim: every field property lives in the
    schema, and the passthrough serves every encoding and third-party
@@ -976,13 +989,40 @@ such as `state.pending`, is **not** a valid default value.
    `true` or `false` for `bool`; for a declared type (§types), a
    literal of its storage type, so the default of a value set is the
    value as written (`default: "pending"`). An expression literal is accepted on any column and is
-   SQLite's to judge. `[]byte` and `time.Time` columns take only an
-   expression literal. A default that does not fit is an error naming
-   the column and its type.
+   SQLite's to judge, except on a `time.Time` column. `[]byte` and
+   `time.Time` columns take only an expression literal. On a
+   `time.Time` column, a declared type stored as one too, the
+   expression MUST be one SQLite evaluates to the stored form of a
+   `time.Time` (§go-types), so that the row read back binds as the
+   text it holds; parentheses around all of it change nothing, and
+   it is one of:
+   - `CURRENT_TIMESTAMP` or `NULL`, in any case;
+   - one `datetime(...)` call none of whose string arguments is the
+     modifier `'subsec'`, which writes three fractional digits, or
+     `'localtime'` or `'utc'`, which shift the instant by the
+     server's zone (`` `datetime('now', '+1 day')` ``);
+   - one SQL string (`` default: `'2024-01-15 10:30:00'` ``) that is
+     the stored form, as a record value must be
+     (§records-sample-data); other date/time text in it is an error
+     spelling the stored form of the same instant.
+   Any other expression, such as `strftime(...)`, `julianday()`,
+   `unixepoch()`, `date()` or a concatenation, is an error naming the
+   accepted forms: SQLite writes text in another form, a number Volt
+   does not compare as an instant, or a value Volt cannot read. A
+   sub-second instant is set from Go by the write itself, whose
+   binding trims the fraction (§go-types). A default that does not fit is an
+   error naming the column and its type.
 2. **NULL has one spelling.** `null` is not a default value: a column
    that carries `null` and has no `default:` is NULL when a write
    leaves it out, so `default: null` would only say that twice and is
    an error.
+3. **Not on the rowid alias.** A default on the rowid alias (§columns), the database-assigned key with or without `autoincrement`,
+   a key that is also a foreign key and a declared type stored as `int`
+   alike, is an error citing §columns: SQLite ignores a `DEFAULT` on
+   the rowid alias and assigns a rowid to an insert that leaves the
+   column out, so the default would never be written. The same holds
+   in a migration's `create table` and `rebuild table` shapes
+   (§migrations).
 
 ### Indexes
 
@@ -1122,6 +1162,14 @@ ref action   = "cascade" | "restrict" | "set_null" | "set_default" ;
    `user_id int [unique, ref: users.id]`. The uniqueness is the
    column's, and the DDL and the generated query surface treat it as
    any unique column's (§mapping-to-sqlite-ddl, §generated-query-surface).
+   A **shared-key** one-to-one makes the foreign key the table's whole
+   primary key, as in `user_id int [pk, ref: users.id]` or a `ref`
+   element whose left endpoint is that key: of the built-in `int`, it
+   is the rowid alias in the DDL but no database-assigned key
+   (§columns), since its value is the referenced row's, so `From`
+   marks it, the generated create casts it, an insert that leaves it
+   unmarked is refused as `not_null` (§changesets), a records list
+   names it and `autoincrement` on it is an error.
 6. **Many-to-many.** There is no many-to-many operator: a junction
    table with two foreign keys models it.
 7. **Referential actions.** `delete:` and `update:` correspond to SQL
@@ -1176,7 +1224,10 @@ ref action   = "cascade" | "restrict" | "set_null" | "set_default" ;
     two relations share, or that is the table's, read as SQLite reads
     an alias, without regard to case, is **ambiguous**:
     nothing can join it (§selects-over-groups), and the error names
-    the relationships and the fix. The settings of a `ref` element
+    the relationships and the fix. A name that one relation alone
+    carries but for case is no ambiguity and no relation, Volt's names
+    being case-sensitive (§case-sensitivity-and-terminology): the error
+    names the relation it misspells. The settings of a `ref` element
     name its relations outright, `as:` the forward one and `reverse:`
     the reverse one, each an identifier that maps to a Go name; they
     exist for that case alone. An inline `ref:` carries no settings
@@ -1319,7 +1370,7 @@ type img.Png     []byte from "example.com/app/img"
 type Slug        string
 
 table products {
-  id    int         [pk, increment]
+  id    int         [pk]
   slug  Slug        [unique]
   price money.Money
   icon  img.Png     [null]
@@ -1334,7 +1385,7 @@ validators.
 type OrderState string
 
 table orders {
-  id     int        [pk, increment]
+  id     int        [pk]
   status OrderState [default: "pending"]
   prev   OrderState [null]
 
@@ -1469,13 +1520,27 @@ record value    = string
 4. **Value typing.** Each value MUST fit the target column's type
    (§columns), as a default must (§default-values): an integer literal
    for `int`; a number for `float64`; a string for `string` and for
-   `time.Time` (ISO 8601 text, `"2024-01-15 10:30:00"`); `true` or
+   `time.Time`; `true` or
    `false` for `bool`; for a declared type, a literal of its storage
    type (`"paid"` for a value set stored as `string`, §types). `null`
    is NULL and is allowed only on a column that carries `null`.
    A `[]byte` column takes an expression literal or NULL. An expression
    literal (backticks) is accepted on any column and is SQLite's to
-   judge. A bare identifier other than `true`, `false` and `null`, and
+   judge.
+   A `time.Time` value, of a declared type stored as one too, MUST be
+   the stored form of a `time.Time` (§go-types), SQLite's datetime
+   text in UTC (`"2024-01-15 10:30:00"`, `"2024-01-15 10:30:00.5"`),
+   so that the row read back binds as the text it holds. Other
+   date/time text, with a `T`, a `Z` or an offset, without seconds, a
+   date alone or a fraction with trailing zeros, is an error whose
+   message spells the stored form of the same instant; the checker
+   refuses rather than rewrites it, so the source shows the text the
+   database holds. An expression literal on such a column is held to
+   the expressions a `time.Time` default is (§default-values):
+   `CURRENT_TIMESTAMP`, `NULL`, a `datetime(...)` call without the
+   `'subsec'`, `'localtime'` or `'utc'` modifier, or a SQL string
+   (`` `'2024-01-15 10:30:00'` ``) of the same form, parentheses or
+   not; any other expression is an error. A bare identifier other than `true`, `false` and `null`, and
    a dotted name, is **not** a value. A value that does not fit is an
    error naming the column and its type.
 5. **No empty field.** Every field of a row holds a value: NULL is
@@ -1483,11 +1548,13 @@ record value    = string
    after the last is an error.
 6. **Coverage.** A records column list MUST name every column of the
    table, injected columns included (§partial-injection-order), that
-   is NOT NULL, has no `default:` and is not the rowid alias (`int
-   [pk, increment]`, §mapping-to-sqlite-ddl), since only `increment`
-   leaves a column's value to the database (§columns), so every other
-   such column is the row's to give. An omitted list names every column
-   (rule 1).
+   is NOT NULL, has no `default:` and is not the database-assigned key
+   (`int [pk]`, with or without `autoincrement`, that is no foreign
+   key, §columns), since only the database-assigned key leaves a
+   column's value to the database, so every other such column is the
+   row's to give, a shared key that is also a foreign key among them,
+   whose value is the referenced row's. An omitted list names every
+   column (rule 1).
 
 ```volt
 type JobState string
@@ -1521,11 +1588,12 @@ records posts(id, user_id, posted_at) {
 A note is human-readable documentation. It has one spelling, the
 `note:` setting, and one meaning: generated code carries it.
 
-1. `note: string` is a setting of a `project` (§project), a `table`
-   (§table) and a column (§columns), and of nothing else: a partial,
-   a type, an index, a relationship, a group and a migration carry no
-   note. A constant of a declared type documents itself in the Go
-   file that declares it (§types).
+1. `note: string` is a setting of a `table` (§table) and a column
+   (§columns), and of nothing else: a package, a partial, a type, an
+   index, a relationship, a group and a migration carry no note. A
+   constant of a declared type documents itself in the Go file that
+   declares it (§types), and a package in a hand-written Go file of
+   its own (§notes-become-doc-comments).
 2. The value is a string. A multi-line string
    (§multi-line-string-literals) is permitted and conventionally
    contains Markdown; a settings list spans lines inside its brackets
@@ -1605,16 +1673,8 @@ above.
 
 program              = { element } ;
 
-element              = project | table | table partial
+element              = table | table partial
                      | type decl | ref element | records element ;
-
-(* ===== Project ===== *)
-
-project              = "project", [ name ], [ project settings ],
-                       "{", project body, "}" ;
-project settings     = "[", "note", ":", string, "]" ;
-project body         = { project property } ;
-project property     = identifier, ":", string, newline ;
 
 (* ===== Table, Columns, Default Values, Indexes ===== *)
 
@@ -1631,7 +1691,7 @@ column type          = [ "[", "]" ], type name ;
 type name            = [ identifier, "." ], identifier ;
 column settings      = "[", column setting, { ",", column setting }, "]" ;
 column setting       = "pk" | "null"
-                     | "unique" | "index" | "increment" | "required"
+                     | "unique" | "index" | "autoincrement" | "required"
                      | "default", ":", default value
                      | "note", ":", string
                      | "tag", ":", string
@@ -1736,7 +1796,7 @@ expression literal   = "`", { any char - "`" }, "`" ;
 punct                = "{" | "}" | "[" | "]" | "(" | ")"
                      | "," | ":" | "." | "~" | "*" | "/"
                      | "<" | ">" | "-" | "+" | "\" | "="
-                     | "!=" | "<=" | ">=" ;
+                     | "!=" | "<=" | ">=" | "?" ;
 ```
 
 ---
@@ -1800,9 +1860,10 @@ both.
    `volt_validate.go`, `volt_selects.go` and `volt_migrations.go` (with
    `volt_schema.sql` on request), over the data runtime `nao/rt`, whose
    values a program performs through the runner `nao/run`. A data
-   file imports only the standard library other than `net/http` and
-   `database/sql`, `nao/rt` and the packages of the package's declared
-   types (§types).
+   file imports only `nao/rt`, the packages of the package's declared
+   types (§types) and the standard library other than `net/http`; it
+   names `database/sql` and `database/sql/driver` only for the
+   `Scanner` and `Valuer` assertions of §types, never a connection.
 2. **The network layer** is packages (§projects-and-packages), imports
    (§imports), pipelines (§pipelines), scopes and routes
    (§scopes-and-routes), resources (§resources) and datasets
@@ -1813,11 +1874,14 @@ both.
    standard library, the root `volt` package, the runner `nao/run` when
    it has a query route, and the data packages whose models and queries
    it names; the client imports the standard library, the root `volt`
-   package and those data packages.
+   package, those data packages and the data runtime `nao/rt` when a
+   method takes an optional parameter, whose `rt.Null[T]` it spells
+   (§generated-client), and never the runner.
 3. **The rule.** The network layer may use the data layer, never the
    reverse. The route files call a data package's queries and
    changesets, and the root `volt` package reads the data runtime's
-   refused write to choose its status (§formats). No data file and no
+   errors, a refused write and a row miss, to choose its status
+   (§formats). No data file and no
    package under `nao/` reaches the root `volt` package, the route
    generator `gen/router`, the generation driver `gen/model`, the
    language server or the tool, and `nao/rt` imports the standard
@@ -1848,8 +1912,9 @@ package clause = "package", name, newline ;
    `module` directive is the project's module path; every other
    directive is Go's business and ignored. There is no second manifest.
 2. Every `.volt` file MUST begin with a package clause: its first
-   declaration, at most one per file. The name is an identifier. The
-   name `volt` is reserved: generated files import the
+   declaration, at most one per file. The name is an identifier, and
+   the clause takes no settings list: a package carries no note
+   (§notes). The name `volt` is reserved: generated files import the
    volt runtime under that qualifier (§generation-contract-informative), so a package of that name
    is an error.
 3. A **package** is a directory: all `.volt` files in one directory
@@ -1909,7 +1974,7 @@ package clause = "package", name, newline ;
 package db
 
 table users {
-	id int [pk, increment]
+	id int [pk]
 }
 ```
 
@@ -1957,7 +2022,18 @@ package path = name, { slash, name } ;
    qualifier is never referenced is an error. An import MAY take the
    package's own name as its qualifier, since that name qualifies
    nothing else (rule 4).
-6. **Import cycles are errors.** The package import graph MUST be
+6. **The generated files' own names.** A qualifier MUST NOT be
+   `context`, `http`, `rt`, `run`, `time` or `volt`: the route files
+   and the client import the standard library's `context`, `net/http`
+   and `time`, the data runtime `nao/rt`, the runner `nao/run` and the
+   root `volt` package under those names (§data-and-network-layers),
+   and they import a data package under its qualifier, so a project
+   package under one of those names would give a generated file two
+   imports of one name. The error names an alias to write: the entry
+   `rtdb rt` imports a package `rt` under `rtdb`. A package that
+   routes its own tables imports nothing, and its client names it as
+   §generated-client says.
+7. **Import cycles are errors.** The package import graph MUST be
    acyclic.
 
 ```volt fragment
@@ -2176,17 +2252,33 @@ func (r Response) Rescue(on func(error) Response) Response
    function that turns its result into the next response. The shim is
    a loop: perform the effect, call `next`, repeat until done, then
    write. `Then` is the only way a handler reaches the database, and
-   a handler calls nothing that performs one.
+   a handler calls nothing that performs one. Each continuation's
+   effect is performed on its own, so two continuations are never one
+   transaction: writes that must commit together, a row and the rows
+   that carry the key its insert assigned among them, are one effect,
+   an `rt.Atomic` over `rt.Then` (§generated-query-surface).
 3. **Failure.** An effect that fails, and a `Fail(err)` a handler
    returns, go to the route's error handler (§scopes), which answers
    404 for a row miss, 409 or 422 for a refused write, an `HTTPError`'s
    own status, and 500 otherwise (§formats). `Rescue` on a continuation
    names the function that answers for its effect's failure instead,
    for a route that must decide on a miss; on a done response it does
-   nothing. `Reject` is a Problem body of the handler's own, with
-   `WithDetails` for the field errors of a changeset it judged.
+   nothing. It covers that one effect: the function receives the
+   error, a timeout's 504 among them (§route-loads), and its response
+   goes on through the shim as `next`'s would, a `Fail(err)` to the
+   error handler; a step `next` returns is rescued only by a `Rescue`
+   of its own. A scope load's `Rescue` does the same for the load's
+   effect (§scope-loads). An effect that fails because the request's
+   context was cancelled, the client having closed the request, fails
+   with a 499 the same way, the status proxies log for it, since no
+   standard status says it: the error handler answers it as an
+   `HTTPError`, logging nothing as a handler error, and nobody reads
+   the answer.
+   `Reject` is a Problem body of the handler's own, with `WithDetails`
+   for the field errors of a changeset it judged.
 4. **Bodies.** `Render` and `RenderStatus` write a value in the
-   negotiated format; `File` serves a file of an `fs.FS` as `net/http`
+   negotiated format, and a nil `v` writes the status and no body
+   (§formats); `File` serves a file of an `fs.FS` as `net/http`
    does; `HTML` writes bytes as `text/html`; `Redirect` writes a
    `Location`; `Stream` hands the body to a function, the one response
    that is not a value, which the lint annex counts (`lint.md`,
@@ -2196,21 +2288,48 @@ func (r Response) Rescue(on func(error) Response) Response
 5. **Determinism.** Two calls of a handler with one request value
    return the same response value, and `volt_handlers.go` declares
    `ControllersDeterministic(c Controllers, r volt.Request) []string`,
-   which calls every action twice with zero-valued parameters and
+   which calls every action twice with zero-valued parameters, a
+   changeset body as the fresh changeset `<Model>New()` (§changesets)
+   since a changeset no constructor made refuses a setter, and
    names the ones whose responses differ (`volt.Same`: the same status,
    headers, cookies and body, or continuations of the same effect;
-   streams compare as the same). An application's test calls it with
-   its controllers and asserts an empty list.
+   streams compare as the same). Functions cannot be compared, so a
+   continuation compares by its effect alone, never by `next`, as
+   `rt.Same` compares two effects, and an effect that wraps others by
+   its kind and what it wraps: an `rt.Then` by being a `Then` and by
+   its first effect, never by the one its `next` would make, and an
+   `rt.Map` and an `rt.Atomic` by their kind and their inner one, so an
+   `Atomic` over `e`, a `Map` over `e` and `e` itself are three effects;
+   a statement compares by its kind, text and arguments, an `Exec` by
+   its `One` and `Model` as well and a `Write` with no statement by the
+   `Row` it yields, an `rt.Pure` by its value as a done response's body
+   does, and an `rt.Fail` by its error, as a `Fail(err)` response does
+   (§generated-query-surface). Every value, an argument, a row, a body
+   and an error among them, compares with `rt.Equal`, which is
+   `reflect.DeepEqual` except that a NaN equals a NaN, so a value that
+   holds no function is always the same as itself and `1` is not
+   `"1"`; two errors of one message and two statuses are two. The rule
+   compares spellings, not what they perform: two spellings of one
+   computation, a `Map` and a `Then` whose `next` returns an `rt.Pure`
+   among them, are two effects, which never misleads the check, since
+   a handler called twice spells its effect the same way both times. An
+   application's test calls it with its controllers and asserts an
+   empty list.
 6. **What keeps a handler pure** is the generated interface, which
    fixes every parameter, and the vet rules of `lint.md`:
    a controller is an empty struct (`handlerreceiver`), a file that
-   declares a handler imports neither the runner nor `database/sql`,
+   declares a handler or a scope-load function (§scope-loads) imports
+   neither the runner nor `database/sql`,
    `net`, `os`, `os/exec` nor a random source (`handlerimports`), it
    reads no clock but `r.Now()` (`handlerclock`), a routes package holds
    no package state and starts no goroutine (`packagestate`,
-   `goroutine`), and every `Stream` is reported (`streamcount`). Not
-   caught: reflection, `unsafe`, cgo, and a package imported under
-   another name.
+   `goroutine`), a function the runner calls, the `next` of an
+   `rt.Then` and the `f` of an `rt.Map` or an `rt.ParallelMap`, writes
+   no variable it captures (`capturedwrite`), and every `Stream` is
+   reported (`streamcount`). Not caught: reflection, `unsafe`, cgo, a
+   package imported under another name, a call through a function
+   value, and a write such a function makes through a method or a
+   function it calls.
 
 ### Request bodies
 
@@ -2310,9 +2429,15 @@ parameters, so the handler reads them and never asks for them.
    package's own tables, as a query route names one (§query-routes). A
    write, `Create`, `Update` or `Delete`, is an error, and so is a
    name that is no generated query. The load's name is the parameter
-   the handler receives the value under: a lower-case Go identifier
-   that is not a reserved name (§route-paths), not `err` or `ok`,
-   which the shim declares beside it, not shaped like a generated
+   the handler receives the value under: a lower-case Go identifier,
+   so no Go keyword (`range`, `func` and the rest), that is not a
+   reserved name (§route-paths), not `err` or `ok`,
+   which the shim declares beside it, not a name the route files
+   import a package under (`context`, `http`, `rt`, `run`, `time`,
+   `volt`; §imports) and not a predeclared Go identifier (`string`,
+   `int`, `len`, `nil` and the rest of Go's universe block), either of
+   which the shim's closure taking the value would shadow, not shaped
+   like a generated
    local (`volt` and an upper-case letter), not the package's name or
    an import qualifier (§imports), not a path parameter of the route
    and not another load of it or of a scope above (§scope-loads).
@@ -2320,14 +2445,48 @@ parameters, so the handler reads them and never asks for them.
    name or a literal. A name that is a path parameter of the route
    binds it, and the parameter's type MUST spell the function's Go
    type, as for a query route; a wildcard cannot bind one, nor can a
-   path parameter bind a list parameter. Any other name binds from the
+   path parameter bind a list parameter. A name that is another load
+   the route declares, before this one or after it, or a scope load
+   above it (§scope-loads), and no path parameter, is an error: no load
+   binds another load's value, and the
+   name, read from the query string as any other name is, would let the
+   client choose the value, the signed-in user's id among them; a
+   handler that needs a row keyed by a loaded value reads it with
+   `Then`. The load's own name is no other load's, so an argument may
+   share it and binds the query key of that name: `title
+   db.PostTitled(title)`. Any other name binds from the
    query string by that name, a list parameter from the repeated key,
    with the types the query string carries (§query-routes); a missing
-   or unparseable value is a 400 naming the key, before any load runs.
-   A literal binds as itself and MUST spell the parameter's Go type: a
+   or unparseable value is a 400 naming the key, before any of the
+   route's loads runs. One key may bind several arguments, of one load
+   or of several, and each binds by its own parameter's rule, so a
+   missing key that one of them requires is a 400 whatever else it
+   binds; every argument a key binds has one Go type, the one the
+   generated client sends it as (§generated-client), so a key two
+   arguments bind as two types is an error. An optional parameter
+   (§predicates) binds from the query string only, absent when the key
+   is missing, as a query route binds it (§query-routes). A path
+   parameter or a literal, which is always present, cannot bind it,
+   and the error names the fix: a query-string key, or a second select
+   whose parameter is required, which the path parameter or the
+   literal then binds. An optional list parameter cannot be
+   loaded at all, whatever its argument, for the reason a query route
+   cannot route one (§query-routes). A literal MUST spell the parameter's Go type: a
    string literal a `string`, a number an `int` when it is whole and
-   a `float64` otherwise, `true` or `false` a `bool`; a type the
-   query string cannot carry takes a literal or nothing.
+   a `float64` otherwise, `true` or `false` a `bool`. A parameter of a
+   type the query string cannot carry, a declared type (§types) among
+   them, is spelled by no literal and no path parameter either, so no
+   load binds it, optional or not: whatever its argument, the load is
+   an error naming the parameter and its type. A number
+   binds in canonical Go form, as a predicate's literal does
+   (§predicates): `010` binds `10`, never the octal `8` Go would read
+   in it. A select's `limit:` parameter (§selects-over-groups) takes a
+   value of at least 1: a literal below 1 is an error, since every
+   request would be refused; a value below 1 from a path parameter is
+   a 400 naming the key once the path parameters parse, before the
+   scope loads (§scope-loads), and one from the query string is a 400
+   naming the key where it binds, before any of the route's loads
+   runs.
 3. **Order and the shim.** Loads run in declaration order before the
    handler, each a continuation of the shim (§requests-and-responses),
    and every argument is bound before the first runs. The handler's
@@ -2346,8 +2505,16 @@ parameters, so the handler reads them and never asks for them.
 5. **`timeout`.** A route setting, a positive integer of seconds,
    bounds the whole chain, loads and the handler's own effects, with
    one deadline from the request's arrival; an effect the deadline
-   cuts off is a 504 through the error spine. A query route takes it
-   too; an event route, whose stream the runtime serves, takes none.
+   cuts off fails with a 504, which goes to the error spine unless a
+   rescue answers for that effect (§requests-and-responses,
+   §scope-loads). The runner sees the deadline at each statement and
+   while a transaction waits for the write lock, but a single statement
+   outside a transaction that finds the lock held waits under SQLite's
+   busy handler, which sees no deadline, and fails with the 504 only
+   when that wait ends (§generated-query-surface, the runner): a write
+   that must answer at the deadline while another connection writes
+   runs in an `Atomic`. A query route takes it too; an event route,
+   whose stream the runtime serves, takes none.
 6. A load block on a query route or an event route is an error: their
    handlers are generated.
 
@@ -2366,12 +2533,22 @@ scope /me [pipe: app] {
 ```
 
 ```go
+type Load[T any] struct { /* unexported: an effect, or a halt */ }
+func LoadWith[T any](e rt.Effect[T]) Load[T]
+func Halt[T any](resp Response) Load[T]
+func (l Load[T]) Rescue(on func(error) Response) Load[T]
+
 func CurrentUser(r volt.Request) volt.Load[db.User] {
 	id, err := strconv.Atoi(r.Header().Get("X-User"))
 	if err != nil {
 		return volt.Halt[db.User](volt.Reject(401, "sign in"))
 	}
-	return volt.LoadWith(db.UserGet(id))
+	return volt.LoadWith(db.UserGet(id)).Rescue(func(err error) volt.Response {
+		if errors.Is(err, rt.ErrNotFound) {
+			return volt.Reject(401, "sign in")
+		}
+		return volt.Fail(err)
+	})
 }
 ```
 
@@ -2392,14 +2569,26 @@ routes need and whether the request goes on.
    qualifier is an import of this package (§imports), which the
    generated handlers file imports under the same qualifier. The
    load's name obeys the rules of a route load's (§route-loads), and
-   no route beneath uses it for a path parameter, a route load or
-   another scope load.
+   no route beneath uses it for a path parameter, a route load, another
+   scope load, or a parameter a query route or a dataset beneath binds
+   from the query string (§query-routes, §datasets): such a route drops
+   the load's value (rule 3), so the key would let the client choose
+   the value the name stands for, the signed-in user's id among them.
+   The function a scope load names is not the name of a load declared
+   before it in its scope or of a load of a scope above it, which holds
+   that load's value where the shim calls the function; the load's own
+   name and a later load's are free, since the shim calls the function
+   before it holds either value: `load current current` calls
+   `current` and then holds its value as `current`.
 3. **Order and the shim.** `scope` loads run for every route beneath
    the scope, controller and query routes alike, outermost scope
    first and in declaration order within a scope, after the path
-   parameters parse and before the body (§request-bodies) and the
-   route loads (§route-loads); a halt answers with its response, an
-   effect that fails goes to the error spine (§requests-and-responses).
+   parameters parse, a path parameter that binds a select's `limit:`
+   checked with them (§route-loads, §query-routes), and before the body
+   (§request-bodies), the query string and the route loads
+   (§route-loads); a halt answers with its response, an
+   effect that fails goes to the error spine (§requests-and-responses)
+   unless the load rescues it.
    A controller route's handler receives the values as its leading
    parameters, after `r` and before the route's parameters, nested
    scopes appending: `Show(r volt.Request, user db.User) volt.Response`.
@@ -2407,6 +2596,18 @@ routes need and whether the request goes on.
    (§handler-references). A query route runs them for the halt and
    drops the values. An event route (§event-routes) runs no load, so
    one beneath a scope load is an error.
+4. **Failure.** `l.Rescue(on)` is the load `l` with `on` answering for
+   its effect's failure instead of the error spine: `on` receives the
+   error, a timeout's 504 among them, nothing beneath runs, and the
+   response `on` returns answers the request, a `Fail(err)` going on to
+   the error handler. A load so answers a miss of its own, a 401 for a
+   user no row holds, and fails with every other error. The rescue
+   covers the load's effect alone: a later scope load, the body
+   (§request-bodies), the route's loads (§route-loads), a query route's
+   query and the handler's own continuations fail to the error spine as
+   they would without it. On a `Halt` and on the zero `Load` it does
+   nothing, as `Rescue` does nothing on a done response
+   (§requests-and-responses); a second `Rescue` replaces the first.
 
 ### Query routes
 
@@ -2458,28 +2659,58 @@ scope /api [pipe: api] {
      binds from the **request body**: the body decodes as
      `<Model>Params` by `Content-Type` (Formats; §changesets, `Params`)
      and is cast into a changeset. `Create` casts into `<Model>New()`
-     allowing every column but the auto-increment key; `Update` loads
+     allowing every column but the database-assigned key (§columns),
+     which the database assigns, so a client cannot choose an id, while
+     a shared key that is also a foreign key is cast like any column,
+     since its value is the referenced row's, and a body that leaves it
+     out is a 422 with `not_null` on it (§changesets); `Update` loads
      the row by the key path parameters with `<Model>Get` (a miss is a
      404), casts into its `Changeset()` allowing every non-key column,
      and the route MUST carry every key column as a path parameter.
      The body is decoded before the row is loaded, so a malformed body
      is a 400 whether or not the row exists. A write route always takes
      a body, `{}` when nothing is set: a table whose only column is the
-     auto-increment key still needs `{}`. An update is partial: nothing
+     database-assigned key still needs `{}`. An update is partial: nothing
      the body leaves out is reset, which is why it is routed with
      `patch` (clause 1);
    - a **list parameter** (§predicates) binds from the **repeated query
      key** of its name; absent means the empty list;
+   - an **optional parameter** (§predicates) binds from the **query
+     string** by name as `rt.Null[T]`: absent when the key is missing,
+     present with the parsed value otherwise, and an unparseable value
+     is a 400 that names the parameter. A path segment is always
+     present, so a path parameter of its name is an error, which names
+     the fix: pass it in the query string, or route a second select
+     whose parameter is required. An optional list parameter is not
+     routable: a missing key and an empty list cannot be told apart in
+     a query string, and an absent list matches every row where a
+     present empty one matches none, so a route to its select is an
+     error; a Go caller, which can spell both, calls the select itself;
    - every other parameter binds from the **query string** by name,
      parsed to its type; a missing or unparseable value is a 400 that
      names the parameter.
+   A select's `limit:` parameter (§selects-over-groups) is an `int`
+   and binds as one, from a path parameter of its name or the query
+   string; a value below 1 is a 400 that names the parameter, since
+   SQLite reads a negative limit as none: from a path parameter once
+   the path parameters parse, before the scope loads (§scope-loads),
+   and from the query string where it binds, before the query runs.
+   A default or a most for the limit is a handler's to write: a
+   controller route reads the key and calls the select with the limit
+   it decides.
    A parameter binds from the query string only when its type is
-   `string`, `bool`, `int`, `float64` or `time.Time`, or a slice of one
-   of those (a list parameter); a select with a parameter of any other
+   `string`, `bool`, `int`, `float64` or `time.Time`, a slice of one
+   of those (a list parameter), or an `rt.Null` of one of those (an
+   optional parameter); a select with a parameter of any other
    type, a declared type (§types) included, is not a query route, and
-   the route is an error. A path parameter the function does not take is
-   an error: the route would capture a value nothing consumes; the key
-   of an `Update` is consumed by the load.
+   the route is an error. A `float64` takes no NaN, which SQLite binds
+   as NULL, so a present optional value would read as absent
+   (§predicates): `NaN`, in any case, is an unparseable value, a 400
+   like any other, wherever a `float64` binds from the query string,
+   a list item and a load's argument (§route-loads) included. A path
+   parameter the function does not take is an error: the route would
+   capture a value nothing consumes; the key of an `Update` is
+   consumed by the load.
 3. **Response.** The result renders in the negotiated format
    (Formats): rows or a row with status 200, a created row with 201,
    a delete with 204 and no body. A query's row miss (`rt.ErrNotFound`) is a 404 through the error
@@ -2520,8 +2751,10 @@ for a format suffix.
 1. **Responses** follow `Accept`: the first listed media type that is
    `application/json`, `application/x-gob`, `application/*` or `*/*`
    decides; an absent header means JSON; a header offering neither is
-   a 406 naming both. Negotiation happens before the handler runs
-   anything: a 406 decodes no body, loads no row and writes nothing.
+   a 406 naming both. A query route's shim negotiates before it runs
+   anything: its 406 decodes no body, loads no row and writes nothing.
+   A controller route's answer is the handler's, so rule 4 says when
+   it negotiates.
 2. **Request bodies** follow `Content-Type`: absent or
    `application/json` decodes JSON, `application/x-gob` decodes GOB,
    anything else is a 415; an empty or malformed body is a 400. A write
@@ -2547,7 +2780,14 @@ for a format suffix.
    `volt.Render`, `volt.RenderStatus`, `volt.Created`, `volt.Reject`
    and `volt.Decode` over the request value's body
    (§requests-and-responses), so a controller route speaks both
-   formats without repeating them.
+   formats without repeating them. A controller route negotiates when
+   it renders, since its answer may be HTML, a redirect, a file or a
+   stream that neither format covers. Its shim decodes the body, loads
+   an update's row and runs the route's loads before the handler
+   starts (§request-bodies, §route-loads), all of them reads, so a body
+   that does not decode is still a 400 or a 415 whatever `Accept`
+   says. A handler that writes and then renders a format calls
+   `volt.Negotiate` before its first write, so its 406 writes nothing.
 5. **Error bodies** are structured: the default error handler writes a
    `volt.Problem` (status, message, and details: check, columns,
    message, when the error itemizes them) in the negotiated format,
@@ -2557,7 +2797,30 @@ for a format suffix.
    write, the data runtime's `*rt.Invalid` (§changesets), is 409 when a
    `unique` field error is among its fields and 422 otherwise; a query's
    row miss is 404; any other error has none and is the default
-   handler's 500. A generated client decodes the body into a
+   handler's 500, `rt.ErrLimit` among them, a limit below 1 the
+   application computed (§selects-over-groups). A rendered value is encoded before anything is
+   written, and the response carries its `Content-Length`. A 406, and
+   a value the negotiated format cannot carry, such as an infinite
+   float in JSON, or whose encoder panics, are failures like any
+   other: they go to the route's error handler (§scopes), whose answer
+   replaces the response with its headers and cookies, so the default
+   handler's answer is a 500 problem (the 406's own problem for a 406),
+   never a 200 with a cut body or a connection closed without one. The
+   error handler answers a render failure once; when its own answer
+   fails the same way, the default handler answers for that failure,
+   and the error handler is not called again. The top-level value
+   renders alike in both formats: a nil `v` is the status without a
+   body; a nil pointer, which GOB cannot encode and JSON would write as
+   `null`, is an encoding failure in both; a nil slice or map is JSON
+   `null` and an empty GOB value, which the generated client decodes as
+   an empty slice or map. Below the top level the formats differ as
+   their encoders do, and Volt does not walk the value to hide it: a
+   nil pointer inside a slice, array or map is JSON `null` but a GOB
+   encoding failure, so a 500 problem in GOB; a nil pointer in a struct
+   field is JSON `null` and an absent GOB field, both decoding to nil;
+   a pointer to a nil pointer is JSON `null` but GOB's zero value of
+   the pointed type, since GOB flattens pointers. A value meant for
+   both formats carries no nil pointer in a collection. A generated client decodes the body into a
    `*volt.ProblemError`, so a caller reads `errors.As(err, &pe)` and
    marks the fields `pe.Details` name.
 
@@ -2569,14 +2832,34 @@ application that shares the schema, a test, another service — calls
 the routes through typed methods instead of hand-built requests.
 
 1. The package is named `client` and imports only the standard
-   library, the runtime and the data packages the routes go through,
-   never the routing package, so a caller links no server code. The one exception is a package
+   library, the root `volt` package, the data packages the routes go
+   through and, when a method takes an optional parameter (rules 3 and
+   4), the data runtime `nao/rt` for its `rt.Null[T]`, never the runner
+   `nao/run` and never the routing package, so a caller links no
+   server code. The one exception is a package
    that routes its own tables (§query-routes): its client imports it for the
-   row types, and so links it; when that package is `main`, which Go
+   row types, and so links it, under the package's name, or as `volt`
+   and the name with an upper-case initial (`voltRt`) when the name is
+   one the client imports for itself, `context`, `http`, `rt` or
+   `time` (§imports); when that package is `main`, which Go
    cannot import, no client is generated.
 2. `type Client struct { volt.Client }` and `New(base string)
    *Client`. The embedded runtime client carries the origin, the
-   `http.Client` and the wire format (§formats); a non-2xx reply comes
+   `http.Client`, the wire format (§formats) and `Header`, the default
+   headers of every request it sends, through `Do`, `Raw` and `Stream`
+   alike. `New` (`NewClient` beside the models, rule 6) sets `Header`
+   to an empty `http.Header`, so `c.Header.Set("X-User", "1")` on a
+   fresh client reaches every call that follows; a nil `Header` sends
+   none. The headers the client writes itself are its own and never
+   come from `Header`: `Accept`, the format's media type
+   (`text/event-stream` on a stream); `Content-Type`, the format's when
+   a body goes and absent otherwise; and a stream's `Last-Event-ID`,
+   absent on its first connection. `Do` and `Raw` write no
+   `Last-Event-ID`, so one in `Header` goes out on them as any other
+   header does. `Stream` reads the client once, when it is called, so
+   its reconnections, which run on a goroutine of their own, send the
+   headers of that moment; a change to the client afterwards reaches
+   the next call, not a stream already open. A non-2xx reply comes
    back as an `HTTPError`: a `*volt.ProblemError` carrying the Problem's
    status, message and details when the body decodes as one (§formats),
    else the status and the body text, so
@@ -2587,8 +2870,13 @@ the routes through typed methods instead of hand-built requests.
    query's result: `func (c *Client) APIUserGet(ctx, id int)
    (db.User, error)`, `APIUserDelete(ctx, id int) error`. Path
    parameters render through the same builders as `Path*` helpers,
-   query-string parameters through `volt.FormatQuery`, a list as a
-   repeated key, a changeset as the body: `APIUserCreate(ctx, cs
+   query-string parameters through `volt.FormatQuery`, a `time.Time`
+   as RFC 3339 with its fractional seconds, so the instant arrives
+   whole, a list as a
+   repeated key, an optional parameter (§predicates) as the
+   `rt.Null[T]` the query takes, left out of the query string when
+   absent, `APIPostFeed(ctx, tag rt.Null[string]) ([]db.Post, error)`,
+   a changeset as the body: `APIUserCreate(ctx, cs
    db.UserChangeset) (db.User, error)`, `APIUserUpdate(ctx, id int, cs
    db.UserChangeset) (db.User, error)`, sent as `cs.Params()`
    (§changesets). Each method sends its route's verb, the one the
@@ -2598,27 +2886,49 @@ the routes through typed methods instead of hand-built requests.
    update needs no row in hand:
    `APIUserUpdate(ctx, id, db.UserNew().EmailSet(e))` sets one column
    of row `id`.
+   A method's Go parameters are named as the path parameters, the
+   query's parameters or the query keys they carry, with `_` appended
+   while the name is a Go keyword, a name the method uses (`ctx`, `c`,
+   `cs`, `body`, `volt`, `http`, `context`, `rt`, `time`, `nil`,
+   `append`, `any`, `error`), a qualifier the client imports a data
+   package under (`db`), of the form of a generated local, or a name an
+   earlier parameter of the method took: a select parameter `:db` is
+   `db_`, and the keys `ctx` and `ctx_` are `ctx_` and `ctx__`. The
+   changeset is always `cs`, a name no other parameter takes.
 4. **Every named controller route** is one raw method with the
-   route's path parameters and, when the route binds a body
-   (§request-bodies), the body last: a changeset `cs db.UserChangeset`
+   route's path parameters, then every query-string key its loads bind
+   (§route-loads), once each, in the order the loads first read it and
+   typed and sent as a query route's parameter is (rule 3), in the one
+   type every load binds it as, required when any load requires it, and
+   named as rule 3 names parameters, so a route that loads through a
+   `limit:` select sends its limit,
+   `Mine(ctx, at rt.Null[time.Time], limit int)`, and, when the route
+   binds a body (§request-bodies), the body last: a changeset `cs db.UserChangeset`
    sent as `cs.Params()`, or `body any` for a struct body, encoded in
    the client's format. It returns `*http.Response` for the caller to
    read and close: Volt does not know what a hand-written action
    writes.
 5. Client method names and reverse-URL helper names share one
-   namespace per package (§route-names-and-reverse-urls); a collision is an error naming
-   `name:`. The namespace also holds the names of the embedded runtime
-   client: `Client`, its fields `Base`, `HTTP` and `Format`, and its
-   methods `Do`, `Raw` and `Stream`, which the generated methods call.
-   A route that derives one of them is an error naming `name:`.
+   namespace per package (§route-names-and-reverse-urls); a collision
+   is an error naming what renames the later route: its `name:`; for
+   resources, which take no `name:`, `singular:` on a member route
+   (§settings); and always the name of an enclosing scope, which
+   prefixes every name beneath it (§scopes) and is the only renaming a
+   resources collection route or a dataset route has. The namespace
+   also holds the names of the embedded runtime client: `Client`, its
+   fields `Base`, `HTTP`, `Format` and `Header`, and its methods `Do`,
+   `Raw` and `Stream`, which the generated methods call. A route that
+   derives one of them is an error naming what renames it in the same
+   way.
 6. **Beside the models.** `volt gen -o DIR` (§projects-and-packages) writes the client
    as `DIR/volt_client.go` in the package `DIR` holds instead of as a
    subpackage, for a program that is the client — a desktop or browser
    front end that is `package main`. The row, changeset and params
    types are named bare, since the models written beside it declare them; the
    constructor is `NewClient(base string) *Client`, since `New` beside
-   it may be the query layer's; nothing but the standard library and
-   the runtime is imported.
+   it may be the query layer's; nothing but the standard library, the
+   root `volt` package and, for an optional parameter, `nao/rt` is
+   imported.
 
 ### Event routes
 
@@ -2641,11 +2951,31 @@ scope / [pipe: api] {
    (`PathEvents`, `client.Events`).
 2. The `Controllers` manifest (§handler-references) gains `Events *volt.Broker`; the
    application publishes with `Events.Publish(name, data)`. The
-   broker fans every event out to every open stream, assigns IDs in
-   order, and keeps a replay buffer so a client that reconnects with
-   `Last-Event-ID` resumes where it was. Events are
-   `text/event-stream` with a JSON payload; a subscriber that falls
-   behind is dropped and reconnects.
+   broker fans every event out to every open stream, numbers events in
+   order, and keeps a replay buffer of the last `Replay` events (256
+   unless set). An ID on the wire is `<epoch>-<n>`: the position and
+   the broker's epoch, read from the clock in nanoseconds when the
+   broker first numbers or serves an event and distinct among the
+   brokers of one process, so the IDs of a process and of the one that
+   replaced it differ unless both read the clock at the same
+   nanosecond. A stream that sends back a `Last-Event-ID` of this
+   broker resumes after it. Every other stream starts at the oldest
+   event the buffer keeps: one opened without the header, one naming
+   an ID of another broker, one from before the process restarted
+   however far the new broker has counted, and one naming an ID in any
+   other form, a bare position among them. An event delivered from the
+   buffer carries the comment line `: replayed`, which `EventSource`
+   ignores and `volt.Event` reads as `Replayed`, so a client tells what
+   was published before it connected from what happens while it
+   listens. A `volt.Event` keeps the broker's `Epoch` beside its `ID`,
+   so a consumer tells a restart and deduplicates by the pair, and
+   `WireID()` spells the two as the wire does. The client sends back
+   the ID of the last event it delivered, so after a replay it resumes
+   on the new broker's IDs. `Broker.Subscribe(after)`, from a
+   position, and `Broker.SubscribeAfter(lastEventID)`, from a wire ID,
+   are the same streams as a channel, for a program that reads events
+   in process. Events are `text/event-stream` with a JSON payload; a
+   subscriber that falls behind is dropped and reconnects.
 3. The generated client's `Events(ctx) <-chan volt.Event` connects,
    delivers every event, reconnects with backoff on any drop, and
    closes the channel when ctx is done.
@@ -2938,9 +3268,17 @@ scope /ms [pipe: api] {
    member's select function (`<Model><SelectName>`). Every parameter of
    the select binds as §query-routes binds it: from a scope prefix
    parameter of the same name, else from the query string, a list
-   parameter as a repeated key; a prefix parameter the select does not
-   take is an error. The helper and client method names are the
-   scope name prefixes followed by the function name (§query-routes).
+   parameter as a repeated key, and an optional one (§predicates) from
+   the query string alone, absent when the key is missing; a prefix
+   parameter the select does not take is an error, and so is one that
+   names an optional parameter, since a path segment is always
+   present, and the error names the fix: the dataset in a scope
+   without that prefix parameter, or a second select whose parameter
+   is required. A select with an optional list parameter, which no
+   route carries (§query-routes), makes the dataset an error; each
+   is reported once for the dataset, not once per member. The helper
+   and client method names are the scope name prefixes followed by
+   the function name (§query-routes).
 3. Expanded routes obey every rule of routes: conflicts (§route-conflicts), one
    helper namespace (§route-names-and-reverse-urls, §generated-client). To hand-write one member's route,
    take it out with `except:` and declare it beside the dataset, with
@@ -2972,14 +3310,20 @@ an element is an error on that element):
 | route | `name`, `timeout`, `body`, `only` |
 | resources | `api`, `only`, `except`, `param`, `singular`, `default` |
 | dataset | `strip`, `only`, `except` |
-| Select | `order` |
+| Select | `order`, `group`, `limit` |
 | `migration` | `irreversible`, `no_transaction` |
 
 The identifier-list value form `(a, b, c)` (production in Collected
-grammar (Part II)) is valid only as the value of `only:` and `except:`:
-an action list on resources, a table list on a dataset, a column list
-on a route (§request-bodies). The query-call value form `pkg.Query(a)`
-is valid only as the value of a route's `body:`.
+grammar (Part II)) is valid only as the value of `only:`, `except:` and
+a select's `group:`: an action list on resources, a table list on a
+dataset, a column list on a route (§request-bodies), the grouping
+columns of a select (§selects-over-groups). A select's
+`order:` takes its order list (§selects-over-groups). The query-call
+value form `pkg.Query(a)` is valid only as the value of a route's
+`body:`. The parameter value form `:name` (§predicates) is valid only
+as the value of a select's `limit:`, which takes it or a positive
+integer (§selects-over-groups); a parameter as the value of any other
+setting is an error.
 
 ## Generation contract (informative)
 
@@ -3078,18 +3422,19 @@ pred expr    = pred and, { "or", pred and } ;
 pred and     = pred unary, { "and", pred unary } ;
 pred unary   = { "not" }, pred primary ;
 pred primary = "(", pred expr, ")"
-             | comparison | membership | pattern | null test
+             | comparison | membership | pattern | null test | exists term
              | name - pred keyword ;       (* reference to a Pred *)
 comparison   = operand, comp op, operand ;
 comp op      = "=" | "!=" | "<" | "<=" | ">" | ">=" ;
 membership   = column ref, "in", ( "(", literal, { ",", literal }, ")" | param ) ;
 pattern      = column ref, "like", ( string | param ) ;
 null test    = column ref, "is", [ "not" ], "null" ;
+exists term  = "exists", name - pred keyword, "(", pred expr, ")" ;
 operand      = column ref | param | literal ;
 column ref   = [ name - pred keyword, "." ], name - pred keyword ;
-param        = ":", name ;                 (* no space after ':' *)
+param        = ":", name, [ "?" ] ;        (* no space after ':' or before '?' *)
 literal      = [ "-" ], number | string | boolean ;
-pred keyword = "and" | "or" | "not" | "in" | "like" | "is" | "null" ;
+pred keyword = "and" | "or" | "not" | "in" | "like" | "is" | "null" | "exists" ;
 ```
 
 ```volt fragment
@@ -3097,11 +3442,14 @@ pred current { org = :org and year = :year }
 pred recent  { year >= :since }
 pred fresh   { current and recent }
 pred chosen  { org in :orgs }
+pred before  { published_at < :at? or (published_at = :at? and id < :id?) }
+pred tagged  { exists tags (tag = :tag?) }
 ```
 
-1. `and`, `or`, `not`, `in`, `like`, `is`, `null` are keywords inside a
-   predicate expression, lowercase (§keywords): a column of one of these
-   names, in any case, cannot be referenced in a predicate. `true` and
+1. `and`, `or`, `not`, `in`, `like`, `is`, `null` and `exists` are
+   keywords inside a predicate expression, lowercase (§keywords): a
+   column or a relation of one of these names, in any case, cannot be
+   referenced in a predicate. `true` and
    `false`, in any case, are the boolean literals where an operand
    stands, so a column of either name is referenced only before `in`,
    `like` or `is`, and a `pred` of either name only as a bare reference.
@@ -3110,7 +3458,10 @@ pred chosen  { org in :orgs }
    package; references must exist and be acyclic. `pred` names are unique
    in the package; redeclaring one is an error.
 3. A `pred` is typed **at each use site** (§selects-over-groups), where a target binds
-   its column names. The rules:
+   its column names, so a fault a `pred` has over one select and not
+   over another is the select's: it is reported where that select
+   names the `pred`, naming the select, the `pred`s it went through and
+   where in them the fault stands. The rules:
    - a comparison MUST name a column on at least one side; a parameter
      or literal on each side is an error;
    - a `column ref` must resolve in the target's environment
@@ -3131,12 +3482,16 @@ pred chosen  { org in :orgs }
      int64, against `float64` a finite value; `9223372036854775808`,
      `1e400`, and `1.5` or `1e2` against `int` are errors. The generated
      method binds the literal in canonical Go form, so `-010`, `007`
-     and `1E2` bind `-10`, `7` and `100.0`;
+     and `1E2` bind `-10`, `7` and `100.0`, and an integer beyond 32
+     bits as an `int64`, `int64(3000000000)`, which compiles where an
+     `int` is 32 bits;
    - `in :name` makes `:name` a **list parameter**: its Go type is a
      slice of the column's Go type without `rt.Null` (`[]string` for
-     both `string` and `string [null]`, `[]int`), and the column MUST
-     NOT be `time.Time`, since JSON, the list's wire form
-     (§selects-over-groups), carries no date/time value;
+     both `string` and `string [null]`, `[]int`, `[]time.Time`); a
+     `time.Time` item travels in the JSON array, the list's wire form
+     (§selects-over-groups), as the text the column holds, its stored
+     form (§go-types). Membership in an empty list is false, so
+     `id in :ids` with no ids matches no row;
    - `[]byte` columns may not appear in predicates;
    - a `param` adopts the type of the expression position it appears
      in, the column's Go type without `rt.Null` for a nullable column
@@ -3144,13 +3499,16 @@ pred chosen  { org in :orgs }
      type across the whole use site (a list and a scalar use of the
      same name disagree), or the later use is an error naming both
      types. A parameter name MUST be an ASCII Go identifier that is
-     neither a Go keyword, nor a name the generated signatures use
-     (`ctx`, `q`, `rt`, `w`, `r`, `opts`, `volt`, `cs`, `c`), nor `nil`,
+     neither a Go keyword, nor `_`, the blank identifier, which no
+     generated expression can read, nor a name the generated signatures use
+     (`ctx`, `rt`, `w`, `r`, `opts`, `volt`, `cs`, `c`, `body`), nor `nil`,
      `append`, `any` or `true`, the predeclared names a generated
      function uses, and
      MUST NOT have the form of the generated locals and helpers,
      `volt`, an upper-case letter and no underscore
-     (§generated-query-surface).
+     (§generated-query-surface); the error names the one rule a name
+     breaks. `q`, the usual search term, is a parameter like any other:
+     `title like :q?`.
 4. `[]byte` (rule 3) is the one column type predicates refuse: every
    other column, a column of a declared type among them, compares
    under rule 5.
@@ -3163,12 +3521,137 @@ pred chosen  { org in :orgs }
    of the storage type, and a declared type stored as `time.Time` or
    `[]byte` takes no literal. A list parameter of a declared type is
    bound as one JSON array of its values, by kind for a kinded type
-   and through the type's driver value otherwise (§types). A declared
-   type stored as `time.Time` cannot take one, as rule 3 says of
-   `time.Time`, and neither can one stored as `[]byte`: JSON carries
+   and through the type's driver value otherwise (§types), so a
+   declared type stored as `time.Time` travels as the stored form of
+   its driver value (§go-types). A declared type stored as `[]byte`
+   cannot take one: JSON carries
    no blob, and the text its bytes would travel as never equals the
    stored value.
-6. **Rendering.** There is one SQL renderer for the generated query
+6. **Optional parameters.** `:name?`, the `?` directly after the
+   name, makes a parameter **optional**: its Go type is `rt.Null[T]`,
+   `T` the type rule 3 gives the parameter, so an optional list
+   parameter is `rt.Null[[]T]` (`rt.Null[[]string]`), and the generated
+   function takes it present, `rt.Some(v)`, or absent, the zero value.
+   - A parameter is optional at every use in one select, the `pred`s it
+     uses included, or at none: `:at?` beside `:at` is an error naming
+     both uses. An optional parameter stands in a predicate term only:
+     in a projection's arithmetic or as the value of `limit:`
+     (§selects-over-groups) it is an error.
+   - **The vanishing rule.** A *term* is a comparison, a membership, a
+     pattern or a null test. A term reads the parameters it names, a
+     null test none, so a null test is never taken out, and a term that
+     reads an absent optional parameter is **taken out** of the
+     predicate, as if it were not written: it is the identity of the
+     connective it stands in, true under `and` and false under `or`, so
+     what stands beside it is filtered as written. An `and`, an `or`, a
+     `not` or an exists term (rule 7) all of whose terms are taken out
+     is taken out itself, the same way, and a `where` all of whose
+     terms are taken out keeps every row. So `author_id = :by? or exists tags
+     (tag = :tag?)` keeps the posts of `:by` when `:tag` is absent,
+     those tagged `:tag` when `:by` is, and every post when both are;
+     `exists comments (author_id = :by? and body like :text?)` keeps
+     the posts `:by` commented on when `:text` is absent, and every post
+     when both are; and `published_at < :at? or (published_at = :at?
+     and id < :id?)` keeps every row when both are absent, which makes
+     the first page of a keyset over `order: (published_at desc, id
+     desc)` the same select as every later page. A term that reads no
+     absent parameter means what it says, so `published_at < :at? or
+     published_at is null` keeps the rows never published when `:at`
+     is absent. A `not` negates what of its operand is left and never
+     a term taken out, which is not there to negate: `not exists tags
+     (tag = :tag?)` keeps the posts not tagged `:tag`, and every post
+     when `:tag` is absent, and `not (views >= :min? or author_id =
+     :by?)` keeps the posts with fewer than `:min` views when `:by` is
+     absent.
+   - **Absent is what binds NULL.** A guard (below) reads the value the
+     parameter binds, so the parameter is absent whenever that value
+     binds as NULL: the zero `rt.Null[T]`, and a present value whose
+     driver value is NULL too, a `float64` NaN, which SQLite binds as
+     NULL, or a value of a declared type whose `Value` answers nil
+     (§types). A query route takes no NaN for a `float64`
+     (§query-routes). A nullable column's field has the parameter's
+     own type, `rt.Null[T]`, so a value read from such a column passes
+     as an optional parameter, and its NULL is absent:
+     `OrderPlacedBy(o.PlacedAt)`, over `placed_at < :before?`, filters
+     nothing for an order never placed, where `placed_at < :before`
+     would match no row. Pass a value that may be NULL as an optional
+     parameter only where its NULL should mean no filter; NULL itself
+     is tested with `is null` (rule 3).
+   - A keyset pages soundly only over rows whose `order:` columns are
+     never NULL. Its cursor is the last row's values of those columns,
+     and a comparison never matches NULL, so no page after the first
+     reaches a row whose column is NULL; worse, a cursor taken from a
+     row whose column is NULL is absent (above), so the terms that read
+     it are taken out, and the page after that row reads by the key
+     alone, again reading rows earlier pages read.
+     The keyset above therefore takes `published_at` to be declared
+     without `[null]`; over a nullable column, the `where` keeps the NULLs out,
+     `published_at is not null and (published_at < :at? or …)`, or the
+     keyset pages over key columns alone.
+   - An optional list parameter that is present and empty keeps rule
+     3's meaning: membership in an empty list is false, so
+     `tag in :tags?` keeps every row for an absent list and none for an
+     empty one.
+   - The statement stays one constant text whatever is present: a term
+     that reads optional parameters renders behind one guard per
+     optional parameter it reads, the guards in first-appearance order,
+     `(? IS NULL OR <term>)` under `and` and `(? IS NOT NULL AND
+     <term>)` under `or`; an `or` under `and`, an `and` under `or`, a
+     `not` and an exists term, each of which every term of can be taken
+     out, render behind the condition that all of them are, `((? IS NULL AND ? IS
+     NULL) OR <it>)` under `and` and `(NOT (? IS NULL AND ? IS NULL) AND
+     <it>)` under `or`, each parameter once. The predicate of a `where`,
+     the one inside an exists term and the operand of a `not` stand
+     under `and`: at the top of any of them a term renders behind its
+     `and` guard and an `or` behind the `and` form of its condition, so
+     it is true when every term of it is taken out, and the `not` over
+     an operand so taken out renders behind its own condition, which
+     takes the `not` out with it. Every placeholder of
+     the parameter, a guard's and the term's own, binds the parameter's
+     `rt.Null`, which binds NULL when absent (rule 8). An optional list parameter binds
+     as `rt.JSONListOptional(tags)`: NULL when absent, the JSON array of
+     rule 3 when present. The one text costs an index: SQLite plans the
+     statement once for whatever it binds, so a guarded term finds no
+     row through an index, even when the parameter is present. `"site"
+     = ?` searches an index on `site`; `(? IS NULL OR "site" = ?)`
+     reads every row, and so does an exists term's subquery for the
+     guards inside it. Where a filter should
+     search an index, write it with a required parameter, in a select
+     of its own.
+7. **`exists`.** `exists rel (x)` is true for a row when at least one
+   row that the relation `rel` leads to from it matches `x`.
+   - `rel` is a relation of the select's `for` table, named as `join`
+     names one (§relationships-ref, §selects-over-groups): a forward
+     relation, which leads to the one row the foreign key refers to, or
+     a reverse relation, the rows that refer to this one. It MUST NOT
+     be ambiguous, and the target MUST be a table, since a group has no
+     relations. A name that is no relation of the table is an error
+     listing its relations.
+   - `x` is a predicate over the related table's columns, named bare:
+     inside `exists`, a bare name is a column of the relation's table,
+     typed as its own table types it (rules 3 to 5), and a qualified
+     name is an error. It sees no column of the outer row: the
+     relation's key is the one link between the two. A `pred` it
+     references expands there, over the same table. The `where` of a
+     select and a `pred` both take the term; a `pred` is typed at each
+     use site, so one that holds an exists term serves a table that has
+     the relation.
+   - `exists` does not nest: an exists term inside another one, written
+     or reached through a `pred` reference, is an error. The depth is
+     one, as it is for `with` (§selects-over-groups).
+   - `exists` reaches what `join` reaches but filters without joining.
+     A join of a reverse relation repeats the row of the `for` table
+     once per related row, so filtering through it multiplies the rows
+     every aggregate reads: in `select feed (id, count(comments.id) as
+     n) for posts join comments join tags where tags.tag in :tags
+     [group: (id)]` a post with two of the tags counts each comment
+     twice. `exists tags (tag in :tags)` keeps the post once and its
+     comments once each; an exists term repeats no row, so `limit:`
+     needs no key of the relation's table for it (§selects-over-groups).
+   - The term renders as a correlated subquery (rule 8): `EXISTS
+     (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" =
+     "posts"."id" AND ("tags"."tag" = ?))`.
+8. **Rendering.** There is one SQL renderer for the generated query
    surface, the runtime's (`rt.SelectRender` and its siblings): the
    select functions, the CRUD functions, the changeset writes and the
    dynamic layer are its output. The dynamic layer calls it at run
@@ -3197,6 +3680,28 @@ pred chosen  { org in :orgs }
      `(a AND b AND c)`; one operand is itself; `not` is `NOT (x)`, and
      when x brings its own parentheses (an `and`/`or` group, a raw
      fragment) they serve: `NOT ("a" = ? OR "b" = ?)`;
+   - an exists term (rule 7) is `EXISTS (SELECT 1 FROM <table> AS
+     "<relation>" WHERE <pairs> AND (x))`, `<table>` the relation's
+     table, `<pairs>` the relation's key as a join spells it,
+     `"<relation>"."<column>" = "<target>"."<column>"` per key column
+     joined by ` AND `, the target's column qualified by the target
+     table's name whether or not the select joins, and every column of
+     x qualified by the relation's name; the parentheses of x serve
+     when it brings its own, as under `not`;
+   - a term that reads optional parameters (rule 6) is `(? IS NULL OR
+     <term>)` under `and` and `(? IS NOT NULL AND <term>)` under `or`,
+     one guard per optional parameter it reads, in first-appearance
+     order: `(? IS NULL OR "published_at" < ?)`; an `or` under `and`,
+     an `and` under `or`, a `not` and an exists term every term of
+     which reads an optional parameter are `(<all absent> OR <it>)` and
+     `(NOT <all absent> AND <it>)`, `<all absent>` the parameters' `? IS NULL`
+     joined by ` AND `, each once: `((? IS NULL AND ? IS NULL) OR
+     EXISTS (SELECT 1 FROM …))`; the predicate of a `where`, the one
+     inside an exists term and the operand of a `not` stand under
+     `and`, so an `or` at the top of any of them is `(<all absent> OR
+     <it>)`: `((? IS NULL AND ? IS NULL) OR
+     ((? IS NOT NULL AND "published_at" < ?) OR …))`; each guard binds
+     its parameter's value, as every placeholder of the term does;
    - a value is always an argument behind a positional `?`, in
      left-to-right order of the text: a literal written in a Volt
      predicate is bound by the generated method like a parameter, the
@@ -3250,7 +3755,12 @@ pred chosen  { org in :orgs }
    not its output and follow their own spelling. A test renders a corpus of predicates once through the typed
    handles and once from Volt source and compares the bytes; the
    generator goldens and the integration tests prepare the constants
-   on a real SQLite.
+   on a real SQLite. An exists term and an optional parameter have no
+   typed handle: a Go caller of the dynamic layer leaves out a
+   predicate it has no value for, since a zero predicate vanishes, and
+   writes a subquery as `rt.Raw`. Their spellings are pinned by a test
+   of the renderer, by the generator goldens and by the integration
+   tests, which run them on SQLite.
 
 ## Selects over groups
 
@@ -3292,6 +3802,9 @@ select recent  (id, ts, value, metric.name, metric.unit) for points join metric 
 select hourly  (metric_id, ts / 3600 * 3600 as hour, avg(value) as mean, count() as n) for points where ts >= :since [group: (metric_id, hour), order: (hour asc)]
 select totals  (count() as n, max(value) as top) for points
 select board   for metrics with points where unit = :unit [order: (name asc)]
+select latest  for points where ts >= :since [order: (ts desc, id desc), limit: :limit]
+select peaks   (metric_id, max(value) as peak) for points [group: (metric_id), order: (peak desc, metric_id asc), limit: 10]
+select feed    for posts where exists tags (tag = :tag?) and (published_at < :at? or (published_at = :at? and id < :id?)) [order: (published_at desc, id desc), limit: :limit]
 ```
 
 The clauses read in SQL order — name, columns, source, filter — and
@@ -3313,10 +3826,13 @@ the optional projection narrows the emitted columns.
    aids (§groups). Since a group cannot take a table's name, at most
    one declaration matches.
 3. `where` takes a full §predicates expression — named Preds, inline
-   comparisons, and any composition of the two. Omitted = all rows.
+   comparisons, exists terms over the target's relations, and any
+   composition of them. Omitted = all rows.
 4. **The agreement rule.** Every column referenced by the `where`
    expression (`pred` references expanded) and by `order:` MUST exist in
-   **every** member, and all members MUST agree on its type (§predicates).
+   **every** member, and all members MUST agree on its type (§predicates);
+   a column inside an exists term is its relation's table's instead
+   (§predicates), and the target of one is a table.
    A missing column or a type disagreement is an error naming the
    offending members and their types — the predicate must be checkable
    for all members or it does not compile.
@@ -3333,11 +3849,15 @@ the optional projection narrows the emitted columns.
    (§generated-query-surface) —
    `func <Model><SelectName>(<params>) rt.Query[<Row>]`
    — parameters in first-appearance order over the expanded
-   expression, each typed by §predicates; `<Row>` is the member's row
+   expression, each typed by §predicates, an optional one as
+   `rt.Null[T]` (`func PostFeed(tag rt.Null[string], at
+   rt.Null[time.Time], id rt.Null[int], limit int)
+   rt.Query[Post]`), and the `limit:` parameter
+   last (rule 12); `<Row>` is the member's row
    type (the model itself when there is no projection); the
    emitted SQL is the runtime renderer's output (§predicates,
    rendering), `SELECT <projected columns> FROM <table> [WHERE …] [ORDER BY
-   …]` with positional `?` placeholders, the function binding its
+   …] [LIMIT ?]` with positional `?` placeholders, the function binding its
    parameters and the expression's literals in the order the text
    names them. A list parameter renders as `<column> IN (SELECT value
    FROM json_each(?))` and binds one JSON array (`rt.JSONList`), so
@@ -3413,7 +3933,13 @@ the optional projection narrows the emitted columns.
    optional relation, a composite key `AND`ing its pairs, every column
    qualified once a join is present. The relation name is the SQL
    alias, which is why a relation named as its table is ambiguous
-   (§relationships-ref).
+   (§relationships-ref). A filter on a relation needs no join: an
+   exists term (§predicates) tests it and adds no row. The two differ
+   for a reverse relation, whose join repeats each row once per
+   related row, which inflates every aggregate the select computes; a
+   forward relation leads to one row at most, so a filter through its
+   join and the exists term over it keep the same rows, and a join is
+   what projects or orders by the relation's columns.
 9. **Aggregates and arithmetic.** A projected item is a column, an
    aggregate or an arithmetic expression; the latter two are
    **derived** and carry an alias, `as name`, a lower-case identifier
@@ -3444,14 +3970,15 @@ the optional projection narrows the emitted columns.
     once; a joined column goes in through an alias. A select that
     aggregates without `group:` yields exactly one row, so it is
     generated as an `rt.Lookup` of the row type rather than an
-    `rt.Query`, and `order:` on it is an error. `where` sees columns,
+    `rt.Query`, and `order:` and `limit:` on it are errors. `where` sees columns,
     never aliases, and there is no `having`: a filter over an aggregate
     is the one escape, a statement written in Go against the runtime
     (§generated-query-surface).
 11. **`with`: nested results.** `with` names a reverse relation of the
     `for` table (§relationships-ref), which MUST be a table, over one
     key column that is never NULL and travels as a list parameter
-    does (§predicates: not `time.Time`, not `[]byte`); the relation is
+    does (§predicates: not `[]byte`; a `time.Time` key travels as its
+    stored form, §go-types); the relation is
     not ambiguous, the select does not aggregate, and when it
     projects, the key column is a bare item of the projection. The row type is `<Row>With<Relation>`, a struct
     embedding the parent's row type `<Row>` (rule 7) with a field named
@@ -3461,7 +3988,7 @@ the optional projection narrows the emitted columns.
     one parent row type share it, and a parent field of the child
     field's name is an error. The function yields `rt.With[Parent, Child, Key,
     Row]`, an effect of `[]Row` (§generated-query-surface), performed
-    as two statements in one deferred transaction, so both read one
+    as two statements in one transaction, so both read one
     snapshot: the parent statement as any select's, then the child
     table's rows `WHERE "<key>" IN (SELECT value FROM json_each(?))`
     over the parent keys, ordered by the child's primary key, grouped
@@ -3469,6 +3996,61 @@ the optional projection narrows the emitted columns.
     runs for no parents, a parent without children carries an empty
     slice, and a NULL key never matches. One level, no projection of
     the children, and no `with` across a junction table.
+12. **`limit:`.** `limit:` keeps the first rows of the select in the
+    order `order:` sets. Its value is a positive integer literal,
+    `limit: 10`, or a parameter, `limit: :limit`, the one setting value
+    that may be a parameter (§settings-whitelists). The literal is
+    decimal digits whose value is at least 1 and fits `int64`, bound
+    in canonical form as a predicate's literal is (§predicates), so
+    `limit: 007` binds `7` and `limit: 3000000000` binds
+    `int64(3000000000)`. The parameter is an `int`, obeys the
+    parameter rules of §predicates, is never optional (`:limit?` is an
+    error, §predicates), and names no other parameter of
+    the select; it joins the select's parameters after every
+    parameter the projection, the `where` clause and the other
+    settings read, so the signature ends with it: `func
+    PointLatest(since int, limit int) rt.Query[Point]`. The order
+    MUST be **total**, so the rows kept are the same whatever plan
+    SQLite picks, an index added or not: it names a key no two rows
+    share. A table's key is every column of its primary key, a column
+    declared `unique`, or the columns of a unique index over columns
+    alone without `where:` (§indexes), none of them `null`, since
+    NULLs repeat under `unique`. Without `group:` a row is a row of
+    the `for` table, so the order names a key of it, of every member
+    of a group, as its own columns, and a joined relation of many
+    rows, a reverse relation (§relationships-ref), repeats that row
+    for each of its own, so the order names a key of that relation's
+    table too, qualified (`comments.id`); an exists term
+    (§predicates) repeats no row and asks for no key. With `group:` a row is a
+    group, so the order names every `group:` item, or a key of the
+    `for` table that `group:` holds as its own columns when no `group:`
+    item reaches a relation of many rows, one group then being one row
+    of the table. An alias of a lone column (rule 9) is that column
+    here, in `order:` and in `group:` alike: `(id as ident, ...)`
+    ordered by `ident` names `id`. The key may stand anywhere in the
+    list, and a table with no key takes no `limit:`. Each of
+    these is an error: `limit:` without `order:`, or over an order
+    that leaves ties (`order: (value desc)` alone), since the rows kept
+    at the cut would be arbitrary; a literal below 1, since `LIMIT 0`
+    keeps nothing and SQLite reads a negative limit as none, a literal
+    that does not fit `int64`, and any other value; `limit:` on a
+    select that yields one row (rule 10), which has nothing to cap; and
+    a second `limit:`, since a select keeps one count of rows. The statement
+    ends in `LIMIT ?` after `ORDER BY`, the literal or the parameter
+    bound behind it (§predicates, rendering): each member's statement
+    of a group takes it, after `GROUP BY` it counts groups, and under
+    `with` it is the parent statement's, so it counts parents and each
+    keeps all its children. At run time a parameter below 1 makes the
+    function's effect carry `rt.ErrLimit` in `Err` (`Parent.Err` under
+    `with`), which the runner returns without running a statement
+    (§generated-query-surface): SQLite reads `LIMIT -1` as no limit at
+    all and would return every row. A value from a request never gets
+    that far: a query route and a route load refuse one below 1 where
+    they bind it, a 400 naming the key (§query-routes, §route-loads),
+    and a load's literal below 1 is an error (§route-loads), so an
+    `rt.ErrLimit` that reaches the error spine is a value the
+    application computed, and its 500 (§formats). The generated client
+    method takes the parameter (§generated-client).
 
 ---
 
@@ -3632,21 +4214,36 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
    default; an expression default, and the default of a declared type
    that implements Scanner and Valuer, are the database's alone and
    read as the zero value until the row is stored, as the
-   auto-increment key does until the database assigns it. An unmarked NOT NULL column without a default
-   reads as its zero value too, but the insert names no value for it,
-   so the database writes NULL and refuses the row as a `not_null`
-   field error (rule 8), unless `Validate` refused that zero value
-   first. The one exception is a single-column `int` primary key
-   without `increment`: SQLite makes it the rowid alias just as with
-   `increment` (§mapping-to-sqlite-ddl), so left unmarked the database
-   assigns it. `u.Changeset()` starts from `u` with nothing set and
+   database-assigned key (§columns) does until the database assigns
+   it. An unmarked NOT
+   NULL column without a default reads as its zero value too, but the
+   insert names no value for it, so the database writes NULL and
+   refuses the row as a `not_null` field error (rule 8), unless
+   `Validate` refused that zero value first. The one NOT NULL column
+   SQLite fills rather than refuses is the rowid alias, a
+   single-column primary key stored as `int` (§columns,
+   §mapping-to-sqlite-ddl): left unmarked, it gets a rowid SQLite
+   picks. That is the design for the database-assigned key. Any other
+   rowid alias is an ordinary key, a shared key that is also a foreign
+   key or a key of a declared type stored as `int`, and a rowid SQLite
+   picked is a value the row never gave, one that may name a row of
+   the referenced table nobody chose, so `rt.Insert` refuses a
+   changeset that leaves it unmarked with a `not_null` field error on
+   the column, the error an ordinary NOT NULL column without a default
+   gets from the database, before any statement runs; it adds none
+   when an error on that column is recorded already, as `required`'s
+   is.
+   `u.Changeset()` starts from `u` with nothing set and
    remembers that it was made from a row. A setter records a value
    for one column and **marks** it; `Changed` reports the mark; a
    column set to the value it already holds is still a change, since
    the changeset records intent, not difference. `Row()` is the data
    with the marked values applied. `From(u)` marks every data column
-   of `u` but the auto-increment key. The auto-increment key has no
-   setter: the database assigns it.
+   of `u` but the database-assigned key, so a zero row never inserts
+   the id 0, and marks a shared key that is also a foreign key, whose
+   value is the referenced row's; the database-assigned key has a
+   setter as every column does, since SQLite stores an explicit rowid,
+   and a changeset that marks it inserts the value given.
 3. **Setters.** One per column, named `<Field>Set` after the field's
    Go name (§names), taking the field's Go type: `rt.Null[T]` for a
    nullable column, so `BioSet(rt.Null[string]{})` sets NULL. The
@@ -3666,9 +4263,10 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
    the client cannot widen it. A key of `p` that is no column's wire
    name (rule 5) is a field error with check `unknown_field`, so a typo
    never vanishes; a column renamed by its `json` tag is known by the
-   tag's name alone. The auto-increment key is never set, even when
-   `allow` lists it (rule 2); a body that carries it is neither an
-   error nor a change.
+   tag's name alone. The database-assigned key is set like any column
+   when `allow` lists it; the generated create of a query route leaves it
+   out of `allow` (§query-routes), so a body sent there that carries
+   it is neither an error nor a change.
 5. **`Params`.** `rt.Params[M]` is a write body as the wire carries
    it, in either format (§formats): as JSON, an object of the changed
    columns keyed by their wire names (the `json` tag, §struct-tags),
@@ -3704,8 +4302,9 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
    the stored row when the runner performs it (§generated-query-surface);
    a column never marked takes its database default or, lacking one,
    NULL, which a `NOT NULL` column refuses as a `not_null` field error
-   (rule 10), a single-column `int` primary key excepted, which the
-   database assigns (rule 2); nothing marked inserts `DEFAULT VALUES`.
+   (rule 10), a single-column primary key stored as `int` excepted,
+   which the database assigns (rule 2); nothing marked inserts
+   `DEFAULT VALUES`.
    `<Model>Update(c)` is the `rt.Write` that validates and, if valid,
    issues `UPDATE <table> SET <the marked columns> WHERE <the key of
    the row the changeset was made from> RETURNING` and returns the
@@ -3764,7 +4363,7 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
     `rt.NullColumn` when nullable); and the unexported desc
     `volt<Model>Desc`, an `rt.Desc[M]` carrying the model's name, its
     quoted table and column list, one `rt.FieldDesc` per column
-    (column, wire name, key, settable), the row of literal defaults (rule 2), and the generated
+    (column, wire name, key, rowid alias, database-assigned key), the row of literal defaults (rule 2), and the generated
     functions `volt<Model>Scan` (a row from `rt.Row`),
     `volt<Model>Values` (a row's bound values in column order),
     `volt<Model>Apply` (a row with the marked values applied) and
@@ -3896,11 +4495,13 @@ migration 0002__users_bio {
    §columns and §indexes as a table does: its `pk` columns form one
    primary key in declaration order, a single-column index is the
    column's `unique` or `index`, its `indexes` block holds composite,
-   expression and partial indexes, and no two of its indexes share a
-   name. A partial injection, a `validators` block and a `records`
+   expression and partial indexes, no two of its indexes share a
+   name, and a single `int` key is the rowid alias, which takes no
+   `default:`, and the database-assigned key unless it carries `ref:`,
+   which alone takes `autoincrement` (§columns). A partial injection, a `validators` block and a `records`
    block are not part of a `shape body`.
 4. **Settings whitelist.** In a migration, a column setting is one of
-   `pk`, `increment`, `null`, `unique`, `index`, `default:`, `ref:`,
+   `pk`, `autoincrement`, `null`, `unique`, `index`, `default:`, `ref:`,
    `delete:`, `update:`, and in a `rebuild` also `from:` (rule 9);
    `from:` anywhere else is an error.
    `ref: table.column` is spelled as in the schema (§columns): the
@@ -3939,7 +4540,8 @@ migration 0002__users_bio {
    schema edit, as below. `add` is `ADD COLUMN` under SQLite's rules,
    checked here rather than at run time: a column without `null` MUST
    carry a `default:`; `pk` and
-   `increment` are errors; `ref:` requires the column to carry `null`;
+   `autoincrement` are errors, since a key and `AUTOINCREMENT` are
+   part of the table's definition, which only a rebuild rewrites; `ref:` requires the column to carry `null`;
    a column with `ref:` takes no `default:`, since SQLite refuses to
    add a `REFERENCES` column with a default other than NULL to a table
    that has rows; a column that carries `unique` or `index` lowers to
@@ -3985,18 +4587,28 @@ migration 0002__users_bio {
    before it would drop the index twice, which the fold refuses
    (§the-fold). `rename` is `RENAME COLUMN`.
 9. **`rebuild table`.** The one operation for every change SQLite
-   cannot `ALTER`: a type, a nullability, a default, a primary key, a
-   foreign key. The body is the new shape and MUST contain at least
+   cannot `ALTER`: a type, a nullability, a default, a primary key,
+   `autoincrement` added or removed, a foreign key. The body is the new shape and MUST contain at least
    one column. It lowers to: create `<table>__new` from the body;
    `INSERT INTO <table>__new (<cols>) SELECT <sources> FROM <table>`;
+   when the body's key carries `autoincrement`, the two statements that
+   give `<table>__new` the larger of its own `sqlite_sequence` mark and
+   the old table's, so the high-water mark survives the rebuild and no
+   deleted id is assigned again (§columns), while a rebuild that adds
+   `autoincrement` starts the mark at the largest copied id, since a
+   table without it keeps none;
    `DROP TABLE <table>`; `ALTER TABLE <table>__new RENAME TO
    <table>`; create every index of the body, those of its columns'
    `unique` and `index` first, named for `<table>`. The source of a column
    is, in order: its `from:` expression literal if given; the old
-   column of the same name; its `default:`; `NULL`. A column without
-   `null` whose source is `NULL` is an error, except a rowid alias
-   (`int [pk, increment]`) introduced by the rebuild, which takes
-   `NULL` as its source and the database assigns it. The source order
+   column of the same name; its `default:`, which the rowid alias never
+   has (§default-values); `NULL`. A column without `null` whose source
+   is `NULL` is an error, except the database-assigned key (`int
+   [pk]`, with or without `autoincrement`, without `ref:`) introduced
+   by the rebuild, which takes `NULL` as its source and the database
+   assigns it; a rowid alias that carries `ref:` and has no old column
+   of its name needs a `from:`, since `NULL` would let the database
+   assign it ids the referenced table never held. The source order
    is checked here for a table the package's migrations created; a
    table of unknown shape takes the old column of the same name when
    the fold has it and otherwise errors at fold time (§the-fold).
@@ -4073,7 +4685,11 @@ true. What is checked instead is their composition.
    what no default means, §default-values) and primary-key membership
    and position, the column's place in the key's column list
    (`PRAGMA table_xinfo`), so that a composite key in another order is
-   a rebuild (§columns); its foreign keys
+   a rebuild (§columns), and whether the key carries `AUTOINCREMENT`,
+   which no PRAGMA reports and which is read from the table's `CREATE
+   TABLE` text in `sqlite_schema` outside its quoted names, strings and
+   comments, so that adding or removing `autoincrement` is a rebuild;
+   its foreign keys
    (`PRAGMA foreign_key_list`); its indexes with uniqueness, partial
    predicate and key (`PRAGMA index_list`, `PRAGMA index_xinfo`).
    Indexes are compared by table, key, uniqueness and predicate,
@@ -4089,8 +4705,10 @@ true. What is checked instead is their composition.
    whose structure differs from the fold, can refuse a migration the
    check accepted. Nothing else
    is compared: not index names, not column order, not row data, not
-   SQL text, not the order of statements, and never the ledger table
-   (§migration-ledger).
+   SQL text beyond `AUTOINCREMENT`, not the order of statements, never
+   the ledger table (§migration-ledger), and never a table whose name
+   begins with `sqlite_`, SQLite's own, among them the `sqlite_sequence`
+   that appears as soon as one table carries `AUTOINCREMENT`.
 3. **Drift.** `volt migration check` compares fold and target and
    reports every difference, table by table, as the operations that
    would close it. Zero differences is the success condition. `volt
@@ -4198,7 +4816,7 @@ true. What is checked instead is their composition.
 package db
 
 table users {
-  id        int    [pk, increment]
+  id        int    [pk]
   email     string [unique, required]
   full_name string [required]
   bio       string [null]
@@ -4212,7 +4830,7 @@ table users {
 
 migration 0001__create_users {
   create table users {
-    id    int    [pk, increment]
+    id    int    [pk]
     email string [unique]
     name  string
     hits  string [default: "0"]
@@ -4225,7 +4843,7 @@ migration 0002__users_bio_and_int_hits [irreversible] {
     rename name to full_name
   }
   rebuild table users {
-    id        int    [pk, increment]
+    id        int    [pk]
     email     string [unique]
     full_name string
     bio       string [null]
@@ -4332,7 +4950,7 @@ migration column setting  = column setting
 
 (* setting value, extended (Part I §settings-lists): *)
 setting value  = (* schema-layer alternatives *) | ident list | order list
-               | query ref | query call ;
+               | query ref | query call | param ;
 ident list     = "(", name, { ",", name }, ")" ;
 ```
 
@@ -4340,7 +4958,9 @@ The `group decl`, `pred decl` and `select decl` productions — with the
 predicate expression grammar they share — are collected in §groups, §predicates
 and §selects-over-groups, and the validators block in §validators; they are not
 duplicated here. The `order list` that extends `setting value` above is the
-value of a Select's `order:` and is defined in §selects-over-groups.
+value of a Select's `order:` and is defined in §selects-over-groups; the
+`param` that extends it is the value of a Select's `limit:` and is
+defined in §predicates.
 
 All tokens of a `route path` and of a `package path` MUST be contiguous
 (§route-paths, §imports) — the grammar above is subject to that adjacency
@@ -4441,12 +5061,92 @@ the set.
 so a route parameter or primary key of type `int` carries the full
 SQLite INTEGER range there, and only there.
 
+A `time.Time` has one stored form: SQLite's own datetime text in
+UTC, `YYYY-MM-DD HH:MM:SS`, followed by `.` and the fractional
+seconds without their trailing zeros only when the fraction is not
+zero (`2026-11-03 05:18:49`, `2026-11-03 05:18:49.5`). In Go it is
+`t.UTC().Format("2006-01-02 15:04:05.999999999")`, the layout
+`rt.TimeLayout`, written by `rt.TimeText`. It is the text
+`CURRENT_TIMESTAMP` and `datetime()` write, whole seconds; it is not
+what `datetime(..., 'subsec')` and `strftime('%f')` write, which is
+always three fractional digits (`12:00:00.000`, `12:00:00.120`), so a
+default or record value is held to the expressions that write it
+(§default-values). A default, a value written from Go and a value read
+back and bound again are therefore one text;
+and since every value spells its seconds in the same width and a
+shorter fraction sorts before a longer one, text order is instant
+order. Equality, the ordering comparisons, `in` and list parameters,
+`order:`, `min` and `max`, the key of a `with`, keyset paging with
+`After` and SQLite's date and time functions (`date(created_at)`)
+therefore all agree with the instants.
+
+The runtime binds every `time.Time` as that text, whatever its
+location, and never hands a `time.Time` to the driver: every argument
+of every statement the runner executes passes through
+`rt.ArgsBound`, which rewrites a `time.Time` and any `driver.Valuer`
+whose value is a `time.Time`, so a changeset write, a key path
+(`Get`, `GetMany`, `Update`, `Delete`), an operator argument, an `In`
+item, a `Set`, an `After` key and a `Raw` argument bind it alike; a
+valid `rt.Null[time.Time]` binds as that text itself, a declared type
+stored as `time.Time` through its own `Value` and then as that text,
+and every item of a list parameter or an `InList` travels in the JSON
+array as that text (`rt.JSONList`, and `rt.JSONListOptional` for an
+optional list, §predicates). A year outside 0000
+to 9999 in UTC, past which SQLite's date functions and the text order
+end, is an error, the same one on every path: the statement returns
+it without running, an `In` item, a list parameter, an `InList` and
+the parent keys of a `with` alike (`rt.JSONList` returns an
+`rt.List` that carries the error to the statement instead of
+panicking, as it does for an item whose `Value` fails), whether the
+value came from Go or was read back from a row. A query parameter
+outside those years, such as `9999-12-31T23:00:00-05:00`, which is
+year 10000 in UTC, is a 400 naming the parameter (§query-routes).
+
+A value reads back in UTC. A NOT NULL `time.Time` field, of a model or
+of a select's row, scans through `(*rt.Time)(&v.At)`, and
+`rt.Null[time.Time]` reads the same way: the driver's `time.Time` for
+a declared column; for `min` or `max` of one, which carries no
+declared type for the driver to convert by (§selects-over-groups),
+SQLite's text in any layout SQLite or the driver writes (a `T` or a
+space, a trailing `Z` or an offset, with or without seconds, or a
+date alone) and an integer as the driver reads one from a declared
+column, unix seconds, or unix milliseconds when its magnitude passes
+10^12, so a column and `min` of it read one row alike. NULL in a NOT
+NULL field, text in no such layout and any other value are errors.
+
+Two limits remain. The sqlite3 driver converts a column declared
+`TIMESTAMP` itself and reads text it cannot parse as the zero
+`time.Time`, without any other sign, so such text in a declared
+column reads as `0001-01-01 00:00:00`, which is also a value Volt can
+store, and Volt cannot refuse it there; `min` and `max` of the
+column refuse it. The limit is Volt's choice of DDL spelling
+(§mapping-to-sqlite-ddl), not SQLite's: every generated read scans
+through `rt.Time`, which refuses such text, so a spelling the driver
+does not convert would make the refusal reliable, but it would also
+take the `time.Time` away from code that reads the column through
+`database/sql` itself, and only SQL written by hand stores such text.
+A row stored in another form, by older code that bound a `time.Time`
+with its offset (`2026-03-01 14:00:00+02:00`) or by SQL written by
+hand, reads back as its instant in UTC, but SQLite compares only the
+stored text: such a row does not equal its own read-back value, and
+it orders among canonical rows by its text. Volt generates no
+migration for such rows. In a column that is no key, reading the row
+and writing its value back (`Update` with the field set, or
+`UpdateWhere` with a `Set`) stores the canonical form. A key column,
+and a foreign key that references one, is out of the generated API's
+reach: every key path binds the canonical text, so `Get`, `Update`
+and `Delete` by the read-back key find no row, and only a statement
+written by hand rewrites it (`UPDATE batches SET opened_at =
+datetime(opened_at)` for whole seconds, its children's keys alike).
+
 ### Nullability
 
 A column that carries `null` (§columns) is nullable and generated as
 `rt.Null[T]`, a value plus a validity bit, never a pointer, for every
 type, `[]byte` included (`rt.Null[[]byte]`). Every other column is NOT
-NULL and generated as `T`. A plain `[]byte` is therefore bytes and
+NULL and generated as `T`. A valid `rt.Null[time.Time]` binds as the stored form of a `time.Time`
+and reads as a NOT NULL one does, NULL aside (§go-types). A plain
+`[]byte` is therefore bytes and
 never NULL (§columns), and `rt.Bytes` is the one place that says
 so: generated code binds a `[]byte` field as `rt.Bytes(v.Body)`, whose
 `Value` writes nil as empty bytes, in a changeset write and on every
@@ -4497,15 +5197,16 @@ Every note is the `note:` setting (§notes):
 
 | Note on | Generated position |
 |---|---|
-| `project` | package comment |
 | `table` | struct doc comment |
 | column | field doc comment |
 | injected partial column | travels with the column; a §tablepartial override brings its own note |
 
 These are the only comments a generated file carries besides the
 header: a note is the maintainer's text, and the generators write no
-comment of their own, so the package comment is the project note
-alone and a file without notes has no comment but the header.
+comment of their own, so a generated file has no package comment and
+a file without notes has no comment but the header. A package doc
+comment, if wanted, is written in a hand-written Go file of the
+package, as any Go package documents itself.
 Generated files start with the machine-readable
 `// Code generated … DO NOT EDIT.` marker; `volt gen` refuses to
 overwrite a file lacking it. Generated data-layer code imports the
@@ -4527,7 +5228,11 @@ tag, assembled in this order:
 
 A struct derivative (§selects-over-groups) copies each kept field's assembled tag
 unchanged; an explicit-list shared row type (§selects-over-groups) carries the
-default `db`/`json` pair only.
+default `db`/`json` pair only. The children field of a `with` row type
+(§selects-over-groups) is no column and carries `json:"<relation
+name>"` alone, so the children travel under the relation's name as
+written, `"points"` for `MetricWithPoints`'s `Points`, as every other
+key is a name the schema spells.
 
 ### Generated query surface
 
@@ -4535,6 +5240,14 @@ A generated query is a value (§values-and-effects): a function of
 `volt_queries.go`, `volt_dyn.go` or `volt_selects.go` with no receiver
 and no context returns an **effect** of `nao/rt`, and the runner
 `nao/run` performs it. Nothing runs when the function is called.
+`Effect[T]` is sealed: every method it requires is unexported, so a
+type of another package satisfies it only by embedding one of the
+kinds below or an `Effect` itself, and is then the effect it embeds: it
+performs, describes and compares as that one, and one that embeds a
+nil `Effect` panics when it is performed or described, as a method of
+a nil interface does. The runner performs an effect through
+`rt.Perform` or `rt.PerformAny`, the only functions that hand an effect
+an executor.
 
 ```go
 // nao/rt: the effects. Effect[T] is sealed; these are all of them.
@@ -4544,9 +5257,19 @@ type Write[M any]  struct { SQL string; Args []any; Scan func(Row) (M, error); R
 type Exec          struct { SQL string; Args []any; Model string; One bool; Err error }    // rows affected
 type With[P, C any, K comparable, R any] struct { Parent Query[P]; Child string; ChildScan func(Row) (C, error); ParentKey func(P) K; ChildKey func(C) K; Build func(P, []C) R }  // parents with their children, []R
 func Tx(steps ...AnyEffect) Transaction   // all or nothing, results in order
-func All(steps ...AnyEffect) Parallel     // at once, first error cancels, results in order
+func All(steps ...AnyEffect) Parallel     // at once, in order inside a transaction, first error stops, results in order
+func Then[T, U any](e Effect[T], next func(T) Effect[U]) Effect[U]  // e, then the effect next makes of its result
+func Map[T, U any](e Effect[T], f func(T) U) Effect[U]              // f of e's result
+func Atomic[T any](e Effect[T]) Effect[T]                          // e and all it performs, all or nothing
+func Pure[T any](v T) Effect[T]                                    // v, performing nothing
+func Fail[T any](err error) Effect[T]                              // err, performing nothing
+var ErrNoEffect error                     // an effect built over nothing: a nil effect, next or f, a Fail of nil
 func Insert[M any](c Changeset[M]) Write[M]
 func Update[M any](c Changeset[M]) Write[M]
+func Perform[T any](ctx context.Context, x Executor, e Effect[T]) (T, error)  // e over the runner's executor
+func Describe(e AnyEffect) string         // its kinds, statements and values, for a person to read
+func Same(a, b AnyEffect) bool            // the same effect, as volt.Same compares continuations
+func Equal(a, b any) bool                 // reflect.DeepEqual, a NaN equal to a NaN: how Same compares values
 
 // nao/run: the one stateful object and the one performer.
 type DB struct { /* the pool, the statement cache, the logger */ }
@@ -4586,19 +5309,29 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    gives none (§indexes). `<Model>List` and `<Model>Create` always
    exist; a table without a key gets List, Create, GetBy and the
    dynamic layer.
-2. A `Lookup` yields `rt.ErrNotFound` on a miss, which the runner
-   returns for the driver's no-rows error, and so does an `Update`
-   whose row vanished and a keyed `Delete`, an `Exec` with `One` set,
-   when nothing was affected. A `Query` yields an empty slice, never
+2. A `Lookup` yields `rt.ErrNotFound` on a miss, a statement that
+   returned no row, and so does an `Update` whose row vanished and a
+   keyed `Delete`, an `Exec` with `One` set, when nothing was affected.
+   A `Lookup` and a `Write` read the first row their statement returns
+   through their `Scan`, which receives the statement's error too, so
+   that it can map a refusal; the statement is released when the
+   `Scan` returns, whether it read the row, refused it unread or
+   panicked. A `Query` yields an empty slice, never
    nil, unless it has no statement.
 3. Every statement is rendered by the runtime (§predicates, rendering):
    `Get`, `GetBy*`, `List`, `Delete` and the select functions carry
    constants rendered at generation time, bound positionally in the
-   order the text names their parameters; `GetMany` and the dynamic
+   order the text names their parameters, every argument through
+   `rt.ArgsBound`, which binds a `time.Time` as its stored form
+   (§go-types); `GetMany` and the dynamic
    layer render when the function is called, so a rendering that
-   fails (an `After` without an `OrderBy`) is a value carrying its
-   error in `Err`, which the runner returns without running a
-   statement. `Create` and `Update` render from the changeset's marks
+   fails (an `After` without an `OrderBy`, a `Limit` below 1, which
+   fails with `rt.ErrLimit`) is a value carrying its error in `Err`,
+   which the runner returns without running a statement. A select
+   whose `limit:` parameter is below 1 carries `rt.ErrLimit` the same
+   way: its function sets `Err` to `rt.LimitCheck(n)`, nil for an `n`
+   of at least 1 (§selects-over-groups), so a limit below 1 has one
+   meaning on both paths and never reaches SQLite. `Create` and `Update` render from the changeset's marks
    and end in `RETURNING` (§changesets). The runner maps a database
    refusal of a `Write` or a keyed `Delete` onto `*rt.Invalid`;
    `DeleteWhere` and `UpdateWhere` yield the driver's error.
@@ -4614,22 +5347,136 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    `OrderBy` terms. Every function of the three files shares the
    package scope with the column handles and the names of
    §changesets, so a column whose handle would take a function's name
-   (`count` on `users` gives `UserCount`) is a check error naming
-   both, as it is for the wrappers (`lint.md`, `dynname`).
+   (`count` on `users` gives `UserCount`, `exists` gives `UserExists`)
+   is refused by `volt gen`, which names both, and reported before
+   generation by `volt vet`, as a wrapper's collision is (`lint.md`,
+   `dynname`).
 5. **The runner.** `run.Open(driver, dsn)` pins one connection and sets
-   WAL, `busy_timeout = 5000` and `foreign_keys = ON`; `run.Wrap` takes
-   a pool the application opened. `run.Run(ctx, db, e)` performs one
-   effect: every statement is prepared through the statement cache,
-   keyed by its text, so identical shapes prepare once; a
+   WAL, `busy_timeout = 5000` and `foreign_keys = ON` on every
+   connection the pool opens, since SQLite keeps each setting per
+   connection; `run.Wrap` takes a pool the application opened, with
+   the settings it gave it. `run.Run(ctx, db, e)` performs one
+   effect: every statement outside a transaction is prepared through
+   the statement cache, keyed by its text, so identical shapes prepare
+   once; a statement inside one runs on the transaction's connection
+   and is prepared there each time, since a cached statement belongs
+   to the pool and not to one connection. A
    `Transaction` runs its steps on one transaction that commits when
-   every step succeeded and rolls back on the first error, a
-   `Transaction` inside one joins it; a `Parallel` runs its steps on
+   every step succeeded and rolls back on the first error or a panic, a
+   `Transaction` inside one joins it. A transaction that can write
+   begins immediately (`BEGIN IMMEDIATE`), taking SQLite's write lock
+   at its start, so one that reads and then writes, the check of rule
+   6 among them, waits for the lock while another connection of a pool
+   holds it, where a deferred one would fail at its first write with
+   `database is locked`. The runner waits for that lock itself, as
+   SQLite's busy handler would, for at most the connection's busy
+   timeout, and stops waiting when the context ends, failing with the
+   context's error: SQLite's own wait sees no context. A transaction
+   whose effects can only read, a `With`, and a `Transaction`, a
+   `Parallel`, a `Map` or an `Atomic` of `Query`, `Lookup`, `With`,
+   `Pure` and `Fail` alone, begins deferred (`BEGIN`): it takes one
+   snapshot at its first read and no lock, so under WAL it reads
+   beside a writer without waiting and beside other readers at once.
+   A `Then` counts as writing, since what its `next` returns is not
+   known before it runs. With the one connection `run.Open` pins the
+   transactions run one after another either way. A statement outside
+   a transaction that finds the write lock held, by another connection
+   or another process, waits under SQLite's own busy handler, which no
+   context interrupts, so a route's deadline (§route-loads) reaches it
+   only when the busy timeout ends; an `Atomic` around it waits as a
+   transaction does. A `Parallel`
+   runs its steps on
    their own goroutines and joins them, the first error cancelling the
-   rest; the context cancels any of them. The runner writes one
+   rest, except inside a transaction, where it runs them in order on
+   that transaction and the first error stops it before the next step
+   starts; the context cancels any of them, and a transaction the
+   context ends, between two statements, inside one or before the
+   commit, rolls back and fails with the context's error, which the
+   shim answers with a 504 when the route's timeout expired
+   (§route-loads) and a 499 when the client closed the request
+   (§requests-and-responses). The transaction keeps its connection
+   either way, so an in-memory database, which lives as long as its
+   one connection, and the connection's settings outlive it. Inside a transaction the
+   steps run in order because a transaction holds one connection,
+   which runs one statement at a time anyway, and because SQLite rolls
+   the whole transaction back when a write inside it is interrupted, as
+   a cancelled context interrupts it, or fails as a full disk does,
+   leaving the connection in autocommit: a step that went on beside it
+   would write outside the transaction, each statement committing on
+   its own. A step of a `Parallel` outside a transaction that panics
+   cancels the rest as well, and once every step has joined its panic
+   is raised again, carrying the step's stack, on the goroutine that
+   performs the `Parallel`: it ends what a panic there would end, the
+   request alone, which `net/http` recovers, and never the process.
+   Inside a transaction a step runs on that goroutine already, and the
+   transaction rolls back. The runner writes one
    structured log line per statement at debug level, with the text,
    the duration and the error, through the logger of `WithLogger`.
    `rt.Null[T]` marshals as the value or `null`.
-6. **Locals and helpers.** Every local a function of a data file
+6. **Effects over earlier results.** `rt.Then(e, next)` performs `e`,
+   calls `next` with its result and performs the effect `next` returns,
+   on the same executor, and yields that effect's result; `rt.Map(e, f)`
+   performs `e` and yields `f` of its result; `rt.Atomic(e)` performs
+   `e`, and everything `e` performs, in one transaction that commits
+   when all of it succeeds and rolls back on the first error, which it
+   returns. `rt.Pure(v)` performs nothing and yields `v`, and
+   `rt.Fail(err)` performs nothing and fails with `err`: a `next`
+   returns the one when nothing is left to perform and the other when
+   it refuses what it read. The five are effects like the others,
+   values the runner performs, and their constructors are the one way
+   to build them. They nest, and `next` may return any effect: an
+   `Atomic` over the `Then` of `PostCreate(c)` whose `next` returns the
+   `Transaction` of the inserts that carry the new post's key writes
+   the post and its tags together or not at all, and an `Atomic` over
+   the `Then` of `PostGet(id)` whose `next` returns
+   `rt.Fail(volt.Error(409, ...))` for a post that is no draft, and its
+   update otherwise, publishes a draft and nothing else.
+   - `next` is a pure function from a value to a description and `f`
+     one from a value to a value (§values-and-effects): the runner
+     calls them between the statements, and nothing performs inside
+     them, and they write no variable they capture, which would make
+     the effect perform differently each time and, inside a `Parallel`
+     outside a transaction, race with itself; in a routes package the
+     vet rules of `lint.md` hold them as they hold the handler, and
+     `capturedwrite` reports a write to a captured variable. Neither is
+     called when the effect before it fails. A panic inside either is
+     the request's, as a handler's is: `net/http` ends that request
+     alone, inside a `Parallel` too, which raises it again on the
+     goroutine that performs it, and the transaction it ran in rolls
+     back.
+   - A nil is never an effect: a nil `Effect` where one is performed,
+     a `Transaction`'s or a `Parallel`'s step, the `e` of a `Then`, a
+     `Map` or an `Atomic` and the effect a `next` returns among them, a
+     nil `next` or `f`, and an `rt.Fail` of a nil error yield
+     `rt.ErrNoEffect`, which stops the effect there as any other error
+     does; a `Transaction`, a `Parallel`, a `Then` and a `Map` check
+     what they hold before they perform any of it.
+   - A `Then` is not atomic by itself. Outside an `Atomic` and a
+     `Transaction` its steps run one after another, each on its own, so
+     when the effect `next` returns fails, what `e` wrote stays
+     written. Inside either, every step runs on that one transaction.
+   - An `Atomic` inside a `Transaction` or another `Atomic` opens no
+     transaction of its own and joins the one already open, as a
+     nested `Transaction` does: its failure rolls back the whole of the
+     outer one, and what it wrote commits only when the outer one does.
+   - A `Parallel` inside an `Atomic` does what it does inside a
+     `Transaction` (rule 5): it runs its steps in order on the one
+     transaction, every step joining it, and the first error stops it
+     before the next step starts and rolls back everything the
+     `Atomic` performed.
+   - `rt.Map(e, f)` performs what an `rt.Then` over `e` does whose
+     `next` returns `rt.Pure(f(v))`, and `rt.Fail(err)` what a kind
+     whose `Err` is set does: `Map` is the short spelling of the
+     common case, and `Fail` is the refusal a `next` of any result
+     returns without building a statement it never runs. `volt.Same`
+     compares spellings, so each pair is two effects there
+     (§requests-and-responses).
+   - An error comes back as the step reported it, unwrapped, so a
+     refused write is still the `*rt.Invalid` the error handler answers
+     with 409 or 422, a miss still `rt.ErrNotFound`, a 404, and an
+     `rt.Fail` the error it carries, an `HTTPError` with its own status
+     among them (§formats).
+7. **Locals and helpers.** Every local a function of a data file
    declares, the parameters of a function literal included, is `volt`
    followed by an upper-case letter, with no underscore (`voltErr`,
    `voltRows`, `voltV`), and so is every unexported package-level name
@@ -4643,12 +5490,13 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    key column takes in `Get`, `GetMany`, `GetBy*` and `Delete` is its
    Go field name (§names) with the leading initialism or letter lowered
    (`UserID` is `userID`), with `_` appended when that is a Go keyword,
-   `ctx`, `arg`, `q` or `rt`, `nil`, `append`, `any` or `true` (the predeclared names a
+   `ctx`, `arg` or `rt`, `nil`, `append`, `any` or `true` (the predeclared names a
    generated method uses), a name the route files' signatures take
-   (`w`, `r`, `opts`, `volt`, `cs`, `c`), which a query route's path
-   parameter, named after the key parameter, may not take
+   (`w`, `r`, `opts`, `volt`, `cs`, `c`, `body`), which a query
+   route's path parameter, named after the key parameter, may not take
    (§route-paths), or of the locals' form: a column `volt_err` takes
-   `voltErr_` and a column `c` takes `c_`. `GetMany` takes that name
+   `voltErr_`, a column `c` takes `c_` and a column `body` takes
+   `body_`. `GetMany` takes that name
    with `s` added. A select parameter is refused where a key column's
    parameter takes `_`, `arg` aside (§predicates), so no column and no
    parameter shadows a local, a helper or a predeclared name a method
@@ -4667,17 +5515,18 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | Declared | SQLite |
 |---|---|
 | column without `null`, key columns included (SQLite's `PRIMARY KEY` does not imply NOT NULL) | `NOT NULL`, the rowid alias below excepted; a column that carries `null` has no nullability constraint (§columns) |
-| `int` `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§columns) |
+| `int` `[pk]`, the one column of the key (§columns) | exactly `INTEGER PRIMARY KEY`, without `NOT NULL` and without `DEFAULT`, which SQLite would ignore there, so `default:` on it is a check error (§default-values): the rowid alias, which SQLite assigns whenever an insert leaves it unmarked. It is the database-assigned key unless it is a foreign key; a shared-key one-to-one (`user_id int [pk, ref: users.id]`) renders the same, with its `FOREIGN KEY`, and takes its value from the referenced row (§relationships-ref). A key of a declared type stored as `int` renders the same, so that a migration's `int [pk]` folds equal to it (§the-fold) |
+| `int` `[pk, autoincrement]` | exactly `INTEGER PRIMARY KEY AUTOINCREMENT`: SQLite's keyword with SQLite's meaning, an id is never reused and SQLite keeps `sqlite_sequence`. The SQLite documentation advises it only when ids must never be reused, since it costs CPU, memory, disk space and disk I/O. Any other `autoincrement` placement, a key that is a foreign key among them, is a check error (§columns) |
 | `pk` on one column | `PRIMARY KEY` on the column, `NOT NULL` with it, the rowid alias above excepted |
 | `pk` on several columns (composite key, §columns) | `PRIMARY KEY (a, b)` table constraint listing the `pk` columns in the table's effective column order (§partial-injection-order); members get `NOT NULL` |
 | `unique` or `index` column (§columns) | `CREATE UNIQUE INDEX` or `CREATE INDEX` `idx_<table>_<column> ON <table> (<column>)` after the table, before the indexes of its `indexes` blocks; never an inline `UNIQUE`, which SQLite enforces the same way but which no `drop index` removes, only a `rebuild table` |
 | `indexes` entry | `CREATE INDEX <name> ON <table> (<key>)`, `UNIQUE` for `unique`, `WHERE <expr>` for `where:` (§indexes); the name is `name:` when given, else `idx_<table>_<col>[_<col>...]` from the SQLite table name and the key columns; two indexes of the schema of one name, or an index named as a table, are a check error, since SQLite names indexes per database (§indexes) |
 | relationship (`ref:`, `ref:`) | `FOREIGN KEY (<fk>) REFERENCES <table> (<columns>)` with `ON DELETE` / `ON UPDATE`; the foreign key is the left endpoint of a `ref` and the declaring column of a `ref:` (§relationships-ref) |
-| one-to-one (a unique foreign key, §relationships-ref) | the uniqueness as written, the column's unique index or the composite key or index; the relationship adds nothing |
+| one-to-one (a unique foreign key, §relationships-ref) | the uniqueness as written, the column's unique index or the composite key or index; the relationship adds nothing. A shared int key is `INTEGER PRIMARY KEY` with its `FOREIGN KEY`, the rowid alias but no database-assigned key (§columns) |
 | `int`, `bool` | `INTEGER` (booleans stored 0/1; `true`/`false` in records and defaults become 1/0) |
 | `float64` | `REAL` |
 | `string` | `TEXT` |
-| `time.Time` | `TIMESTAMP` (ISO-8601 text; the DDL spelling is what the sqlite3 driver keys its time conversion on) |
+| `time.Time` | `TIMESTAMP`, holding the stored form of §go-types, SQLite's datetime text in UTC (the sqlite3 driver keys its time conversion on this spelling, so code reading the column through `database/sql` itself gets a `time.Time`; Volt's own reads parse through `rt.Time` and need no conversion, and the price, text the driver cannot parse reading as the zero time, is the limit §go-types states) |
 | `[]byte` | `BLOB` |
 | declared `type` (§types) | the column type of its storage type; a value set (§types) carries no `CHECK`, its values are the Go constants |
 | backtick expressions | verbatim; parenthesized in `DEFAULT` as SQLite requires |
@@ -4687,8 +5536,8 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 
 Identifiers are quoted only when needed (not a plain lower-case name,
 or a SQLite keyword): `order` → `"order"`, `Users` → `"Users"`,
-`żółw` → `"żółw"`. `project` note → file header comment; table
-and column notes → comments above their DDL. Output opens with
+`żółw` → `"żółw"`. Table and column notes → comments above their
+DDL. Output opens with
 `PRAGMA foreign_keys = ON;` and the `-- Code generated … DO NOT EDIT.`
 marker, with the same overwrite protection as §mapping-to-go.
 

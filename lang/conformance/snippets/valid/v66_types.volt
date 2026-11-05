@@ -6,7 +6,7 @@ type Slug        string
 type Status string
 
 table products {
-  id    int         [pk, increment]
+  id    int         [pk]
   slug  Slug        [unique, required]
   price money.Money [default: 0]
   icon  png.Png

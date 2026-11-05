@@ -372,6 +372,59 @@ select rows for series [order: (
             (identifier)))))))
 
 ==================
+select with a limit, a literal and a parameter
+==================
+
+select top for page_views [order: (hits desc, id asc), limit: 10]
+select page for page_views where day >= :from [order: (day asc, id asc), limit: :limit]
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_target)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
+          (identifier)
+          (ident_modifier
+            (identifier))))
+      (setting
+        (setting_name
+          (identifier))
+        (number))))
+  (select_definition
+    (select_name)
+    (select_target)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name))))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
+          (identifier)
+          (ident_modifier
+            (identifier))))
+      (setting
+        (setting_name
+          (identifier))
+        (query_param
+          (parameter_name))))))
+
+==================
 select projections
 ==================
 
@@ -464,8 +517,7 @@ scope / [error_handler: Errors] {
         (identifier)))))
 
 ==================
-a dotted setting value is an error
-:error
+volt: a dotted setting value parses, the checker judges it
 ==================
 
 scope / [error_handler: app.Errors] {
@@ -473,6 +525,23 @@ scope / [error_handler: app.Errors] {
 }
 
 ---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (go_ref
+          (identifier)
+          (identifier))))
+    (route
+      (verb)
+      (route_path)
+      (go_ref
+        (identifier)
+        (identifier)))))
 
 ==================
 volt: route with a load block
@@ -524,6 +593,7 @@ volt: route with a body setting
 
 scope / {
 	patch /settings/:id(int) Settings.Save [body: db.SettingUpdate(id), only: (unit)]
+	post  /metrics           Metrics.Create [body: db.MetricCreate]
 	post  /login             Session.Login [body: LoginForm]
 }
 
@@ -555,6 +625,20 @@ scope / {
           (setting_name
             (identifier))
           (ident_group
+            (identifier)))))
+    (route
+      (verb)
+      (route_path
+        (path_segment))
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (go_ref
+            (identifier)
             (identifier)))))
     (route
       (verb)
@@ -705,3 +789,75 @@ scope /me {
       (go_ref
         (identifier)
         (identifier)))))
+
+==================
+volt: optional parameters and exists terms
+==================
+
+pred before { published_at < :at? or (published_at = :at? and id < :id?) }
+select feed for posts where exists tags (tag in :tags? and not tag = "draft") and before [order: (published_at desc, id desc), limit: :limit]
+
+---
+
+(source_file
+  (pred_definition
+    (pred_name)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name)
+          (optional_marker)))
+      (pred_expr
+        (pred_compare
+          (column_ref)
+          (query_param
+            (parameter_name)
+            (optional_marker)))
+        (pred_compare
+          (column_ref)
+          (query_param
+            (parameter_name)
+            (optional_marker))))))
+  (select_definition
+    (select_name)
+    (select_target)
+    (pred_expr
+      (pred_exists
+        (relation_name)
+        (pred_expr
+          (pred_in
+            (column_ref)
+            (query_param
+              (parameter_name)
+              (optional_marker)))
+          (pred_compare
+            (column_ref)
+            (string
+              (string_content)))))
+      (pred_ref))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
+          (identifier)
+          (ident_modifier
+            (identifier))))
+      (setting
+        (setting_name
+          (identifier))
+        (query_param
+          (parameter_name))))))
+
+==================
+volt: a space before ? leaves the parameter required and the ? an error
+:error
+==================
+
+select feed for posts where id < :id ? [order: (id asc)]
+
+---

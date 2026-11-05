@@ -90,7 +90,7 @@ func (c *checker) relationsBuild() {
 		}
 		forward.Name = ri.Target.Table.Key
 		if len(ri.FK.Columns) == 1 {
-			forward.Name = relationStem(ri.FK.Columns[0])
+			forward.Name = RelationStem(ri.FK.Columns[0])
 		}
 		if as := refNameSetting(ri, "as"); as != nil {
 			forward.Name = as.Name()
@@ -106,7 +106,9 @@ func (c *checker) relationsBuild() {
 	}
 }
 
-func relationStem(col string) string {
+// RelationStem is the name a forward relation over the one column col
+// takes (spec §relationships-ref): col without a trailing _id, else col.
+func RelationStem(col string) string {
 	if stem, ok := strings.CutSuffix(col, "_id"); ok && stem != "" {
 		return stem
 	}

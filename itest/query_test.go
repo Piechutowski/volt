@@ -6,13 +6,16 @@ package itest
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -197,6 +200,186 @@ func TestQueryRouteTimeParam(t *testing.T) {
 	}
 }
 
+type statementCount struct{ n *atomic.Int64 }
+
+func (h statementCount) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h statementCount) Handle(_ context.Context, r slog.Record) error {
+	if r.Message == "statement" {
+		h.n.Add(1)
+	}
+	return nil
+}
+
+func (h statementCount) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h statementCount) WithGroup(string) slog.Handler      { return h }
+
+// countedHandler is the fixture's router over a database that counts the
+// statements it runs.
+func countedHandler() (http.Handler, *atomic.Int64) {
+	var n atomic.Int64
+	dbh := fixtureDB().WithLogger(slog.New(statementCount{&n}))
+	return app.NewRouter(fixtureControllers(dbh, &volt.Broker{})), &n
+}
+
+// TestQueryRouteLimitParam (§query-routes, §selects-over-groups): a
+// select's limit parameter binds from the query string like any int,
+// keeps the first rows in order, and a value below 1 is a 400 naming the
+// parameter that runs no statement, as a missing or unparseable one is.
+func TestQueryRouteLimitParam(t *testing.T) {
+	h, ran := countedHandler()
+	call(h, "POST", "/api/users", strings.NewReader(`{"email":"two@example.com"}`))
+	call(h, "POST", "/api/users", strings.NewReader(`{"email":"three@example.com"}`))
+
+	rec := call(h, "GET", app.PathAPIUserLatest(volt.Query("limit", "2")), nil)
+	var rows []db.User
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &rows) != nil || len(rows) != 2 || rows[0].ID != 3 || rows[1].ID != 2 {
+		t.Fatalf("latest 2: %d %s, want ids 3 and 2", rec.Code, rec.Body.String())
+	}
+	for _, q := range []string{"limit=0", "limit=-1"} {
+		var p volt.Problem
+		before := ran.Load()
+		rec = call(h, "GET", "/api/latest?"+q, nil)
+		if rec.Code != 400 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || p.Status != 400 || !strings.Contains(p.Message, "parameter limit") {
+			t.Fatalf("%s: %d %q, want a 400 problem naming the parameter limit (§query-routes)", q, rec.Code, rec.Body.String())
+		}
+		if n := ran.Load() - before; n != 0 {
+			t.Errorf("%s ran %d statements; want none, the limit refused where it binds", q, n)
+		}
+	}
+	if rec = call(h, "GET", "/api/latest?limit=many", nil); rec.Code != 400 || !strings.Contains(rec.Body.String(), "limit") {
+		t.Fatalf("unparseable limit: %d %q, want 400 naming limit", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "GET", "/api/latest", nil); rec.Code != 400 {
+		t.Fatalf("missing limit: %d, want 400", rec.Code)
+	}
+}
+
+// TestLoadLimitParam (§route-loads, §selects-over-groups): a load binds a
+// select's limit from a path parameter or the query string, and a value
+// below 1 from either is a 400 naming its key before any load runs, the
+// route's earlier load of the user included.
+func TestLoadLimitParam(t *testing.T) {
+	h, ran := countedHandler()
+	call(h, "POST", "/api/users", strings.NewReader(`{"email":"two@example.com"}`))
+	call(h, "POST", "/api/users", strings.NewReader(`{"email":"three@example.com"}`))
+
+	served := ran.Load()
+	rec := call(h, "GET", app.PathPeers(1, 2, volt.Query("count", "1")), nil)
+	var got map[string]int
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &got) != nil || got["user"] != 1 || got["peers"] != 2 || got["more"] != 1 {
+		t.Fatalf("peers 2 and 1 more: %d %s, want user 1 with 2 peers and 1 more", rec.Code, rec.Body.String())
+	}
+	if n := ran.Load() - served; n != 3 {
+		t.Fatalf("the served route ran %d statements; want its 3 loads, or the counts below prove nothing", n)
+	}
+	for _, tc := range []struct{ target, key string }{
+		{app.PathPeers(1, 0, volt.Query("count", "1")), "parameter n"},
+		{app.PathPeers(1, -1, volt.Query("count", "1")), "parameter n"},
+		{app.PathPeers(1, 2, volt.Query("count", "0")), "parameter count"},
+		{app.PathPeers(1, 2, volt.Query("count", "-1")), "parameter count"},
+	} {
+		var p volt.Problem
+		before := ran.Load()
+		rec = call(h, "GET", tc.target, nil)
+		if rec.Code != 400 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || !strings.Contains(p.Message, tc.key) {
+			t.Errorf("%s: %d %q, want a 400 problem naming %s (§route-loads)", tc.target, rec.Code, rec.Body.String(), tc.key)
+		}
+		if n := ran.Load() - before; n != 0 {
+			t.Errorf("%s ran %d statements; want none, every argument bound before the first load", tc.target, n)
+		}
+	}
+}
+
+// TestLoadKeyBindsTwice (§route-loads): one query key binds a required
+// limit of one load and an optional parameter of another, each by its own
+// rule, so the key present feeds both and the key missing is a 400 naming
+// it before any load runs, the optional binding notwithstanding.
+func TestLoadKeyBindsTwice(t *testing.T) {
+	h, ran := countedHandler()
+	call(h, "POST", "/api/users", strings.NewReader(`{"email":"two@example.com"}`))
+	call(h, "POST", "/api/users", strings.NewReader(`{"email":"three@example.com"}`))
+
+	rec := call(h, "GET", app.PathBoth(1, volt.Query("count", "3")), nil)
+	var got map[string]int
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &got) != nil || got["latest"] != 3 || got["described"] != 1 {
+		t.Fatalf("count=3: %d %s, want the 3 latest and the 1 user from id 3", rec.Code, rec.Body.String())
+	}
+	before := ran.Load()
+	var p volt.Problem
+	rec = call(h, "GET", app.PathBoth(1), nil)
+	if rec.Code != 400 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || !strings.Contains(p.Message, "count") {
+		t.Fatalf("no count: %d %q, want a 400 problem naming count", rec.Code, rec.Body.String())
+	}
+	if n := ran.Load() - before; n != 0 {
+		t.Fatalf("no count ran %d statements; want none", n)
+	}
+}
+
+// TestScopeLoadLimitParam (§scope-loads, §route-loads, §query-routes): a
+// limit from the path, of a load or of a query route, is checked with the
+// path parameters, before the scope load runs or halts, and one from the
+// query string where it binds, after the scope load, as every query key is.
+func TestScopeLoadLimitParam(t *testing.T) {
+	h, ran := countedHandler()
+	call(h, "POST", "/api/users", strings.NewReader(`{"email":"two@example.com"}`))
+	call(h, "POST", "/api/users", strings.NewReader(`{"email":"three@example.com"}`))
+
+	served := ran.Load()
+	rec := call(h, "GET", app.PathMePicks(2), nil, "X-User", "1")
+	var got map[string]int
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &got) != nil || got["user"] != 1 || got["picks"] != 2 {
+		t.Fatalf("picks 2: %d %s, want user 1 with 2 picks", rec.Code, rec.Body.String())
+	}
+	if n := ran.Load() - served; n != 2 {
+		t.Fatalf("the served route ran %d statements; want the scope load's and the route load's, or the counts below prove nothing", n)
+	}
+	served = ran.Load()
+	rec = call(h, "GET", app.PathMeTop(2), nil, "X-User", "1")
+	var top []db.User
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &top) != nil || len(top) != 2 || top[0].ID != 3 || top[1].ID != 2 {
+		t.Fatalf("top 2: %d %s, want users 3 and 2", rec.Code, rec.Body.String())
+	}
+	if n := ran.Load() - served; n != 2 {
+		t.Fatalf("the served query route ran %d statements; want the scope load's and the query's, or the counts below prove nothing", n)
+	}
+	for _, user := range []string{"", "1"} {
+		for _, n := range []int{0, -1} {
+			for _, tc := range []struct{ target, key string }{
+				{app.PathMePicks(n), "parameter n"},
+				{app.PathMeTop(n), "parameter limit"},
+			} {
+				before := ran.Load()
+				rec = call(h, "GET", tc.target, nil, "X-User", user)
+				var p volt.Problem
+				if rec.Code != 400 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || !strings.Contains(p.Message, tc.key) {
+					t.Errorf("%s, X-User %q: %d %q, want a 400 naming %s before the scope load (§scope-loads)", tc.target, user, rec.Code, rec.Body.String(), tc.key)
+				}
+				if count := ran.Load() - before; count != 0 {
+					t.Errorf("%s, X-User %q ran %d statements; want none, the scope load's among them", tc.target, user, count)
+				}
+			}
+		}
+	}
+
+	if rec = call(h, "GET", app.PathMeUserLatest(volt.Query("limit", "0")), nil); rec.Code != http.StatusUnauthorized {
+		t.Errorf("latest limit=0 without a user: %d %q, want the scope load's 401, which runs before the query string binds", rec.Code, rec.Body.String())
+	}
+	before := ran.Load()
+	rec = call(h, "GET", app.PathMeUserLatest(volt.Query("limit", "0")), nil, "X-User", "1")
+	if p := problemOf(t, rec, 400); !strings.Contains(p.Message, "parameter limit") {
+		t.Errorf("latest limit=0: %q, want a 400 naming limit", p.Message)
+	}
+	if n := ran.Load() - before; n != 1 {
+		t.Errorf("latest limit=0 ran %d statements; want the scope load's alone, and no query", n)
+	}
+	rec = call(h, "GET", app.PathMeUserLatest(volt.Query("limit", "2")), nil, "X-User", "1")
+	var rows []db.User
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &rows) != nil || len(rows) != 2 || rows[0].ID != 3 || rows[1].ID != 2 {
+		t.Errorf("latest limit=2: %d %s, want users 3 and 2", rec.Code, rec.Body.String())
+	}
+}
+
 // TestQueryRouteTable: query rows carry the reference as written and no
 // controller, and only reads have helpers (§query-routes).
 func TestQueryRouteTable(t *testing.T) {
@@ -213,8 +396,8 @@ func TestQueryRouteTable(t *testing.T) {
 			t.Errorf("%s %s: helper %q — only GET query routes have one", r.Method, r.Spelled, r.Helper)
 		}
 	}
-	if seen != 20 {
-		t.Errorf("query rows = %d, want 20 (seven query routes, one under a scope load, two dataset members, ten resources [default] routes)", seen)
+	if seen != 29 {
+		t.Errorf("query rows = %d, want 29 (nine query routes, three under a scope load, two dataset members, fifteen resources [default] routes)", seen)
 	}
 }
 

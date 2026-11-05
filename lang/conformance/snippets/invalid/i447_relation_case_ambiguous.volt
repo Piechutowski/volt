@@ -3,14 +3,14 @@
 package db
 
 table metrics {
-  id   int    [pk, increment]
+  id   int    [pk]
   name string
   unit string [null]
   hour int
 }
 
 table points {
-  id        int   [pk, increment]
+  id        int   [pk]
   metric_id int
   ts        int
   value     float64

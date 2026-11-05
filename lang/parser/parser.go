@@ -219,8 +219,6 @@ func (p *parser) decl() (d ast.Decl) {
 	case "get", "post", "put", "patch", "delete", "options", "head", "any", "resources", "dataset":
 		p.fail(t, "routes, resources and datasets must appear inside a scope (§scopes-and-routes)")
 		return nil
-	case "project":
-		return p.project()
 	case "table":
 		return p.table()
 	case "table_partial":
@@ -294,27 +292,6 @@ func (p *parser) settingsAt(construct string) *ast.SettingList {
 		p.errorf(p.cur(), "a settings list stays on the line of the %s it modifies, found '[' on the next line (§settings-lists)", construct)
 	}
 	return p.settingList()
-}
-
-func (p *parser) project() *ast.Project {
-	d := &ast.Project{ProjectPos: p.next().Pos}
-	if p.at(token.IDENT) {
-		d.Name = p.ident("project name (§project)")
-	}
-	d.Settings = p.settingsAt("project")
-	p.expect(token.LBRACE, "project (§project)")
-	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		p.item(func() {
-			p.lineBegin("project property (§project)")
-			key := p.ident("project property (§project)")
-			p.expect(token.COLON, "project property (§project)")
-			val := p.expect(token.STRING, "project property value (§project)")
-			d.Props = append(d.Props, &ast.ProjectProp{Key: key, Value: p.litOf(val)})
-			p.endOfLine("project property (§project)")
-		})
-	}
-	d.Rbrace = p.expect(token.RBRACE, "project (§project)").Pos
-	return d
 }
 
 func (p *parser) table() *ast.Table {
@@ -706,6 +683,8 @@ func (p *parser) settingValue() ast.Node {
 	case token.MINUS:
 		p.next()
 		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "setting value (§settings-lists)"))}
+	case token.COLON:
+		return p.param()
 	case token.LPAREN:
 		l := p.next()
 		il := &ast.IdentList{Lparen: l.Pos}

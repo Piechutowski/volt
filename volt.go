@@ -44,8 +44,11 @@ func Params(names ...string) HandlerOption {
 }
 
 // Timeout bounds the handler and every effect it describes with one
-// deadline from the request's arrival (spec §route-loads); an effect the
-// deadline cuts off is a 504 through the error handler.
+// deadline from the request's arrival, which a statement outside a
+// transaction waiting for SQLite's write lock sees only when its busy
+// timeout ends (spec §route-loads); an effect the deadline cuts off fails
+// with a 504, which its rescue answers if it has one and the error
+// handler otherwise.
 func Timeout(d time.Duration) HandlerOption {
 	return func(s *shim) { s.timeout = d }
 }
@@ -76,7 +79,7 @@ func Handler(route string, h HandlerFunc, eh ErrorHandler, perform Performer, op
 		} else {
 			resp = h(req)
 		}
-		resp = resolve(ctx, req, resp, eh, perform)
+		resp = encoded(ctx, req, resolve(ctx, req, resp, eh, perform), eh, perform)
 		if err := resp.write(w, hr, req); err != nil {
 			slog.Error("volt: writing the response", "route", route, "err", err)
 		}

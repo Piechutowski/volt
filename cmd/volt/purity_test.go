@@ -27,10 +27,12 @@ var pureTargets = []struct{ pkg, name string }{
 }
 
 var immutableVars = map[string]bool{
+	"time.UTC":                                 true,
 	module + "/lang.crudMethodSuffixes":        true,
 	module + "/lang.compareSQL":                true,
 	module + "/lang.goKeywords":                true,
-	module + "/lang.selectMethodNames":         true,
+	module + "/lang.generatedImportNames":      true,
+	module + "/lang.goPredeclared":             true,
 	module + "/lang.resourceActions":           true,
 	module + "/lang.queryMethods":              true,
 	module + "/lang.actionByLower":             true,
@@ -59,6 +61,11 @@ var pureStdlib = map[string]bool{
 
 var pureStdlibFuncs = map[string]bool{
 	"(*sync/atomic.Int32).Load": true,
+	"(time.Time).UTC":           true,
+	"(time.Time).Year":          true,
+	"(time.Time).Format":        true,
+	"time.ParseInLocation":      true,
+	"time.Unix":                 true,
 }
 
 var stdlibMutators = map[string]int{

@@ -212,7 +212,7 @@ type Ok string
 func TestBodyIncompleteAfterDroppedItem(t *testing.T) {
 	f, _ := ParseFile("t", `
 table posts {
-  id int [pk increment]
+  id int [pk autoincrement]
 }
 table users {
   id int [pk]
@@ -222,13 +222,13 @@ table_partial stamps {
 }
 migration 0001__a {
   create table posts {
-    id int [pk increment]
+    id int [pk autoincrement]
   }
   rebuild table users {
-    id int [pk increment]
+    id int [pk autoincrement]
   }
   drop table users {
-    id int [pk increment]
+    id int [pk autoincrement]
   }
   create table users {
     id int [pk]

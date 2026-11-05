@@ -113,15 +113,12 @@ textually: `` `a+b` `` and `` `a + b` `` count as different keys.
 
 ### emptybody
 
-**What it does.** Reports empty `Indexes {}` and `Validators {}` blocks,
-and a `project` with neither properties nor a `note:` (spec §project).
+**What it does.** Reports empty `indexes {}` and `validators {}` blocks.
 
 **Why.** An empty block does nothing but implies work in progress.
 
 **Examples.** [testdata/emptybody.volt](../lang/vet/testdata/emptybody.volt):
 every empty block warns; the table's column is the good line.
-[testdata/emptybody_note.volt](../lang/vet/testdata/emptybody_note.volt):
-a `project` that carries only a note is not empty, and draws nothing.
 
 ### shadowedcolumn
 
@@ -316,8 +313,9 @@ function (spec §requests-and-responses, §values-and-effects). A
 *handler file* is one that declares a method taking a `volt.Request`
 first and returning a `volt.Response`. Generated files are never read.
 Not caught, by the spec's own account: reflection, `unsafe`, cgo, a
-package imported under another name, and a call through a function
-value.
+package imported under another name, a call through a function value,
+and a write a function the runner calls makes through a method or a
+function it calls.
 
 ### handlerreceiver
 
@@ -339,9 +337,11 @@ seen.
 
 ### handlerimports
 
-**What it does.** Reports a handler file that imports a package that
-touches the world: the runner `nao/run`, `database/sql`, `net`, `os`,
-`os/exec`, `math/rand`, `math/rand/v2` or `crypto/rand`.
+**What it does.** Reports a file that declares a handler or a
+scope-load function (spec §scope-loads), which is pure like a handler,
+and imports a package that touches the world: the runner `nao/run`,
+`database/sql`, `net`, `os`, `os/exec`, `math/rand`, `math/rand/v2` or
+`crypto/rand`.
 
 **Why.** A handler describes its effects as values and the shim
 performs them; a handler that could open a socket or read a file is
@@ -351,19 +351,25 @@ through it is among what the spec lists as not caught.
 
 **Examples.** [testdata/handlerimports.go](../lang/vet/testdata/handlerimports.go):
 `database/sql`, `os` and `nao/run` warn at their import lines;
-`net/http` and the runtime do not.
+`net/http` and the runtime do not. [testdata/scopeload.go](../lang/vet/testdata/scopeload.go):
+a file that declares a scope load and no handler, `os` warning there.
 
 ### handlerclock
 
 **What it does.** Reports `time.Now`, `time.Since` and `time.Until` in a
-handler file.
+file that declares a handler or a scope-load function.
 
 **Why.** The shim captures the time once and the handler reads
 `r.Now()`, so two calls with the same request see the same clock and a
 test fixes it.
 
 **Examples.** [testdata/handlerclock.go](../lang/vet/testdata/handlerclock.go):
-arithmetic on `r.Now()` passes; `time.Now()` and `time.Since` warn.
+arithmetic on `r.Now()` passes; `time.Now()` and `time.Since` warn, and
+so does `time.Since` inside the `next` of an `rt.Then`, which the
+runner calls and which is pure like the handler (spec
+§values-and-effects). In [testdata/scopeload.go](../lang/vet/testdata/scopeload.go)
+`time.Now` inside the `next` of the effect a scope load performs warns,
+in a file that declares no handler.
 
 ### packagestate
 
@@ -394,6 +400,38 @@ request to a job, periodic work to `main`.
 
 **Examples.** [testdata/goroutine.go](../lang/vet/testdata/goroutine.go).
 
+### capturedwrite
+
+**What it does.** Reports, in any hand-written file of a routes
+package, a function the runner calls, the `next` of an `rt.Then` or
+the `f` of an `rt.Map` or an `rt.ParallelMap`, that assigns to or
+increments a variable it captures: a local or a parameter of a
+function around it, or what such a variable points at, indexes or
+selects. The function is a literal in the call or a name a literal is
+bound to in the same declaration.
+
+**Why.** A function the runner calls is pure (spec
+§values-and-effects): it turns a value into a description or a value.
+A write to a captured variable makes the effect perform differently
+the second time it is performed, and inside an `rt.All` outside a
+transaction or an `rt.ParallelMap`, whose steps run at once on their
+own goroutines, the writes race. Return the value instead and combine
+the results where a `next` receives them.
+
+**Examples.** [testdata/capturedwrite.go](../lang/vet/testdata/capturedwrite.go):
+`Tally` adds to a total its two steps share, `Seen` marks a captured
+map from a function bound to a name, and `Squares` counts the calls of
+a `ParallelMap`'s `f`, so all three warn; `Sum` adds into a local of
+its own `f`, and `Last` writes a local from a helper the handler calls
+itself, so both pass.
+
+**Limitations.** Without type information the rule reads names: a
+write through a method (`counter.Add(1)`) or through a function the
+literal calls is not seen, nor a function declared elsewhere and
+passed by name, and a name declared anywhere inside the literal is
+taken as its own, even where an inner block's declaration shadows it
+only there. A write to a package-level var is `packagestate`'s.
+
 ### streamcount
 
 **What it does.** Reports every call of `volt.Stream`.
@@ -411,6 +449,17 @@ each use keeps the count visible, so it stays the exception.
 
 **What it does.** Reports a handler that returns `volt.Then` over a
 query whose every argument is a parameter of the handler or a literal.
+The handler's request body is no such parameter, since no load binds
+it (spec §request-bodies), so a create or an update of the body, which
+takes a changeset, is never reported. The rule tells the body by where
+the generated interface declares it, not by its name: the routes say
+which actions take a body, its position among the parameters (after
+the request, the scope loads and the route's parameters, spec
+§handler-references) and its type, and a parameter at that position
+spelling that type is the body whatever the handler calls it. Nor is a
+function of the runtime packages, `volt` and `rt`, reported, which no
+load names, or a delete, a call whose name ends in `Delete` or
+`DeleteWhere`, since a load is a read (spec §route-loads).
 
 **Why.** A route load (spec §route-loads) spells that lookup once, in
 the route, and hands the handler the row: the handler never sees a
@@ -419,9 +468,23 @@ handler reads. A continuation is for a lookup that depends on the
 request's body, its headers or a computed value.
 
 **Examples.** [testdata/loadspelledlong.go](../lang/vet/testdata/loadspelledlong.go):
-`Show` looks a metric up by its path parameter and warns; `Peers`
-computes an argument from the query string and `Recent` builds a
-dynamic query, so both pass.
+`Show` looks a metric up by its path parameter and `Touched` runs a
+select named `last_update` by its own, so both warn; `Peers` computes
+an argument from the query string and `Recent` builds a dynamic query,
+so both pass; `Save` updates and `Add` inserts the changeset body,
+`Rename` updates it under the name `cs`, and `Drop` and `Purge`
+delete, writes no load could spell, so all five pass; `Mirror` names a
+parameter `body` that the routes do not declare as its body, so its
+lookup by it warns. The file's `// bodies:` line stands in for the
+routes, naming each action that takes a body, the body's position and
+its type.
+
+**Limitations.** Without type information a delete is told by its
+name, so a select whose function name ends in `Delete` or
+`DeleteWhere` is skipped too, and the body's type is compared as
+spelled, so a handler that imports the data package under another
+name than the generated interface does is not seen to receive its
+body.
 
 ---
 
@@ -438,6 +501,8 @@ one file in `vet/` plus one testdata file.
 | `recordsdupkey` | duplicate primary-key values across record rows | belongs in `check` beside record value typing (§records-sample-data) |
 | `sqlkeyword` | names that are reserved words in common SQL dialects (`order`, `user`) | needs per-dialect wordlists and a target-dialect setting |
 | `namingstyle` | mixed naming conventions (snake_case vs camelCase) | pure style; needs configuration machinery first |
+| `nullkeyset` | a keyset over a nullable `order:` column whose `where` does not keep its NULLs out (`is not null`), told by an optional parameter compared with that column by `=` and by `<`, `<=`, `>` or `>=`; a NULL cursor is absent, so the next page reads by the key alone and reads again rows earlier pages read (spec §predicates) | a rule over a select needs the checker's facts about its target's columns, and no rule reads a select's facts yet |
+| `filterjoin` | a join of a reverse relation whose columns an aggregating select reads in its `where` alone, never projecting or ordering by them; the join repeats each row once per related row and inflates the aggregates, where an exists term filters without repeating (spec §selects-over-groups, §predicates) | as for `nullkeyset`: it needs the checker's facts about the select's joins |
 
 ---
 

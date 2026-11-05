@@ -3,12 +3,12 @@
 package db
 
 table hosts {
-  id   int    [pk, increment]
+  id   int    [pk]
   code string [null, unique]
 }
 
 table visits {
-  id        int    [pk, increment]
+  id        int    [pk]
   host_code string [null, ref: hosts.code]
 }
 

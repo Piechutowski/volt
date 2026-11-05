@@ -40,3 +40,7 @@ func (c PostTagChangeset) Validate() PostTagChangeset {
 func (c PingChangeset) Validate() PingChangeset {
 	return PingChangeset{c.WithFindings(nil)}
 }
+
+func (c LevelChangeset) Validate() LevelChangeset {
+	return LevelChangeset{c.WithFindings(nil)}
+}

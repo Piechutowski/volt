@@ -44,7 +44,10 @@ func TestGroupTermDefinitionAndHover(t *testing.T) {
 		t.Fatal("no hover for the group term")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"group Metrics", "- + ms_revenue", "- + ms_dict"} {
+	if strings.Contains(md, "\n- ") {
+		t.Errorf("the group hover is a Markdown list, whose + and \\ operators render as nested bullets:\n%s", md)
+	}
+	for _, want := range []string{"```volt\ngroup Metrics {\n\tms_revenue\n\tms_usage\n\tms_dict\n}\n```", "Members: `ms_revenue`, `ms_usage`, `ms_dict`"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("group hover missing %q:\n%s", want, md)
 		}
@@ -60,7 +63,10 @@ func TestGroupTermDefinitionAndHover(t *testing.T) {
 		t.Fatal("no hover for the group")
 	}
 	md = h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"- + Metrics", "- \\ (ms_dict)"} {
+	if strings.Contains(md, "\n- ") {
+		t.Errorf("the group hover is a Markdown list, whose + and \\ operators render as nested bullets:\n%s", md)
+	}
+	for _, want := range []string{"```volt\ngroup series = Metrics \\ (ms_dict)\n```", "Members: `ms_revenue`, `ms_usage`"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("group hover missing %q:\n%s", want, md)
 		}
@@ -115,13 +121,13 @@ func TestDatasetNavigatesToSelect(t *testing.T) {
 	if h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, "MsRevenueBrowse") {
 		t.Fatalf("dataset hover should list the select's methods: %+v", h)
 	}
-	edit, err := d.Rename(posOf(t, appText, "browse", 0), "list")
+	edit, err := d.Rename(posOf(t, appText, "browse", 0), "listing")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for uri, edits := range edit.Changes {
 		for _, e := range edits {
-			if strings.HasSuffix(string(uri), "routes.volt") && (e.Range.Start.Character != uint32(strings.Index("\tdataset db.browse", "browse")) || e.NewText != "list") {
+			if strings.HasSuffix(string(uri), "routes.volt") && (e.Range.Start.Character != uint32(strings.Index("\tdataset db.browse", "browse")) || e.NewText != "listing") {
 				t.Errorf("dataset rename edit = %+v, want only the name after the qualifier", e)
 			}
 		}

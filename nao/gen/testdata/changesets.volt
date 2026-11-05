@@ -3,9 +3,11 @@
 // for declared types whose Go declaration spells their storage type and
 // left to the database for one that implements Scanner and Valuer
 // (spec §types), membership validators on a plain and a nullable
-// declared column, a composite key with no Update, and a table whose
-// only column is the auto-increment key, so Cast and From have nothing
-// to set.
+// declared column, a composite key with no Update, a table whose only
+// column is the database-assigned key with autoincrement, so From
+// marks nothing and a generated create casts nothing, and a single key
+// of a declared type stored as int, written INTEGER PRIMARY KEY but an
+// ordinary key in Go, which an insert must mark (spec §columns).
 package metrics
 
 type Visibility string
@@ -13,7 +15,7 @@ type Tier int
 type Cents int
 
 table posts {
-  id       int [pk, increment]
+  id       int [pk]
   slug     string [required, unique]
   words    int [required]
   score    float64 [required]
@@ -49,5 +51,10 @@ table post_tags {
 }
 
 table pings {
-  id int [pk, increment]
+  id int [pk, autoincrement]
+}
+
+table levels {
+  id    Tier [pk]
+  label string
 }

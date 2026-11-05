@@ -5,11 +5,11 @@ table_partial stamped {
 }
 
 table authors {
-  id int [pk, increment]
+  id int [pk]
   ~stamped
 }
 
 table posts {
-  id int [pk, increment]
+  id int [pk]
   ~stamped
 }

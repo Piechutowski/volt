@@ -4,7 +4,7 @@ package db
 type Plan string
 
 table accounts {
-  id     int     [pk, increment]
+  id     int     [pk]
   email  string  [required, unique]
   seats  int     [required]
   tier   Plan    [required]

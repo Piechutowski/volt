@@ -153,6 +153,8 @@ func TestVoltSyntaxErrors(t *testing.T) {
 		{"projection unclosed set", "select p (* \\ (a, b for t\n", "expected ')'"},
 		{"in without list", "pred p { site in }\n", "expected '('"},
 		{"in with column", "pred p { site in other }\n", "expected '('"},
+		{"space in a limit parameter", "select s for t [order: (id asc), limit: : n]\n", "':' must be directly followed by a parameter name"},
+		{"limit parameter on the next line", "select s for t [order: (id asc), limit: :\nn]\n", "':' must be directly followed by a parameter name"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -228,6 +230,34 @@ func TestProjectionSetTerms(t *testing.T) {
 	}
 }
 
+// A predicate keyword names a column anywhere outside a predicate: a
+// projection lists, aggregates and computes over it, and only inside the
+// where clause is it the keyword (spec §keywords, §predicates).
+func TestProjectionTakesPredicateWords(t *testing.T) {
+	src := "package db\nselect p (id, exists, like.in, sum(is) as total, not + 1 as next) for t join like\n"
+	f, diags := ParseFile("t.volt", src)
+	if len(diags) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	var got []string
+	for _, d := range f.Decls {
+		if s, ok := d.(*ast.Select); ok {
+			for _, it := range s.Items {
+				if it.Col != nil {
+					got = append(got, it.Col.String())
+				}
+			}
+		}
+	}
+	if strings.Join(got, ",") != "id,exists,like.in,is" {
+		t.Errorf("projected columns = %v, want id,exists,like.in,is", got)
+	}
+	_, diags = ParseFile("t.volt", "package db\nselect p (id) for t where exists = 1\n")
+	if len(diags) == 0 || !strings.Contains(diags[0].Msg, "keyword inside a predicate") {
+		t.Errorf("exists as a column inside a predicate: %v, want the keyword error", diags)
+	}
+}
+
 func TestPipelineRecoversPerPlug(t *testing.T) {
 	src := "pipeline api {\n\tuse volt.RequestID\n\tRequestID\n\tBearerAuth extra\n\tuse Last\n}\n"
 	f, diags := ParseFile("p.volt", src)
@@ -243,6 +273,32 @@ func TestPipelineRecoversPerPlug(t *testing.T) {
 	}
 	if len(pl.Plugs) != 2 || pl.Plugs[0].Ref.String() != "volt.RequestID" || pl.Plugs[1].Ref.String() != "Last" {
 		t.Errorf("plugs = %+v, want the two good ones", pl.Plugs)
+	}
+}
+
+func TestPackageClauseSurvivesTrailingError(t *testing.T) {
+	for _, tc := range []struct{ src, kinds string }{
+		{"package db [note: \"the blog data\"]\n\ntable posts {\n\tid int [pk]\n}\n", "package,table"},
+		{"package db extra\n\ntable posts {\n\tid int [pk]\n}\n", "package,table"},
+	} {
+		f, diags := ParseFile("db.volt", tc.src)
+		if len(diags) != 1 {
+			t.Errorf("%q: diagnostics = %v, want one", tc.src, diags)
+		}
+		var kinds []string
+		for _, d := range f.Decls {
+			switch d.(type) {
+			case *ast.PackageClause:
+				kinds = append(kinds, "package")
+			case *ast.Table:
+				kinds = append(kinds, "table")
+			default:
+				kinds = append(kinds, "other")
+			}
+		}
+		if got := strings.Join(kinds, ","); got != tc.kinds {
+			t.Errorf("%q: decls = %s, want %s", tc.src, got, tc.kinds)
+		}
 	}
 }
 

@@ -1,7 +1,7 @@
 package db
 
 table authors {
-  id    int64  [pk, increment]
+  id    int64  [pk]
   email string [unique]
   rank  int32
 }

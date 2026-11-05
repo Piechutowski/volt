@@ -1,6 +1,6 @@
 package db
 
 table posts {
-  id    int [pk, increment]
+  id    int [pk]
   title string
 }

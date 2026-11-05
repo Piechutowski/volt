@@ -12,7 +12,7 @@ import (
 
 var (
 	elementKeywords = []string{
-		"project", "table", "table_partial", "type", "ref",
+		"table", "table_partial", "type", "ref",
 		"records", "migration",
 		"package ", "import", "pipeline", "scope",
 		"group", "pred", "select",
@@ -29,20 +29,19 @@ var (
 	}
 
 	settingsByContext = map[string][]string{
-		"column":    {"pk", "null", "unique", "index", "increment", "required", "default: ", "note: ", "ref: ", "tag: "},
-		"project":   {"note: "},
+		"column":    {"pk", "null", "unique", "index", "autoincrement", "required", "default: ", "note: ", "ref: ", "tag: "},
 		"table":     {"note: ", "model: "},
-		"select":    {"order: ("},
+		"select":    {"order: (", "group: (", "limit: "},
 		"index":     {"name: ", "unique", "where: "},
 		"migration": {"irreversible", "no_transaction"},
-		"ref":       {"delete: ", "update: "},
+		"ref":       {"delete: ", "update: ", "as: ", "reverse: "},
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
-		"route":     {"name: "},
+		"route":     {"name: ", "timeout: ", "body: ", "only: ("},
 		"resources": {"only: (", "except: (", "param: ", "singular: ", "api", "default"},
 		"dataset":   {"strip: ", "only: (", "except: ("},
 
-		"migrationcolumn": {"pk", "null", "unique", "index", "increment", "default: ", "ref: ", "delete: ", "update: "},
-		"rebuildcolumn":   {"pk", "null", "unique", "index", "increment", "default: ", "ref: ", "delete: ", "update: ", "from: "},
+		"migrationcolumn": {"pk", "null", "unique", "index", "autoincrement", "default: ", "ref: ", "delete: ", "update: "},
+		"rebuildcolumn":   {"pk", "null", "unique", "index", "autoincrement", "default: ", "ref: ", "delete: ", "update: ", "from: "},
 		"migrationindex":  {"unique", "name: ", "where: "},
 		"standaloneindex": {"unique", "name: ", "where: "},
 	}
@@ -81,7 +80,7 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 	prefix := d.Text[lineStart:offset]
 	ctx, outer := d.blockContexts(int(pos.Line))
 
-	if items := d.voltComplete(prefix); items != nil {
+	if items := d.voltComplete(prefix, ctx == "pred"); items != nil {
 		return items
 	}
 
@@ -191,14 +190,14 @@ func headContext(head string) string {
 		return "group"
 	case strings.HasPrefix(head, "table"):
 		return "table"
-	case strings.HasPrefix(head, "project"):
-		return "project"
 	case strings.HasPrefix(head, "records"):
 		return "records"
 	case strings.HasPrefix(head, "ref"):
 		return "ref"
 	case strings.HasPrefix(head, "pipeline"):
 		return "pipeline"
+	case strings.HasPrefix(head, "pred ") || strings.HasPrefix(head, "pred{"):
+		return "pred"
 	case strings.HasPrefix(head, "scope"):
 		return "scope"
 	case strings.HasPrefix(head, "migration"), upDownHeadRE.MatchString(head):
@@ -244,8 +243,6 @@ func (d *Document) settingsComplete(prefix, ctx, outer string, top bool) []proto
 		return nil
 	case header("table"):
 		kind = "table"
-	case header("project"):
-		kind = "project"
 	case header("ref"):
 		kind = "ref"
 	case header("select"):

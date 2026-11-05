@@ -206,6 +206,59 @@ func TestLayersGeneratedDataImports(t *testing.T) {
 	}
 }
 
+// TestLayersGeneratedRouteImports proves the import rule of the network
+// layer (spec §data-and-network-layers, §generated-client) on the router
+// goldens and the generated itest fixture: a route file imports the
+// standard library, the root volt package, nao/run and the data packages,
+// and a client the standard library, the root volt package, the data
+// packages and nao/rt, never the runner and never the routing package.
+func TestLayersGeneratedRouteImports(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden := filepath.Join(root, "gen", "router", "testdata")
+	fixture := filepath.Join(root, "itest", "blog", "app")
+	type unit struct {
+		data    string
+		routes  []string
+		clients []string
+	}
+	units := []unit{
+		{"blog/db", nil, []string{filepath.Join(golden, "blog_app_client.go.golden"), filepath.Join(golden, "blog_app_client_beside.go.golden")}},
+		{module + "/itest/blog/db", nil, []string{filepath.Join(fixture, "client", "volt_client.go")}},
+	}
+	for _, kind := range []string{"handlers", "paths", "router", "routes"} {
+		units[0].routes = append(units[0].routes, filepath.Join(golden, "blog_app_"+kind+".go.golden"))
+		units[1].routes = append(units[1].routes, filepath.Join(fixture, "volt_"+kind+".go"))
+	}
+	files, withRT := 0, 0
+	for _, u := range units {
+		for _, f := range u.routes {
+			files++
+			for _, path := range fileImports(t, f) {
+				if !stdlibPath(path) && path != module && path != runPath && path != u.data {
+					t.Errorf("route file %s imports %s, neither the standard library, the root volt package, nao/run nor its data package", f, path)
+				}
+			}
+		}
+		for _, f := range u.clients {
+			files++
+			for _, path := range fileImports(t, f) {
+				if path == rtPath {
+					withRT++
+				}
+				if !stdlibPath(path) && path != module && path != rtPath && path != u.data {
+					t.Errorf("client %s imports %s, neither the standard library, the root volt package, nao/rt nor its data package", f, path)
+				}
+			}
+		}
+	}
+	if files < 11 || withRT == 0 {
+		t.Fatalf("checked %d generated route files and clients, %d importing nao/rt; the walk sees too little", files, withRT)
+	}
+}
+
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
@@ -267,12 +320,12 @@ func TestLayersDataOnlyProgram(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{
 		"go.mod": "module dataonly\n\ngo 1.27\n\nrequire github.com/Piechutowski/volt v0.0.0\n\nreplace github.com/Piechutowski/volt => " + root + "\n",
-		"db/schema.volt": "package db\n\ntable authors {\n  id    int    [pk, increment]\n  email string [unique]\n  name  string [required]\n}\n\n" +
-			"table posts {\n  id        int    [pk, increment]\n  author_id int    [ref: authors.id]\n  title     string\n  views     int    [default: 0]\n}\n\n" +
+		"db/schema.volt": "package db\n\ntable authors {\n  id    int    [pk]\n  email string [unique]\n  name  string [required]\n}\n\n" +
+			"table posts {\n  id        int    [pk]\n  author_id int    [ref: authors.id]\n  title     string\n  views     int    [default: 0]\n}\n\n" +
 			"select popular for posts where views >= :least [order: (views desc)]\n",
 		"db/pipe.volt": "package db\n\npipeline api {\n  use volt.RequestID\n}\n",
-		"db/0001__init.volt": "package db\n\nmigration 0001__init {\n  create table authors {\n    id    int    [pk, increment]\n    email string [unique]\n    name  string\n  }\n" +
-			"  create table posts {\n    id        int    [pk, increment]\n    author_id int    [ref: authors.id]\n    title     string\n    views     int    [default: 0]\n  }\n}\n",
+		"db/0001__init.volt": "package db\n\nmigration 0001__init {\n  create table authors {\n    id    int    [pk]\n    email string [unique]\n    name  string\n  }\n" +
+			"  create table posts {\n    id        int    [pk]\n    author_id int    [ref: authors.id]\n    title     string\n    views     int    [default: 0]\n  }\n}\n",
 		"cmd/app/main.go": "package main\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n\t\"dataonly/db\"\n\t\"github.com/Piechutowski/volt/nao/run\"\n)\n\n" +
 			"func main() {\n\tctx := context.Background()\n\tconn, err := run.Open(\"sqlite3\", \":memory:\")\n\tif err != nil {\n\t\tpanic(err)\n\t}\n" +
 			"\tif _, err := run.MigrateUp(ctx, conn, db.Migrations); err != nil {\n\t\tfmt.Println(err)\n\t}\n" +
@@ -311,7 +364,7 @@ func TestLayersDataOnlyProgram(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	cmd := exec.Command("go", "build", "./...")
+	cmd := exec.Command("go", "build", "-buildvcs=false", "./...")
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the data-only program does not build:\n%s", out)

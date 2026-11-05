@@ -45,14 +45,6 @@ func (d *Document) DocumentSymbols() []protocol.DocumentSymbol {
 	var out []protocol.DocumentSymbol
 	for _, decl := range d.File.Decls {
 		switch n := decl.(type) {
-		case *ast.Project:
-			name := "project"
-			var sel ast.Node = n
-			if n.Name != nil {
-				name = n.Name.Name()
-				sel = n.Name
-			}
-			out = append(out, d.symbol(name, "project", protocol.SymbolKindNamespace, n, sel, nil))
 		case *ast.Table:
 			out = append(out, d.symbol(n.Name.Name(), "table", protocol.SymbolKindStruct, n, n.Name, d.tableChildren(n.Body)))
 		case *ast.TablePartial:
@@ -126,9 +118,13 @@ func identNames(ids []*ast.Ident) []string {
 	return out
 }
 
-// Definition returns the location of the declaration of the symbol at pos.
+// Definition returns the location of the declaration of the symbol at pos;
+// on the name of a type declaration, the Go type it admits (§types).
 func (d *Document) Definition(pos protocol.Position) *protocol.Location {
 	if loc := d.voltDefinition(pos); loc != nil {
+		return loc
+	}
+	if loc := d.goTypeDefinition(d.FromLSP(pos)); loc != nil {
 		return loc
 	}
 	occ := d.Index.At(d.FromLSP(pos))
@@ -162,35 +158,6 @@ func (d *Document) References(pos protocol.Position, includeDecl bool) []protoco
 		}
 	}
 	return out
-}
-
-// Rename renames the symbol at pos, rewriting every occurrence spelled like
-// the identifier under the cursor.
-func (d *Document) Rename(pos protocol.Position, newName string) (*protocol.WorkspaceEdit, error) {
-	if !validIdentifier(newName) {
-		return nil, fmt.Errorf("%q is not a valid Volt identifier", newName)
-	}
-	if edit, ok := d.voltRename(pos, newName); ok {
-		return edit, nil
-	}
-	occ := d.Index.At(d.FromLSP(pos))
-	if occ == nil {
-		return nil, fmt.Errorf("nothing renameable at this position")
-	}
-	spelling := occ.Ident.Name()
-	var edits []protocol.TextEdit
-	for _, o := range d.Index.OccurrencesOf(occ.ID) {
-		if o.Ident.Name() != spelling {
-			continue
-		}
-		edits = append(edits, protocol.TextEdit{Range: d.tokenRange(o.Ident.Tok), NewText: newName})
-	}
-	if len(edits) == 0 {
-		return nil, fmt.Errorf("nothing renameable at this position")
-	}
-	return &protocol.WorkspaceEdit{
-		Changes: map[protocol.DocumentUri][]protocol.TextEdit{d.URI: edits},
-	}, nil
 }
 
 func validIdentifier(s string) bool {

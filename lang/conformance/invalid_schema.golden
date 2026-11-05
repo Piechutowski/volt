@@ -50,8 +50,8 @@ i130_default_type_mismatch.volt:4:19: error: spec/default-values: default of "n"
 ## i131_unknown_type.volt
 i131_unknown_type.volt:4:8: error: spec/columns: column "name": unknown type "varchar"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 
-## i133_increment_declared_type.volt
-i133_increment_declared_type.volt:5:14: error: spec/columns: increment on "id" (ID): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)
+## i133_autoincrement_declared_type.volt
+i133_autoincrement_declared_type.volt:5:14: error: spec/columns: autoincrement on "id" (ID): a declared type stored as int is the rowid alias but an ordinary key, whose value the row gives; only the database-assigned key, a rowid alias of the built-in int that is no foreign key, takes AUTOINCREMENT (§columns, §mapping-to-sqlite-ddl)
 
 ## i134_default_null_not_null.volt
 i134_default_null_not_null.volt:4:25: error: spec/default-values: null is not a default value: a column that carries null and has no default is NULL when a write leaves it out (§default-values)
@@ -133,9 +133,9 @@ i229_primary_key_two_words.volt:4:19: error: syntax: expected ',' or ']' in sett
 i230_use_unknown_element.volt:3:1: error: syntax: unknown element type "use" (§program-structure)
 
 ## i231_records_omit_not_null.volt
-i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "title", which is NOT NULL and has no default: only increment leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
-i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "stamped_by", which is NOT NULL and has no default: only increment leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
-i231_records_omit_not_null.volt:25:1: error: spec/records-sample-data: records of table "authors" do not list column "name", which is NOT NULL and has no default: only increment leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
+i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "title", which is NOT NULL and has no default: only the database-assigned key leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
+i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "stamped_by", which is NOT NULL and has no default: only the database-assigned key leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
+i231_records_omit_not_null.volt:25:1: error: spec/records-sample-data: records of table "authors" do not list column "name", which is NOT NULL and has no default: only the database-assigned key leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
 
 ## i232_ref_set_null_not_null.volt
 i232_ref_set_null_not_null.volt:14:34: error: spec/relationships-ref: delete: set_null on foreign-key column "posts.author_id", which does not carry null: the database would write a NULL the column refuses (§relationships-ref)
@@ -241,7 +241,7 @@ i275_ref_action_no_action.volt:5:49: error: spec/relationships-ref: invalid refe
 i276_ref_action_two_words.volt:5:44: error: syntax: expected ',' or ']' in settings list, found identifier "null": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
 
 ## i278_settings_missing_comma.volt
-i278_settings_missing_comma.volt:4:17: error: syntax: expected ',' or ']' in settings list, found identifier "increment": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
+i278_settings_missing_comma.volt:4:17: error: syntax: expected ',' or ']' in settings list, found identifier "autoincrement": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
 
 ## i280_ref_action_quoted.volt
 i280_ref_action_quoted.volt:5:40: error: spec/relationships-ref: "delete" must be a referential action: cascade, restrict, set_null or set_default (§relationships-ref)
@@ -334,9 +334,9 @@ i317_index_name_sqlite_prefix.volt:10:13: error: spec/indexes: index (b, a) on "
 i318_index_name_empty.volt:10:13: error: spec/indexes: index (a, b) on "posts" has an empty name:; write a name, or leave name: out for the derived one (§indexes)
 i318_index_name_empty.volt:11:21: error: spec/indexes: index `lower(title)` on "posts" has an empty name:; write a name, or leave name: out for the derived one (§indexes)
 
-## i319_increment_partial_composite.volt
-i319_increment_partial_composite.volt:4:15: error: spec/columns: increment on "id" in table "a", whose primary key is (id, site): a composite primary key has no auto-assigned column, since SQLite auto-assigns only a single-column int key (§columns)
-i319_increment_partial_composite.volt:4:15: error: spec/columns: increment on "id" in table "b", whose primary key is (id, site): a composite primary key has no auto-assigned column, since SQLite auto-assigns only a single-column int key (§columns)
+## i319_autoincrement_partial_composite.volt
+i319_autoincrement_partial_composite.volt:4:15: error: spec/columns: autoincrement on "id" in table "a", whose primary key is (id, site): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (§columns)
+i319_autoincrement_partial_composite.volt:4:15: error: spec/columns: autoincrement on "id" in table "b", whose primary key is (id, site): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (§columns)
 
 ## i320_index_pk_alone.volt
 i320_index_pk_alone.volt:9:8: error: spec/indexes: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (§indexes)
@@ -352,9 +352,6 @@ i32_settings_next_line.volt:4:3: error: syntax: expected a column, indexes, vali
 ## i33_ref_without_body.volt
 i33_ref_without_body.volt:5:1: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found end of file
 
-## i344_project_settings_next_line.volt
-i344_project_settings_next_line.volt:4:3: error: syntax: a settings list stays on the line of the project it modifies, found '[' on the next line (§settings-lists)
-
 ## i345_table_settings_next_line.volt
 i345_table_settings_next_line.volt:4:3: error: syntax: a settings list stays on the line of the table it modifies, found '[' on the next line (§settings-lists)
 i345_table_settings_next_line.volt:9:1: error: syntax: a settings list stays on the line of the table it modifies, found '[' on the next line (§settings-lists)
@@ -369,9 +366,6 @@ i348_setting_name_digit.volt:5:14: error: spec/columns: unknown setting "2fa" (�
 ## i349_table_empty_partial.volt
 i349_table_empty_partial.volt:6:1: error: spec/table: table "t" must contain at least one column, directly or from an injected table_partial (§table)
 
-## i34_project_bad_value.volt
-i34_project_bad_value.volt:3:18: error: syntax: expected string in project property value (§project), found number "42"
-
 ## i350_ref_duplicate_permuted.volt
 i350_ref_duplicate_permuted.volt:15:1: error: spec/relationships-ref: duplicate relationship: the same endpoints are already related
 
@@ -384,8 +378,8 @@ i363_type_alias_two_paths.volt:4:6: error: spec/types: type "a.Hits" imports "ex
 ## i364_type_from_not_import_path.volt
 i364_type_from_not_import_path.volt:3:27: error: spec/types: type "money.Money" has from path "not a path!", which is not a Go import path (§types)
 
-## i365_records_time_not_iso.volt
-i365_records_time_not_iso.volt:10:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be ISO 8601 text such as "2024-01-15 10:30:00", found "not a date at all" (§records-sample-data)
+## i365_records_time_not_a_date.volt
+i365_records_time_not_a_date.volt:10:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be date/time text in SQLite's canonical UTC form, such as "2024-01-15 10:30:00", found "not a date at all" (§records-sample-data)
 
 ## i367_type_from_next_line.volt
 i367_type_from_next_line.volt:4:3: error: syntax: expected end of line after type declaration (§types), found string "\"example.com/app/money\""
@@ -412,6 +406,59 @@ i42_bare_ident_record.volt:5:17: error: spec/records-sample-data: record values 
 ## i43_bare_ident_default.volt
 i43_bare_ident_default.volt:3:19: error: spec/default-values: default value must be a number, string, boolean or expression literal; found bare identifier "something" (§default-values)
 
+## i448_increment_unknown_setting.volt
+i448_increment_unknown_setting.volt:4:18: error: spec/columns: unknown setting "increment" (§columns)
+
+## i449_required_rowid_alias.volt
+i449_required_rowid_alias.volt:4:18: error: spec/columns: required on "id", the database-assigned key of table "posts": the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)
+i449_required_rowid_alias.volt:9:32: error: spec/columns: required on "id", the database-assigned key of table "events": the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)
+
+## i452_project_not_an_element.volt
+i452_project_not_an_element.volt:3:1: error: syntax: unknown element type "project" (§program-structure)
+
+## i454_autoincrement_foreign_key.volt
+i454_autoincrement_foreign_key.volt:8:23: error: spec/columns: autoincrement on "user_id", the rowid alias of table "user_profiles" and a foreign key: its values come from the referenced row, so the never-reuse bookkeeping of AUTOINCREMENT has nothing to assign; it is valid on the database-assigned key alone (§columns)
+i454_autoincrement_foreign_key.volt:13:23: error: spec/columns: autoincrement on "user_id", the rowid alias of table "user_settings" and a foreign key: its values come from the referenced row, so the never-reuse bookkeeping of AUTOINCREMENT has nothing to assign; it is valid on the database-assigned key alone (§columns)
+
+## i455_records_omit_foreign_key.volt
+i455_records_omit_foreign_key.volt:11:3: error: spec/records-sample-data: records of table "user_profiles" do not list column "user_id", the rowid alias and a foreign key: its value comes from the referenced row, and only the database-assigned key leaves a column's value to the database; list the column (§records-sample-data, §columns)
+i455_records_omit_foreign_key.volt:21:1: error: spec/records-sample-data: records of table "user_settings" do not list column "user_id", the rowid alias and a foreign key: its value comes from the referenced row, and only the database-assigned key leaves a column's value to the database; list the column (§records-sample-data, §columns)
+
+## i456_default_rowid_alias.volt
+i456_default_rowid_alias.volt:6:15: error: spec/columns: default on "id", the rowid alias of table "users": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
+i456_default_rowid_alias.volt:10:35: error: spec/columns: default on "id", the rowid alias of table "events": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
+i456_default_rowid_alias.volt:15:38: error: spec/columns: default on "user_id", the rowid alias of table "user_profiles": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
+i456_default_rowid_alias.volt:20:21: error: spec/columns: default on "code", the rowid alias of table "tickets": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (§columns, §default-values)
+
+## i458_records_time_not_canonical.volt
+i458_records_time_not_canonical.volt:9:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15T10:30:00Z" (§records-sample-data)
+i458_records_time_not_canonical.volt:10:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15 12:30:00+02:00" (§records-sample-data)
+i458_records_time_not_canonical.volt:11:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15 10:30" (§records-sample-data)
+i458_records_time_not_canonical.volt:12:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 00:00:00", found "2024-01-15" (§records-sample-data)
+i458_records_time_not_canonical.volt:13:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 10:30:00.5", found "2024-01-15 10:30:00.500" (§records-sample-data)
+i458_records_time_not_canonical.volt:14:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be a SQL string of SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15T10:30:00" (§records-sample-data)
+
+## i459_records_declared_time_not_canonical.volt
+i459_records_declared_time_not_canonical.volt:10:8: error: spec/records-sample-data: record value for "at" (stamp.Stamp) must be SQLite's canonical UTC date/time text, "2024-01-15 08:30:00", found "2024-01-15 10:30:00+02:00" (§records-sample-data)
+
+## i460_default_time_sql_string.volt
+i460_default_time_sql_string.volt:5:33: error: spec/default-values: default of "posted_at" (time.Time) must be a SQL string of SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15T10:30:00Z" (§default-values)
+
+## i461_default_time_expression_not_stored.volt
+i461_default_time_expression_not_stored.volt:5:28: error: spec/default-values: default of "a" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `datetime('now', 'subsec')` (§default-values)
+i461_default_time_expression_not_stored.volt:6:28: error: spec/default-values: default of "b" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `strftime('%Y-%m-%d %H:%M:%f', 'now')` (§default-values)
+i461_default_time_expression_not_stored.volt:7:28: error: spec/default-values: default of "c" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `julianday('now')` (§default-values)
+i461_default_time_expression_not_stored.volt:8:28: error: spec/default-values: default of "d" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `unixepoch()` (§default-values)
+i461_default_time_expression_not_stored.volt:9:28: error: spec/default-values: default of "e" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `datetime('now', 'localtime')` (§default-values)
+i461_default_time_expression_not_stored.volt:10:28: error: spec/default-values: default of "f" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `datetime('now') || ''` (§default-values)
+i461_default_time_expression_not_stored.volt:11:28: error: spec/default-values: default of "g" (time.Time) must be a SQL string of SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15T10:30:00Z" (§default-values)
+
+## i462_records_time_expression_not_stored.volt
+i462_records_time_expression_not_stored.volt:9:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `datetime('now', 'subsec')` (§records-sample-data)
+i462_records_time_expression_not_stored.volt:10:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `strftime('%Y-%m-%d %H:%M:%f', 'now')` (§records-sample-data)
+i462_records_time_expression_not_stored.volt:11:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be a SQL string of SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15T10:30:00Z" (§records-sample-data)
+i462_records_time_expression_not_stored.volt:12:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `date('now')` (§records-sample-data)
+
 ## i61_tag_malformed.volt
 i61_tag_malformed.volt:4:21: error: spec/columns: tag "json=name" is not one key:"value" pair: write e.g. "json:\"name\"" (§columns)
 
@@ -421,14 +468,14 @@ i62_tag_db_reserved.volt:4:21: error: spec/columns: tag key "db" is reserved: th
 ## i63_tag_duplicate_key.volt
 i63_tag_duplicate_key.volt:4:40: error: spec/columns: tag key "json" appears more than once on this column (§columns)
 
-## i78_increment_varchar.volt
-i78_increment_varchar.volt:4:20: error: spec/columns: increment on "code" (string): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)
+## i78_autoincrement_text.volt
+i78_autoincrement_text.volt:4:20: error: spec/columns: autoincrement on "code" (string): only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; a column that is not int is never the rowid alias (§columns, §mapping-to-sqlite-ddl)
 
-## i79_increment_not_pk.volt
-i79_increment_not_pk.volt:6:16: error: spec/columns: increment on "counter": only the primary key auto-increments; elsewhere the keyword would be silently ignored while no changeset ever marks the column (§columns, §mapping-to-sqlite-ddl)
+## i79_autoincrement_not_pk.volt
+i79_autoincrement_not_pk.volt:7:16: error: spec/columns: autoincrement on "counter": only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (§columns, §mapping-to-sqlite-ddl)
 
-## i80_increment_composite_pk.volt
-i80_increment_composite_pk.volt:4:23: error: spec/columns: increment on "user_id" in table "user_tags", whose primary key is (user_id, tag): a composite primary key has no auto-assigned column, since SQLite auto-assigns only a single-column int key (§columns)
+## i80_autoincrement_composite_pk.volt
+i80_autoincrement_composite_pk.volt:4:23: error: spec/columns: autoincrement on "user_id" in table "user_tags", whose primary key is (user_id, tag): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (§columns)
 
 ## i81_element_boundary.volt
 i81_element_boundary.volt:12:1: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found the start of the next element (§line-structure-and-whitespace)

@@ -57,10 +57,12 @@ effect is performed by generated code you can read.
 
 ## Crib sheet
 
-Requires Go 1.27+ and a C compiler.
+Requires Go 1.27+ and a C compiler. From the repository root, with
+`go install`'s directory on the path; `volt check` is silent when the
+packages are clean:
 
 ```sh
 go install ./cmd/volt
-volt check ./app && volt gen ./app && volt routes ./app
+volt check ./itest/blog/... && volt routes ./itest/blog/app
 go test ./... ./lsp/... ./cmd/volt/...
 ```

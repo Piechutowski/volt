@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"reflect"
+	"time"
 )
 
 // Null is the representation of a nullable column: a value
@@ -36,9 +37,18 @@ func (n Null[T]) Or(def T) T {
 // Scan implements sql.Scanner through database/sql's rules via sql.Null,
 // but converts a value of bool kind itself unless the type implements
 // sql.Scanner, since database/sql scans an integer into a bool and not
-// into a named bool (spec §types), and reads a valid []byte through
-// Bytes, never nil (spec §columns).
+// into a named bool (spec §types), reads a valid []byte through
+// Bytes, never nil (spec §columns), and reads a time.Time through Time,
+// from the text SQLite answers for min or max of a date/time column
+// (spec §selects-over-groups).
 func (n *Null[T]) Scan(src any) error {
+	if t, ok := any(&n.V).(*time.Time); ok && src != nil {
+		if err := (*Time)(t).Scan(src); err != nil {
+			return err
+		}
+		n.Valid = true
+		return nil
+	}
 	if b, ok := any(&n.V).(*[]byte); ok && src != nil {
 		if err := bytesScan(b, src); err != nil {
 			return err
@@ -65,10 +75,14 @@ func (n *Null[T]) Scan(src any) error {
 }
 
 // Value implements driver.Valuer: the value, or nil for NULL; a valid
-// []byte binds through Bytes, nil as empty bytes (spec §columns).
+// []byte binds through Bytes, nil as empty bytes (spec §columns), and a
+// valid time.Time as its TimeText (spec §go-types).
 func (n Null[T]) Value() (driver.Value, error) {
 	if b, ok := any(n.V).([]byte); ok && n.Valid {
 		return Bytes(b).Value()
+	}
+	if t, ok := any(n.V).(time.Time); ok && n.Valid {
+		return TimeText(t)
 	}
 	return sql.Null[T]{V: n.V, Valid: n.Valid}.Value()
 }

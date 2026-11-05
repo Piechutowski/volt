@@ -128,7 +128,8 @@ load-bearing patterns, each citing the spec section it implements:
   wildcards, `resources` with an optional package qualifier, and the
   query layer — `group` algebra, the `pred` expression grammar
   (prec.left or/and, keyword operators at the same precedence as other
-  keywords), `Select ... for ... where`.
+  keywords, `exists rel (...)` terms, and a query parameter's optional
+  `?` as a token immediate after its name), `Select ... for ... where`.
   `/` is a token per §layers-files-and-the-superset-rule.
 - **Keywords of a migration body are tokens of the migration rules
   only** (§migrations, §keywords). `up`, `down`, `create`, `drop`,
@@ -160,7 +161,8 @@ the path), since the tool carries its own SQLite.
 
 **The local grammar mirror** (`scripts/sync-grammar.sh`): Zed loads
 grammars from a *git repository* even for dev extensions. The script
-regenerates `src/parser.c` if a tree-sitter CLI is present, mirrors
+regenerates `src/parser.c` if the pinned tree-sitter CLI is present
+(section 5), mirrors
 `grammar/` into `~/.cache/volt/tree-sitter-volt-git`, commits there,
 and rewrites `[grammars.volt]` with the mirror's `file://` URL and
 fresh SHA. The rewritten lines are machine-local by design; the
@@ -216,12 +218,36 @@ layer:
 
 - Rename rewrites exactly the identifier, never the `db.` qualifier
   (the hit-test span and the edit span are tracked separately), only
-  occurrences whose spelling matches the one under the cursor, and
-  validates the new name against the identifier grammar (§identifiers).
+  occurrences whose spelling matches the one under the cursor, each
+  once, and validates the new name against the identifier grammar
+  (§identifiers). It then checks what it would write: every error of
+  the project with the edits applied (the file alone outside a
+  project) must be one it had before, the same file and message with
+  the renamed names spelled as they were and the positions it names
+  set aside, or the rename is refused naming the first error it adds,
+  so a name that makes a relation ambiguous, or that a `pred` would no
+  longer find, never lands (§relationships-ref), even beside an error
+  it fixes. A rename at a Go reference skips the check, since gopls
+  renames the Go side (section 7). A rename rewrites `.volt` files
+  alone: the generated Go names derived from what it renames change at
+  the next `volt gen`, and hand-written Go that uses them does not
+  (section 7).
+- A relation is its own symbol (§relationships-ref): one a ref's `as:`
+  or `reverse:` names is declared there, and renames, at the setting
+  or at any use, with every use: a join, a column's qualifier, a
+  `with`, an exists term, and those of the `pred` bodies a select over
+  its table reads; one named after its foreign-key column refuses
+  rename from any file and renames with the column instead, which
+  rewrites its uses to the column's new name without `_id`; one named
+  after a table is that table's and renames with it. Definition at a
+  relation goes to its `as:` or `reverse:`, else to its column, else to
+  the table; it hovers as the relationship it walks and the table it
+  leads to, one named after that table too.
 - Column identity is container-scoped; a column injected from a
   `table_partial` resolves into the partial, so renaming it updates the
   partial once plus every reference through every injecting table
-  (§tablepartial).
+  (§tablepartial). A column renames across every file of its package,
+  from its declaration or from any use.
 - Completion is textual-context + semantic-fill: where-am-I is
   answered by line-prefix regexes plus a `{`/`}`-balance scanner (the
   current line usually doesn't parse mid-keystroke); candidates come
@@ -229,6 +255,13 @@ layer:
   (case-insensitively filtered), verbs and `resources` in `scope`
   bodies, tables and groups in a `group` body, operations in a
   `migration` body, the columns of the named table after `ref: table.`,
+  `pred` names and `exists` where a predicate term starts, after
+  `where`, `and`, `or`, `not`, a pred's `{`, with a space or without,
+  or a predicate's `(` (not a projection's, a list's or a setting's),
+  and at the start of a line of a pred body, `exists` left out inside
+  an exists term, which does not nest, and the `pred`s there those
+  whose every column is a column of the relation's table, and the relations of the
+  select's table after `exists` (§predicates),
   settings per construct and none on a construct that takes none
   (§settings-lists, §settings-whitelists), and `true`/`false` after
   `default:` only on a column stored as `bool`. Every keyword
@@ -236,12 +269,22 @@ layer:
   referential actions are the parser's own list, and a test holds the
   element words, the verbs and the setting names to the parser's
   lists. Resource actions and order directions are not completed.
+- A group hovers as its declaration as written, set terms and all,
+  and the tables it resolves to (§groups).
 - A migration's name hovers as its position among the package's
   migrations in name order ("migration 2 of 3") and whether it runs
   backward (§migrations); the project index answers it, so a
   migration alone in its own file counts its siblings.
-- A select hovers as its row types, its rendered `WHERE` and `ORDER
-  BY`, and its method signatures. A select kept unresolved by a column
+- A select hovers as its row types, the nested row type of a `with`
+  select, its rendered `WHERE`, `ORDER BY` and `LIMIT` with what each
+  binds, and its method signatures, each with the effect it yields:
+  `rt.Query`, `rt.Lookup` for one row of aggregates, `rt.With` for a
+  `with` select (§selects-over-groups). A parameter the select names
+  in its `where` or as its `limit:`, `:at?` and `:limit` among them,
+  hovers as the Go parameter its functions take, saying whether it is
+  optional or the limit; one a `pred` names is typed at each use and
+  hovers as none, and no parameter renames, since a `pred` may name it
+  too. A select kept unresolved by a column
   of unknown type (§columns) hovers as its header, its row types with
   that field, nullable or not, spelled in its declared type and marked
   unknown, and one line naming the unknown columns; never an empty Go
@@ -289,6 +332,17 @@ agree. The LSP picks it up automatically.
 `tree-sitter test` → section 8's differential checks →
 `./scripts/sync-grammar.sh` → Rebuild in Zed.
 
+The CLI is pinned: `grammar/package-lock.json` holds tree-sitter-cli
+0.25.10, the version the first line of `src/parser.c` names, and
+`npm ci` in `grammar/` installs it as
+`grammar/node_modules/.bin/tree-sitter`. Run that one: another version
+rewrites the committed `src/` from an unchanged `grammar.js` (0.27.1
+rewrites `src/parser.c` and `src/tree_sitter/array.h`).
+`sync-grammar.sh` regenerates with the pinned version only, from
+`grammar/node_modules/.bin` or from the `PATH`, and otherwise leaves
+`src/` as committed and says so. Moving the pin is a change of its
+own: update the lockfile, regenerate, and commit both.
+
 ## 6. Tooling choices
 
 The server is Go and wraps the reference front end, so diagnostics come
@@ -319,28 +373,46 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
   setting's name and its `:` (`[default` then `: 1` on the next line)
   draw an ERROR node, since a line break there is not whitespace to
   the grammar; the front end accepts them.
-- **LSP: no Go-side navigation.** Handler references (`Home.Index`)
+- **LSP: a rename stops at the `.volt` files.** Renaming a table, a
+  column, a relation or a select renames the Go names `volt gen`
+  derives from it, a model, a field, a function, a with row's type
+  (`PostWithReplies`), a joined column's field (`PostTitle`) and its
+  JSON key among them, at the next generation, and the server does not
+  rewrite the hand-written Go that uses the old ones, which stops
+  compiling then; renaming each Go name with gopls first, while the
+  generated code still declares it, keeps the two in step. A rename at
+  a Go reference is the other way round: the Go side is gopls's, the
+  `.volt` spellings the server's.
+- **LSP: Go-side navigation is partial.** Handler references (`Home.Index`)
   and `error_handler:` point into Go, which this server does not
   index (roadmap). A query reference (`db.UserGet`, §query-routes) is
   not navigated either; a dataset's select (`dataset db.browse`) is.
-  Definition and hover on a bare declared type stay on its `type`
-  line and do not open the Go type (§types).
+  A declared type's hover stays on its `type` line; go-to-definition
+  on a column's type lands there, and from the name of the `type`
+  line itself on the Go type (Go references, below).
 
 ### Go references
 
 A `.volt` file names Go by rule only in the containing package's own
 Go files (§projects-and-packages): pipeline plugs (§pipelines),
-validators (§validators), error handlers (§scopes) and bare declared
-types (§types). The server resolves plugs and validators with the
+validators (§validators), scope-load functions (§scope-loads), error
+handlers (§scopes) and bare declared types (§types). The server
+resolves plugs, validators and scope-load functions with the
 standard library's Go parser
 over the package directory's non-test `*.go` files (no gopls, no
 build): go-to-definition lands on the `func`, hover shows its signature
 and doc comment, and an undeclared name hovers as undeclared while the
 checker's diagnostic on the reference names the exact signature to
 write. `volt.*` plugs live in the runtime and
-make no claim. Error handlers and bare types are not navigated
-(section 7), but their existence, and a handler's signature, are
-checked like the rest. Existence and the spelled signature are the
+make no claim. Go-to-definition on the name of a `type` declaration
+(§types), either part of a qualified one, lands on the Go type spec: a
+bare name in the package's own Go files, a qualified one in the
+package its `from` path imports, whose directory the go tool finds
+(`go list -find`, offline), so a package of the project, of a
+workspace module, of the module cache or of the standard library all
+resolve; with no go tool on the path it finds nothing. Error handlers
+are not navigated (section 7), but their existence, and a handler's
+signature, are checked like the rest. Existence and the spelled signature are the
 checker's, so a typo or a wrong parameter type is a diagnostic at the
 reference. The Go side can move without any `.volt` buffer changing —
 a gopls rename, a newly written function — so the server registers a
@@ -356,9 +428,12 @@ the fresh one. Only saved files
 count: the Go buffers themselves belong to gopls, not to this server. Rename on a Go reference rewrites its Volt spellings only —
 the Go declaration is gopls' job, and the existence error then points
 at whichever side is still behind. Rename on a column follows it into
-the table's validators (their arguments); a column named through a
-group, in a `pred` body or a group select, is left alone, and the
-agreement error (§selects-over-groups) names what is now missing.
+the table's validators (their arguments), and a foreign-key column into
+the relation it names (section 4); a column named through a group, in
+a `pred` body or a group select, is left alone, and the rename's check
+refuses the rename when the agreement error (§selects-over-groups)
+would then name what is missing. A relation or a table a `pred` body
+names renames with it.
 
 ## 8. The verification checklist
 
@@ -368,9 +443,10 @@ How to audit that the three components implement
 | Claim | Check | Where |
 |---|---|---|
 | Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (files without a `package` clause = the schema pass, files with one and project dirs = the project pass); every diagnostic of every invalid snippet, recovery included, is a golden | `lang/conformance/snippets/` and `lang/conformance/invalid_*.golden` via `go test ./lang/...`; refresh with `-update` after reading the diff |
-| Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` |
+| Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` with the pinned CLI, tree-sitter-cli 0.25.10 (section 5) |
 | Spec grammar and front end agree | the spec's EBNF read as data: every derived sentence parses, every one-token neighbour is decided alike by the grammar and the front end | `lang/spec_grammar_test.go` via `go test ./lang/...` |
-| Grammar and front end agree | every valid conformance snippet (the files its loader reads, so not `testdata/` or a nested module) and `grammar/examples/*` must produce zero front-end diagnostics, and every derived sentence of the spec's grammar (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) zero parser diagnostics; all of them must produce zero tree-sitter ERROR nodes, except where a limitation of section 7 applies: today `v55_element_continuation` (a `ref:` continued on an indented line) | differential run after grammar changes |
+| Grammar and front end agree | every valid conformance snippet (the files its loader reads, so not `testdata/` or a nested module) and `grammar/examples/*` must produce zero front-end diagnostics, and every derived sentence of the spec's grammar (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) zero parser diagnostics; all of them must produce zero tree-sitter ERROR nodes, except where a limitation of section 7 applies: today `v55_element_continuation` (a `ref:` continued on an indented line) and `34_no_reserved_words` (a column named `indexes`) | differential run after grammar changes |
+| Highlight queries cover the grammar | every keyword `grammar.js` matches (`kw(...)`) is captured in `highlights.scm`, by its spelling or through the node it is aliased to (a verb, a boolean, `null`, an aggregate name) | `lsp/highlights_test.go` via `go test ./lsp/...`; `tree-sitter query zed-extension/languages/volt/highlights.scm FILE` from `grammar/` shows the captures |
 | Spec examples run | every `volt` block of `spec.md` (§conformance-and-the-proof-chain): a plain block is a whole file the front end accepts, a block fenced `volt invalid` one it rejects, a block fenced `volt fragment` a piece of a file that parses alone; any other fence marker fails | `lang/spec_examples_test.go` via `go test ./lang/...` |
 | Lint rules match their doc | doc ↔ registry ↔ testdata consistency test; `//WANT` markers both directions | `lang/vet/docs_test.go` against [`lint.md`](lint.md) |
 | Generated routers implement Part II of the spec | goldens byte-compared, gofmt-stable, **compiled**; itest exercises match/404/405, typed-param 404s, pipeline order, the error spine, reverse-URL round-trip totality | `gen/router`, `itest/` |

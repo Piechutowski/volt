@@ -29,11 +29,19 @@ func (l *routeLowering) loads(r *ast.Route, params []Param, inh inherited) (load
 		byName[p.Name] = p
 	}
 	seen := map[string]token.Position{}
+	keys := map[string]keyBinding{}
+	values := map[string]string{}
+	for _, ld := range r.Loads {
+		values[ld.Name.Name()] = "a load of the route"
+	}
+	for _, sl := range inh.loads {
+		values[sl.Name] = "a scope load above the route"
+	}
 	for _, ld := range r.Loads {
 		name := ld.Name.Name()
 		switch {
 		case !loadNameOK(name):
-			l.errorf(ld.Name.Pos(), "route-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§route-loads, §route-paths)", name)
+			l.errorf(ld.Name.Pos(), "route-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier and no Go keyword, that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), not a predeclared Go identifier (string, int, len, nil and the rest), and not shaped like a generated local (§route-loads, §route-paths)", name)
 			ok = false
 			continue
 		case loadNameQualifier(name, l.facts.pkgName, l.facts.imports):
@@ -55,8 +63,12 @@ func (l *routeLowering) loads(r *ast.Route, params []Param, inh inherited) (load
 			continue
 		}
 		seen[name] = ld.Name.Pos()
-		q := l.loadQuery(ld, byName)
+		q := l.callQuery(name, ld.Call, byName, values)
 		if q == nil {
+			ok = false
+			continue
+		}
+		if !l.loadKeysAgree(ld, q, keys) {
 			ok = false
 			continue
 		}
@@ -65,15 +77,57 @@ func (l *routeLowering) loads(r *ast.Route, params []Param, inh inherited) (load
 	return loads, ok
 }
 
+// loadKeysAgree holds the query-string keys the loads of a route bind to
+// one Go type each (spec §route-loads, §generated-client): the client
+// method takes a key once, so a key two loads bind as two types, which
+// no one argument of the method can serve, is an error.
+func (l *routeLowering) loadKeysAgree(ld *ast.Load, q *QueryRef, keys map[string]keyBinding) bool {
+	for _, p := range q.Params {
+		if p.Source != FromQuery && p.Source != FromList {
+			continue
+		}
+		first, seen := keys[p.Name]
+		if !seen {
+			keys[p.Name] = keyBinding{p, ld.Name.Name()}
+			continue
+		}
+		if first.p.GoType != p.GoType {
+			l.errorf(ld.Call.Pos(), "route-loads", "load %s binds the query key %q as %s, and load %s binds it as %s; one key binds one type, the one the client sends it as (§route-loads, §generated-client)", ld.Name.Name(), p.Name, p.Type(), first.load, first.p.Type())
+			return false
+		}
+	}
+	return true
+}
+
+type keyBinding struct {
+	p    QueryParam
+	load string
+}
+
 // loadNameOK reports whether a load may be named so (spec §route-loads,
-// §scope-loads): a lower-case Go identifier that is neither reserved
-// nor err or ok, which the shim declares beside it, nor shaped like a
+// §scope-loads): a lower-case Go identifier, so no Go keyword, that is
+// neither reserved, nor err or ok, which the shim declares beside it,
+// nor a name the route files import a package under or a predeclared Go
+// identifier, which the shim's closures would shadow, nor shaped like a
 // generated local.
 func loadNameOK(name string) bool {
-	if naming.RouteSignatureName(name) || name == "_" || name == "err" || name == "ok" || naming.LocalName(name) || !exportedIdentOK(strings.ToUpper(name[:1])+name[1:]) {
+	if naming.RouteSignatureName(name) || name == "_" || name == "err" || name == "ok" || goKeywords[name] || generatedImportNames[name] != "" || goPredeclared[name] || naming.LocalName(name) || !exportedIdentOK(strings.ToUpper(name[:1])+name[1:]) {
 		return false
 	}
 	return name[0] >= 'a' && name[0] <= 'z'
+}
+
+// goPredeclared are the identifiers of Go's universe block, which a
+// generated closure parameter would shadow (spec §route-loads).
+var goPredeclared = map[string]bool{
+	"any": true, "bool": true, "byte": true, "comparable": true, "complex64": true, "complex128": true,
+	"error": true, "float32": true, "float64": true, "int": true, "int8": true, "int16": true,
+	"int32": true, "int64": true, "rune": true, "string": true, "uint": true, "uint8": true,
+	"uint16": true, "uint32": true, "uint64": true, "uintptr": true,
+	"true": true, "false": true, "iota": true, "nil": true,
+	"append": true, "cap": true, "clear": true, "close": true, "complex": true, "copy": true,
+	"delete": true, "imag": true, "len": true, "make": true, "max": true, "min": true,
+	"new": true, "panic": true, "print": true, "println": true, "real": true, "recover": true,
 }
 
 // loadNameQualifier reports whether name is the package's own name or
@@ -86,11 +140,7 @@ func loadNameQualifier(name, pkgName string, imports map[string]string) bool {
 	return ok
 }
 
-func (l *routeLowering) loadQuery(ld *ast.Load, byName map[string]Param) *QueryRef {
-	return l.callQuery(ld.Name.Name(), ld.Call, byName)
-}
-
-func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[string]Param) *QueryRef {
+func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[string]Param, values map[string]string) *QueryRef {
 	parts := call.Ref.Parts
 	last := parts[len(parts)-1]
 	name := last.Name()
@@ -124,13 +174,16 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 	}
 	qr := &QueryRef{Qualifier: qual, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200}
 
-	type sigParam struct{ name, goType string }
+	type sigParam struct {
+		name, goType     string
+		limits, optional bool
+	}
 	var sig []sigParam
 	found := false
 	if si, m, ok := l.selectByMethod(target, name); ok {
 		found = true
 		for _, p := range si.Params {
-			sig = append(sig, sigParam{p.GoName, p.GoType})
+			sig = append(sig, sigParam{p.GoName, p.GoType, p.GoName == si.LimitParam, p.Optional})
 		}
 		switch {
 		case si.With != nil:
@@ -155,7 +208,7 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 			return nil
 		}
 		for _, k := range cm.Key {
-			sig = append(sig, sigParam{k.GoName, k.GoType})
+			sig = append(sig, sigParam{name: k.GoName, goType: k.GoType})
 		}
 		qr.Result, qr.Many = cm.Result, cm.Many
 	}
@@ -170,13 +223,49 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 	ok := true
 	for i, arg := range call.Args {
 		sp := sig[i]
-		qp := QueryParam{Name: sp.name, GoType: sp.goType}
+		if a, isName := arg.(*ast.Ident); isName && byName[a.Name()].Name == "" && a.Name() != what {
+			if kind := values[a.Name()]; kind != "" {
+				l.errorf(a.Pos(), "route-loads", "argument %d of %s names %q, %s, whose value no load binds: a name that is no path parameter reads the query string by that name, so the client would choose it; name the key otherwise, or load in the handler with Then (§route-loads)", i+1, ref, a.Name(), kind)
+				ok = false
+				continue
+			}
+		}
+		qp := QueryParam{Name: sp.name, GoType: sp.goType, Limit: sp.limits}
 		if sp.goType == "" {
 			qr.Unresolved = true
 			qr.Params = append(qr.Params, qp)
 			continue
 		}
 		list := strings.HasPrefix(sp.goType, "[]")
+		qp.Optional = sp.optional
+		if !queryValueTypes[strings.TrimPrefix(sp.goType, "[]")] {
+			l.errorf(arg.Pos(), "route-loads", "parameter %q of %s is %s, which no load binds: the query string cannot carry it, and neither a path parameter nor a literal spells it (§route-loads)", sp.name, ref, qp.Type())
+			ok = false
+			qr.Params = append(qr.Params, qp)
+			continue
+		}
+		if sp.optional {
+			a, isName := arg.(*ast.Ident)
+			inPath := false
+			if isName {
+				_, inPath = byName[a.Name()]
+			}
+			switch {
+			case list:
+				l.errorf(arg.Pos(), "route-loads", "argument %d of %s binds the optional list parameter %q, which a load cannot carry: a missing key and an empty list cannot be told apart in a query string, and an absent list matches every row where an empty one matches none; call the select in the handler with Then (§route-loads, §query-routes)", i+1, ref, sp.name)
+				ok = false
+			case !isName || a.Name() == "true" || a.Name() == "false":
+				l.errorf(arg.Pos(), "route-loads", "argument %d of %s binds the optional parameter %q, which a literal, always present, cannot bind: an optional parameter binds from the query string only; name a query-string key, or load a second select whose parameter is required (§route-loads)", i+1, ref, sp.name)
+				ok = false
+			case inPath:
+				l.errorf(a.Pos(), "route-loads", "argument %d of %s binds the optional parameter %q, which a path parameter, always present, cannot bind: an optional parameter binds from the query string only; name a query-string key, or load a second select whose parameter is required (§route-loads)", i+1, ref, sp.name)
+				ok = false
+			default:
+				qp.Source, qp.Name = FromQuery, a.Name()
+			}
+			qr.Params = append(qr.Params, qp)
+			continue
+		}
 		switch a := arg.(type) {
 		case *ast.Ident:
 			if a.Name() == "true" || a.Name() == "false" {
@@ -206,10 +295,6 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 			if list {
 				qp.Source = FromList
 			}
-			if !queryValueTypes[strings.TrimPrefix(sp.goType, "[]")] {
-				l.errorf(a.Pos(), "route-loads", "parameter %q of %s is %s, which the query string cannot carry; write a literal (§route-loads)", sp.name, ref, sp.goType)
-				ok = false
-			}
 		case *ast.BasicLit:
 			qp.Source = FromLiteral
 			switch {
@@ -224,6 +309,9 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 				if qp.Literal == "" {
 					l.errorf(a.Pos(), "route-loads", "argument %d of %s is %s, which the number %s does not spell (§route-loads)", i+1, ref, sp.goType, a.Tok.Val)
 					ok = false
+				} else if sp.limits && !limitLiteralOK(qp.Literal) {
+					l.errorf(a.Pos(), "route-loads", "argument %d of %s is its limit, at least 1, not %s, or every request would be refused (§route-loads, §selects-over-groups)", i+1, ref, a.Tok.Val)
+					ok = false
 				}
 			}
 		case *ast.NegNumber:
@@ -231,6 +319,9 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 			qp.Literal = numberLiteral("-"+a.Num.Tok.Val, sp.goType)
 			if qp.Literal == "" {
 				l.errorf(a.Pos(), "route-loads", "argument %d of %s is %s, which the number -%s does not spell (§route-loads)", i+1, ref, sp.goType, a.Num.Tok.Val)
+				ok = false
+			} else if sp.limits {
+				l.errorf(a.Pos(), "route-loads", "argument %d of %s is its limit, at least 1, not -%s, or every request would be refused (§route-loads, §selects-over-groups)", i+1, ref, a.Num.Tok.Val)
 				ok = false
 			}
 		}
@@ -242,26 +333,26 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 	return qr
 }
 
-// numberLiteral is the Go spelling of lit as a value of goType, "" when
-// the number does not spell one: an integer for int, any number for
-// float64.
+// limitLiteralOK reports whether an int literal a load binds to a
+// select's limit: parameter is at least 1 (spec §route-loads).
+func limitLiteralOK(lit string) bool {
+	n, err := strconv.ParseInt(lit, 10, 64)
+	return err == nil && n >= 1
+}
+
+// numberLiteral is the canonical Go spelling of lit as a value of goType
+// (spec §route-loads, §predicates), "" when the number does not spell
+// one: a decimal integer for int, so 010 is 10 and never Go's octal 8,
+// and a float literal for float64.
 func numberLiteral(lit, goType string) string {
-	switch goType {
-	case "int":
-		if _, err := strconv.ParseInt(lit, 10, 64); err != nil {
-			return ""
-		}
-		return lit
-	case "float64":
-		if _, err := strconv.ParseFloat(lit, 64); err != nil {
-			return ""
-		}
-		if !strings.ContainsAny(lit, ".eE") {
-			return lit + ".0"
-		}
-		return lit
+	if goType != "int" && goType != "float64" {
+		return ""
 	}
-	return ""
+	s, err := numberGo(lit, goType)
+	if err != nil {
+		return ""
+	}
+	return s
 }
 
 // timeout reads a route's timeout: setting (spec §route-loads): a
