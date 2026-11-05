@@ -1125,6 +1125,9 @@ db/i53_pred_type_mismatch.volt:9:33: error: spec/predicates: column "org" (strin
 app/routes.volt:10:35: error: spec/settings-whitelists: setting "max_limit" is not valid on a dataset (§settings-whitelists); valid: strip, only, except
 app/routes.volt:10:50: error: spec/settings-whitelists: setting "default_limit" is not valid on a dataset (§settings-whitelists); valid: strip, only, except
 
+## i541_shared_action_two_docs.volt
+app/i541_shared_action_two_docs.volt:9:2: error: spec/scopes-and-routes: Posts.Index is documented by the route at app/i541_shared_action_two_docs.volt:7:2 already: one of the routes that share an action carries its doc comment (§handler-references, §doc-comments-in-generated-code)
+
 ## i54_group_type_disagree.volt
 db/i54_group_type_disagree.volt:19:29: error: spec/selects-over-groups: column "org" disagrees on type across "mixed": int in ks_seats; string in ms_revenue — the predicate cannot be checked for every member (§selects-over-groups)
 

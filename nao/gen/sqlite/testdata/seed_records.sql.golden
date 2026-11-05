@@ -7,7 +7,6 @@ CREATE TABLE currencies (
   name TEXT NOT NULL
 );
 
--- Seeded exchange rates
 CREATE TABLE rates (
   id INTEGER PRIMARY KEY,
   currency_code TEXT NOT NULL,

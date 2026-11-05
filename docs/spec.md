@@ -1620,11 +1620,12 @@ comment does. It is the one way to document anything in Volt.
    escapes (§escape-sequences). The text is conventionally Markdown,
    in Go's doc comment syntax.
 4. **Meaning.** A doc comment never changes what a program means: no
-   check, no diagnostic and no generated statement or identifier
-   depends on one. Generated code carries the doc comment wherever
-   its construct becomes Go or SQL (§doc-comments-in-generated-code);
-   every other one is the reader's, shown by the language server
-   ([`editor.md`](editor.md)).
+   generated statement or identifier depends on one, and the one check
+   it meets is that of the routes sharing an action, at most one
+   carries a doc comment (§handler-references). Generated Go carries
+   the doc comment where its construct becomes a Go declaration
+   (§doc-comments-in-generated-code); every other one is the reader's,
+   shown by the language server ([`editor.md`](editor.md)).
 5. **Package.** The doc comment of the package clause documents the
    package. Each `.volt` file of a package may write one; the
    package's doc text is theirs joined in file name order, each a
@@ -2238,7 +2239,10 @@ handler ref = name, [ ".", name ] ;
    loads (§scope-loads), identical parameter signatures (names, types
    and wildcard-ness, in order), the same body type or none
    (§request-bodies) and identical loads (names and types, in order;
-   §route-loads).
+   §route-loads). At most one of the routes that share an action carries
+   a doc comment (§doc-comments); its text documents the action's method
+   (§doc-comments-in-generated-code), and a second documented route is an
+   error naming the first.
 4. The generated `Controllers` manifest is one namespace: a controller
    MUST NOT take the name of a field the manifest holds for a data
    the query routes run on (`DB`; §query-routes) or for the event broker
@@ -5236,22 +5240,24 @@ generated name, a router's included, is a check error (§types).
 
 ### Doc comments in generated code
 
-A doc comment (§doc-comments) is carried, as its doc text, wherever
-its construct becomes Go or SQL:
+A doc comment (§doc-comments) is carried, as its doc text, into the
+generated Go where its construct becomes a Go declaration:
 
 | Doc comment on | Generated position |
 |---|---|
 | package clause | package doc comment of `volt_models.go`, or of `volt_router.go` in a package without data |
-| `table` | model struct doc comment; comment above its `CREATE TABLE` |
-| column | field doc comment, in the model and in the struct derivative of a star select (§selects-over-groups); comment above its line of the `CREATE TABLE` |
+| `table` | model struct doc comment |
+| column | field doc comment, in the model and in the struct derivative of a star select (§selects-over-groups) |
 | injected partial column | travels with the column; a §tablepartial override brings its own |
-| entry of an `indexes` block | comment above its `CREATE INDEX` |
-| `ref` element | comment above its `FOREIGN KEY` clause |
 | `select` | doc comment of the query function of every member |
-| `records` block | comment above its `INSERT` statements |
+| route | doc comment of its action's method in the controller interface (§handler-references) |
 
-Every other doc comment is the reader's alone. These are the only
-comments a generated file carries besides the header: a doc comment
+Every other doc comment is the reader's alone: the controller
+interface, a reverse-URL helper and a client method carry none, a
+`resources` or `dataset` declaration's doc documents none of the
+methods it expands to, and the DDL carries no comment but its header,
+since the schema documents itself in Volt (§mapping-to-sqlite-ddl).
+These are the only comments a generated file carries besides the header: a doc comment
 is the maintainer's text, and the generators write no comment of
 their own, so a file of an undocumented schema has no comment but the
 header, and a package without a documented package clause has no
@@ -5586,8 +5592,9 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 
 Identifiers are quoted only when needed (not a plain lower-case name,
 or a SQLite keyword): `order` → `"order"`, `Users` → `"Users"`,
-`żółw` → `"żółw"`. Doc comments become `--` comments above their
-DDL (§doc-comments-in-generated-code). Output opens with
+`żółw` → `"żółw"`. The DDL carries no comment but its header: doc
+comments stay in the Volt source (§doc-comments-in-generated-code).
+Output opens with
 `PRAGMA foreign_keys = ON;` and the `-- Code generated … DO NOT EDIT.`
 marker, with the same overwrite protection as §mapping-to-go.
 

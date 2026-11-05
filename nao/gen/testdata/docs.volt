@@ -1,7 +1,7 @@
-// every doc comment level the generators carry (spec
-// §doc-comments-in-generated-code): table, column, index, relationship and
-// records; the constants of a declared type carry their docs in the Go file
-// beside it
+// the doc comments the generators carry (spec §doc-comments-in-generated-code):
+// table and column into Go, none into SQL; the index, relationship and
+// records docs stay in Volt; the constants of a declared type carry their
+// docs in the Go file beside it
 
 type PostState string
 

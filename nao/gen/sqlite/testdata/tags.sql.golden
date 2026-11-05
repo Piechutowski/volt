@@ -5,6 +5,5 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE users (
   id INTEGER PRIMARY KEY,
   user_name TEXT NOT NULL,
-  -- NULL until written
   bio TEXT
 );

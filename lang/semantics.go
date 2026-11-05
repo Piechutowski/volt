@@ -849,9 +849,16 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 				r.Controller, r.Action, signatureString(r.ScopeLoads, r.Params, r.Body, r.Loads), signatureString(a.ScopeLoads, a.Params, a.Body, a.Loads), a.Routes[0].Pos)
 			return
 		}
+		if r.Doc != "" {
+			if first := a.documentedBy(); first != nil {
+				c.errorf(r.Pos, "scopes-and-routes", "%s.%s is documented by the route at %s already: one of the routes that share an action carries its doc comment (§handler-references, §doc-comments-in-generated-code)", r.Controller, r.Action, first.Pos)
+			} else {
+				a.Doc = r.Doc
+			}
+		}
 		a.Routes = append(a.Routes, &r)
 	} else {
-		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Params: r.Params, Body: r.Body, Loads: r.Loads, ScopeLoads: r.ScopeLoads, Routes: []*RouteInfo{&r}})
+		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Doc: r.Doc, Params: r.Params, Body: r.Body, Loads: r.Loads, ScopeLoads: r.ScopeLoads, Routes: []*RouteInfo{&r}})
 	}
 	c.routeAccept(&r)
 }

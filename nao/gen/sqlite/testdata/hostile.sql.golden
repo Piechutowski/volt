@@ -6,21 +6,17 @@ CREATE TABLE users (
   id INTEGER PRIMARY KEY
 );
 
--- Shares the stem of users; its own name keeps the models apart
 CREATE TABLE core_users (
   id INTEGER PRIMARY KEY,
   api_key TEXT NOT NULL,
   homepage_url TEXT,
   http_status INTEGER,
-  -- Once a quoted name with a space
   full_name TEXT NOT NULL,
   precision_value REAL,
   balance REAL,
   kind TEXT NOT NULL,
-  -- Column named like a Go keyword
   type TEXT,
   func INTEGER,
-  -- Named like the runtime package GetByRt binds through
   rt BLOB NOT NULL
 );
 CREATE UNIQUE INDEX idx_core_users_rt ON core_users (rt);
@@ -34,7 +30,6 @@ CREATE TABLE _2fa_codes (
 );
 
 CREATE TABLE digests (
-  -- Named like the runtime package Get and Delete bind through
   rt BLOB PRIMARY KEY NOT NULL,
   size INTEGER NOT NULL
 );

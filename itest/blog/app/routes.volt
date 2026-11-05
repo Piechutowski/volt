@@ -17,6 +17,7 @@ pipeline extra {
 }
 
 scope / [pipe: api, error_handler: Errors] {
+	// The front page.
 	get /        Home.Index [name: root]
 	get /teapot  Home.Teapot
 	any /ping    Home.Ping
@@ -32,6 +33,9 @@ scope / [pipe: api, error_handler: Errors] {
 	resources db.users
 
 	get /users/:id(int)/avatar Users.Avatar
+	// A user's public profile.
+	//
+	// Loads the user, or answers 404.
 	get /users/:id(int)/profile Users.Profile [name: profile, timeout: 5] {
 		user db.UserGet(id)
 	}

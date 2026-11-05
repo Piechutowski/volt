@@ -9,7 +9,6 @@ CREATE TABLE users (
 CREATE UNIQUE INDEX idx_users_email ON users (email);
 
 CREATE TABLE user_profiles (
-  -- Also the FK: one profile per user
   user_id INTEGER PRIMARY KEY,
   bio TEXT,
   avatar_url TEXT,

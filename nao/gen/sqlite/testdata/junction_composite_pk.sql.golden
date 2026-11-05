@@ -12,7 +12,6 @@ CREATE TABLE roles (
 );
 CREATE UNIQUE INDEX idx_roles_name ON roles (name);
 
--- Junction table: which user holds which role
 CREATE TABLE user_roles (
   user_id INTEGER NOT NULL,
   role_id INTEGER NOT NULL,

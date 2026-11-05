@@ -6,7 +6,6 @@ CREATE TABLE users (
   id INTEGER PRIMARY KEY,
   email TEXT NOT NULL,
   name TEXT NOT NULL,
-  -- NULL until the user writes one
   bio TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 );

@@ -12,6 +12,7 @@ pipeline api {
 }
 
 scope / [pipe: api, error_handler: Errors] {
+	// The front page.
 	get  /        Home.Index [name: root]
 	get  /about   Home.About
 
@@ -36,6 +37,9 @@ scope / [pipe: api, error_handler: Errors] {
 
 	get /files/:path...          Files.Serve
 	get /users/:id(int)/avatar Users.Avatar
+	// A user's public profile.
+	//
+	// Loads the user, or answers 404.
 	get /users/:id(int)/profile Users.Profile [timeout: 5] {
 		user   db.UserGet(id)
 		picked db.UserPicked(ids)

@@ -21,6 +21,7 @@ type FilesController interface {
 }
 
 type HomeController interface {
+	// The front page.
 	Index(r volt.Request) volt.Response
 	About(r volt.Request) volt.Response
 	Ping(r volt.Request) volt.Response
@@ -40,6 +41,9 @@ type UsersController interface {
 	Create(r volt.Request) volt.Response
 	Show(r volt.Request, id int) volt.Response
 	Avatar(r volt.Request, id int) volt.Response
+	// A user's public profile.
+	//
+	// Loads the user, or answers 404.
 	Profile(r volt.Request, id int, user db.User, picked []db.User, since []db.User, recent []db.User) volt.Response
 	ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response
 	Signup(r volt.Request, body db.UserChangeset) volt.Response

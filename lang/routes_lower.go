@@ -524,6 +524,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		Loads:        loads,
 		Timeout:      timeout,
 		Pos:          r.Pos(),
+		Doc:          r.Doc.Text(),
 	}
 }
 

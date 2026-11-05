@@ -23,6 +23,7 @@ type FilesController interface {
 }
 
 type HomeController interface {
+	// The front page.
 	Index(r volt.Request) volt.Response
 	Teapot(r volt.Request) volt.Response
 	Ping(r volt.Request) volt.Response
@@ -58,6 +59,9 @@ type UsersController interface {
 	Update(r volt.Request, id int) volt.Response
 	Delete(r volt.Request, id int) volt.Response
 	Avatar(r volt.Request, id int) volt.Response
+	// A user's public profile.
+	//
+	// Loads the user, or answers 404.
 	Profile(r volt.Request, id int, user db.User) volt.Response
 	Card(r volt.Request, id int) volt.Response
 	Peers(r volt.Request, id int, n int, user db.User, peers []db.User, more []db.User) volt.Response
