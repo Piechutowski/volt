@@ -1,4 +1,5 @@
 // analyzers: reftype
+
 table users {
   id int [pk]
 }

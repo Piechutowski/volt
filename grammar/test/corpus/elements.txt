@@ -71,19 +71,6 @@ Enum status {
 
 
 ==================
-a body note is an error
-:error
-==================
-
-table t {
-  id int
-  Note: 'body form'
-}
-
----
-
-
-==================
 use is not an element
 :error
 ==================

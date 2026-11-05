@@ -312,7 +312,7 @@ func TestSessionBindsUnresolvedSelects(t *testing.T) {
 	routed := strings.Replace(routes, "scope /api {\n", "scope /api {\n\tget /tags db.TagList\n", 1)
 	round("route edit", map[string]string{routesPath: routed})
 	reused := s.Stats().SelectsReused
-	noted := strings.Replace(schema, "name string\n", "name string [note: \"shown\"]\n", 1)
+	noted := strings.Replace(schema, "\tname string\n", "\t// shown\n\tname string\n", 1)
 	round("data edit", map[string]string{schemaPath: noted, routesPath: routed})
 	if s.Stats().SelectsReused == reused {
 		t.Errorf("the data edit checked the unresolved select afresh; want it answered by the memo")
@@ -370,12 +370,12 @@ func TestSessionReparsesOneDeclaration(t *testing.T) {
 	all := work{whole.Parsed, 12, 12, 12, 13, 17, whole.Parsed}
 	round("first", text, all)
 	one := work{1, 1, 1, 1, 2, 2, 2}
-	round("edit one table", strings.Replace(text, "c002 string\n", "c002 string [note: \"edited\"]\n", 1), one)
+	round("edit one table", strings.Replace(text, "\tc002 string\n", "\t// edited\n\tc002 string\n", 1), one)
 	round("break it", strings.Replace(text, "c002 string\n", "c002 string [null\n", 1), one)
 	round("fix it", text, one)
 	cur := strings.Replace(text, "get /events        volt.Events", "get /stream        volt.Events", 1)
 	round("edit a route", cur, work{1, 0, 0, 0, 0, 17, 1})
-	cur = strings.Replace(cur, "created_at time.Time", "created_at time.Time [note: \"stamped\"]", 1)
+	cur = strings.Replace(cur, "\tcreated_at time.Time", "\t// stamped\n\tcreated_at time.Time", 1)
 	round("edit the partial", cur, work{1, 12, 12, 12, 13, 13, 13})
 	cur = strings.Replace(cur, "type Status string", "type Status  string", 1)
 	round("respace the Type", cur, work{1, 0, 0, 0, 0, 0, 1})

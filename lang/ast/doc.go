@@ -1,0 +1,85 @@
+package ast
+
+// DocOf is the doc comment of n, nil when n has none or is not a
+// construct that takes one (spec §doc-comments).
+func DocOf(n Node) *CommentGroup {
+	switch x := n.(type) {
+	case *PackageClause:
+		return x.Doc
+	case *ImportDecl:
+		return x.Doc
+	case *ImportSpec:
+		return x.Doc
+	case *Pipeline:
+		return x.Doc
+	case *Plug:
+		return x.Doc
+	case *Scope:
+		return x.Doc
+	case *Route:
+		return x.Doc
+	case *Load:
+		return x.Doc
+	case *Resources:
+		return x.Doc
+	case *Dataset:
+		return x.Doc
+	case *ScopeLoad:
+		return x.Doc
+	case *Group:
+		return x.Doc
+	case *Pred:
+		return x.Doc
+	case *Select:
+		return x.Doc
+	case *Table:
+		return x.Doc
+	case *TablePartial:
+		return x.Doc
+	case *Column:
+		return x.Doc
+	case *IndexesBlock:
+		return x.Doc
+	case *Index:
+		return x.Doc
+	case *ValidatorsBlock:
+		return x.Doc
+	case *Validator:
+		return x.Doc
+	case *PartialRef:
+		return x.Doc
+	case *Ref:
+		return x.Doc
+	case *TypeDecl:
+		return x.Doc
+	case *Records:
+		return x.Doc
+	case *RecordRow:
+		return x.Doc
+	case *Migration:
+		return x.Doc
+	case *CreateTable:
+		return x.Doc
+	case *DropTable:
+		return x.Doc
+	case *RenameTable:
+		return x.Doc
+	case *AlterTable:
+		return x.Doc
+	case *AlterAdd:
+		return x.Doc
+	case *AlterDrop:
+		return x.Doc
+	case *AlterRename:
+		return x.Doc
+	case *RebuildTable:
+		return x.Doc
+	case *CreateIndex:
+		return x.Doc
+	case *DropIndex:
+		return x.Doc
+	case *Exec:
+		return x.Doc
+	}
+	return nil
+}

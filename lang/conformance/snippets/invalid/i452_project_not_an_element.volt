@@ -1,6 +1,6 @@
-// spec: §program-structure, §notes-become-doc-comments, project is not an element: a package documents itself in a hand-written Go file
+// spec: §program-structure, project is not an element: a package documents itself with the doc comment above its clause (§doc-comments)
 // want: unknown element type "project"
-project blog [note: "Blogging platform"] {
+project blog {
   owner: "platform team"
 }
 

@@ -1,4 +1,5 @@
 // analyzers: selfref
+
 table employees {
   id int [pk]
   manager_id int [null]

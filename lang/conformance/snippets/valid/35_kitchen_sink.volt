@@ -6,7 +6,8 @@ table_partial timestamps {
   updated_at time.Time
 }
 
-table users [note: "Registered users"] {
+// Registered users
+table users {
   id int [pk]
   username string [unique]
   ~timestamps

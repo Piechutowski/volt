@@ -24,6 +24,7 @@ func (p SelectParam) Type() string {
 // lowered (spec §predicates) and the §selects-over-groups
 // projection already validated.
 type SelectFn struct {
+	Doc          string // the select's doc text, "" when it has none (spec §doc-comments)
 	TableKey     string // the table's name, its key into check.Info
 	MethodSuffix string
 	Where        rt.GenPred    // the zero value when the select has no where clause
@@ -88,7 +89,7 @@ type FieldSig struct {
 	Col      string // source column name, e.g. "editor_id"
 	Type     string // full Go type, e.g. "rt.Null[int64]"
 	Tag      string // assembled struct tag (§struct-tags)
-	Doc      string // column note, "" when absent
+	Doc      string // the column's doc text, "" when it has none (§doc-comments)
 	Nullable bool   // NULL-admitting column (§nullability)
 }
 

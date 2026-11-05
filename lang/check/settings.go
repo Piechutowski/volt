@@ -32,14 +32,14 @@ type settingSpec struct {
 
 var (
 	tableSettings = settingSpec{
-		kinds: map[string]valueKind{"note": strValue, "model": strValue},
+		kinds: map[string]valueKind{"model": strValue},
 	}
 	columnSettings = settingSpec{
 		kinds: map[string]valueKind{
 			"pk": flagOnly, "null": flagOnly,
 			"unique": flagOnly, "index": flagOnly, "autoincrement": flagOnly,
 			"default": defaultVal,
-			"note":    strValue, "ref": refVal, "tag": strValue,
+			"ref":     refVal, "tag": strValue,
 			"required": flagOnly,
 		},
 		repeatable: map[string]bool{"tag": true},

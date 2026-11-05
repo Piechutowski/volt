@@ -1,4 +1,5 @@
 // analyzers: shadowedcolumn
+
 table_partial base {
   id int
   created_at time.Time

@@ -78,8 +78,8 @@ func (g *generator) tableEmit(ti *check.TableInfo) error {
 	name := ti.Key
 
 	g.out.WriteString("\n")
-	if note := tableNote(ti.Decl); note != "" {
-		commentWrite(&g.out, "", note)
+	if doc := ti.Decl.Doc.Text(); doc != "" {
+		commentWrite(&g.out, "", doc)
 	}
 	fmt.Fprintf(&g.out, "CREATE TABLE %s (\n", identQuote(name))
 
@@ -94,9 +94,9 @@ func (g *generator) tableEmit(ti *check.TableInfo) error {
 		if err != nil {
 			return fmt.Errorf("table %s: %w", name, err)
 		}
-		if note := settingNote(cd.Col.Settings); note != "" {
+		if doc := cd.Col.Doc.Text(); doc != "" {
 			var b strings.Builder
-			commentWrite(&b, "  ", note)
+			commentWrite(&b, "  ", doc)
 			line = b.String() + line
 		}
 		lines = append(lines, line)
@@ -110,7 +110,13 @@ func (g *generator) tableEmit(ti *check.TableInfo) error {
 		if r.FK.Table != ti || r.Target.Table == nil {
 			continue
 		}
-		line := "  FOREIGN KEY (" + quotedJoin(r.FK.Columns) + ") REFERENCES " +
+		line := ""
+		if ref, ok := r.Node.(*ast.Ref); ok && ref.Doc != nil {
+			var b strings.Builder
+			commentWrite(&b, "  ", ref.Doc.Text())
+			line = b.String()
+		}
+		line += "  FOREIGN KEY (" + quotedJoin(r.FK.Columns) + ") REFERENCES " +
 			identQuote(r.Target.Table.Key) + " (" + quotedJoin(r.Target.Columns) + ")"
 		if a := refAction(r, "delete"); a != "" {
 			line += " ON DELETE " + a
@@ -178,7 +184,13 @@ func (g *generator) indexesEmit(ti *check.TableInfo) error {
 	if err != nil {
 		return err
 	}
-	for _, s := range stmts {
+	blocks := len(stmts) - len(ti.Indexes)
+	for i, s := range stmts {
+		if i >= blocks {
+			if doc := ti.Indexes[i-blocks].Doc.Text(); doc != "" {
+				commentWrite(&g.out, "", doc)
+			}
+		}
 		g.out.WriteString(s + ";\n")
 	}
 	return nil
@@ -277,7 +289,11 @@ func (g *generator) insertsEmit(ti *check.TableInfo, r *ast.Records) error {
 	if len(r.Rows) == 0 {
 		return nil
 	}
-	fmt.Fprintf(&g.out, "\nINSERT INTO %s (%s) VALUES\n", identQuote(ti.Key), quotedJoin(cols))
+	g.out.WriteString("\n")
+	if doc := r.Doc.Text(); doc != "" {
+		commentWrite(&g.out, "", doc)
+	}
+	fmt.Fprintf(&g.out, "INSERT INTO %s (%s) VALUES\n", identQuote(ti.Key), quotedJoin(cols))
 	var rows []string
 	for _, row := range r.Rows {
 		var vals []string
@@ -345,21 +361,6 @@ func actionSQL(sl *ast.SettingList, kind string) string {
 	}
 	if v, ok := s.Value.(*ast.Ident); ok {
 		return strings.ToUpper(strings.ReplaceAll(v.Name(), "_", " "))
-	}
-	return ""
-}
-
-func tableNote(t *ast.Table) string { return settingNote(t.Settings) }
-
-func settingNote(sl *ast.SettingList) string { return settingString(sl, "note") }
-
-func settingString(sl *ast.SettingList, name string) string {
-	s := sl.Get(name)
-	if s == nil {
-		return ""
-	}
-	if lit, ok := s.Value.(*ast.BasicLit); ok {
-		return lit.Tok.Val
 	}
 	return ""
 }

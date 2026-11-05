@@ -4,9 +4,8 @@ comments everywhere
 
 // leading comment
 table t { // trailing
-  /* block */ id int // after
-  /* multi
-     line */
+  // above
+  id int // after
   name string
 }
 
@@ -26,7 +25,6 @@ table t { // trailing
         (type_name
           (identifier))))
     (comment)
-    (comment)
     (column_definition
       (column_name
         (identifier))
@@ -39,8 +37,8 @@ string escapes
 ==================
 
 table t {
-  a text [note: "it's fine"]
-  b string [note: "tab\there, \"b\" \\ c"]
+  a text [default: "it's fine"]
+  b string [default: "tab\there, \"b\" \\ c"]
 }
 
 ---
@@ -79,7 +77,7 @@ triple-quoted string with inner quotes and lines
 ==================
 
 table t {
-  a text [note: """
+  a text [default: """
     line one
     ""quoted"" and "one" don't, \"\"\" too
   """]
@@ -223,7 +221,7 @@ single quotes delimit no string
 :error
 ==================
 
-table t [note: 'a note'] {
+table t [model: 'a model'] {
   id int
 }
 
@@ -234,7 +232,7 @@ an unknown escape is an error
 :error
 ==================
 
-table t [note: "no \q escape"] {
+table t [model: "no \q escape"] {
   id int
 }
 
@@ -245,7 +243,7 @@ a backslash before a line break is an error in a string
 :error
 ==================
 
-table t [note: "one line \
+table t [model: "one line \
 continued"] {
   id int
 }
@@ -253,25 +251,23 @@ continued"] {
 ---
 
 ==================
-unterminated block comment is an error
+a block comment is an error
 :error
 ==================
 
 table t {
   id int
 }
-/* never closed
+/* not a comment */
 
 ---
-
-
 
 ==================
 a color literal is an error
 :error
 ==================
 
-table t [note: #fff] {
+table t [model: #fff] {
   id int
 }
 

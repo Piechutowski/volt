@@ -200,14 +200,6 @@ func ElementStarts(text string) []int {
 				i++
 			}
 			continue
-		case strings.HasPrefix(text[i:], "/*"):
-			end := strings.Index(text[i+2:], "*/")
-			if end < 0 {
-				return starts
-			}
-			i += 2 + end + 2
-			col1 = false
-			continue
 		case strings.HasPrefix(text[i:], `"""`):
 			end := strings.Index(text[i+3:], `"""`)
 			if end < 0 {

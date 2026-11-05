@@ -4,6 +4,7 @@
 // the option wrappers, and per model the changeset Model+Changeset, the
 // aliases Model+Column and Model+Params and the constructor Model+New.
 // Distinct declarations can demand the same Go name; generation
+
 // refuses, this rule names both origins.
 
 table users {

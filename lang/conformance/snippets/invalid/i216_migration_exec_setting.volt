@@ -1,5 +1,5 @@
 // spec: §migrations, an exec takes down: and no other setting
-// want: unknown setting "note"
+// want: unknown setting "name"
 package db
 
 table users {
@@ -10,5 +10,5 @@ migration 0001__init {
   create table users {
     id int [pk]
   }
-  exec `PRAGMA user_version = 1` [down: `PRAGMA user_version = 0`, note: "bump"]
+  exec `PRAGMA user_version = 1` [down: `PRAGMA user_version = 0`, name: "bump"]
 }

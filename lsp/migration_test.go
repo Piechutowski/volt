@@ -97,7 +97,7 @@ func TestCompletionMigrationShapeSettings(t *testing.T) {
 		bracket       int
 		want, refused []string
 	}{
-		{"create table column", 0, []string{"pk", "unique", "index", "ref:", "delete:", "update:"}, []string{"required", "tag:", "from:", "note:"}},
+		{"create table column", 0, []string{"pk", "unique", "index", "ref:", "delete:", "update:"}, []string{"required", "tag:", "from:"}},
 		{"shape indexes", 1, []string{"unique", "where:", "name:"}, []string{"pk", "type:"}},
 		{"alter add", 2, []string{"unique", "index", "default:", "ref:"}, []string{"required", "tag:", "from:"}},
 		{"rebuild column", 3, []string{"pk", "index", "from:", "ref:"}, []string{"required", "tag:"}},

@@ -20,7 +20,8 @@ table_partial base {
   id int [pk]
 }
 
-table users [note: "people"] {
+// people
+table users {
   ~base
   name string [unique]
   status Status [null, default: "active"]
@@ -108,7 +109,7 @@ func TestDefinitionFromRefEndpoint(t *testing.T) {
 	if loc == nil {
 		t.Fatal("no definition for ref endpoint table")
 	}
-	want := posOf(t, sample, "table users [", 0)
+	want := posOf(t, sample, "table users {", 0)
 	if loc.Range.Start.Line != want.Line+0 {
 		t.Errorf("definition line = %d, want %d", loc.Range.Start.Line, want.Line)
 	}
@@ -122,7 +123,7 @@ func TestDefinitionFromInlineRef(t *testing.T) {
 	if loc == nil {
 		t.Fatal("no definition from an inline ref")
 	}
-	declPos := posOf(t, sample, "table users [", 0)
+	declPos := posOf(t, sample, "table users {", 0)
 	if loc.Range.Start.Line != declPos.Line {
 		t.Errorf("inline ref definition line = %d, want %d", loc.Range.Start.Line, declPos.Line)
 	}
@@ -157,7 +158,7 @@ func TestDefinitionDeclaredType(t *testing.T) {
 
 func TestReferencesForTable(t *testing.T) {
 	d := doc(t, sample)
-	pos := posOf(t, sample, "table users [", 0)
+	pos := posOf(t, sample, "table users {", 0)
 	pos.Character += protocol.UInteger(len("table "))
 	refs := d.References(pos, true)
 	if len(refs) < 3 {
@@ -325,8 +326,8 @@ func TestCompletionSettingsPerHeader(t *testing.T) {
 	if got := at("type Slug string ["); len(got) != 0 {
 		t.Errorf("a Type takes no settings (§types), completion offers %v", got)
 	}
-	if got := strings.Join(at("table t2 ["), " "); got != "note:  model: " {
-		t.Errorf("table settings are note and model (§table), completion offers %q", got)
+	if got := strings.Join(at("table t2 ["), " "); got != "model: " {
+		t.Errorf("model is the one table setting (§table), completion offers %q", got)
 	}
 	if got := strings.Join(at("select s for users ["), " "); got != "order: ( group: ( limit: " {
 		t.Errorf("a select takes order:, group: and limit: (§selects-over-groups, §settings-whitelists), completion offers %q", got)
@@ -616,5 +617,21 @@ func TestSettingsCompleteTheWhitelist(t *testing.T) {
 		if !slices.Equal(got, names) {
 			t.Errorf("%s settings complete %v; the spec lists %v", ctx, got, names)
 		}
+	}
+}
+
+func TestHoverDocComment(t *testing.T) {
+	src := "table posts {\n  id int [pk]\n  // the column\n  author_id int\n\n  indexes {\n    // Lists a writer's posts.\n    (author_id, id)\n  }\n}\n"
+	d := doc(t, src)
+	h := d.Hover(posOf(t, src, "(author_id, id)", 0))
+	if h == nil || h.Contents.(protocol.MarkupContent).Value != "Lists a writer's posts." {
+		t.Errorf("hover on a documented index = %+v, want its doc text (§doc-comments)", h)
+	}
+	h = d.Hover(posOf(t, src, "author_id int", 0))
+	if h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, "the column") {
+		t.Errorf("hover on a documented column = %+v, want its doc text after the column (§doc-comments)", h)
+	}
+	if h := d.Hover(posOf(t, src, "id int", 0)); h != nil && strings.Contains(h.Contents.(protocol.MarkupContent).Value, "---") {
+		t.Errorf("hover on an undocumented column carries a doc: %+v", h)
 	}
 }

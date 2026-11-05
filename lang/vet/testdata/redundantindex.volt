@@ -1,4 +1,5 @@
 // analyzers: redundantindex
+
 table t {
   id int [pk, unique] //WANT redundantindex
   email string [unique]

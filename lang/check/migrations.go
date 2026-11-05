@@ -40,7 +40,6 @@ var (
 		"tag":      "tag: describes the Go struct field, not the database, and is not a migration setting (§migrations)",
 		"required": "required describes Go-side validation, not the database, and is not a migration setting (§migrations)",
 		"model":    "model: names the Go model, not the database, and is not a migration setting (§migrations)",
-		"note":     "note: documents the schema, which generated code carries, and is not a migration setting (§migrations)",
 	}
 	migrationColumnSettings = settingSpec{
 		kinds:     migrationColumnKinds,

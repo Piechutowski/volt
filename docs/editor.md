@@ -38,7 +38,7 @@ checklist for verifying all of it against [`spec.md`](spec.md).
 1. **The grammar** (`grammar/`) — a *syntactic*, error-tolerant,
    incremental parser compiled to WebAssembly and run inside Zed on
    every keystroke. It powers everything visual: colors, outline,
-   indent, bracket matching, Markdown-in-notes.
+   indent, bracket matching.
 2. **The extension** (`zed-extension/`) — a thin package: declarative
    files (manifest, language config, queries) plus ~70 lines of Rust
    whose only job is telling Zed how to launch `volt lsp`.
@@ -110,8 +110,8 @@ load-bearing patterns, each citing the spec section it implements:
   single quote opens nothing.
 - **Split string tokens for injection** (§string-literals). Delimiters and
   content are separate tokens, so `(string_content)` is a node with a
-  range — exactly what `injections.scm` needs to hand note bodies to
-  Markdown and backtick expressions, an `exec`'s SQL among them, to SQL.
+  range; `injections.scm` hands backtick expressions, an `exec`'s SQL
+  among them, to SQL.
 - **One endpoint shape** (§relationships-ref). A ref endpoint is
   `table.column` or `table.(columns)`, in a `ref:` and in a column's
   `ref:` alike, so the grammar declares no conflicts: `setting` gives
@@ -269,6 +269,11 @@ layer:
   referential actions are the parser's own list, and a test holds the
   element words, the verbs and the setting names to the parser's
   lists. Resource actions and order directions are not completed.
+- Every hover of a declaration ends with its doc text (§doc-comments):
+  a table, a column, a partial, a declared type, a group, a pred, a
+  select, a pipeline and a migration. On the first line of any other
+  documented construct, a route, an index or a load among them, where
+  no other hover answers, the hover is its doc text alone.
 - A group hovers as its declaration as written, set terms and all,
   and the tables it resolves to (§groups).
 - A migration's name hovers as its position among the package's
@@ -361,7 +366,7 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
 - **Grammar: a multi-line string that opens with `//`.** When the
   first characters after an opening `"""`, spaces allowed, are `//`,
   the grammar lexes the rest of that line as a comment and draws an
-  ERROR node (`[note: """// x"""]`); the front end reads the string.
+  ERROR node (`[default: """// x"""]`); the front end reads the string.
   A `//` later in the body, and a single-line string or an expression
   literal that begins with `//`, parse in both.
 - **Grammar: continuations outside a settings list, and a break

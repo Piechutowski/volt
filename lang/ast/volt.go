@@ -9,6 +9,7 @@ import (
 
 // PackageClause is a "package name" clause (spec §projects-and-packages).
 type PackageClause struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	PackagePos token.Position
 	Name       *Ident
 }
@@ -19,6 +20,7 @@ func (d *PackageClause) declNode()           {}
 
 // ImportDecl is an "import ( ... )" block (spec §imports).
 type ImportDecl struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	ImportPos  token.Position
 	Specs      []*ImportSpec
 	Incomplete bool // true if a syntax error dropped an entry from Specs
@@ -32,8 +34,9 @@ func (d *ImportDecl) declNode()           {}
 // ImportSpec is one import line: [alias] path, the path written as
 // slash-separated identifiers rooted at the project root (spec §imports).
 type ImportSpec struct {
-	Alias *Ident   // nil when the default qualifier applies
-	Path  []*Ident // 1+ segments
+	Doc   *CommentGroup // nil when the construct has no doc comment (§doc-comments)
+	Alias *Ident        // nil when the default qualifier applies
+	Path  []*Ident      // 1+ segments
 }
 
 func (x *ImportSpec) Pos() token.Position {
@@ -91,6 +94,7 @@ func (x *GoRef) String() string {
 
 // Pipeline is a named middleware list (spec §pipelines).
 type Pipeline struct {
+	Doc         *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	PipelinePos token.Position
 	Name        *Ident
 	Plugs       []*Plug
@@ -103,6 +107,7 @@ func (d *Pipeline) declNode()           {}
 
 // Plug is one "use ref" line inside a Pipeline body.
 type Plug struct {
+	Doc    *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	UsePos token.Position
 	Ref    *GoRef
 }
@@ -113,6 +118,7 @@ func (x *Plug) End() token.Position { return x.Ref.End() }
 // Scope is a routing scope (spec §scopes-and-routes): a path prefix, optional settings,
 // and a body of routes, resources and nested scopes.
 type Scope struct {
+	Doc      *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	ScopePos token.Position
 	Path     *RoutePath
 	Settings *SettingList
@@ -135,7 +141,8 @@ type ScopeItem interface {
 // Route is one verb route line (spec §routes), with its load block when
 // it has one (§route-loads).
 type Route struct {
-	VerbTok  token.Token // IDENT: get, post, patch, delete, options, head, any; put, read only for the checker to name the verb to write (§routes)
+	Doc      *CommentGroup // nil when the construct has no doc comment (§doc-comments)
+	VerbTok  token.Token   // IDENT: get, post, patch, delete, options, head, any; put, read only for the checker to name the verb to write (§routes)
 	Path     *RoutePath
 	Handler  *GoRef // Controller.Action — exactly two parts
 	Settings *SettingList
@@ -157,6 +164,7 @@ func (x *Route) End() token.Position {
 // Load is one line of a route's load block (spec §route-loads): the name
 // the handler receives the value under and the query call that loads it.
 type Load struct {
+	Doc  *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	Name *Ident
 	Call *QueryCall
 }
@@ -183,6 +191,7 @@ func (x *Route) Verb() string { return lower(x.VerbTok.Val) }
 
 // Resources is a resources declaration (spec §resources).
 type Resources struct {
+	Doc          *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	ResourcesPos token.Position
 	// Pkg is the package qualifier when the declaration names a model
 	// of an imported package (`resources db.Post`); nil otherwise.
@@ -211,6 +220,7 @@ func (x *Resources) scopeItemNode() {}
 // Dataset expands a group select of an imported data package into one
 // query route per member (spec, Datasets): `dataset db.browse [strip: "da_"]`.
 type Dataset struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	DatasetPos token.Position
 	Pkg        *Ident // the package qualifier; required
 	Name       *Ident // the select's declared name
@@ -237,6 +247,7 @@ func (x *Dataset) scopeItemNode() {}
 // ScopeLoad is "load name Func" in a Scope body (§scope-loads): a value
 // every route beneath receives, from a function of the package.
 type ScopeLoad struct {
+	Doc     *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	LoadPos token.Position
 	Name    *Ident
 	Ref     *GoRef
@@ -280,7 +291,7 @@ const (
 )
 
 // Segment is one path segment. The wildcard is spelled ":name...":
-// after a slash, "/*" opens a block comment (§comments).
+// "/*" is no comment and an error (§comments).
 type Segment struct {
 	Kind    SegKind
 	MarkPos token.Position // position of ':'; equals Name.Pos() for literals
@@ -355,6 +366,7 @@ func lower(s string) string {
 // Group is a named set of tables for generation (spec §groups): either a
 // block of members or a `+`/`\` expression over tables and groups.
 type Group struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	GroupPos   token.Position
 	Name       *Ident
 	Terms      []*GroupTerm // block form: all Add, one name each; expr form: signed
@@ -369,8 +381,9 @@ func (d *Group) declNode()           {}
 // GroupTerm is one term of a group expression: one name, or a
 // parenthesized set of names, added or removed (spec §groups).
 type GroupTerm struct {
-	Neg    bool     // true for '\' terms
-	Names  []*Ident // one name, or the members of a parenthesized set
+	Doc    *CommentGroup // nil when the construct has no doc comment (§doc-comments)
+	Neg    bool          // true for '\' terms
+	Names  []*Ident      // one name, or the members of a parenthesized set
 	Lparen token.Position
 	Rparen token.Position // End of the closing paren; zero when unparenthesized
 }
@@ -388,6 +401,7 @@ func (t *GroupTerm) End() token.Position {
 
 // Pred is a named predicate declaration (spec §predicates).
 type Pred struct {
+	Doc     *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	PredPos token.Position
 	Name    *Ident
 	X       PredExpr
@@ -578,6 +592,7 @@ func (x *Lit) String() string {
 // Select declares a query generated for every member of its target
 // (spec §selects-over-groups).
 type Select struct {
+	Doc       *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	SelectPos token.Position
 	Name      *Ident
 	Lparen    token.Position // projection parens (§selects-over-groups); zero when absent

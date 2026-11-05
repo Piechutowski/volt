@@ -1,5 +1,6 @@
 // The migration CLI fixture: a blog whose two migrations fold to this
 // schema. The tests copy the directory before writing into it.
+
 package blog
 
 table posts {

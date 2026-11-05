@@ -1,6 +1,7 @@
 // The migrations fixture: every operation of spec §migrations in both
 // body forms, with every migration setting, folding to the schema beside
 // it. The Lower golden is blog.sql.golden.
+
 package blog
 
 table posts {

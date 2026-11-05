@@ -4,7 +4,7 @@ package db
 
 table users {
   id   int    [pk]
-  name string [note: """one line \
+  name string [default: """one line \
   continued"""]
 }
 

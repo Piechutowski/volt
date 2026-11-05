@@ -22,8 +22,8 @@ func allocated(fn func()) uint64 {
 var keystrokeBudget = struct {
 	document, analysis, publish uint64
 }{
-	document: 1077864,
-	analysis: 5317264,
+	document: 1168712,
+	analysis: 4947016,
 	publish:  49216,
 }
 
@@ -38,8 +38,8 @@ func TestKeystrokeAllocationBudget(t *testing.T) {
 	}
 	path := filepath.Join(root, "schema.volt")
 	text := corpus.Files(spec)["schema.volt"]
-	anchor := "c002 string\n"
-	if !strings.Contains(text, anchor) {
+	at := strings.LastIndex(text[:max(strings.Index(text, "c002 string\n"), 0)], "// metrics table")
+	if at < 0 {
 		t.Fatal("anchor")
 	}
 	s := &lang.Session{}
@@ -49,7 +49,7 @@ func TestKeystrokeAllocationBudget(t *testing.T) {
 	if projectAnalyze(root, map[string]string{path: text}, s, &memo) == nil {
 		t.Fatal("the project does not load")
 	}
-	edited := strings.Replace(text, anchor, "c002 string [note: \"edited\"]\n", 1)
+	edited := text[:at] + "// edited " + text[at+3:]
 	overlay := map[string]string{path: edited}
 	document := allocated(func() { d.UpdateLocal(edited) })
 	var res *projectResult

@@ -96,37 +96,29 @@ table t {
         (column_ref)))))
 
 ==================
-notes: the note setting of a table and a column
+doc comments: the comment group above a table and a column
 ==================
 
-table t [note: "table note"] {
-  id int [note: "column note"]
+// the table
+table t {
+  // the column
+  id int
 }
 
 ---
 
 (source_file
+  (comment)
   (table_definition
     (table_name
       (identifier))
-    (settings_list
-      (setting
-        (setting_name
-          (identifier))
-        (string
-          (string_content))))
+    (comment)
     (column_definition
       (column_name
         (identifier))
       (column_type
         (type_name
-          (identifier)))
-      (settings_list
-        (setting
-          (setting_name
-            (identifier))
-          (string
-            (string_content)))))))
+          (identifier))))))
 
 ==================
 records: top-level with expressions and null

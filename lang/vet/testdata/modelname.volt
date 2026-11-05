@@ -1,4 +1,5 @@
 // analyzers: modelname
+
 table users {
   id int [pk]
 }

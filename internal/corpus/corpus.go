@@ -100,7 +100,7 @@ func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 	b.WriteString("table_partial stamped {\n\tcreated_at time.Time [default: `CURRENT_TIMESTAMP`]\n}\n\n")
 	b.WriteString("pred fresh { c001 >= :since }\n\n")
 	for i := 1; i <= spec.Tables; i++ {
-		fmt.Fprintf(b, "table %s [note: \"metrics table %d of %s\"] {\n", Table(i), i, pkg)
+		fmt.Fprintf(b, "// metrics table %d of %s\ntable %s {\n", i, pkg, Table(i))
 		if i%2 == 0 {
 			b.WriteString("\tid int [pk, autoincrement]\n\t~stamped\n")
 		} else {

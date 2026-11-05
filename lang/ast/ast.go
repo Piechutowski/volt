@@ -2,12 +2,55 @@
 // mirroring the role of go/ast. Nodes carry no semantic judgment.
 package ast
 
-import "github.com/Piechutowski/volt/lang/token"
+import (
+	"strings"
+
+	"github.com/Piechutowski/volt/lang/token"
+)
 
 // Node is implemented by all AST nodes.
 type Node interface {
 	Pos() token.Position // position of the first token of the node
 	End() token.Position // position immediately after the node
+}
+
+// CommentGroup is a doc comment: the comments of consecutive lines
+// directly above the construct it documents (spec §doc-comments).
+type CommentGroup struct {
+	List []token.Token // each of Kind COMMENT, its Val the text after "//"
+}
+
+func (g *CommentGroup) Pos() token.Position { return g.List[0].Pos }
+func (g *CommentGroup) End() token.Position { return g.List[len(g.List)-1].End() }
+
+// Text is the doc text (spec §doc-comments): each line without its
+// "//" and one space after it, trailing spaces and tabs trimmed, the
+// empty lines at both ends removed and a run of them kept as one. A
+// nil group's text is "".
+func (g *CommentGroup) Text() string {
+	if g == nil {
+		return ""
+	}
+	lines := make([]string, 0, len(g.List))
+	for _, c := range g.List {
+		line := strings.TrimPrefix(c.Val, " ")
+		lines = append(lines, strings.TrimRight(line, " \t"))
+	}
+	var b strings.Builder
+	blank := false
+	for _, line := range lines {
+		if line == "" {
+			blank = b.Len() > 0
+			continue
+		}
+		if blank {
+			b.WriteByte('\n')
+			blank = false
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	return strings.TrimSuffix(b.String(), "\n")
 }
 
 // Ident is an identifier (spec §identifiers).
@@ -110,7 +153,7 @@ func (x *SettingList) Get(name string) *Setting {
 	return nil
 }
 
-// Setting is one entry: a flag (pk) or a key-value pair (note: "...").
+// Setting is one entry: a flag (pk) or a key-value pair (model: "...").
 // Name is the lowercased form of its one identifier ("no_transaction",
 // §settings-lists).
 type Setting struct {
@@ -149,6 +192,7 @@ type Decl interface {
 
 // Table is a Table element (spec §table).
 type Table struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	TablePos   token.Position
 	Name       *Ident
 	Settings   *SettingList
@@ -163,6 +207,7 @@ func (d *Table) declNode()           {}
 
 // TablePartial is a TablePartial element (spec §tablepartial).
 type TablePartial struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	PartialPos token.Position
 	Name       *Ident
 	Body       []TableItem
@@ -184,6 +229,7 @@ type TableItem interface {
 
 // Column is one column definition (spec §columns).
 type Column struct {
+	Doc      *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	Name     *Ident
 	Type     *TypeRef
 	Settings *SettingList
@@ -224,6 +270,7 @@ func (x *TypeRef) String() string {
 
 // IndexesBlock is one Indexes { ... } block (spec §indexes).
 type IndexesBlock struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	IndexesPos token.Position
 	Indexes    []*Index
 	Rbrace     token.Position
@@ -236,6 +283,7 @@ func (x *IndexesBlock) tableItemNode()      {}
 // Index is one index definition. Key atoms are *Ident (columns) or
 // *FuncExpr (expressions).
 type Index struct {
+	Doc       *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	Key       []Node
 	Composite bool // written with parentheses
 	Settings  *SettingList
@@ -251,6 +299,7 @@ func (x *Index) End() token.Position {
 
 // ValidatorsBlock is a Validators block (spec §validators).
 type ValidatorsBlock struct {
+	Doc           *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	ValidatorsPos token.Position
 	Validators    []*Validator
 	Rbrace        token.Position
@@ -263,6 +312,7 @@ func (x *ValidatorsBlock) tableItemNode()      {}
 // Validator is one validator line: a Go function of the package applied
 // to columns of the table (spec §validators).
 type Validator struct {
+	Doc    *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	Ref    *GoRef
 	Args   []*Ident
 	EndPos token.Position
@@ -273,6 +323,7 @@ func (x *Validator) End() token.Position { return x.EndPos }
 
 // PartialRef is a ~partial injection line (spec §tablepartial).
 type PartialRef struct {
+	Doc      *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	TildePos token.Position
 	Name     *Ident
 }
@@ -284,6 +335,7 @@ func (x *PartialRef) tableItemNode()      {}
 // Ref is a top-level relationship element, Ref: left > right, whose
 // left endpoint is the foreign key (spec §relationships-ref).
 type Ref struct {
+	Doc      *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	RefPos   token.Position
 	Left     *RefEndpoint
 	Right    *RefEndpoint
@@ -313,6 +365,7 @@ func (x *RefEndpoint) SetEnd(p token.Position) { x.endPos = p }
 // TypeDecl is a Type element: a Go type admitted as a column type, with
 // its storage type and import path (spec §types).
 type TypeDecl struct {
+	Doc     *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	TypePos token.Position
 	Name    *QualName
 	Storage *TypeRef
@@ -326,6 +379,7 @@ func (d *TypeDecl) declNode()           {}
 
 // Records is sample data, top-level or in-table (spec §records-sample-data).
 type Records struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	RecordsPos token.Position
 	Table      *Ident   // nil for in-table records
 	Columns    []*Ident // nil when the column list is implicit
@@ -342,6 +396,7 @@ func (d *Records) tableItemNode()      {}
 // RecordRow is one CSV-style row. Values are *BasicLit, *Ident (true/false/
 // null), *FuncExpr or *NegNumber.
 type RecordRow struct {
+	Doc    *CommentGroup // nil when the construct has no doc comment (§doc-comments)
 	Values []Node
 }
 

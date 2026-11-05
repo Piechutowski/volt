@@ -1,4 +1,5 @@
 // analyzers: missingpk
+
 table has_col_pk {
   id int [pk]
 }

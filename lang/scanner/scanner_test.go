@@ -281,7 +281,7 @@ func TestDoubleQuotesDelimitStrings(t *testing.T) {
 }
 
 func TestElementStarts(t *testing.T) {
-	src := "table a {\n  b int\n}\nx.y\n  indented\n\"quoted\" z\n2fa\nscope e {\n  v\n}\n/* c */ w\n"
+	src := "table a {\n  b int\n}\nx.y\n  indented\n\"quoted\" z\n2fa\nscope e {\n  v\n}\n w // c\n"
 	toks, errs := Scan("t", src)
 	if len(errs) != 0 {
 		t.Fatalf("errors: %v", errs)
@@ -296,7 +296,7 @@ func TestElementStarts(t *testing.T) {
 		t.Errorf("element starts %q, want %q", starts, want)
 	}
 
-	chunk, _, end, bound := ScanChunk(token.NewFile("t", src), nil)
+	chunk, _, _, end, bound := ScanChunk(token.NewFile("t", src), nil)
 	if want := strings.Index(src, "x.y"); end != want || !bound {
 		t.Errorf("chunk ends at %d bound=%v, want %d and true", end, bound, want)
 	}
@@ -308,20 +308,24 @@ func TestElementStarts(t *testing.T) {
 		t.Errorf("chunk holds %d tokens, want 6", got)
 	}
 	open := "table a {\n  b int\n"
-	if _, _, end, bound := ScanChunk(token.NewFile("t", open), nil); end != len(open) || bound {
+	if _, _, _, end, bound := ScanChunk(token.NewFile("t", open), nil); end != len(open) || bound {
 		t.Errorf("open chunk ends at %d bound=%v, want %d and false", end, bound, len(open))
 	}
 
 	for text, want := range map[string]bool{
-		"x.y\n":            true,
-		"2fa x\n":          true,
-		"scope e {":        true,
-		"  indented\n":     false,
-		"\"quoted\" z\n":   false,
-		"// c\ntable a {}": false,
-		"123\n":            false,
-		"{\n":              false,
-		"":                 false,
+		"x.y\n":              true,
+		"2fa x\n":            true,
+		"scope e {":          true,
+		"  indented\n":       false,
+		"\"quoted\" z\n":     false,
+		"// c\ntable a {}":   true,
+		"  // c\ntable a {}": true,
+		"// c\n\ntable a {}": false,
+		"// c\n  x\n":        false,
+		"x // c\n":           true,
+		"123\n":              false,
+		"{\n":                false,
+		"":                   false,
 	} {
 		if got := StartsDecl(text); got != want {
 			t.Errorf("StartsDecl(%q) = %v, want %v", text, got, want)
@@ -355,5 +359,57 @@ func TestLookaheadStopsAtLineBreak(t *testing.T) {
 	}
 	if got := s.peekAt(3); got != eof {
 		t.Errorf("peekAt(3) = %q, want eof past the next line break", got)
+	}
+}
+
+func TestDocComments(t *testing.T) {
+	src := "// license\n\n// the package\npackage db\n\n// free\n\n// first line\n//   second line\ntable a {\n  b int // trailing\n  // c's doc\n  c int\n}\n// d's doc\n  // indented\nd\n"
+	toks, docs, errs, _, _ := ScanChunk(token.NewFile("t", src), nil)
+	if len(errs) != 0 {
+		t.Fatalf("errors: %v", errs)
+	}
+	got := map[string][]string{}
+	for _, d := range docs {
+		for _, c := range d.Comments {
+			got[toks[d.Tok].Val] = append(got[toks[d.Tok].Val], c.Val)
+		}
+	}
+	if len(got) != 0 {
+		t.Errorf("the license chunk documents %q, want nothing", got)
+	}
+
+	var all []string
+	for f := token.NewFile("t", src); ; {
+		toks, docs, _, end, bound := ScanChunk(f, nil)
+		for _, d := range docs {
+			var lines []string
+			for _, c := range d.Comments {
+				lines = append(lines, c.Val)
+			}
+			all = append(all, toks[d.Tok].Val+"="+strings.Join(lines, "|"))
+		}
+		if !bound {
+			break
+		}
+		f = token.NewFile("t", f.Src[end:])
+	}
+	if want := []string{"package= the package", "table= first line|   second line", "c= c's doc", "d= d's doc| indented"}; strings.Join(all, "\n") != strings.Join(want, "\n") {
+		t.Errorf("docs across chunks:\n%s\nwant:\n%s", strings.Join(all, "\n"), strings.Join(want, "\n"))
+	}
+
+	f := token.NewFile("t", src)
+	_, _, _, end, _ := ScanChunk(f, nil)
+	if want := strings.Index(src, "// the package"); end != want {
+		t.Errorf("first chunk ends at %d, want %d, where the package clause's doc comment begins", end, want)
+	}
+}
+
+func TestBlockCommentIsAnError(t *testing.T) {
+	toks, errs := Scan("t", "/* not a comment */ table\nx\n")
+	if len(errs) != 1 || !strings.Contains(errs[0].Msg, "Volt has no block comment") {
+		t.Fatalf("errors = %v, want the one block comment error", errs)
+	}
+	if len(toks) != 2 || toks[0].Val != "x" {
+		t.Errorf("tokens = %v, want the rest of the line skipped", toks)
 	}
 }

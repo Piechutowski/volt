@@ -3,6 +3,7 @@
 // beside its ref and avatars.user_id has a unique index; the ref adds
 // nothing, and the referenced table carries nothing of it
 // (§mapping-to-sqlite-ddl).
+
 table users {
   id    int    [pk]
   email string [unique]

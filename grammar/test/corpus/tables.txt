@@ -23,7 +23,7 @@ table users {
 table with settings
 ==================
 
-table users [note: "main", model: "Member"] {
+table users [model: "Member"] {
   id int
 }
 
@@ -34,11 +34,6 @@ table users [note: "main", model: "Member"] {
     (table_name
       (identifier))
     (settings_list
-      (setting
-        (setting_name
-          (identifier))
-        (string
-          (string_content)))
       (setting
         (setting_name
           (identifier))
@@ -102,7 +97,7 @@ column settings
 table t {
   a int [pk, unique, autoincrement]
   b int [null]
-  c string [default: "x", note: "col"]
+  c string [default: "x", tag: "col"]
   d time.Time [default: `now()`]
   e float64 [default: -1.5]
   f bool [default: false]
@@ -260,7 +255,7 @@ settings lists spanning lines
 ==================
 
 table t [
-  note: "x"
+  model: "x"
 ] {
   id int [pk,
     autoincrement]
@@ -309,7 +304,7 @@ table t [
 a line break after a setting's colon
 ==================
 
-table posts [note:
+table posts [model:
   """
   A blog post.
   """] {
@@ -404,8 +399,6 @@ table t {
 
 ---
 
-
-
 ==================
 a name beginning with a digit is an error
 :error
@@ -468,8 +461,6 @@ table t { id int name string }
 
 ---
 
-
-
 ==================
 a table alias is an error
 :error
@@ -481,8 +472,6 @@ table users as U {
 
 ---
 
-
-
 ==================
 a schema-qualified table name is an error
 :error
@@ -493,8 +482,6 @@ table core.users {
 }
 
 ---
-
-
 
 ==================
 an inline ref with an operator is an error
@@ -517,3 +504,5 @@ table t {
 }
 
 ---
+
+

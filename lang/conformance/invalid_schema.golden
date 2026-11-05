@@ -1,13 +1,13 @@
-## i01_unterminated_block_comment.volt
-i01_unterminated_block_comment.volt:3:1: error: syntax: unterminated block comment (§comments)
+## i01_block_comment.volt
+i01_block_comment.volt:4:1: error: syntax: a comment is written //, to the end of its line: Volt has no block comment (§comments)
 
 ## i02_unterminated_string.volt
-i02_unterminated_string.volt:2:25: error: syntax: newline in a string: a string ends on its line, and a multi-line string is written """...""" (§string-literals)
+i02_unterminated_string.volt:2:31: error: syntax: newline in a string: a string ends on its line, and a multi-line string is written """...""" (§string-literals)
 i02_unterminated_string.volt:3:1: error: syntax: invalid setting value (§settings-lists): found end of file
 i02_unterminated_string.volt:3:1: error: syntax: expected '}' in table (§table), found end of file
 
 ## i03_newline_in_string.volt
-i03_newline_in_string.volt:3:17: error: syntax: newline in a string: a string ends on its line, and a multi-line string is written """...""" (§string-literals)
+i03_newline_in_string.volt:3:23: error: syntax: newline in a string: a string ends on its line, and a multi-line string is written """...""" (§string-literals)
 i03_newline_in_string.volt:4:6: error: syntax: newline in a string: a string ends on its line, and a multi-line string is written """...""" (§string-literals)
 i03_newline_in_string.volt:5:1: error: syntax: expected ']' in settings list (§settings-lists), found '}' "}"
 
@@ -189,12 +189,8 @@ i253_diagram_elements.volt:12:1: error: syntax: unknown element type "Note" (§p
 i254_color_literal.volt:3:27: error: syntax: unexpected character "#" (§lexical-structure)
 i254_color_literal.volt:3:27: error: syntax: invalid setting value (§settings-lists): found illegal token "#"
 
-## i255_body_note.volt
-i255_body_note.volt:5:7: error: syntax: expected identifier in column type (§columns), found ':' ":"
-
-## i256_index_type_note.volt
-i256_index_type_note.volt:7:20: error: spec/indexes: unknown setting "type" (§indexes)
-i256_index_type_note.volt:8:20: error: spec/indexes: unknown setting "note" (§indexes)
+## i256_index_type.volt
+i256_index_type.volt:7:20: error: spec/indexes: unknown setting "type" (§indexes)
 
 ## i258_semicolon_not_a_token.volt
 i258_semicolon_not_a_token.volt:4:14: error: syntax: unexpected character ";" (§lexical-structure)
@@ -222,11 +218,11 @@ i269_table_unknown_setting.volt:3:14: error: spec/table: unknown setting "header
 ## i26_toplevel_records_no_columns.volt
 i26_toplevel_records_no_columns.volt:3:1: error: spec/records-sample-data: top-level records must list columns
 
-## i270_ref_note.volt
-i270_ref_note.volt:10:32: error: spec/relationships-ref: unknown setting "note" (§relationships-ref)
+## i270_ref_setting.volt
+i270_ref_setting.volt:10:32: error: spec/relationships-ref: unknown setting "name" (§relationships-ref)
 
-## i271_type_note.volt
-i271_type_note.volt:2:18: error: syntax: expected end of line after type declaration (§types), found '[' "["
+## i271_type_settings.volt
+i271_type_settings.volt:2:18: error: syntax: expected end of line after type declaration (§types), found '[' "["
 
 ## i273_inline_ref_action.volt
 i273_inline_ref_action.volt:8:31: error: spec/columns: unknown setting "delete" (§columns)
@@ -260,7 +256,7 @@ i285_case_block_word.volt:10:3: error: syntax: write records, not Records: keywo
 ## i286_case_setting_name.volt
 i286_case_setting_name.volt:4:16: error: syntax: write pk, not PK: keywords are case-sensitive (§keywords)
 i286_case_setting_name.volt:5:16: error: syntax: write null, not Null: keywords are case-sensitive (§keywords)
-i286_case_setting_name.volt:5:22: error: syntax: write note, not Note: keywords are case-sensitive (§keywords)
+i286_case_setting_name.volt:5:22: error: syntax: write unique, not Unique: keywords are case-sensitive (§keywords)
 
 ## i287_case_ref_action.volt
 i287_case_ref_action.volt:5:40: error: syntax: write cascade, not CASCADE: keywords are case-sensitive (§keywords)
@@ -281,17 +277,17 @@ i294_identifier_combining_mark.volt:5:7: error: syntax: U+0301, a combining mark
 i295_quoted_name.volt:3:7: error: syntax: expected identifier in table name (§table), found string "\"user accounts\""
 
 ## i296_single_quoted_string.volt
-i296_single_quoted_string.volt:3:20: error: syntax: a multi-line string is written """...""", not '''...''' (§multi-line-string-literals)
-i296_single_quoted_string.volt:7:23: error: syntax: a string is written in double quotes, "...", not single quotes (§string-literals)
+i296_single_quoted_string.volt:3:21: error: syntax: a multi-line string is written """...""", not '''...''' (§multi-line-string-literals)
+i296_single_quoted_string.volt:7:26: error: syntax: a string is written in double quotes, "...", not single quotes (§string-literals)
 
 ## i297_unknown_escape.volt
-i297_unknown_escape.volt:5:28: error: syntax: unknown escape sequence \q: a string takes \\, \", \n and \t only (§escape-sequences)
-i297_unknown_escape.volt:6:23: error: syntax: unknown escape sequence \u: a string takes \\, \", \n and \t only (§escape-sequences)
-i297_unknown_escape.volt:7:23: error: syntax: unknown escape sequence \': a string takes \\, \", \n and \t only (§escape-sequences)
-i297_unknown_escape.volt:8:24: error: syntax: unknown escape sequence \r: a string takes \\, \", \n and \t only (§escape-sequences)
+i297_unknown_escape.volt:5:31: error: syntax: unknown escape sequence \q: a string takes \\, \", \n and \t only (§escape-sequences)
+i297_unknown_escape.volt:6:26: error: syntax: unknown escape sequence \u: a string takes \\, \", \n and \t only (§escape-sequences)
+i297_unknown_escape.volt:7:26: error: syntax: unknown escape sequence \': a string takes \\, \", \n and \t only (§escape-sequences)
+i297_unknown_escape.volt:8:27: error: syntax: unknown escape sequence \r: a string takes \\, \", \n and \t only (§escape-sequences)
 
 ## i306_multiline_ends_quote.volt
-i306_multiline_ends_quote.volt:3:30: error: syntax: a multi-line string cannot end with a double quote: write it \" before the closing """ (§multi-line-string-literals)
+i306_multiline_ends_quote.volt:3:31: error: syntax: a multi-line string cannot end with a double quote: write it \" before the closing """ (§multi-line-string-literals)
 
 ## i307_index_pk.volt
 i307_index_pk.volt:8:21: error: spec/indexes: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (§indexes)
@@ -388,8 +384,8 @@ i367_type_from_next_line.volt:11:9: error: spec/columns: column "price": unknown
 i367_type_from_next_line.volt:12:9: error: spec/columns: column "slug": unknown type "Slug"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 
 ## i368_setting_list_shape.volt
-i368_setting_list_shape.volt:4:15: error: syntax: the list of note: is neither names separated by commas nor names each followed by asc or desc (§settings-lists)
-i368_setting_list_shape.volt:4:21: error: spec/columns: "note" must be a string (§columns)
+i368_setting_list_shape.volt:4:15: error: syntax: the list of tag: is neither names separated by commas nor names each followed by asc or desc (§settings-lists)
+i368_setting_list_shape.volt:4:20: error: spec/columns: "tag" must be a string (§columns)
 
 ## i36_bad_default.volt
 i36_bad_default.volt:4:20: error: spec/default-values: default value must be a number, string, boolean or expression literal (§default-values)

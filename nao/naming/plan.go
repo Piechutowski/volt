@@ -282,7 +282,7 @@ func fieldSigOf(fp *Field) FieldSig {
 		Tag: fp.Tag, Nullable: fp.Nullable,
 	}
 	if fp.Col != nil {
-		sig.Doc = SettingNote(fp.Col.Settings)
+		sig.Doc = fp.Col.Doc.Text()
 	}
 	return sig
 }

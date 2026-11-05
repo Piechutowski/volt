@@ -1,3 +1,5 @@
+// Package app is the itest fixture: the generated router and, beside it,
+// the hand-written middleware and error handler its routes name.
 package app
 
 import (
@@ -73,6 +75,7 @@ scope / [pipe: api, error_handler: Errors] {
 	}
 
 	// A dataset (§datasets): one query route per member of the group select.
+
 	scope /ms {
 		dataset db.browse [strip: "ms_"]
 	}
@@ -82,6 +85,7 @@ scope / [pipe: api, error_handler: Errors] {
 
 	// Default handlers (§default-handlers): every action is a query route over
 	// the table's generated CRUD; no controller to write.
+
 	scope /ref [name: ref] {
 		resources db.users [default]
 		resources db.tags  [default]

@@ -97,6 +97,22 @@ func (p *Package) Schema() *check.Info { return p.schema }
 // generated Go and SQL name, decided once.
 func (p *Package) Plan() *naming.Plan { return p.plan }
 
+// Doc is the package's doc text (spec §doc-comments): the doc comments
+// of its package clauses in file name order, each a paragraph.
+func (p *Package) Doc() string {
+	var docs []string
+	for _, f := range p.Files {
+		for _, d := range f.Decls {
+			if pc, ok := d.(*ast.PackageClause); ok {
+				if text := pc.Doc.Text(); text != "" {
+					docs = append(docs, text)
+				}
+			}
+		}
+	}
+	return strings.Join(docs, "\n\n")
+}
+
 // HasSchema reports whether the package declares data elements.
 func (p *Package) HasSchema() bool {
 	return p.schema != nil && len(p.schema.Tables) > 0

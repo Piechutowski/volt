@@ -2461,6 +2461,7 @@ func (p *Package) SelectFns() []naming.SelectFn {
 		}
 		for _, m := range si.Members {
 			fn := naming.SelectFn{
+				Doc:          si.Decl.Doc.Text(),
 				TableKey:     m.Key,
 				MethodSuffix: si.MethodSuffix,
 				Where:        si.Where,

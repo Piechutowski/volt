@@ -18,6 +18,9 @@ func fileShape(f *ast.File, diags []diag.Diagnostic) string {
 	for _, d := range f.Decls {
 		fmt.Fprintf(&b, "%T %s+%d-%s+%d\n", d, d.Pos(), d.Pos().Offset(), d.End(), d.End().Offset())
 		ast.Inspect(d, func(n ast.Node) bool {
+			if doc := ast.DocOf(n); doc != nil {
+				fmt.Fprintf(&b, "  doc %T %s+%d %q\n", n, doc.Pos(), doc.Pos().Offset(), doc.Text())
+			}
 			if id, ok := n.(*ast.Ident); ok {
 				fmt.Fprintf(&b, "  %s@%s+%d\n", id.Name(), id.Pos(), id.Pos().Offset())
 			}
@@ -58,6 +61,9 @@ func TestParseFileReuseIsTheParse(t *testing.T) {
 		"bare\n",
 		"ref: a.b >\n",
 		"/* open\n",
+		"// doc\n",
+		"  // indented doc\n",
+		"// doc\n\n",
 		"\"\"\"\n",
 		"// note\n",
 	}
@@ -130,10 +136,13 @@ ref: tags.id > posts.id
 	}
 	step("first", base, 5, 0)
 	step("same", base, 0, 5)
-	step("edit tags", strings.Replace(base, "name string", "name string    [note: \"edited\"]", 1), 1, 4)
+	step("edit tags", strings.Replace(base, "name string", "name string    [unique, index]", 1), 1, 4)
 	step("insert above", strings.Replace(base, "table posts", "// a comment\n\ntable posts", 1), 2, 3)
 	step("broken posts", strings.Replace(base, "title  string", "title  string [", 1), 2, 3)
 	step("fixed", base, 1, 4)
+	step("document posts", strings.Replace(base, "table posts", "// A blog post.\ntable posts", 1), 1, 4)
+	step("edit the doc", strings.Replace(base, "table posts", "// A post.\ntable posts", 1), 1, 4)
+	step("undocument", base, 1, 4)
 	step("append", base+"\ntable extra {\n  id int [pk]\n}\n", 2, 4)
 	step("whole rewrite", strings.ReplaceAll(base, "  ", "\t"), 3, 2)
 }

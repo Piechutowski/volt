@@ -1,6 +1,7 @@
 // The fixture's migrations: they fold to schema.volt (spec §the-fold),
 // which 'volt gen' verifies before it writes, and volt_migrations.go
 // carries them for the tests that build a database through Migrate.
+
 package itest
 
 migration 0001__users_and_orders {
@@ -82,6 +83,7 @@ migration 0005__daily_hits_and_invites {
 // An index and a unique column added to a table that has rows, with no
 // rebuild: each add is its ADD COLUMN and its CREATE INDEX (spec
 // §migrations).
+
 migration 0006__daily_hits_label_and_token {
   alter table daily_hits {
     add label string [index, default: ""]
