@@ -20,23 +20,28 @@ func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 	per := make([][]diag.Diagnostic, len(paths))
 	var keys map[string]pkgKey
 	var memos map[string]*declMemo
+	var funcs *goFuncsCache
 	if s != nil {
-		keys = s.packageKeys(pr, paths, s.goFuncsFor(pr, paths))
+		funcs = s.goFuncsFor(pr, paths)
+		keys = s.packageKeys(pr, paths, funcs)
 		memos = s.declMemos(paths)
 	}
 	fresh := make([]bool, len(paths))
 	par.For(len(paths), func(i int) {
 		pkg := pr.Packages[paths[i]]
-		var memo *vet.Memo
+		var memo *declMemo
+		var srcs []GoSource
 		if s != nil {
 			if ds, ok := s.vetRestore(paths[i], keys[paths[i]]); ok {
 				per[i] = ds
 				return
 			}
-			memo = &memos[paths[i]].vet
+			memo, srcs = memos[paths[i]], funcs.srcs[pkg.Dir]
 			fresh[i] = true
+		} else {
+			srcs = GoSourcesRead(pr.src, pkg.Dir)
 		}
-		per[i] = vetPackage(pr, pkg, memo)
+		per[i] = vetPackage(pkg, srcs, memo)
 		if s != nil {
 			s.vetStore(paths[i], keys[paths[i]], per[i])
 		}
@@ -58,21 +63,26 @@ func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 	return out
 }
 
-func vetPackage(pr *Project, pkg *Package, memo *vet.Memo) []diag.Diagnostic {
+func vetPackage(pkg *Package, gosrcs []GoSource, memo *declMemo) []diag.Diagnostic {
+	var declVet *vet.Memo
+	var goVet *vet.GoMemo
+	if memo != nil {
+		declVet, goVet = &memo.vet, &memo.goVet
+	}
 	var out []diag.Diagnostic
 	if pkg.HasSchema() {
-		out = vet.RunMemo(pkg.merged, pkg.schema, pkg.plan, memo, vet.All()...)
+		out = vet.RunMemo(pkg.merged, pkg.schema, pkg.plan, declVet, vet.All()...)
 	}
 	var srcs []vet.GoSource
-	for _, s := range GoSourcesRead(pr.src, pkg.Dir) {
+	for _, s := range gosrcs {
 		if !s.Head {
 			srcs = append(srcs, vet.GoSource{Name: s.Name, Text: s.Text})
 		}
 	}
 	if pkg.HasRouting() {
-		out = append(out, vet.RunGo(pkg.Dir, srcs, bodiesOf(pkg))...)
+		out = append(out, vet.RunGoMemo(pkg.Dir, srcs, bodiesOf(pkg), goVet)...)
 	} else {
-		out = append(out, vet.RunGo(pkg.Dir, srcs, nil, vet.ByName("packagedoc"))...)
+		out = append(out, vet.RunGoMemo(pkg.Dir, srcs, nil, goVet, vet.ByName("packagedoc"))...)
 	}
 	return append(out, vetUnusedPipelines(pkg)...)
 }

@@ -222,8 +222,9 @@ type goScan struct {
 }
 
 type goFuncsCache struct {
-	mu sync.Mutex
-	by map[string]*goScan
+	mu   sync.Mutex
+	by   map[string]*goScan
+	srcs map[string][]GoSource
 }
 
 func goScanOf(funcs map[string]GoFunc, gotypes map[string]GoType, broken []string) *goScan {

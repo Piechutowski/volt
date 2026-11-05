@@ -9,6 +9,7 @@ import (
 	goparser "go/parser"
 	gotoken "go/token"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 
@@ -77,6 +78,31 @@ func (f *GoFile) Pos(n goast.Node) token.Position {
 // file that does not parse is skipped, the compiler reporting it. The
 // warnings come file by file, sorted by position.
 func RunGo(dir string, srcs []GoSource, bodies []Body, analyzers ...Analyzer) []diag.Diagnostic {
+	return RunGoMemo(dir, srcs, bodies, nil, analyzers...)
+}
+
+// GoMemo remembers the Go rules' warnings of one routes package across
+// its versions (spec §requests-and-responses): a directory, sources,
+// bodies and rules that are what they were warn what they warned. The
+// zero value is ready; a GoMemo belongs to one package and one
+// goroutine at a time.
+type GoMemo struct {
+	dir    string
+	srcs   []GoSource
+	bodies []Body
+	rules  []GoRule
+	diags  []diag.Diagnostic
+	held   bool
+	// Hits and Misses count whether the last RunGoMemo was answered
+	// from the memo or judged afresh.
+	Hits, Misses int
+}
+
+// RunGoMemo is RunGo with a memo of the package's last run (spec
+// §requests-and-responses): the same directory, sources, bodies and
+// rules answer the warnings they gave without parsing a file. A nil
+// memo judges afresh.
+func RunGoMemo(dir string, srcs []GoSource, bodies []Body, memo *GoMemo, analyzers ...Analyzer) []diag.Diagnostic {
 	if len(analyzers) == 0 {
 		analyzers = All()
 	}
@@ -86,6 +112,30 @@ func RunGo(dir string, srcs []GoSource, bodies []Body, analyzers ...Analyzer) []
 			rules = append(rules, r)
 		}
 	}
+	if memo == nil {
+		diags := GoVet(dir, srcs, bodies, rules)
+		diag.Sort(diags)
+		return diags
+	}
+	if len(rules) == 0 || len(srcs) == 0 {
+		memo.Hits, memo.Misses = 0, 0
+		return nil
+	}
+	if memo.held && memo.dir == dir && slices.Equal(memo.srcs, srcs) && slices.Equal(memo.bodies, bodies) && slices.Equal(memo.rules, rules) {
+		memo.Hits, memo.Misses = 1, 0
+		return memo.diags
+	}
+	diags := GoVet(dir, srcs, bodies, rules)
+	diag.Sort(diags)
+	*memo = GoMemo{dir: dir, srcs: slices.Clone(srcs), bodies: slices.Clone(bodies), rules: rules, diags: diags, held: true, Misses: 1}
+	return diags
+}
+
+// GoVet runs the Go rules over the sources of the routes package at dir
+// (spec §requests-and-responses), bodies telling where its actions
+// receive a request body: a pure function of its arguments, which
+// RunGoMemo memoizes and sorts by position.
+func GoVet(dir string, srcs []GoSource, bodies []Body, rules []GoRule) []diag.Diagnostic {
 	if len(rules) == 0 || len(srcs) == 0 {
 		return nil
 	}
@@ -125,7 +175,6 @@ func RunGo(dir string, srcs []GoSource, bodies []Body, analyzers ...Analyzer) []
 			out = append(out, r.Go(f)...)
 		}
 	}
-	diag.Sort(out)
 	return out
 }
 

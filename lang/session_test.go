@@ -504,3 +504,58 @@ func TestSessionCarriesEditedDocs(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionGoVetMemo(t *testing.T) {
+	root := t.TempDir()
+	spec := corpus.Spec{Tables: 3, Columns: 4, Single: true}
+	if err := corpus.Write(root, spec); err != nil {
+		t.Fatal(err)
+	}
+	clock := filepath.Join(root, "clock.go")
+	clockWrite := func(stamps int) {
+		t.Helper()
+		var b strings.Builder
+		b.WriteString("package main\n\nimport (\n\t\"time\"\n\n\tvolt \"github.com/Piechutowski/volt\"\n)\n\nfunc (stub) Late(r volt.Request) volt.Response {\n")
+		for range stamps {
+			b.WriteString("\t_ = time.Now()\n")
+		}
+		b.WriteString("\treturn volt.NoContent()\n}\n")
+		if err := os.WriteFile(clock, []byte(b.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	clockWrite(1)
+	schema := filepath.Join(root, "schema.volt")
+	var s lang.Session
+	round := func(name string, overlay map[string]string, vetted, judged, answered, clocks int) {
+		t.Helper()
+		before := s.Stats()
+		pr, err := s.Load(disk.Source{}, root, overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.Check(pr)
+		got := diagsRender(s.Vet(pr))
+		fresh, err := lang.LoadOverlay(disk.Source{}, root, overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lang.Check(fresh)
+		if want := diagsRender(lang.Vet(fresh)); got != want {
+			t.Fatalf("%s: session vet differs from a fresh vet:\n--- session\n%s--- fresh\n%s", name, got, want)
+		}
+		if n := strings.Count(got, "handlerclock"); n != clocks {
+			t.Errorf("%s: %d handlerclock warnings, want %d:\n%s", name, n, clocks, got)
+		}
+		after := s.Stats()
+		if v, j, a := after.PackagesVetted-before.PackagesVetted, after.GoVetted-before.GoVetted, after.GoVetReused-before.GoVetReused; v != vetted || j != judged || a != answered {
+			t.Errorf("%s: vetted %d packages, Go rules judged %d and answered %d; want %d, %d and %d", name, v, j, a, vetted, judged, answered)
+		}
+	}
+	round("first", nil, 1, 1, 0, 1)
+	round("no change", nil, 0, 0, 0, 1)
+	text := corpus.Files(spec)["schema.volt"]
+	round("edit of the .volt file", map[string]string{schema: text + "\n// touched\n"}, 1, 0, 1, 1)
+	clockWrite(2)
+	round("edit of a Go file", map[string]string{schema: text + "\n// touched\n"}, 1, 1, 0, 2)
+}

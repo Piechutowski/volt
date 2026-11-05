@@ -24,6 +24,7 @@ var pureTargets = []struct{ pkg, name string }{
 	{module + "/lang", "itemLower"},
 	{module + "/lsp", "tableOccurrences"},
 	{module + "/lang/vet", "DeclVet"},
+	{module + "/lang/vet", "GoVet"},
 }
 
 var immutableVars = map[string]bool{
@@ -43,6 +44,8 @@ var immutableVars = map[string]bool{
 	module + "/lang/check.indexSettings":       true,
 	module + "/lang/check.refSettings":         true,
 	module + "/lang/check.ReservedAliases":     true,
+	module + "/lang/vet.worldImports":          true,
+	module + "/lang/vet.runnerCalled":          true,
 	module + "/nao/naming.commonInitialisms":   true,
 	module + "/nao/naming.goKeywords":          true,
 	module + "/nao/naming.routeSignatureNames": true,
@@ -57,6 +60,8 @@ var pureStdlib = map[string]bool{
 	"sort":    true,
 	"strconv": true,
 	"errors":  true,
+	"path":    true,
+	"go/ast":  true, "go/parser": true, "go/token": true,
 }
 
 var pureStdlibFuncs = map[string]bool{

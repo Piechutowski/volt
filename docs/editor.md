@@ -265,7 +265,9 @@ and schedules the project's analysis:
    memoized by input identity — and every open document of the
    project is published from that one run, so cross-file diagnostics
    never go stale and one edit costs one parse plus the packages that
-   could see it. A request adopts the newest result at its start.
+   could see it; a package vetted again parses its Go files for the
+   Go rules only when they, or the request bodies its routes declare,
+   changed. A request adopts the newest result at its start.
 4. Two indexes are (re)built *after* Check, from the resolved model:
    the schema occurrence index (single-file symbols: tables, columns,
    declared types, partials) and the project index (`voltIndex`:

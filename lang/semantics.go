@@ -125,6 +125,7 @@ type declMemo struct {
 	selects selectsMemo
 	routes  routesMemo
 	vet     vet.Memo
+	goVet   vet.GoMemo
 }
 
 type checksMemo struct {

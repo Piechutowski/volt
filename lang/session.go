@@ -44,6 +44,9 @@ type SessionStats struct {
 	// Within the packages vetted: declarations judged afresh by the
 	// rules, and answered by the memo.
 	DeclsVetted, DeclsVetReused int
+	// Within the packages vetted: packages whose Go rules judged their
+	// Go files afresh, and were answered by the memo.
+	GoVetted, GoVetReused int
 }
 
 type fileEntry struct {
@@ -202,8 +205,10 @@ func (s *Session) goFuncsFor(pr *Project, paths []string) *goFuncsCache {
 		dirs[i] = pr.Packages[path].Dir
 	}
 	scans := make([]*goScan, len(dirs))
+	read := make([][]GoSource, len(dirs))
 	par.For(len(dirs), func(i int) {
 		srcs := GoSourcesRead(pr.src, dirs[i])
+		read[i] = srcs
 		s.mu.Lock()
 		prev := s.scans[dirs[i]]
 		s.mu.Unlock()
@@ -220,9 +225,9 @@ func (s *Session) goFuncsFor(pr *Project, paths []string) *goFuncsCache {
 		s.scans[dirs[i]] = &goDir{srcs: srcs, scan: scans[i]}
 		s.mu.Unlock()
 	})
-	cache := &goFuncsCache{by: make(map[string]*goScan, len(dirs))}
+	cache := &goFuncsCache{by: make(map[string]*goScan, len(dirs)), srcs: make(map[string][]GoSource, len(dirs))}
 	for i, dir := range dirs {
-		cache.by[dir] = scans[i]
+		cache.by[dir], cache.srcs[dir] = scans[i], read[i]
 	}
 	return cache
 }
@@ -233,6 +238,8 @@ func (s *Session) vetStats(memos map[string]*declMemo) {
 	for _, m := range memos {
 		s.stats.DeclsVetReused += m.vet.Hits
 		s.stats.DeclsVetted += m.vet.Misses
+		s.stats.GoVetReused += m.goVet.Hits
+		s.stats.GoVetted += m.goVet.Misses
 	}
 }
 

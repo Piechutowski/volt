@@ -23,7 +23,7 @@ var keystrokeBudget = struct {
 	document, analysis, publish uint64
 }{
 	document: 1092320,
-	analysis: 4922464,
+	analysis: 4885864,
 	publish:  49216,
 }
 
