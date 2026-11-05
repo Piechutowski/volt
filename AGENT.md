@@ -46,8 +46,8 @@ green.
 Three Go modules under `go.work`: the library at the root (runtime,
 `lang/`, `gen/`, `nao/` with the value runtime `nao/rt` and the runner
 `nao/run`, `itest/`; stdlib only, sqlite3 test-only) and the tools
-`lsp/` and `cmd/volt/`, which carry the third-party dependencies;
-`cmd/volt` carries the `mattn/go-sqlite3` driver for the fold and
+`lsp/` (stdlib only, its LSP layer `lsp/protocol` its own) and
+`cmd/volt/`, which carries the third-party dependencies; it carries the `mattn/go-sqlite3` driver for the fold and
 `volt migration up`, so the tool is built with cgo (a C compiler on the
 path; without it the driver is a stub and `volt` refuses the fold and
 the migration commands with exit 2), while the library and the runtime

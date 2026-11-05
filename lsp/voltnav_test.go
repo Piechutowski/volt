@@ -7,11 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	protocol "github.com/tliron/glsp/protocol_3_16"
-
 	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 const navSchema = "package db\n\ntable posts {\n\tid    int [pk]\n\ttitle string [null]\n}\n"
@@ -108,7 +107,7 @@ func TestVoltHoverTableShowsModel(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for db.posts")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	for _, want := range []string{"table posts", "package `db`", "Go model `Post`", "id int [pk]", "title string [null]"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
@@ -133,7 +132,7 @@ func TestVoltHoverTableKeyNotRoutable(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for db.samples")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	if !strings.Contains(md, "key: `id`\n") {
 		t.Errorf("hover should name the key:\n%s", md)
 	}
@@ -160,14 +159,14 @@ func TestVoltHoverTableKeyFromPartials(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for db.site_days")
 	}
-	if md := h.Contents.(protocol.MarkupContent).Value; strings.Contains(md, "key:") {
+	if md := h.Contents.Value; strings.Contains(md, "key:") {
 		t.Errorf("a composite key (site, day) has no single key to name:\n%s", md)
 	}
 	h = d.Hover(posOf(t, routes, "db.posts", 0))
 	if h == nil {
 		t.Fatal("no hover for db.posts")
 	}
-	if md := h.Contents.(protocol.MarkupContent).Value; !strings.Contains(md, "key: `id` → route parameter type `int`") {
+	if md := h.Contents.Value; !strings.Contains(md, "key: `id` → route parameter type `int`") {
 		t.Errorf("the key the partial injects is the table's key:\n%s", md)
 	}
 }
@@ -213,7 +212,7 @@ func TestVoltHoverPipeline(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for pipe: api")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	if !strings.Contains(md, "pipeline `api`") || !strings.Contains(md, "volt.RequestID") {
 		t.Errorf("pipeline hover wrong:\n%s", md)
 	}
@@ -632,7 +631,7 @@ func TestVoltScopeLoadNavigates(t *testing.T) {
 	if loc := d.Definition(pos); loc == nil || !strings.HasSuffix(string(loc.URI), "loads.go") {
 		t.Errorf("definition of a scope load's function = %v, want app/loads.go", loc)
 	}
-	if h := d.Hover(pos); h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, "the member a request names") {
+	if h := d.Hover(pos); h == nil || !strings.Contains(h.Contents.Value, "the member a request names") {
 		t.Errorf("hover of a scope load's function = %v, want its signature and doc comment", h)
 	}
 }

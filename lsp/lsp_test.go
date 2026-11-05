@@ -7,11 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	protocol "github.com/tliron/glsp/protocol_3_16"
-
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 const sample = `type Status string
@@ -209,7 +208,7 @@ func TestHoverTable(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for table reference")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	for _, want := range []string{"table users", "name string", "people", "from ~base"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
@@ -225,7 +224,7 @@ func TestHoverDeclaredType(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for declared type reference")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	if !strings.Contains(md, "type Status string") {
 		t.Errorf("unexpected declared type hover:\n%s", md)
 	}
@@ -383,7 +382,7 @@ func TestHoverShowsAStringDefaultQuoted(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover on the status column")
 	}
-	if md := h.Contents.(protocol.MarkupContent).Value; !strings.Contains(md, `default: "active"`) {
+	if md := h.Contents.Value; !strings.Contains(md, `default: "active"`) {
 		t.Errorf("a string default hovers as written, quoted (§default-values): %s", md)
 	}
 }
@@ -624,14 +623,14 @@ func TestHoverDocComment(t *testing.T) {
 	src := "table posts {\n  id int [pk]\n  // the column\n  author_id int\n\n  indexes {\n    // Lists a writer's posts.\n    (author_id, id)\n  }\n}\n"
 	d := doc(t, src)
 	h := d.Hover(posOf(t, src, "(author_id, id)", 0))
-	if h == nil || h.Contents.(protocol.MarkupContent).Value != "Lists a writer's posts." {
+	if h == nil || h.Contents.Value != "Lists a writer's posts." {
 		t.Errorf("hover on a documented index = %+v, want its doc text (§doc-comments)", h)
 	}
 	h = d.Hover(posOf(t, src, "author_id int", 0))
-	if h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, "the column") {
+	if h == nil || !strings.Contains(h.Contents.Value, "the column") {
 		t.Errorf("hover on a documented column = %+v, want its doc text after the column (§doc-comments)", h)
 	}
-	if h := d.Hover(posOf(t, src, "id int", 0)); h != nil && strings.Contains(h.Contents.(protocol.MarkupContent).Value, "---") {
+	if h := d.Hover(posOf(t, src, "id int", 0)); h != nil && strings.Contains(h.Contents.Value, "---") {
 		t.Errorf("hover on an undocumented column carries a doc: %+v", h)
 	}
 }
@@ -647,7 +646,7 @@ func TestHoverDocCommentInRoutes(t *testing.T) {
 		"get / Admin.Home": "The admin home.",
 	} {
 		h := d.Hover(posOf(t, src, needle, 0))
-		if h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, want) {
+		if h == nil || !strings.Contains(h.Contents.Value, want) {
 			t.Errorf("hover at %q = %+v, want the doc text %q (§doc-comments)", needle, h, want)
 		}
 	}

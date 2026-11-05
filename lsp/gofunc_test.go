@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 const goRefSchema = "package db\n\ntable users {\n\tid int [pk]\n\temail string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t\tMissing(email)\n\t}\n}\n"
@@ -44,7 +42,7 @@ func TestGoRefDefinitionAndHover(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for EmailValid")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	for _, want := range []string{"func EmailValid(email string) error", "rejects addresses without an @"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
@@ -64,7 +62,7 @@ func TestGoRefMissingFunctionHoverExplains(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for a missing Go reference")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	if !strings.Contains(md, "no such function") {
 		t.Errorf("hover should explain the function is undeclared:\n%s", md)
 	}
@@ -80,7 +78,7 @@ func TestGoRefPipelinePlug(t *testing.T) {
 		t.Fatalf("plug definition = %v, want app/mw.go", loc)
 	}
 	h := d.Hover(posOf(t, goRefRoutes, "Auth", 0))
-	if h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, "func Auth(next http.Handler) http.Handler") {
+	if h == nil || !strings.Contains(h.Contents.Value, "func Auth(next http.Handler) http.Handler") {
 		t.Errorf("plug hover missing the signature: %v", h)
 	}
 	if loc := d.Definition(posOf(t, goRefRoutes, "RequestID", 0)); loc != nil {

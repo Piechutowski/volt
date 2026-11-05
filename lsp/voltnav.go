@@ -10,13 +10,12 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	protocol "github.com/tliron/glsp/protocol_3_16"
-
 	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/lsp/protocol"
 	"github.com/Piechutowski/volt/nao/naming"
 )
 

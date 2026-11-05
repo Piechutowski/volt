@@ -8,11 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tliron/glsp"
-	protocol "github.com/tliron/glsp/protocol_3_16"
-
 	"github.com/Piechutowski/volt/internal/corpus"
 	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 func occsRender(ix *Index) string {
@@ -72,8 +70,8 @@ func TestServerForeignFileVerdict(t *testing.T) {
 	s.debounce = 0
 	var mu sync.Mutex
 	var published []protocol.PublishDiagnosticsParams
-	ctx := &glsp.Context{Notify: func(method string, params any) {
-		if method != protocol.ServerTextDocumentPublishDiagnostics {
+	ctx := &protocol.Context{Notify: func(method string, params any) {
+		if method != protocol.TextDocumentPublishDiagnostics {
 			return
 		}
 		mu.Lock()
@@ -88,7 +86,7 @@ func TestServerForeignFileVerdict(t *testing.T) {
 	}
 	hasVet := func(ds []protocol.Diagnostic) bool {
 		for _, dg := range ds {
-			if dg.Code != nil && dg.Code.Value == "vet/emptybody" {
+			if dg.Code == "vet/emptybody" {
 				return true
 			}
 		}

@@ -6,8 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tliron/glsp"
-	protocol "github.com/tliron/glsp/protocol_3_16"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 func rangeAt(l1, c1, l2, c2 int) *protocol.Range {
@@ -17,14 +16,14 @@ func rangeAt(l1, c1, l2, c2 int) *protocol.Range {
 	}
 }
 
-func ranged(r *protocol.Range, text string) any {
+func ranged(r *protocol.Range, text string) protocol.TextDocumentContentChangeEvent {
 	return protocol.TextDocumentContentChangeEvent{Range: r, Text: text}
 }
 
 func TestIncrementalSync(t *testing.T) {
 	s := NewServer()
-	ctx := &glsp.Context{Notify: func(string, any) {}}
-	change := func(uri string, version int32, items ...any) {
+	ctx := &protocol.Context{Notify: func(string, any) {}}
+	change := func(uri string, version int32, items ...protocol.TextDocumentContentChangeEvent) {
 		t.Helper()
 		if err := s.didChange(ctx, &protocol.DidChangeTextDocumentParams{
 			TextDocument:   protocol.VersionedTextDocumentIdentifier{TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: uri}, Version: version},
@@ -63,7 +62,7 @@ func TestIncrementalSync(t *testing.T) {
 	change(uri, 3, ranged(rangeAt(2, 7, 2, 11), "\"na😀\""))
 	change(uri, 4, ranged(rangeAt(2, 13, 2, 13), "y"))
 	expect(uri, "table users {\n  id float64 [pk]\n  name \"na😀\"y [null]\n}\n", 4)
-	change(uri, 5, protocol.TextDocumentContentChangeEventWhole{Text: "table t {\n  id int\n}\n"}, ranged(rangeAt(1, 8, 1, 8), " [pk]"))
+	change(uri, 5, protocol.TextDocumentContentChangeEvent{Text: "table t {\n  id int\n}\n"}, ranged(rangeAt(1, 8, 1, 8), " [pk]"))
 	expect(uri, "table t {\n  id int [pk]\n}\n", 5)
 
 	crlf := "file:///crlf.volt"
@@ -82,8 +81,8 @@ func TestIncrementalSync(t *testing.T) {
 func TestPublishCarriesVersion(t *testing.T) {
 	var mu sync.Mutex
 	var published []protocol.PublishDiagnosticsParams
-	ctx := &glsp.Context{Notify: func(method string, params any) {
-		if method != protocol.ServerTextDocumentPublishDiagnostics {
+	ctx := &protocol.Context{Notify: func(method string, params any) {
+		if method != protocol.TextDocumentPublishDiagnostics {
 			return
 		}
 		mu.Lock()
@@ -118,7 +117,7 @@ func TestPublishCarriesVersion(t *testing.T) {
 	}
 	if err := s.didChange(ctx, &protocol.DidChangeTextDocumentParams{
 		TextDocument:   protocol.VersionedTextDocumentIdentifier{TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: lone}, Version: 9},
-		ContentChanges: []any{ranged(rangeAt(1, 9, 1, 9), ", null")},
+		ContentChanges: []protocol.TextDocumentContentChangeEvent{ranged(rangeAt(1, 9, 1, 9), ", null")},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +147,7 @@ func TestPublishCarriesVersion(t *testing.T) {
 	waitVersion(3)
 	if err := s.didChange(ctx, &protocol.DidChangeTextDocumentParams{
 		TextDocument:   protocol.VersionedTextDocumentIdentifier{TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: uri}, Version: 4},
-		ContentChanges: []any{ranged(rangeAt(3, 17, 3, 17), "\n\tget /x Home.X")},
+		ContentChanges: []protocol.TextDocumentContentChangeEvent{ranged(rangeAt(3, 17, 3, 17), "\n\tget /x Home.X")},
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -4,8 +4,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 const projSchema = "package db\n\n" +
@@ -34,7 +32,7 @@ func TestSelectHoverSharedRowType(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for the summary select")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	for _, want := range []string{
 		"PageViewSummary(from int) rt.Query[Summary]",
 		"LinkClickSummary(from int) rt.Query[Summary]",
@@ -64,7 +62,7 @@ func TestSelectHoverStructDerivative(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for the public select")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	for _, want := range []string{
 		"LinkClickPublic() rt.Query[LinkClickPublicRow]",
 		"type LinkClickPublicRow struct",
@@ -85,7 +83,7 @@ func TestSelectHoverListParam(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for the chosen select")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	for _, want := range []string{
 		"PageViewChosen(sites []string, days []int) rt.Query[PageView]",
 		"json_each(?)",
@@ -106,7 +104,7 @@ func TestSelectHoverLimit(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for the leaders select")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	for _, want := range []string{
 		"```sql\nORDER BY \"hits\" DESC, \"id\" ASC\n```\n```sql\nLIMIT ?\n```\nbinds: `limit`\n",
 		"PageViewLeaders(site string, limit int) rt.Query[PageView]",
@@ -123,7 +121,7 @@ func TestSelectHoverBindsInPlaceholderOrder(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for the busy select")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	want := "```sql\nWHERE (\"hits\" > ? AND \"site\" = ? AND \"day\" IN (SELECT value FROM json_each(?)))\n```\n" +
 		"binds: `10`, `site`, `rt.JSONList(days)`\n"
 	if !strings.Contains(md, want) {
@@ -151,7 +149,7 @@ func unresolvedHover(t *testing.T, needle string) string {
 	if h == nil {
 		t.Fatalf("no hover for the %s select", needle)
 	}
-	return h.Contents.(protocol.MarkupContent).Value
+	return h.Contents.Value
 }
 
 func TestSelectHoverUnresolved(t *testing.T) {
@@ -205,7 +203,7 @@ func TestSelectHoverNullableUnknownFieldType(t *testing.T) {
 		if h == nil {
 			t.Fatalf("no hover for the %s select", needle)
 		}
-		md := h.Contents.(protocol.MarkupContent).Value
+		md := h.Contents.Value
 		for _, want := range []string{"\tRank int32 // unknown type (§columns)\n", "\tScore Score // unknown type (§columns)\n"} {
 			if !strings.Contains(md, want) {
 				t.Errorf("%s: hover missing %q:\n%s", needle, want, md)
@@ -230,7 +228,7 @@ func TestSelectHoverBytesFieldTypes(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for the named select")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	for _, want := range []string{"\tBody []byte\n", "\tThumb rt.Null[[]byte]\n"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
@@ -257,7 +255,7 @@ func TestSelectHoverEffectKinds(t *testing.T) {
 		if h == nil {
 			t.Fatalf("no hover for %s", name)
 		}
-		md := h.Contents.(protocol.MarkupContent).Value
+		md := h.Contents.Value
 		for _, want := range wants {
 			if !strings.Contains(md, want) {
 				t.Errorf("hover of %s missing %q:\n%s", name, want, md)
@@ -288,7 +286,7 @@ func TestSelectParamHover(t *testing.T) {
 		if h == nil {
 			t.Fatalf("no hover at %s", at)
 		}
-		if md := h.Contents.(protocol.MarkupContent).Value; !strings.Contains(md, want) {
+		if md := h.Contents.Value; !strings.Contains(md, want) {
 			t.Errorf("hover at %s = %q, want %q", at, md, want)
 		}
 	}

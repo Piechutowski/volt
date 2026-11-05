@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	protocol "github.com/tliron/glsp/protocol_3_16"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 const migrationSchema = "package db\n\ntable users {\n\tid int [pk]\n\tbio string [null]\n}\n\n" +
@@ -150,7 +150,7 @@ func TestMigrationHoverSingleFile(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover on the migration name")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	for _, want := range []string{"migration 0002__users_bio", "migration 2 of 2", "irreversible"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover lacks %q:\n%s", want, md)
@@ -160,7 +160,7 @@ func TestMigrationHoverSingleFile(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover on the first migration")
 	}
-	md = h.Contents.(protocol.MarkupContent).Value
+	md = h.Contents.Value
 	if !strings.Contains(md, "migration 1 of 2, reversible") {
 		t.Errorf("hover on the first migration:\n%s", md)
 	}
@@ -178,7 +178,7 @@ func TestMigrationHoverCountsThePackage(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover on a migration in its own file")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	if !strings.Contains(md, "migration 3 of 3, irreversible") {
 		t.Errorf("hover does not count the package's migrations:\n%s", md)
 	}

@@ -50,7 +50,7 @@ effect is performed by generated code you can read.
 | `lang/` | the language: scanner, parser, checker, vet, conformance corpus |
 | `gen/` | the generators |
 | `nao/` | the data layer: naming, generation, the value runtime `rt`, the runner `run` |
-| `lsp/` | the language server |
+| `lsp/` | the language server, with its own LSP protocol layer `lsp/protocol` on the standard library |
 | `grammar/`, `zed-extension/` | the editor stack |
 | `itest/` | the fixture application served over `httptest`, drift-checked against the generator |
 | `docs/` | `spec.md`, `lint.md`, `editor.md`, `roadmap.md`, `plan.md` |
