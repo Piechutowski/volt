@@ -8,7 +8,7 @@ import (
 	"testing"
 	"unicode"
 
-	protocol "github.com/tliron/glsp/protocol_3_16"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 const aggregateSchema = "package db\n\n" +
@@ -43,7 +43,7 @@ func TestAggregateSelectNavigates(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for the aggregate select")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	for _, want := range []string{"N ", "MeanAlloc "} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover lacks the derived field %q:\n%s", want, md)

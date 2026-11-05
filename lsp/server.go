@@ -1,13 +1,12 @@
 package lsp
 
 import (
+	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/tliron/glsp"
-	protocol "github.com/tliron/glsp/protocol_3_16"
-	glspserver "github.com/tliron/glsp/server"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 // Version is stamped into the initialize response.
@@ -15,7 +14,7 @@ const Version = "0.1.0"
 
 const serverName = "volt-lsp"
 
-// Server owns the open documents and the protocol handler.
+// Server owns the open documents and answers the editor's methods.
 type Server struct {
 	watchSupported bool
 	mu             sync.Mutex
@@ -24,89 +23,88 @@ type Server struct {
 	versions       map[string]int32
 	analyses       map[string]*analysis
 	debounce       time.Duration
-
-	handler protocol.Handler
 }
 
-// NewServer wires up the LSP handler.
+// NewServer makes a server with no open documents.
 func NewServer() *Server {
-	s := &Server{
+	return &Server{
 		docs:     map[string]*Document{},
 		texts:    map[string]string{},
 		versions: map[string]int32{},
 		analyses: map[string]*analysis{},
 		debounce: analysisDebounce,
 	}
-	s.handler = protocol.Handler{
-		Initialize:  s.initialize,
-		Initialized: s.initialized,
-		Shutdown:    func(*glsp.Context) error { return nil },
-		SetTrace:    func(*glsp.Context, *protocol.SetTraceParams) error { return nil },
-
-		TextDocumentDidOpen:   s.didOpen,
-		TextDocumentDidChange: s.didChange,
-		TextDocumentDidClose:  s.didClose,
-
-		WorkspaceDidChangeWatchedFiles: s.watchedFilesChanged,
-
-		TextDocumentCompletion:     s.completion,
-		TextDocumentHover:          s.hover,
-		TextDocumentDefinition:     s.definition,
-		TextDocumentReferences:     s.references,
-		TextDocumentRename:         s.rename,
-		TextDocumentDocumentSymbol: s.documentSymbol,
-	}
-	return s
 }
 
-// RunStdio serves LSP over stdin/stdout until the client disconnects.
+func (s *Server) methods() map[string]protocol.Handler {
+	return map[string]protocol.Handler{
+		"initialize":                      protocol.Request(s.initialize),
+		"initialized":                     protocol.Notification(s.initialized),
+		"textDocument/didOpen":            protocol.Notification(s.didOpen),
+		"textDocument/didChange":          protocol.Notification(s.didChange),
+		"textDocument/didClose":           protocol.Notification(s.didClose),
+		"workspace/didChangeWatchedFiles": protocol.Notification(s.watchedFilesChanged),
+		"textDocument/completion":         protocol.Request(s.completion),
+		"textDocument/hover":              protocol.Request(s.hover),
+		"textDocument/definition":         protocol.Request(s.definition),
+		"textDocument/references":         protocol.Request(s.references),
+		"textDocument/rename":             protocol.Request(s.rename),
+		"textDocument/documentSymbol":     protocol.Request(s.documentSymbol),
+	}
+}
+
+// RunStdio serves LSP over stdin and stdout until the editor sends exit or
+// closes stdin, then exits the process with code 1 when no shutdown came
+// first (LSP Exit Notification).
 func (s *Server) RunStdio() error {
-	return glspserver.NewServer(&s.handler, serverName, false).RunStdio()
+	code, err := protocol.Serve(os.Stdin, os.Stdout, s.methods())
+	if err != nil {
+		return err
+	}
+	if code != 0 {
+		os.Exit(code)
+	}
+	return nil
 }
 
-func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error) {
-	if ws := params.Capabilities.Workspace; ws != nil && ws.DidChangeWatchedFiles != nil &&
-		ws.DidChangeWatchedFiles.DynamicRegistration != nil {
-		s.watchSupported = *ws.DidChangeWatchedFiles.DynamicRegistration
-	}
-	capabilities := s.handler.CreateServerCapabilities()
-
-	syncKind := protocol.TextDocumentSyncKindIncremental
-	capabilities.TextDocumentSync = &protocol.TextDocumentSyncOptions{
-		OpenClose: boolPtr(true),
-		Change:    &syncKind,
-	}
-	capabilities.CompletionProvider = &protocol.CompletionOptions{
-		TriggerCharacters: []string{".", "~", "[", ",", ":", ">", "<", "-"},
-	}
-
-	version := Version
+func (s *Server) initialize(_ *protocol.Context, params *protocol.InitializeParams) (protocol.InitializeResult, error) {
+	s.watchSupported = params.Capabilities.Workspace.DidChangeWatchedFiles.DynamicRegistration
 	return protocol.InitializeResult{
-		Capabilities: capabilities,
-		ServerInfo: &protocol.InitializeResultServerInfo{
-			Name:    serverName,
-			Version: &version,
+		Capabilities: protocol.ServerCapabilities{
+			TextDocumentSync: &protocol.TextDocumentSyncOptions{
+				OpenClose: true,
+				Change:    protocol.TextDocumentSyncKindIncremental,
+			},
+			CompletionProvider: &protocol.CompletionOptions{
+				TriggerCharacters: []string{".", "~", "[", ",", ":", ">", "<", "-"},
+			},
+			HoverProvider:          true,
+			DefinitionProvider:     true,
+			ReferencesProvider:     true,
+			RenameProvider:         true,
+			DocumentSymbolProvider: true,
 		},
+		ServerInfo: &protocol.ServerInfo{Name: serverName, Version: Version},
 	}, nil
 }
 
-func (s *Server) initialized(ctx *glsp.Context, _ *protocol.InitializedParams) error {
+func (s *Server) initialized(ctx *protocol.Context, _ *protocol.InitializedParams) error {
 	if !s.watchSupported {
 		return nil
 	}
-	go ctx.Call(protocol.ServerClientRegisterCapability, protocol.RegistrationParams{
+	ctx.Request("client/registerCapability", protocol.RegistrationParams{
 		Registrations: []protocol.Registration{{
 			ID:     "volt-go-files",
-			Method: string(protocol.MethodWorkspaceDidChangeWatchedFiles),
+			Method: "workspace/didChangeWatchedFiles",
 			RegisterOptions: protocol.DidChangeWatchedFilesRegistrationOptions{
 				Watchers: []protocol.FileSystemWatcher{{GlobPattern: "**/*.go"}},
 			},
 		}},
-	}, nil)
+	})
 	return nil
 }
 
-func (s *Server) watchedFilesChanged(ctx *glsp.Context, params *protocol.DidChangeWatchedFilesParams) error {
+func (s *Server) watchedFilesChanged(ctx *protocol.Context, params *protocol.DidChangeWatchedFilesParams) error {
 	goTouched := false
 	for _, ev := range params.Changes {
 		if strings.HasSuffix(string(ev.URI), ".go") {
@@ -119,7 +117,7 @@ func (s *Server) watchedFilesChanged(ctx *glsp.Context, params *protocol.DidChan
 	return nil
 }
 
-func (s *Server) freshen(ctx *glsp.Context, doc *Document) {
+func (s *Server) freshen(ctx *protocol.Context, doc *Document) {
 	if doc == nil || !doc.GoFilesChanged() {
 		return
 	}
@@ -128,7 +126,7 @@ func (s *Server) freshen(ctx *glsp.Context, doc *Document) {
 	}
 }
 
-func (s *Server) didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
+func (s *Server) didOpen(ctx *protocol.Context, params *protocol.DidOpenTextDocumentParams) error {
 	doc := &Document{URI: params.TextDocument.URI, Siblings: s.openTexts, Session: s.sessionFor}
 	s.mu.Lock()
 	s.docs[params.TextDocument.URI] = doc
@@ -137,7 +135,7 @@ func (s *Server) didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocument
 	return nil
 }
 
-func (s *Server) edited(ctx *glsp.Context, doc *Document, text string, version int32) {
+func (s *Server) edited(ctx *protocol.Context, doc *Document, text string, version int32) {
 	path := pathFromURI(doc.URI)
 	s.mu.Lock()
 	s.texts[path] = text
@@ -171,39 +169,34 @@ func (s *Server) openSnapshot() (map[string]string, map[string]int32) {
 	return texts, versions
 }
 
-func (s *Server) didChange(ctx *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
+func (s *Server) didChange(ctx *protocol.Context, params *protocol.DidChangeTextDocumentParams) error {
 	doc := s.docGet(params.TextDocument.URI)
 	if doc == nil {
 		return nil
 	}
 	text := doc.Text
 	for _, change := range params.ContentChanges {
-		switch c := change.(type) {
-		case protocol.TextDocumentContentChangeEventWhole:
-			text = c.Text
-		case protocol.TextDocumentContentChangeEvent:
-			if c.Range == nil {
-				text = c.Text
-				continue
-			}
-			doc.textSet(text)
-			start := doc.FromLSP(c.Range.Start)
-			end := doc.FromLSP(c.Range.End)
-			text = text[:start] + c.Text + text[end:]
+		if change.Range == nil {
+			text = change.Text
+			continue
 		}
+		doc.textSet(text)
+		start := doc.FromLSP(change.Range.Start)
+		end := doc.FromLSP(change.Range.End)
+		text = text[:start] + change.Text + text[end:]
 	}
 	s.edited(ctx, doc, text, params.TextDocument.Version)
 	return nil
 }
 
-func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocumentParams) error {
+func (s *Server) didClose(ctx *protocol.Context, params *protocol.DidCloseTextDocumentParams) error {
 	path := pathFromURI(params.TextDocument.URI)
 	s.mu.Lock()
 	delete(s.docs, params.TextDocument.URI)
 	delete(s.texts, path)
 	delete(s.versions, path)
 	s.mu.Unlock()
-	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+	ctx.Notify(protocol.TextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
 		URI:         params.TextDocument.URI,
 		Diagnostics: []protocol.Diagnostic{},
 	})
@@ -213,7 +206,7 @@ func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocume
 	return nil
 }
 
-func (s *Server) analysisKickAll(ctx *glsp.Context) {
+func (s *Server) analysisKickAll(ctx *protocol.Context) {
 	s.mu.Lock()
 	roots := map[string]bool{}
 	for uri := range s.docs {
@@ -227,20 +220,19 @@ func (s *Server) analysisKickAll(ctx *glsp.Context) {
 	}
 }
 
-func (s *Server) diagnosticsPublish(ctx *glsp.Context, doc *Document) {
+func (s *Server) diagnosticsPublish(ctx *protocol.Context, doc *Document) {
 	s.mu.Lock()
 	version := s.versions[pathFromURI(doc.URI)]
 	s.mu.Unlock()
-	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+	ctx.Notify(protocol.TextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
 		URI:         doc.URI,
 		Version:     versionStamp(version),
 		Diagnostics: doc.LSPDiagnostics(),
 	})
 }
 
-func versionStamp(v int32) *protocol.UInteger {
-	u := protocol.UInteger(v)
-	return &u
+func versionStamp(v int32) *protocol.Integer {
+	return &v
 }
 
 func (s *Server) docGet(uri string) *Document {
@@ -251,20 +243,16 @@ func (s *Server) docGet(uri string) *Document {
 	return doc
 }
 
-func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams) (any, error) {
+func (s *Server) completion(ctx *protocol.Context, params *protocol.CompletionParams) ([]protocol.CompletionItem, error) {
 	doc := s.docGet(params.TextDocument.URI)
 	s.freshen(ctx, doc)
 	if doc == nil {
 		return nil, nil
 	}
-	items := doc.Complete(params.Position)
-	if items == nil {
-		return nil, nil
-	}
-	return items, nil
+	return doc.Complete(params.Position), nil
 }
 
-func (s *Server) hover(ctx *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
+func (s *Server) hover(ctx *protocol.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
 	doc := s.docGet(params.TextDocument.URI)
 	s.freshen(ctx, doc)
 	if doc == nil {
@@ -273,20 +261,16 @@ func (s *Server) hover(ctx *glsp.Context, params *protocol.HoverParams) (*protoc
 	return doc.Hover(params.Position), nil
 }
 
-func (s *Server) definition(ctx *glsp.Context, params *protocol.DefinitionParams) (any, error) {
+func (s *Server) definition(ctx *protocol.Context, params *protocol.DefinitionParams) (*protocol.Location, error) {
 	doc := s.docGet(params.TextDocument.URI)
 	s.freshen(ctx, doc)
 	if doc == nil {
 		return nil, nil
 	}
-	loc := doc.Definition(params.Position)
-	if loc == nil {
-		return nil, nil
-	}
-	return *loc, nil
+	return doc.Definition(params.Position), nil
 }
 
-func (s *Server) references(ctx *glsp.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
+func (s *Server) references(ctx *protocol.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
 	doc := s.docGet(params.TextDocument.URI)
 	s.freshen(ctx, doc)
 	if doc == nil {
@@ -295,7 +279,7 @@ func (s *Server) references(ctx *glsp.Context, params *protocol.ReferenceParams)
 	return doc.References(params.Position, params.Context.IncludeDeclaration), nil
 }
 
-func (s *Server) rename(ctx *glsp.Context, params *protocol.RenameParams) (*protocol.WorkspaceEdit, error) {
+func (s *Server) rename(ctx *protocol.Context, params *protocol.RenameParams) (*protocol.WorkspaceEdit, error) {
 	doc := s.docGet(params.TextDocument.URI)
 	s.freshen(ctx, doc)
 	if doc == nil {
@@ -304,12 +288,10 @@ func (s *Server) rename(ctx *glsp.Context, params *protocol.RenameParams) (*prot
 	return doc.Rename(params.Position, params.NewName)
 }
 
-func (s *Server) documentSymbol(_ *glsp.Context, params *protocol.DocumentSymbolParams) (any, error) {
+func (s *Server) documentSymbol(_ *protocol.Context, params *protocol.DocumentSymbolParams) ([]protocol.DocumentSymbol, error) {
 	doc := s.docGet(params.TextDocument.URI)
 	if doc == nil {
 		return nil, nil
 	}
 	return doc.DocumentSymbols(), nil
 }
-
-func boolPtr(b bool) *bool { return &b }

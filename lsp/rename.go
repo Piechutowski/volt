@@ -7,13 +7,12 @@ import (
 	"slices"
 	"strings"
 
-	protocol "github.com/tliron/glsp/protocol_3_16"
-
 	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/parser"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 type renameEdit struct {

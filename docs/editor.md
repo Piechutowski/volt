@@ -176,14 +176,73 @@ Later patterns win in a query file, so generic rules go first.
 
 ## 4. The language server (`lsp/`)
 
-Speaks LSP 3.16 over stdio via `tliron/glsp`; the wiring is one
-`protocol.Handler` literal in `server.go`. Document sync is
+Speaks LSP 3.16 over stdio through its own protocol layer,
+`lsp/protocol` (standard library only, described below); the wiring
+is one method table in `server.go`. Document sync is
 incremental: the client sends each keystroke as a range and the
 text that replaces it, and the server applies every item of a change
 to the text as it then stands, positions in UTF-16 units; a client
 that still sends the whole text is served the same way. Every publish
 of diagnostics carries the version of the text they are positioned
 in, so a client whose buffer has moved on drops it.
+
+**The protocol layer (`lsp/protocol`).** Written from the LSP 3.16
+specification and the JSON-RPC 2.0 specification, and holding only
+what Volt uses: stdio, the methods in `server.go`'s table, and types
+with the fields Volt reads or writes.
+
+- *Framing* (Base Protocol): a header block of `Name: value` lines,
+  names case-insensitive, ended by a blank line; `Content-Length` is
+  required, `Content-Type` is read and ignored (UTF-8 is the only
+  encoding, and a body in another one fails to parse). A missing or
+  malformed `Content-Length` loses the message boundary, so the stream
+  ends with an error. Messages are read through one buffered reader,
+  so several in one read and one split across reads are the same case.
+- *Messages*: a message with a method and an `id` is a request, one
+  with a method and no `id` a notification, one with an `id` and a
+  `result` or an `error` but no method a reply to the server's own
+  request, which is read and discarded. An id is a number or a string
+  and is echoed byte for byte; any other id gets `InvalidRequest`
+  with a `null` id. A body that is not JSON gets `ParseError`, a JSON
+  value that is not one message object (a batch included, which LSP
+  does not use) gets `InvalidRequest`. A response carries `result`
+  (`null` when the handler has none) or `error`, never both.
+- *Dispatch*: one `Handler` per method; `protocol.Request` and
+  `protocol.Notification` turn a typed function into one, decoding
+  the params (unknown fields ignored, absent or `null` params give the
+  zero value) and answering `InvalidParams` when they do not decode.
+  An unknown method gets `MethodNotFound` as a request and is ignored
+  as a notification, which is also the whole of the `$/` rule ($
+  Notifications and Requests): `$/setTrace` and `$/cancelRequest` are
+  dropped, and a `$/` request is answered `MethodNotFound`. A handler
+  error is answered `InternalError` (-32603) with the error's text as
+  the message: 3.16 defines no code for a request the server
+  declines (3.17 adds `RequestFailed`), and a refused rename is the
+  one such error Volt returns.
+- *Lifecycle* (Lifecycle Messages): before a successful `initialize`
+  every request gets `ServerNotInitialized` (-32002) and every
+  notification but `exit` is dropped; a second `initialize` gets
+  `InvalidRequest`. The layer answers `shutdown` itself, and after it
+  every request gets `InvalidRequest` and every notification but
+  `exit` is dropped. `exit` ends the serve loop with exit code 0 when
+  `shutdown` came first and 1 otherwise, and the end of the input
+  stream counts as `exit`; `RunStdio` exits the process with that
+  code.
+- *Order and concurrency*: messages are handled one at a time in
+  arrival order, each to completion before the next is read, which
+  the document memos rely on. Every write (a response, a notification
+  from the analysis goroutine, a request) is one locked write of
+  header and body, so concurrent writers never interleave.
+- *Server to editor*: the handler `Context` carries `Notify` and
+  `Request`. `Request` writes a request with the next numeric id and
+  returns at once; the read loop drops the reply. So
+  `client/registerCapability` is sent from the `initialized` handler
+  directly.
+- *Capabilities*: the `initialize` reply is written out field by
+  field in `server.go`, not derived from the method table.
+- *Required fields*: a field the spec requires has no `omitempty`;
+  `PublishDiagnosticsParams` writes a nil list as `[]`, so clearing
+  diagnostics never sends `null`.
 
 **The per-edit pipeline.** An edit updates the document's own front
 end at once, through the document's own memos (the parse by
@@ -351,8 +410,9 @@ own: update the lockfile, regenerate, and commit both.
 ## 6. Tooling choices
 
 The server is Go and wraps the reference front end, so diagnostics come
-from one implementation. The protocol library is `tliron/glsp` (LSP
-3.16), kept out of the library module by the tool-module split.
+from one implementation. The protocol layer is Volt's own
+`lsp/protocol`, LSP 3.16 over stdio on the standard library alone
+(section 4), so the `lsp` module has no third-party dependency.
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 

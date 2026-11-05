@@ -9,15 +9,13 @@ import (
 	"unicode/utf16"
 
 	"github.com/Piechutowski/volt/lang"
-
-	protocol "github.com/tliron/glsp/protocol_3_16"
-
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/lang/token"
 	"github.com/Piechutowski/volt/lang/vet"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 // Document is one open text document plus everything derived from it.

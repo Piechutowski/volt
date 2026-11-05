@@ -5,13 +5,12 @@ import (
 	"strings"
 	"unicode"
 
-	protocol "github.com/tliron/glsp/protocol_3_16"
-
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/scanner"
 	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 // LSPDiagnostics converts the front end's diagnostics for publishing.
@@ -32,7 +31,7 @@ func diagnosticsLSP(text string, starts []int, diags []diag.Diagnostic) []protoc
 		out = append(out, protocol.Diagnostic{
 			Range:    diagnosticRangeIn(text, starts, dg.Pos),
 			Severity: &sev,
-			Code:     &protocol.IntegerOrString{Value: code},
+			Code:     code,
 			Source:   &source,
 			Message:  dg.Msg,
 		})

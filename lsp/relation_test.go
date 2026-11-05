@@ -7,11 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	protocol "github.com/tliron/glsp/protocol_3_16"
-
 	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 const relationSchema = "package db\n\n" +
@@ -195,7 +194,7 @@ func TestRelationHoverAndDefinition(t *testing.T) {
 	root, _ := relationProject(t, relationSchema)
 	sel := NewDocument("file://"+filepath.Join(root, "db", "selects.volt"), relationSelects)
 	h := sel.Hover(posOf(t, relationSelects, "author [order", 0))
-	if h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, "relation `author`") || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, "table users") {
+	if h == nil || !strings.Contains(h.Contents.Value, "relation `author`") || !strings.Contains(h.Contents.Value, "table users") {
 		t.Errorf("hover at a relation a column names = %+v; want the relation and the table users", h)
 	}
 	loc := sel.Definition(posOf(t, relationSelects, "author.name", 0))
@@ -203,7 +202,7 @@ func TestRelationHoverAndDefinition(t *testing.T) {
 		t.Errorf("definition of the relation author = %+v; want the column author_id at %v", loc, want)
 	}
 	_, d := relationProject(t, relationSchema)
-	if h := d.Hover(posOf(t, relationSchema, "remarks (body", 0)); h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, "table notes") {
+	if h := d.Hover(posOf(t, relationSchema, "remarks (body", 0)); h == nil || !strings.Contains(h.Contents.Value, "table notes") {
 		t.Errorf("hover at a relation reverse: names = %+v; want the table notes it leads to", h)
 	}
 	refs := d.References(posOf(t, relationSchema, "writer where", 0), true)
@@ -258,11 +257,11 @@ func TestRelationNamedAfterATableHovers(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover at a relation named after its table")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	if !strings.Contains(md, "relation `comments`") || !strings.Contains(md, "comments.post_id") || !strings.Contains(md, "table comments") {
 		t.Errorf("hover at exists comments = %q; want the relation, the foreign key it walks and the table", md)
 	}
-	if h := d.Hover(posOf(t, relationSchema, "comments {", 0)); h == nil || strings.Contains(h.Contents.(protocol.MarkupContent).Value, "relation `") {
+	if h := d.Hover(posOf(t, relationSchema, "comments {", 0)); h == nil || strings.Contains(h.Contents.Value, "relation `") {
 		t.Errorf("hover at the table's declaration = %+v; want the table alone", h)
 	}
 }

@@ -7,10 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tliron/glsp"
-	protocol "github.com/tliron/glsp/protocol_3_16"
-
 	"github.com/Piechutowski/volt/internal/corpus"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 func keystrokeSpec() corpus.Spec {
@@ -39,8 +37,8 @@ func BenchmarkKeystroke(b *testing.B) {
 	s := NewServer()
 	s.debounce = 0
 	published := make(chan struct{}, 8)
-	ctx := &glsp.Context{Notify: func(method string, params any) {
-		if method == protocol.ServerTextDocumentPublishDiagnostics {
+	ctx := &protocol.Context{Notify: func(method string, params any) {
+		if method == protocol.TextDocumentPublishDiagnostics {
 			published <- struct{}{}
 		}
 	}}
@@ -55,7 +53,7 @@ func BenchmarkKeystroke(b *testing.B) {
 		edited := strings.Replace(text, anchor, "\t// "+strings.Repeat("x", 1+i%5)+"\n\tc002 string\n", 1)
 		if err := s.didChange(ctx, &protocol.DidChangeTextDocumentParams{
 			TextDocument:   protocol.VersionedTextDocumentIdentifier{TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: uri}, Version: protocol.Integer(i + 2)},
-			ContentChanges: []any{protocol.TextDocumentContentChangeEventWhole{Text: edited}},
+			ContentChanges: []protocol.TextDocumentContentChangeEvent{{Text: edited}},
 		}); err != nil {
 			b.Fatal(err)
 		}

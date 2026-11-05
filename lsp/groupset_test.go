@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	protocol "github.com/tliron/glsp/protocol_3_16"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 const groupSetSchema = "package db\n\n" +
@@ -43,7 +43,7 @@ func TestGroupTermDefinitionAndHover(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for the group term")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	if strings.Contains(md, "\n- ") {
 		t.Errorf("the group hover is a Markdown list, whose + and \\ operators render as nested bullets:\n%s", md)
 	}
@@ -62,7 +62,7 @@ func TestGroupTermDefinitionAndHover(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for the group")
 	}
-	md = h.Contents.(protocol.MarkupContent).Value
+	md = h.Contents.Value
 	if strings.Contains(md, "\n- ") {
 		t.Errorf("the group hover is a Markdown list, whose + and \\ operators render as nested bullets:\n%s", md)
 	}
@@ -118,7 +118,7 @@ func TestDatasetNavigatesToSelect(t *testing.T) {
 		t.Fatalf("dataset select definition = %+v, want db/schema.volt", loc)
 	}
 	h := d.Hover(posOf(t, appText, "browse", 0))
-	if h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, "MsRevenueBrowse") {
+	if h == nil || !strings.Contains(h.Contents.Value, "MsRevenueBrowse") {
 		t.Fatalf("dataset hover should list the select's methods: %+v", h)
 	}
 	edit, err := d.Rename(posOf(t, appText, "browse", 0), "listing")

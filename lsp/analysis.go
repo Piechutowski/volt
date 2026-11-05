@@ -4,13 +4,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/tliron/glsp"
-	protocol "github.com/tliron/glsp/protocol_3_16"
-
 	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 const analysisDebounce = 75 * time.Millisecond
@@ -112,7 +110,7 @@ func (s *Server) sessionFor(root string) *lang.Session {
 	return s.analysisFor(root).session
 }
 
-func (s *Server) analysisKick(ctx *glsp.Context, root string) {
+func (s *Server) analysisKick(ctx *protocol.Context, root string) {
 	s.mu.Lock()
 	a := s.analysisFor(root)
 	a.gen++
@@ -124,7 +122,7 @@ func (s *Server) analysisKick(ctx *glsp.Context, root string) {
 	}
 }
 
-func (s *Server) analysisRun(ctx *glsp.Context, root string, a *analysis) {
+func (s *Server) analysisRun(ctx *protocol.Context, root string, a *analysis) {
 	for {
 		var gen int
 		for {
@@ -160,7 +158,7 @@ func (s *Server) analysisRun(ctx *glsp.Context, root string, a *analysis) {
 	}
 }
 
-func (s *Server) publishResult(ctx *glsp.Context, res *projectResult) {
+func (s *Server) publishResult(ctx *protocol.Context, res *projectResult) {
 	s.mu.Lock()
 	uris := make([]string, 0, len(s.docs))
 	for uri := range s.docs {
@@ -181,7 +179,7 @@ func (s *Server) publishResult(ctx *glsp.Context, res *projectResult) {
 		} else {
 			continue
 		}
-		ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+		ctx.Notify(protocol.TextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
 			URI:         uri,
 			Version:     versionStamp(res.versions[path]),
 			Diagnostics: diagnosticsLSP(text, lineStarts(text), ds),

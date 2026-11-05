@@ -48,7 +48,7 @@ that lands it.
 | Graceful shutdown, health endpoint | releases / Puma | missing | |
 | Test helpers (temp database, server, clients) | ConnTest / fixtures | missing | |
 | Code formatter | mix format / rubocop | missing | |
-| Language server and editor support | yes | built | |
+| Language server and editor support | yes | built (LSP 3.16 over stdio on a protocol layer of the standard library alone) | |
 | Generators and scaffolds | yes | built (`volt gen` is the generator) | |
 | REPL | iex / rails c | not planned | |
 | Admin dashboard | LiveDashboard / gems | not planned | |

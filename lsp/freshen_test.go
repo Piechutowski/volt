@@ -8,8 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tliron/glsp"
-	protocol "github.com/tliron/glsp/protocol_3_16"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 func TestGoFileChangeRefreshesInBackground(t *testing.T) {
@@ -20,8 +19,8 @@ func TestGoFileChangeRefreshesInBackground(t *testing.T) {
 	s.debounce = 20 * time.Millisecond
 	var mu sync.Mutex
 	published := 0
-	ctx := &glsp.Context{Notify: func(method string, params any) {
-		if method == protocol.ServerTextDocumentPublishDiagnostics && params.(protocol.PublishDiagnosticsParams).URI == uri {
+	ctx := &protocol.Context{Notify: func(method string, params any) {
+		if method == protocol.TextDocumentPublishDiagnostics && params.(protocol.PublishDiagnosticsParams).URI == uri {
 			mu.Lock()
 			published++
 			mu.Unlock()

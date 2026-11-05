@@ -8,8 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tliron/glsp"
-	protocol "github.com/tliron/glsp/protocol_3_16"
+	"github.com/Piechutowski/volt/lsp/protocol"
 )
 
 func TestServerAnalyzesInBackground(t *testing.T) {
@@ -30,8 +29,8 @@ func TestServerAnalyzesInBackground(t *testing.T) {
 	s.debounce = 0
 	var mu sync.Mutex
 	var published []protocol.PublishDiagnosticsParams
-	ctx := &glsp.Context{Notify: func(method string, params any) {
-		if method != protocol.ServerTextDocumentPublishDiagnostics {
+	ctx := &protocol.Context{Notify: func(method string, params any) {
+		if method != protocol.TextDocumentPublishDiagnostics {
 			return
 		}
 		mu.Lock()
@@ -70,7 +69,7 @@ func TestServerAnalyzesInBackground(t *testing.T) {
 	fixed := strings.Replace(broken, "Users.index", "Users.Index", 1)
 	if err := s.didChange(ctx, &protocol.DidChangeTextDocumentParams{
 		TextDocument:   protocol.VersionedTextDocumentIdentifier{TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: uri}},
-		ContentChanges: []any{protocol.TextDocumentContentChangeEventWhole{Text: fixed}},
+		ContentChanges: []protocol.TextDocumentContentChangeEvent{{Text: fixed}},
 	}); err != nil {
 		t.Fatal(err)
 	}

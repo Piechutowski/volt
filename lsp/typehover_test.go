@@ -3,8 +3,6 @@ package lsp
 import (
 	"strings"
 	"testing"
-
-	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 const typeSchema = "package db\n\ntype money.Money int from \"example.com/app/money\"\ntype Slug string\n\ntable products {\n\tid int [pk]\n\tslug Slug\n\tprice money.Money\n}\n"
@@ -15,7 +13,7 @@ func TestTypeHoverAndDefinition(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover for the declared type reference")
 	}
-	md := h.Contents.(protocol.MarkupContent).Value
+	md := h.Contents.Value
 	if !strings.Contains(md, "type money.Money int from \"example.com/app/money\"") {
 		t.Errorf("hover does not show the declaration:\n%s", md)
 	}
