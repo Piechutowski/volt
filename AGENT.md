@@ -54,9 +54,38 @@ the migration commands with exit 2), while the library and the runtime
 register none. Generated code is committed only where it is a golden:
 the generator testdata and the `itest/` and `nao/itest/` fixtures. Go
 floor is the newest stable Go, declared in all three `go.mod` files.
-`grammar/`, `zed-extension/` and `scripts/sync-grammar.sh` are the
-editor stack.
+`grammar/`, `zed-extension/`, `scripts/sync-grammar` and its wrapper
+`scripts/sync-grammar.sh` are the editor stack.
 `go test ./...` at the root does not cover the tool modules.
+
+## Stack: Go, Volt and SQLite, nothing else
+
+Code, tests, tools and scripts are Go. The database is SQLite through
+`mattn/go-sqlite3`, in tests as in production: a test opens a file in
+its temporary directory through `run.Open` (`internal/dbtest`). The only
+program a test or tool runs is `go`, or a `volt` it built. No Python, no
+shell scripts, no other SQLite driver or engine, no other runtime, and
+no check that skips itself when a tool is missing: a check that seems
+to need another tool is written in Go against mattn.
+
+mattn is the driver, chosen and settled. It wraps SQLite's C library
+through cgo, so a C compiler is a required and accepted dependency of
+building and testing Volt. A pure-Go driver is not wanted; do not
+raise the cgo dependency as a cost or a risk.
+
+The one exception is the editor stack, whose languages the editors
+dictate. `grammar/` is a tree-sitter grammar: `grammar.js`, the C
+parser generated from it, and the tree-sitter CLI that `npm ci` pins.
+`zed-extension/` is a Zed extension: Rust, TOML and tree-sitter queries,
+with its grammar loaded from a git mirror. `scripts/sync-grammar`,
+written in Go, runs `git` and that CLI for them;
+`scripts/sync-grammar.sh` is a one-line wrapper that runs it, kept for
+convenience until the Zed extension is published. Nothing outside
+those directories uses any of it.
+
+One violation remains: `internal/perfsweep` runs `git`, `uname`,
+`sysctl` and `sw_vers` to describe the machine; `plan.md` step 20
+removes them.
 
 ## Verification bar, all of it, before claiming done
 
@@ -72,7 +101,7 @@ Golden refresh is `go test ./gen/router -update` and `go test
 ./nao/gen/... -update`; read the diff, goldens
 exist to surface unintended output changes. Grammar changes also need
 `tree-sitter generate`, `tree-sitter test`, the checklist in
-`editor.md` section 8 and `./scripts/sync-grammar.sh`. Anything
+`editor.md` section 8 and `go run ./scripts/sync-grammar`. Anything
 interactive in the language server gets a scripted stdio session; one
 is a golden (`cmd/volt/lsp_session_test.go`).
 

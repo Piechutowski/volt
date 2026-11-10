@@ -252,6 +252,17 @@ Deferred: the language first, then non-core features and tooling.
 
 ---
 
+## Step 20. No external tools in the performance report
+
+`internal/perfsweep` describes the machine by running `uname`, `sysctl`,
+`sw_vers` and `git` (AGENT.md, the stack). It reads them from the
+system instead: the kernel release from `/proc` on Linux and through
+`syscall.Sysctl` on macOS, the commit from `.git` itself. The `+dirty`
+mark needs `git status` and goes, unless the report takes it from the
+build's own VCS stamp.
+
+---
+
 ## Verification bar
 
 Before claiming any step done:
@@ -266,13 +277,14 @@ gofmt -l . | grep -v zed-extension      # empty
 
 Goldens: `go test ./gen/router -update`, `go test ./nao/gen/... -update`,
 read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
-`editor.md` checklist, `./scripts/sync-grammar.sh`.
+`editor.md` checklist, `go run ./scripts/sync-grammar`.
 
 ## Order
 
 | Step | Depends on | Lands |
 |---|---|---|
 | 5, 13 to 19 | | deferred |
+| 20 | | next |
 
 The blog fixture under `itest/blog` is the application every step
 rebuilds. Measured at each step on it and recorded in the commit

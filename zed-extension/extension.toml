@@ -12,8 +12,8 @@ languages = ["Volt"]
 
 # The grammar is loaded from a local git mirror of ../grammar.
 # `repository` and `commit` below are machine-specific and are rewritten by
-# scripts/sync-grammar.sh — run it once after cloning and after every grammar
+# `go run ./scripts/sync-grammar` — run it once after cloning and after every grammar
 # change, then use `zed: install dev extension` / Rebuild.
 [grammars.volt]
-repository = "file:///SET-BY-scripts/sync-grammar.sh"
+repository = "file:///SET-BY-scripts/sync-grammar"
 commit = "0000000000000000000000000000000000000000"

@@ -1,22 +1,25 @@
 package golang
 
 import (
-	"encoding/json"
-	"os/exec"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/Piechutowski/volt/internal/dbtest"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/parser"
 	sqlitegen "github.com/Piechutowski/volt/nao/gen/sqlite"
 	"github.com/Piechutowski/volt/nao/naming"
 	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/nao/run"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type stmtCase struct {
-	SQL string `json:"sql"`
-	N   int    `json:"n"`
+	SQL string
+	N   int
 }
 
 func planStatements(t *testing.T, p *naming.Plan) map[string]stmtCase {
@@ -125,28 +128,7 @@ func planDynStatements(t *testing.T, p *naming.Plan) map[string]stmtCase {
 }
 
 func TestQueriesPrepare(t *testing.T) {
-	if _, err := exec.LookPath("python3"); err != nil {
-		t.Skip("python3 not available")
-	}
-	const driver = `
-import sqlite3, sys, json, datetime, uuid
-inp = json.load(sys.stdin)
-con = sqlite3.connect(":memory:")
-con.execute("PRAGMA foreign_keys = ON")
-def _now(): return datetime.datetime.now().isoformat(sep=" ")
-con.create_function("now", 0, _now, deterministic=True)
-con.create_function("getdate", 0, _now, deterministic=True)
-con.create_function("uuid_generate_v4", 0, lambda: str(uuid.uuid4()), deterministic=True)
-con.executescript(inp["ddl"])
-for name, case in sorted(inp["stmts"].items()):
-    stmt, n = case["sql"], case["n"]
-    try:
-        con.execute("EXPLAIN " + stmt, [None] * n)
-    except Exception as e:
-        sys.exit(f"{name}: {e}\n  {stmt}")
-`
 	for _, schema := range corpusSchemas(t) {
-		schema := schema
 		t.Run(strings.TrimSuffix(strings.TrimPrefix(schema, "../testdata/"), ".volt"), func(t *testing.T) {
 			f, info := parseChecked(t, schema)
 			ddl, err := sqlitegen.Generate(f, info, sqlitegen.Options{Source: schema})
@@ -161,19 +143,19 @@ for name, case in sorted(inp["stmts"].items()):
 			for name, c := range planDynStatements(t, p) {
 				stmts[name] = c
 			}
-			input, err := json.Marshal(map[string]any{
-				"ddl":   string(ddl),
-				"stmts": stmts,
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			cmd := exec.Command("python3", "-c", driver)
-			cmd.Stdin = strings.NewReader(string(input))
-			if out, err := cmd.CombinedOutput(); err != nil {
-				t.Errorf("statement does not prepare against the generated DDL: %v\n%s", err, out)
-			}
+			stmtsPrepare(t, dbtest.Open(t, string(ddl)), stmts)
 		})
+	}
+}
+
+// stmtsPrepare fails t for every statement of stmts, in name order, that
+// does not prepare against db's schema with its number of arguments.
+func stmtsPrepare(t *testing.T, db run.DB, stmts map[string]stmtCase) {
+	t.Helper()
+	for _, name := range slices.Sorted(maps.Keys(stmts)) {
+		if err := dbtest.StatementPrepares(db, stmts[name].SQL, stmts[name].N); err != nil {
+			t.Errorf("%s does not prepare against the generated DDL: %v", name, err)
+		}
 	}
 }
 
