@@ -235,12 +235,15 @@ func (x poolExecutor) Transaction(ctx context.Context, writes bool, fn func(rt.E
 			rollback(conn)
 		}
 	}()
-	if err := fn(txExecutor{db: x.db, conn: conn}); err != nil {
+	stmts := &txStmts{conn: conn, byText: map[string]*sql.Stmt{}}
+	defer stmts.close()
+	if err := fn(txExecutor{db: x.db, conn: conn, stmts: stmts}); err != nil {
 		return err
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	stmts.close()
 	if _, err := conn.ExecContext(context.WithoutCancel(ctx), "COMMIT"); err != nil {
 		return err
 	}
@@ -311,8 +314,38 @@ func rollback(conn *sql.Conn) {
 }
 
 type txExecutor struct {
-	db   DB
-	conn *sql.Conn
+	db    DB
+	conn  *sql.Conn
+	stmts *txStmts
+}
+
+const txStmtsMax = 64
+
+type txStmts struct {
+	conn   *sql.Conn
+	byText map[string]*sql.Stmt
+}
+
+func (s *txStmts) prepared(ctx context.Context, query string) (*sql.Stmt, error) {
+	if stmt, ok := s.byText[query]; ok {
+		return stmt, nil
+	}
+	if len(s.byText) >= txStmtsMax {
+		return nil, nil
+	}
+	stmt, err := s.conn.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	s.byText[query] = stmt
+	return stmt, nil
+}
+
+func (s *txStmts) close() {
+	for query, stmt := range s.byText {
+		_ = stmt.Close()
+		delete(s.byText, query)
+	}
 }
 
 func (x txExecutor) Query(ctx context.Context, query string, args []any) (rt.Rows, error) {
@@ -324,7 +357,17 @@ func (x txExecutor) Query(ctx context.Context, query string, args []any) (rt.Row
 		return nil, err
 	}
 	start := time.Now()
-	rows, err := x.conn.QueryContext(ctx, query, bound...)
+	stmt, err := x.stmts.prepared(ctx, query)
+	if err != nil {
+		x.db.logged(query, start, err)
+		return nil, err
+	}
+	var rows *sql.Rows
+	if stmt != nil {
+		rows, err = stmt.QueryContext(ctx, bound...)
+	} else {
+		rows, err = x.conn.QueryContext(ctx, query, bound...)
+	}
 	x.db.logged(query, start, err)
 	return rows, err
 }
@@ -338,7 +381,17 @@ func (x txExecutor) Exec(ctx context.Context, query string, args []any) (int64, 
 		return 0, err
 	}
 	start := time.Now()
-	res, err := x.conn.ExecContext(ctx, query, bound...)
+	stmt, err := x.stmts.prepared(ctx, query)
+	if err != nil {
+		x.db.logged(query, start, err)
+		return 0, err
+	}
+	var res sql.Result
+	if stmt != nil {
+		res, err = stmt.ExecContext(ctx, bound...)
+	} else {
+		res, err = x.conn.ExecContext(ctx, query, bound...)
+	}
 	x.db.logged(query, start, err)
 	if err != nil {
 		return 0, err

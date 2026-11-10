@@ -5427,9 +5427,12 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    only ways to make a `run.DB`. `run.Run(ctx, db, e)` performs one
    effect: every statement outside a transaction is prepared through
    the statement cache, keyed by its text, so identical shapes prepare
-   once; a statement inside one runs on the transaction's connection
-   and is prepared there each time, since a cached statement belongs
-   to the pool and not to one connection. A
+   once; a statement inside one runs on the transaction's connection,
+   which the pool's cached statements cannot reach while the
+   transaction holds it, and is prepared there once per transaction:
+   the transaction keeps each distinct text it prepared, up to 64,
+   runs a text past those unprepared, and closes every one before it
+   commits or rolls back, whatever ends it. A
    `Transaction` runs its steps on one transaction that commits when
    every step succeeded and rolls back on the first error or a panic, a
    `Transaction` inside one joins it. A transaction that can write
