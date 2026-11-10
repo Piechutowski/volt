@@ -5414,20 +5414,39 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    generation by `volt vet`, as a wrapper's collision is (`lint.md`,
    `dynname`).
 5. **The runner.** `run.Open(driver, dsn)` opens the database file at
-   `dsn`, pins one connection and sets WAL, `busy_timeout = 5000` and
-   `foreign_keys = ON` on every connection the pool opens, since SQLite
-   keeps each setting per connection. It refuses an in-memory DSN
+   `dsn` as two pools, since SQLite under WAL lets one writer and any
+   number of readers work at once. The writer is one connection with
+   WAL, `busy_timeout = 5000` and `foreign_keys = ON`; the readers are
+   as many connections as `GOMAXPROCS`, held open and idle once
+   opened, with `busy_timeout = 5000`, `foreign_keys = ON` and
+   `query_only = ON`, so a reader that is handed a write fails. The
+   runner compares `GOMAXPROCS` with the readers' size whenever it
+   hands out a reader and resizes the pool when it changed, as Go
+   follows the CPUs, the affinity mask and the cgroup quota it runs
+   under; a smaller size closes the readers left idle. SQLite keeps
+   each setting per connection, so the pools set them on every
+   connection they open. An effect that cannot write runs on a
+   reader, wherever it is performed outside a transaction: at
+   `run.Run`, as a step of a `Parallel`, as either half of a `Then`;
+   every other one runs on the writer, and inside a transaction
+   every statement runs on the transaction's connection. A read that
+   starts after a write committed sees it, since every read
+   transaction under WAL starts from the last commit; a read never
+   waits for the writer and never sees a write transaction before it
+   commits. `MigrateUp` and `MigrateDown` close the idle readers
+   before they run, so a migration that needs the file to itself in
+   this process, one that changes the journal mode, finds it so. It refuses an in-memory DSN
    (`:memory:`, `file::memory:`, `mode=memory`; `run.MemoryRefused`
    names the refusal), since such a database lives on one connection
    and is gone with it: tests open a file in their temporary directory
    as production does. `run.OpenReadOnly(driver, dsn)` opens a file
    for reading alone, its connections with `busy_timeout = 5000`,
    `foreign_keys = ON` and `query_only = ON` and no change of journal
-   mode, so a write fails and the file stays as it was. They are the
+   mode, readers only, so a write fails and the file stays as it was. They are the
    only ways to make a `run.DB`. `run.Run(ctx, db, e)` performs one
    effect: every statement outside a transaction is prepared through
-   the statement cache, keyed by its text, so identical shapes prepare
-   once; a statement inside one runs on the transaction's connection,
+   its pool's statement cache, keyed by its text, so identical shapes
+   prepare once per connection; a statement inside one runs on the transaction's connection,
    which the pool's cached statements cannot reach while the
    transaction holds it, and is prepared there once per transaction:
    the transaction keeps each distinct text it prepared, up to 64,
@@ -5446,12 +5465,13 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    context's error: SQLite's own wait sees no context. A transaction
    whose effects can only read, a `With`, and a `Transaction`, a
    `Parallel`, a `Map` or an `Atomic` of `Query`, `Lookup`, `With`,
-   `Pure` and `Fail` alone, begins deferred (`BEGIN`): it takes one
-   snapshot at its first read and no lock, so under WAL it reads
-   beside a writer without waiting and beside other readers at once.
+   `Pure` and `Fail` alone, runs on one reader and begins deferred
+   (`BEGIN`): it takes one snapshot at its first read and no lock, so
+   its reads agree with each other, and it reads beside the writer
+   without waiting and beside other readers at once.
    A `Then` counts as writing, since what its `next` returns is not
-   known before it runs. With the one connection `run.Open` pins the
-   transactions run one after another either way. A statement outside
+   known before it runs. The writer's one connection runs the
+   transactions that can write one after another. A statement outside
    a transaction that finds the write lock held, by another connection
    or another process, waits under SQLite's own busy handler, which no
    context interrupts, so a route's deadline (§route-loads) reaches it

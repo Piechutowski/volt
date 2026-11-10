@@ -80,6 +80,8 @@ func (x *fakeExecutor) Exec(ctx context.Context, sql string, args []any) (int64,
 	return x.affected, x.execErr
 }
 
+func (x *fakeExecutor) Reader() Executor { return x }
+
 func (x *fakeExecutor) Transaction(ctx context.Context, writes bool, fn func(Executor) error) error {
 	x.mu.Lock()
 	x.txs++
@@ -248,7 +250,11 @@ func (x joinExecutor) Transaction(ctx context.Context, _ bool, fn func(Executor)
 	return fn(inTx(x))
 }
 
+func (x joinExecutor) Reader() Executor { return x }
+
 type inTx joinExecutor
+
+func (x inTx) Reader() Executor { return x }
 
 func (x inTx) Query(ctx context.Context, sql string, args []any) (Rows, error) {
 	return x.fakeExecutor.Query(ctx, "tx "+sql, args)
@@ -506,6 +512,8 @@ func TestParallelInsideTransactionRunsInOrder(t *testing.T) {
 }
 
 type waitExecutor struct{ *fakeExecutor }
+
+func (x waitExecutor) Reader() Executor { return x }
 
 func (x waitExecutor) Exec(ctx context.Context, sql string, args []any) (int64, error) {
 	if sql != "wait" {

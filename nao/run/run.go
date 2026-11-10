@@ -7,41 +7,70 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // DB is the one stateful object of the data layer (spec
-// §values-and-effects): the connection pool, the statement cache every
-// statement outside a transaction is prepared through, and the logger
-// that writes one line per statement. It is made in main, handed to the generated router and
-// held by the generated shims; a DB is a value whose fields are shared.
+// §values-and-effects): the writer's pool of one connection, the
+// readers' pool, a statement cache for each, through which every
+// statement outside a transaction is prepared, and the logger that
+// writes one line per statement. It is made in main, handed to the
+// generated router and held by the generated shims; a DB is a value
+// whose fields are shared.
 type DB struct {
+	pool    *sql.DB
+	cache   *StmtCache
+	readers *readers
+	log     *slog.Logger
+}
+
+type readers struct {
 	pool  *sql.DB
 	cache *StmtCache
-	log   *slog.Logger
+	mu    sync.Mutex
+	limit atomic.Int64
+}
+
+func (r *readers) fit() {
+	n := int64(runtime.GOMAXPROCS(0))
+	if r.limit.Load() == n {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.limit.Load() == n {
+		return
+	}
+	r.pool.SetMaxOpenConns(int(n))
+	r.pool.SetMaxIdleConns(int(n))
+	r.limit.Store(n)
 }
 
 // Open opens the SQLite database file at dsn via the named database/sql
-// driver and applies the pragmas the generated code is designed for
-// (spec §generated-query-surface) to every connection the pool opens:
-// WAL, a busy timeout of five seconds and foreign keys on. It pins the
-// pool to a single connection and refuses an in-memory database.
+// driver (spec §generated-query-surface, the runner): a writer of one
+// connection with WAL, a busy timeout of five seconds and foreign keys
+// on, and readers as many as GOMAXPROCS, following it, with the same
+// timeout and foreign keys and query_only. It refuses an in-memory
+// database.
 func Open(driverName, dsn string) (DB, error) {
-	return open("run.Open", driverName, dsn, writerPragmas)
+	return open("run.Open", driverName, dsn, false)
 }
 
 // OpenReadOnly opens the SQLite database file at dsn for reading alone
-// (spec §generated-query-surface): every connection runs with a busy
+// (spec §generated-query-surface): readers only, each with a busy
 // timeout of five seconds, foreign keys on and query_only, so a write
 // fails and the file is left as it was, its journal mode included.
 func OpenReadOnly(driverName, dsn string) (DB, error) {
-	return open("run.OpenReadOnly", driverName, dsn, readerPragmas)
+	return open("run.OpenReadOnly", driverName, dsn, true)
 }
 
-func open(name, driverName, dsn string, pragmas []string) (DB, error) {
+func open(name, driverName, dsn string, readOnly bool) (DB, error) {
 	if err := MemoryRefused(dsn); err != nil {
 		return DB{}, fmt.Errorf("%s: %w", name, err)
 	}
@@ -57,13 +86,29 @@ func open(name, driverName, dsn string, pragmas []string) (DB, error) {
 			return DB{}, err
 		}
 	}
-	pool := sql.OpenDB(pragmaConnector{inner: c, pragmas: pragmas})
-	pool.SetMaxOpenConns(1)
-	if err := pool.Ping(); err != nil {
-		_ = pool.Close()
+	var writer *sql.DB
+	if !readOnly {
+		writer = sql.OpenDB(pragmaConnector{inner: c, pragmas: writerPragmas})
+		writer.SetMaxOpenConns(1)
+		if err := writer.Ping(); err != nil {
+			_ = writer.Close()
+			return DB{}, fmt.Errorf("%s: %w", name, err)
+		}
+	}
+	r := &readers{pool: sql.OpenDB(pragmaConnector{inner: c, pragmas: readerPragmas}), cache: NewStmtCache(256)}
+	r.fit()
+	if err := r.pool.Ping(); err != nil {
+		_ = r.pool.Close()
+		if writer != nil {
+			_ = writer.Close()
+		}
 		return DB{}, fmt.Errorf("%s: %w", name, err)
 	}
-	return DB{pool: pool, cache: NewStmtCache(256), log: slog.Default()}, nil
+	db := DB{pool: writer, cache: NewStmtCache(256), readers: r, log: slog.Default()}
+	if readOnly {
+		db.pool, db.cache = r.pool, r.cache
+	}
+	return db, nil
 }
 
 // MemoryRefused is the error Open and OpenReadOnly return for a dsn that
@@ -138,8 +183,9 @@ func driverExec(ctx context.Context, conn driver.Conn, query string) error {
 	return err
 }
 
-// Pool is the pool, for what reads the database outside the effects:
-// the tool's fold and a program's own shutdown.
+// Pool is the writer's pool, the readers' for a DB OpenReadOnly made,
+// for what touches the database outside the effects: the tool's fold,
+// migrations, tests' DDL and a program's own shutdown.
 func (db DB) Pool() *sql.DB { return db.pool }
 
 // WithLogger is db logging each statement through l, at debug level.
@@ -148,22 +194,59 @@ func (db DB) WithLogger(l *slog.Logger) DB {
 	return db
 }
 
-// Close closes the cached statements and the pool.
+// Close closes the cached statements and the pools.
 func (db DB) Close() error {
-	return errors.Join(db.cache.Close(), db.pool.Close())
+	if db.pool == db.readers.pool {
+		return errors.Join(db.cache.Close(), db.pool.Close())
+	}
+	return errors.Join(db.cache.Close(), db.pool.Close(), db.readers.cache.Close(), db.readers.pool.Close())
 }
+
+func (db DB) readersIdleClose() {
+	r := db.readers
+	if r.pool == db.pool {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.pool.SetMaxIdleConns(0)
+	r.limit.Store(0)
+}
+
+var errReaderWrite = errors.New("run: a transaction that can write reached a reader")
 
 // Run performs e over db and returns what it yields (spec
 // §values-and-effects): the one place a described effect meets the
 // database.
 func Run[T any](ctx context.Context, db DB, e rt.Effect[T]) (T, error) {
-	return rt.Perform(ctx, poolExecutor{db}, e)
+	return rt.Perform(ctx, db.writer(), e)
 }
 
-type poolExecutor struct{ db DB }
+type poolExecutor struct {
+	db    DB
+	pool  *sql.DB
+	cache *StmtCache
+	reads bool
+}
+
+func (db DB) writer() poolExecutor {
+	return poolExecutor{db: db, pool: db.pool, cache: db.cache, reads: db.pool == db.readers.pool}
+}
+
+func (db DB) reader() poolExecutor {
+	db.readers.fit()
+	return poolExecutor{db: db, pool: db.readers.pool, cache: db.readers.cache, reads: true}
+}
+
+func (x poolExecutor) Reader() rt.Executor {
+	if x.reads {
+		return x
+	}
+	return x.db.reader()
+}
 
 func (x poolExecutor) Query(ctx context.Context, query string, args []any) (rt.Rows, error) {
-	stmt, release, err := x.db.cache.Prepare(ctx, x.db.pool, query)
+	stmt, release, err := x.cache.Prepare(ctx, x.pool, query)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +280,7 @@ func (r heldRows) Close() error {
 }
 
 func (x poolExecutor) Exec(ctx context.Context, query string, args []any) (int64, error) {
-	stmt, release, err := x.db.cache.Prepare(ctx, x.db.pool, query)
+	stmt, release, err := x.cache.Prepare(ctx, x.pool, query)
 	if err != nil {
 		return 0, err
 	}
@@ -216,7 +299,10 @@ func (x poolExecutor) Exec(ctx context.Context, query string, args []any) (int64
 }
 
 func (x poolExecutor) Transaction(ctx context.Context, writes bool, fn func(rt.Executor) error) error {
-	conn, err := x.db.pool.Conn(ctx)
+	if writes && x.reads {
+		return errReaderWrite
+	}
+	conn, err := x.pool.Conn(ctx)
 	if err != nil {
 		return err
 	}
@@ -403,17 +489,24 @@ func (x txExecutor) Transaction(ctx context.Context, _ bool, fn func(rt.Executor
 	return fn(x)
 }
 
+func (x txExecutor) Reader() rt.Executor { return x }
+
 func (db DB) logged(query string, start time.Time, err error) {
 	db.log.Debug("statement", "sql", query, "duration", time.Since(start), "err", err)
 }
 
-// Statements is how many statements the cache holds, for tests and
-// observability.
-func (db DB) Statements() int { return db.cache.Len() }
+// Statements is how many statements the caches hold, the writer's and
+// the readers', for tests and observability.
+func (db DB) Statements() int {
+	if db.cache == db.readers.cache {
+		return db.cache.Len()
+	}
+	return db.cache.Len() + db.readers.cache.Len()
+}
 
 // Perform is Run for an effect of any result, as the shim holds one.
 func Perform(ctx context.Context, db DB, e rt.AnyEffect) (any, error) {
-	return rt.PerformAny(ctx, poolExecutor{db}, e)
+	return rt.PerformAny(ctx, db.writer(), e)
 }
 
 // Performer is the function the generated router hands the shim: Perform

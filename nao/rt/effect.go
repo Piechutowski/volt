@@ -38,13 +38,23 @@ type Rows interface {
 // Executor performs statements for the effects (spec
 // §generated-query-surface): the runner's handle over one pool or one
 // transaction. nao/run implements it and nothing else does; an Exec
-// reports the rows affected, and a Transaction runs fn over an
-// executor that commits when fn returns nil and rolls back otherwise,
-// taking the write lock at its start when writes is set.
+// reports the rows affected, a Transaction runs fn over an executor
+// that commits when fn returns nil and rolls back otherwise, taking the
+// write lock at its start when writes is set, and Reader is the
+// executor an effect that cannot write runs on: a reader connection
+// outside a transaction, the executor itself inside one.
 type Executor interface {
 	Query(ctx context.Context, sql string, args []any) (Rows, error)
 	Exec(ctx context.Context, sql string, args []any) (int64, error)
 	Transaction(ctx context.Context, writes bool, fn func(Executor) error) error
+	Reader() Executor
+}
+
+func executorFor(x Executor, writes bool) Executor {
+	if writes {
+		return x
+	}
+	return x.Reader()
 }
 
 // Effect is a computation over the database that yields a T, described
@@ -70,14 +80,14 @@ type AnyEffect interface {
 
 // Perform performs e over x and returns what it yields (spec
 // §generated-query-surface): with PerformAny, the only functions that
-// hand an effect an executor, which the runner calls. A nil e yields
-// ErrNoEffect.
+// hand an effect an executor, which the runner calls. An effect that
+// cannot write runs on x's Reader. A nil e yields ErrNoEffect.
 func Perform[T any](ctx context.Context, x Executor, e Effect[T]) (T, error) {
 	if e == nil {
 		var zero T
 		return zero, ErrNoEffect
 	}
-	return e.perform(ctx, x)
+	return e.perform(ctx, executorFor(x, e.writes()))
 }
 
 // PerformAny is Perform for an effect of any result, as the shim holds
@@ -86,7 +96,7 @@ func PerformAny(ctx context.Context, x Executor, e AnyEffect) (any, error) {
 	if e == nil {
 		return nil, ErrNoEffect
 	}
-	return e.performAny(ctx, x)
+	return e.performAny(ctx, executorFor(x, e.writes()))
 }
 
 // Query is zero or more rows of T (spec §generated-query-surface): a
@@ -262,6 +272,8 @@ func (e Exec) performAny(ctx context.Context, x Executor) (any, error) { return 
 
 type txExecutor struct{ Executor }
 
+func (x txExecutor) Reader() Executor { return x }
+
 func txRun(ctx context.Context, x Executor, writes bool, fn func(Executor) error) error {
 	return x.Transaction(ctx, writes, func(tx Executor) error { return fn(txExecutor{tx}) })
 }
@@ -273,7 +285,7 @@ func stepsWrite(steps []AnyEffect) bool {
 func stepsPerform(ctx context.Context, x Executor, steps []AnyEffect) ([]any, error) {
 	out := make([]any, len(steps))
 	for i, s := range steps {
-		v, err := s.performAny(ctx, x)
+		v, err := s.performAny(ctx, executorFor(x, s.writes()))
 		if err != nil {
 			return nil, err
 		}
@@ -341,7 +353,7 @@ func (p Parallel) perform(ctx context.Context, x Executor) ([]any, error) {
 	var mu sync.Mutex
 	var first error
 	stepsJoin(len(p.Steps), cancel, func(i int) {
-		v, err := p.Steps[i].performAny(ctx, x)
+		v, err := p.Steps[i].performAny(ctx, executorFor(x, p.Steps[i].writes()))
 		if err != nil {
 			mu.Lock()
 			if first == nil {
@@ -425,7 +437,7 @@ func (t thenEffect[T, U]) perform(ctx context.Context, x Executor) (U, error) {
 	if t.first == nil || t.next == nil {
 		return zero, ErrNoEffect
 	}
-	v, err := t.first.perform(ctx, x)
+	v, err := t.first.perform(ctx, executorFor(x, t.first.writes()))
 	if err != nil {
 		return zero, err
 	}
@@ -433,7 +445,7 @@ func (t thenEffect[T, U]) perform(ctx context.Context, x Executor) (U, error) {
 	if e == nil {
 		return zero, ErrNoEffect
 	}
-	return e.perform(ctx, x)
+	return e.perform(ctx, executorFor(x, e.writes()))
 }
 
 func (t thenEffect[T, U]) performAny(ctx context.Context, x Executor) (any, error) {

@@ -207,7 +207,7 @@ func TestStmtCacheClosesApartFromItsCallers(t *testing.T) {
 func TestQueryOfAnEvictedStatementClosesApart(t *testing.T) {
 	ctx := context.Background()
 	pool := poolCancelOpen(t, 3)
-	db := DB{pool: pool, cache: NewStmtCache(1), log: slog.Default()}
+	db := cacheDB(pool, NewStmtCache(1))
 	t.Cleanup(func() { db.cache.Close() })
 	read := func(evict bool) rt.Query[int64] {
 		return rt.Query[int64]{SQL: "SELECT 1 UNION ALL SELECT 2", Scan: func(r rt.Row) (int64, error) {
@@ -284,7 +284,7 @@ func TestStmtCacheEvictionUnderLoad(t *testing.T) {
 	ctx := context.Background()
 	opened := migrateDB(t)
 	opened.Pool().SetMaxOpenConns(8)
-	db := DB{pool: opened.pool, cache: NewStmtCache(4), log: opened.log}
+	db := cacheDB(opened.pool, NewStmtCache(4))
 	defer db.cache.Close()
 	var mu sync.Mutex
 	failures := map[string]int{}
@@ -309,4 +309,8 @@ func TestStmtCacheEvictionUnderLoad(t *testing.T) {
 	if len(failures) != 0 {
 		t.Fatalf("lookups over an evicting cache failed: %v", failures)
 	}
+}
+
+func cacheDB(pool *sql.DB, cache *StmtCache) DB {
+	return DB{pool: pool, cache: cache, readers: &readers{pool: pool, cache: cache}, log: slog.Default()}
 }
