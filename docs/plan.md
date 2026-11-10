@@ -182,8 +182,8 @@ kind follows nullability and the nesting depth is one.
 ### Documentation policy
 
 After step 1 the repository's prose is: `README.md`, `AGENT.md`,
-`docs/spec.md`, `docs/lint.md`, `docs/editor.md`, `docs/roadmap.md` and
-this file. Nothing else carries opinion. `hypotheses.md`,
+`docs/spec.md`, `docs/lint.md`, `docs/editor.md`, `docs/runner.md`,
+`docs/roadmap.md` and this file. Nothing else carries opinion. `hypotheses.md`,
 `entropy-and-purity-report.md` and the spec's non-goals are deleted; a
 decision that was settled lives in the spec as a rule, an open one lives
 nowhere until the maintainer settles it. The roadmap is a status table
@@ -263,6 +263,30 @@ build's own VCS stamp.
 
 ---
 
+## Step 21. Open questions of the runner
+
+Measure and settle what `docs/runner.md` section 6 lists, then delete this
+section and that one:
+
+1. Reader scaling past four cores: whether mattn's SQLite, built with
+   its memory statistics behind one global mutex, caps parallel reads at
+   high core counts, and whether the readers need a cap below
+   `GOMAXPROCS`.
+2. The readers' page caches: about 2 MB per connection at most, so up to
+   some 256 MB for 128 busy readers; whether `cache_size` or `mmap_size`
+   should change.
+3. The bulk insert's statement size: 1,000-row statements measured 16%
+   faster than statements cut to the 32,766-parameter limit (37 ms
+   against 44 ms for ten thousand rows); whether a fixed size replaces
+   the limit.
+4. Double-quoted identifiers that name no column compile as string
+   literals (`SQLITE_DQS=3` in mattn's build), so a misspelled column in
+   generated SQL is not caught; how to catch it.
+5. A cancellable context makes mattn start a goroutine per statement and
+   per row; what that costs request traffic.
+
+---
+
 ## Verification bar
 
 Before claiming any step done:
@@ -285,6 +309,7 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 |---|---|---|
 | 5, 13 to 19 | | deferred |
 | 20 | | next |
+| 21 | | open: measure first |
 
 The blog fixture under `itest/blog` is the application every step
 rebuilds. Measured at each step on it and recorded in the commit

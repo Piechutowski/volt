@@ -18,7 +18,7 @@ one silently.
 
 ## Docs
 
-Five files in `docs/` and the README, nothing else carries prose:
+Six files in `docs/` and the README, nothing else carries prose:
 
 - `spec.md` — the language and the generated code, normative for the
   implementation as it stands. Spec and code must agree; the language
@@ -30,6 +30,10 @@ Five files in `docs/` and the README, nothing else carries prose:
   the build if it drifts.
 - `editor.md` — grammar, Zed extension, language server, and the
   verification checklist in its section 8.
+- `runner.md`: how `nao/run` meets SQLite: the two pools, which
+  connection an effect runs on, prepared statements, the bulk insert,
+  what was measured and the questions still open; the rules themselves
+  stay normative in `spec.md`.
 - `roadmap.md` — what is built and what is not; a status changes in
   the commit that lands it.
 - `plan.md` — the one forward-looking document: the decisions made
