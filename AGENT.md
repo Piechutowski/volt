@@ -132,7 +132,7 @@ is a golden (`cmd/volt/lsp_session_test.go`).
 - Test data is neutral (blog and metrics domains, never agriculture).
   A test that needs a project of some size writes one with
   `internal/corpus`.
-- Commit messages explain why.
+- A commit message is `.`, nothing else.
 
 ## Working style
 
