@@ -448,10 +448,14 @@ from one implementation. The protocol layer is Volt's own
   generated code still declares it, keeps the two in step. A rename at
   a Go reference is the other way round: the Go side is gopls's, the
   `.volt` spellings the server's.
-- **LSP: Go-side navigation is partial.** Handler references (`Home.Index`)
-  and `error_handler:` point into Go, which this server does not
-  index (roadmap). A query reference (`db.UserGet`, §query-routes) is
-  not navigated either; a dataset's select (`dataset db.browse`) is.
+- **LSP: Go-side navigation is partial.** A handler reference
+  (`Home.Index`) reaches its Go method only when the routes package's
+  own Go files hold the type that implements the controller; a type in
+  another package, or in a test file, is not read, and the reference
+  lands on the generated interface instead, where gopls's
+  go-to-implementation takes over (Go references, below). A query
+  reference (`db.UserGet`, §query-routes) is not navigated; a
+  dataset's select (`dataset db.browse`) is.
   A declared type's hover stays on its `type` line; go-to-definition
   on a column's type lands there, and from the name of the `type`
   line itself on the Go type (Go references, below).
@@ -475,9 +479,20 @@ bare name in the package's own Go files, a qualified one in the
 package its `from` path imports, whose directory the go tool finds
 (`go list -find`, offline), so a package of the project, of a
 workspace module, of the module cache or of the standard library all
-resolve; with no go tool on the path it finds nothing. Error handlers
-are not navigated (section 7), but their existence, and a handler's
-signature, are checked like the rest. Existence and the spelled signature are the
+resolve; with no go tool on the path it finds nothing. An error
+handler (`error_handler:`) resolves as a plug does. A route's handler
+`Controller.Action` names an action of the generated
+`<Controller>Controller` interface, which any type may implement
+(§handler-references), so the server takes as the implementation the
+one type of the package's Go files whose methods, by value or pointer
+receiver, name every action the routes give the controller, or, when
+several do, the one named as the controller: go-to-definition on the
+controller lands on that type, on the action on its method, and the
+action hovers with the method's signature and doc comment. With no
+such type, or several and none named so, both land on the generated
+interface and its method in `volt_handlers.go` when the file exists,
+and the hover says why. A rename at either part rewrites every route
+that spells it and leaves the Go side to gopls. Existence and the spelled signature are the
 checker's, so a typo or a wrong parameter type is a diagnostic at the
 reference. The Go side can move without any `.volt` buffer changing —
 a gopls rename, a newly written function — so the server registers a

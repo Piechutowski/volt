@@ -105,6 +105,7 @@ func TestLSPSession(t *testing.T) {
 	files := map[string]string{
 		"go.mod":       "module session\n\ngo 1.27\n",
 		"app/title.go": "package app\n\n// TitleShape keeps a title non-blank.\nfunc TitleShape(title string) error { return nil }\n",
+		"app/home.go":  "package app\n\nimport \"github.com/Piechutowski/volt\"\n\n// Home answers the front page.\ntype Home struct{}\n\n// Index renders the front page.\nfunc (Home) Index(r volt.Request) volt.Response { return volt.NoContent() }\n",
 		"app/schema.volt": `package app
 
 table posts {
@@ -229,6 +230,10 @@ migration 0001__posts {
 	s.response("definition from the resources table", id)
 	id = s.send("textDocument/definition", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 7, "character": 4}}, true)
 	s.response("definition from a validator into its Go function", id)
+	id = s.send("textDocument/definition", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 12, "character": 13}}, true)
+	s.response("definition from a route's action into its Go method", id)
+	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 12, "character": 13}}, true)
+	s.response("hover on a route's action", id)
 	id = s.send("textDocument/completion", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 3, "character": 21}}, true)
 	s.response("completion inside the settings list", id)
 	id = s.send("textDocument/documentSymbol", map[string]any{"textDocument": map[string]any{"uri": uri}}, true)

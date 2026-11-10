@@ -27,8 +27,8 @@ func TestGoScanReusedAcrossBuilds(t *testing.T) {
 			t.Fatalf("%s: the index reads as stale right after its build", name)
 		}
 		e, ok := memo.goscans[root]
-		if !ok || len(res.vindex.gofuncs) == 0 {
-			t.Fatalf("%s: no Go scan kept for the package directory (%d scanned)", name, len(res.vindex.gofuncs))
+		if !ok || len(res.vindex.scanned) == 0 {
+			t.Fatalf("%s: no Go scan kept for the package directory (%d scanned)", name, len(res.vindex.scanned))
 		}
 		return fmt.Sprintf("%p", e.funcs)
 	}

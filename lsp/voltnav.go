@@ -55,7 +55,7 @@ type voltIndex struct {
 	defs    map[voltSym]voltDef
 	refs    []voltRef
 	texts   map[string]string
-	gofuncs map[string]map[string]lang.GoFunc
+	scanned map[string]goScanEntry
 	gosrcs  map[string][]lang.GoSource
 	goscans map[string]goScanEntry
 }
@@ -79,16 +79,45 @@ type voltIndexMemo struct {
 	hovers  map[*lang.SelectInfo]string
 	next    map[*lang.SelectInfo]string
 	goscans map[string]goScanEntry
+	refs    int
 }
 
 type goScanEntry struct {
-	srcs  []lang.GoSource
-	funcs map[string]lang.GoFunc
+	srcs    []lang.GoSource
+	funcs   map[string]lang.GoFunc
+	types   map[string]lang.GoType
+	methods map[string]map[string]lang.GoFunc
+}
+
+func goScanBuild(dir string, srcs []lang.GoSource) goScanEntry {
+	funcs, types, _ := lang.GoFuncsOf(dir, srcs)
+	return goScanEntry{srcs: srcs, funcs: funcs, types: types, methods: lang.GoMethodsOf(dir, srcs)}
+}
+
+func (ix *voltIndex) goScan(pkg *lang.Package) goScanEntry {
+	if e, ok := ix.scanned[pkg.Dir]; ok {
+		return e
+	}
+	srcs := ix.goSourcesNote(pkg)
+	e, kept := ix.goscans[pkg.Dir]
+	if !kept || !slices.Equal(e.srcs, srcs) {
+		e = goScanBuild(pkg.Dir, srcs)
+		if ix.goscans != nil {
+			ix.goscans[pkg.Dir] = e
+		}
+	}
+	if ix.scanned == nil {
+		ix.scanned = map[string]goScanEntry{}
+	}
+	ix.scanned[pkg.Dir] = e
+	return e
 }
 
 func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndexMemo) *voltIndex {
 	ix := &voltIndex{defs: map[voltSym]voltDef{}, texts: overlay}
 	if memo != nil {
+		ix.refs = make([]voltRef, 0, memo.refs+memo.refs/8)
+		defer func() { memo.refs = len(ix.refs) }()
 		if memo.index == nil {
 			memo.index = map[string]*IndexMemo{}
 		}
@@ -361,30 +390,16 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	if ref.Qualifier() != "" {
 		return
 	}
-	name := ref.Base()
+	ix.goFuncRefAdd(pkg, path, ref.Base(), spanOf(ref), spanOf(ref.Parts[len(ref.Parts)-1]))
+}
+
+func (ix *voltIndex) goFuncRefAdd(pkg *lang.Package, path, name string, hit, edit voltSpan) {
 	sym := voltSym{"gofunc", path, name}
-	hit, edit := spanOf(ref), spanOf(ref.Parts[len(ref.Parts)-1])
 	ix.refs = append(ix.refs, voltRef{hit, edit, sym, false, name, ""})
 	if _, done := ix.defs[sym]; done {
 		return
 	}
-	if ix.gofuncs == nil {
-		ix.gofuncs = map[string]map[string]lang.GoFunc{}
-	}
-	funcs, ok := ix.gofuncs[path]
-	if !ok {
-		srcs := ix.goSourcesNote(pkg)
-		if e, kept := ix.goscans[pkg.Dir]; kept && slices.Equal(e.srcs, srcs) {
-			funcs = e.funcs
-		} else {
-			funcs, _, _ = lang.GoFuncsOf(pkg.Dir, srcs)
-			if ix.goscans != nil {
-				ix.goscans[pkg.Dir] = goScanEntry{srcs: srcs, funcs: funcs}
-			}
-		}
-		ix.gofuncs[path] = funcs
-	}
-	if gf, found := funcs[name]; found {
+	if gf, found := ix.goScan(pkg).funcs[name]; found {
 		gfCopy := gf
 		span := voltSpan{file: gf.File, pos: gf.Pos, end: gf.End}
 		ix.defs[sym] = voltDef{span: span, gofn: &gfCopy, md: goFuncHover(name, pkg.Name, &gfCopy)}
@@ -467,6 +482,7 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 			}
 			ix.settingRefs(pkg, path, it.Settings)
 		case *ast.Route:
+			ix.handlerRefAdd(pkg, path, it.Handler)
 			ix.settingRefs(pkg, path, it.Settings)
 		case *ast.ScopeLoad:
 			ix.goRefAdd(pkg, path, it.Ref)
@@ -487,6 +503,10 @@ func (ix *voltIndex) settingRefs(pkg *lang.Package, path string, list *ast.Setti
 			}
 		case "error_handler":
 			ix.goSourcesNote(pkg)
+			if id, ok := s.Value.(*ast.Ident); ok {
+				sp := spanOf(id)
+				ix.goFuncRefAdd(pkg, path, id.Name(), sp, sp)
+			}
 		}
 	}
 }
@@ -600,7 +620,7 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 		md = groupHover(ref.sym, def, d.vindex)
 	case ref.sym.kind == "pred":
 		md = predHover(ref.sym, def, d.vindex)
-	case slices.Contains([]string{"select", "gofunc", "migration", "param", "relation"}, ref.sym.kind):
+	case slices.Contains([]string{"select", "gofunc", "controller", "action", "migration", "param", "relation"}, ref.sym.kind):
 		md = def.md
 	}
 	if md == "" {
