@@ -106,24 +106,7 @@ func goSourceOf(name string, b []byte) GoSource {
 func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, gotypes map[string]GoType, broken []string) {
 	funcs = map[string]GoFunc{}
 	gotypes = map[string]GoType{}
-	fset := gotoken.NewFileSet()
-	ctxt := build.Default
-	for _, src := range srcs {
-		if src.Head {
-			continue
-		}
-		ctxt.OpenFile = func(string) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(src.Text)), nil }
-		if ok, _ := ctxt.MatchFile(dir, src.Name); !ok {
-			continue
-		}
-		path := filepath.Join(dir, src.Name)
-		f, perr := parser.ParseFile(fset, path, src.Text, parser.ParseComments|parser.SkipObjectResolution)
-		if perr != nil {
-			broken = append(broken, fmt.Sprintf("%s: %v", src.Name, perr))
-		}
-		if f == nil {
-			continue
-		}
+	broken = goFilesParse(dir, srcs, func(fset *gotoken.FileSet, path string, f *goast.File) {
 		for _, d := range f.Decls {
 			if gd, ok := d.(*goast.GenDecl); ok && gd.Tok == gotoken.TYPE {
 				for _, spec := range gd.Specs {
@@ -146,8 +129,74 @@ func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, gotypes ma
 			}
 			funcs[fn.Name.Name] = goFuncOf(fset, path, fn)
 		}
-	}
+	})
 	return funcs, gotypes, broken
+}
+
+// GoMethodsOf scans a package directory's sources as GoFuncsOf does and
+// returns its methods by the name of their receiver's type, then by
+// their own name (spec §handler-references): what a type implementing a
+// controller declares. Sig spells the receiver.
+func GoMethodsOf(dir string, srcs []GoSource) map[string]map[string]GoFunc {
+	methods := map[string]map[string]GoFunc{}
+	goFilesParse(dir, srcs, func(fset *gotoken.FileSet, path string, f *goast.File) {
+		for _, d := range f.Decls {
+			fn, ok := d.(*goast.FuncDecl)
+			if !ok || fn.Recv == nil || len(fn.Recv.List) != 1 || fn.Name == nil || fn.Type == nil {
+				continue
+			}
+			recv := receiverTypeName(fn.Recv.List[0].Type)
+			if recv == "" {
+				continue
+			}
+			if methods[recv] == nil {
+				methods[recv] = map[string]GoFunc{}
+			}
+			if _, dup := methods[recv][fn.Name.Name]; !dup {
+				methods[recv][fn.Name.Name] = goFuncOf(fset, path, fn)
+			}
+		}
+	})
+	return methods
+}
+
+func receiverTypeName(x goast.Expr) string {
+	if star, ok := x.(*goast.StarExpr); ok {
+		x = star.X
+	}
+	switch t := x.(type) {
+	case *goast.IndexExpr:
+		x = t.X
+	case *goast.IndexListExpr:
+		x = t.X
+	}
+	if id, ok := x.(*goast.Ident); ok {
+		return id.Name
+	}
+	return ""
+}
+
+func goFilesParse(dir string, srcs []GoSource, each func(fset *gotoken.FileSet, path string, f *goast.File)) (broken []string) {
+	fset := gotoken.NewFileSet()
+	ctxt := build.Default
+	for _, src := range srcs {
+		if src.Head {
+			continue
+		}
+		ctxt.OpenFile = func(string) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(src.Text)), nil }
+		if ok, _ := ctxt.MatchFile(dir, src.Name); !ok {
+			continue
+		}
+		path := filepath.Join(dir, src.Name)
+		f, perr := parser.ParseFile(fset, path, src.Text, parser.ParseComments|parser.SkipObjectResolution)
+		if perr != nil {
+			broken = append(broken, fmt.Sprintf("%s: %v", src.Name, perr))
+		}
+		if f != nil {
+			each(fset, path, f)
+		}
+	}
+	return broken
 }
 
 // GoFuncsScan is GoFuncsOf over the sources src holds now.
@@ -205,7 +254,7 @@ func goFuncOf(fset *gotoken.FileSet, path string, fn *goast.FuncDecl) GoFunc {
 		}
 	}
 	var buf bytes.Buffer
-	if err := printer.Fprint(&buf, fset, &goast.FuncDecl{Name: fn.Name, Type: fn.Type}); err == nil {
+	if err := printer.Fprint(&buf, fset, &goast.FuncDecl{Recv: fn.Recv, Name: fn.Name, Type: fn.Type}); err == nil {
 		gf.Sig = strings.TrimSpace(buf.String())
 	}
 	if fn.Doc != nil {

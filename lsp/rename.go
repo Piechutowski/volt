@@ -67,7 +67,7 @@ func (d *Document) renameEdits(pos protocol.Position, newName string) (edits []r
 			if def := d.vindex.defs[ref.sym]; ref.sym.kind == "relation" && def.column != "" {
 				return nil, false, relationColumnRefusal(ref.text, def.column)
 			}
-			return d.vindex.renameEdits(ref.sym, ref.text, newName), ref.sym.kind == "gofunc", nil
+			return d.vindex.renameEdits(ref.sym, ref.text, newName), slices.Contains([]string{"gofunc", "controller", "action"}, ref.sym.kind), nil
 		}
 	}
 	ix := d.Index
