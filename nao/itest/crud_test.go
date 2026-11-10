@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Piechutowski/volt/internal/dbtest"
 	"github.com/Piechutowski/volt/nao/run"
 	"os"
 	"path/filepath"
@@ -20,11 +21,7 @@ import (
 
 func newDB(t *testing.T) run.DB {
 	t.Helper()
-	db, err := run.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
+	db := dbtest.Open(t, "")
 	ddlApply(t, db)
 	return db
 }

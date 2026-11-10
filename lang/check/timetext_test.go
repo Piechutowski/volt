@@ -2,6 +2,7 @@ package check
 
 import (
 	"database/sql"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -91,7 +92,7 @@ var timeExprsNotStored = []string{
 // result does not hang on the clock or the server's zone write another
 // form or another type (spec §default-values).
 func TestTimeExprStoredOnSQLite(t *testing.T) {
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

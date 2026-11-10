@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/Piechutowski/volt"
+	"github.com/Piechutowski/volt/internal/dbtest"
 	"github.com/Piechutowski/volt/itest/blog/app"
 	"github.com/Piechutowski/volt/itest/blog/db"
-	"github.com/Piechutowski/volt/nao/run"
 )
 
 // TestHandlersAreValues proves a handler is a function from a request
@@ -46,7 +46,7 @@ func TestHandlersAreValues(t *testing.T) {
 // §requests-and-responses, §route-loads): the lookup of a missing user
 // is a 404 through the scope's own error_handler either way.
 func TestEffectFailureInsideThenReachesTheSpine(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	for _, path := range []string{app.PathCard(1), app.PathProfile(1)} {
 		rec, body := serve(t, h, "GET", path)
 		if rec.Code != 200 || body["email"] != "one@example.com" {
@@ -70,7 +70,7 @@ func TestEffectFailureInsideThenReachesTheSpine(t *testing.T) {
 // that negotiates before its write answers a 406 having written nothing
 // (spec §formats).
 func TestRequestBodies(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	post := func(method, path, contentType, body string) (*httptest.ResponseRecorder, map[string]any) {
 		t.Helper()
 		req := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -158,7 +158,7 @@ func TestRequestBodies(t *testing.T) {
 // effect through the rescue's Fail to the error spine, leaves a failure
 // beneath it to the error spine, and runs for a query route beneath too.
 func TestScopeLoads(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	get := func(h http.Handler, path, user string) (*httptest.ResponseRecorder, map[string]any) {
 		t.Helper()
 		req := httptest.NewRequest("GET", path, nil)
@@ -198,17 +198,12 @@ func TestScopeLoads(t *testing.T) {
 		t.Fatalf("query route with a user = %d; want 200", rec.Code)
 	}
 
-	bare, err := run.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bare.Close()
+	bare := dbtest.Open(t, "")
 	rec, body = get(app.NewRouter(fixtureControllers(bare, &volt.Broker{})), app.PathMeShow(), "1")
 	if rec.Code != http.StatusInternalServerError || body["message"] != "internal server error" || rec.Header().Get("X-Error-Handler") != "app" {
 		t.Fatalf("a database failure under the rescue = %d %v via %q; want the rescue's Fail answered by the error handler", rec.Code, body, rec.Header().Get("X-Error-Handler"))
 	}
-	seeded := fixtureDB()
-	defer seeded.Close()
+	seeded := fixtureDB(t)
 	c := fixtureControllers(seeded, &volt.Broker{})
 	c.Me = meNext{}
 	rec, body = get(app.NewRouter(c), app.PathMeShow(), "1")

@@ -24,12 +24,27 @@ type DB struct {
 	log   *slog.Logger
 }
 
-// Open opens a SQLite database via the named database/sql driver and
-// applies the pragmas the generated code is designed for (spec
-// §generated-query-surface) to every connection the pool opens: WAL, a
-// busy timeout of five seconds and foreign keys on. It pins the pool to
-// a single connection.
+// Open opens the SQLite database file at dsn via the named database/sql
+// driver and applies the pragmas the generated code is designed for
+// (spec §generated-query-surface) to every connection the pool opens:
+// WAL, a busy timeout of five seconds and foreign keys on. It pins the
+// pool to a single connection and refuses an in-memory database.
 func Open(driverName, dsn string) (DB, error) {
+	return open("run.Open", driverName, dsn, writerPragmas)
+}
+
+// OpenReadOnly opens the SQLite database file at dsn for reading alone
+// (spec §generated-query-surface): every connection runs with a busy
+// timeout of five seconds, foreign keys on and query_only, so a write
+// fails and the file is left as it was, its journal mode included.
+func OpenReadOnly(driverName, dsn string) (DB, error) {
+	return open("run.OpenReadOnly", driverName, dsn, readerPragmas)
+}
+
+func open(name, driverName, dsn string, pragmas []string) (DB, error) {
+	if err := MemoryRefused(dsn); err != nil {
+		return DB{}, fmt.Errorf("%s: %w", name, err)
+	}
 	probe, err := sql.Open(driverName, dsn)
 	if err != nil {
 		return DB{}, err
@@ -42,19 +57,36 @@ func Open(driverName, dsn string) (DB, error) {
 			return DB{}, err
 		}
 	}
-	pool := sql.OpenDB(pragmaConnector{c})
+	pool := sql.OpenDB(pragmaConnector{inner: c, pragmas: pragmas})
 	pool.SetMaxOpenConns(1)
 	if err := pool.Ping(); err != nil {
 		_ = pool.Close()
-		return DB{}, fmt.Errorf("run.Open: %w", err)
+		return DB{}, fmt.Errorf("%s: %w", name, err)
 	}
-	return Wrap(pool), nil
+	return DB{pool: pool, cache: NewStmtCache(256), log: slog.Default()}, nil
 }
 
-var pragmas = []string{
+// MemoryRefused is the error Open and OpenReadOnly return for a dsn that
+// names an in-memory database, and nil for a file (spec
+// §generated-query-surface): an in-memory database lives on one
+// connection and is gone when it closes.
+func MemoryRefused(dsn string) error {
+	if dsn == ":memory:" || strings.HasPrefix(dsn, "file::memory:") || strings.Contains(dsn, "mode=memory") {
+		return fmt.Errorf("%s is an in-memory database, which holds nothing beyond its one connection; name a file", dsn)
+	}
+	return nil
+}
+
+var writerPragmas = []string{
 	"PRAGMA journal_mode = WAL",
 	"PRAGMA busy_timeout = 5000",
 	"PRAGMA foreign_keys = ON",
+}
+
+var readerPragmas = []string{
+	"PRAGMA busy_timeout = 5000",
+	"PRAGMA foreign_keys = ON",
+	"PRAGMA query_only = ON",
 }
 
 type dsnConnector struct {
@@ -65,7 +97,10 @@ type dsnConnector struct {
 func (c dsnConnector) Connect(context.Context) (driver.Conn, error) { return c.driver.Open(c.dsn) }
 func (c dsnConnector) Driver() driver.Driver                        { return c.driver }
 
-type pragmaConnector struct{ inner driver.Connector }
+type pragmaConnector struct {
+	inner   driver.Connector
+	pragmas []string
+}
 
 func (c pragmaConnector) Driver() driver.Driver { return c.inner.Driver() }
 
@@ -74,7 +109,7 @@ func (c pragmaConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, pragma := range pragmas {
+	for _, pragma := range c.pragmas {
 		if err := driverExec(ctx, conn, pragma); err != nil {
 			_ = conn.Close()
 			return nil, fmt.Errorf("%s: %w", pragma, err)
@@ -101,12 +136,6 @@ func driverExec(ctx context.Context, conn driver.Conn, query string) error {
 		_, err = stmt.Exec(nil)
 	}
 	return err
-}
-
-// Wrap is a DB over a pool the caller opened, with its own pragmas, a
-// cache of 256 statements and the default logger.
-func Wrap(pool *sql.DB) DB {
-	return DB{pool: pool, cache: NewStmtCache(256), log: slog.Default()}
 }
 
 // Pool is the pool, for what reads the database outside the effects:

@@ -3,6 +3,7 @@ package rt
 import (
 	"database/sql"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -146,7 +147,7 @@ func (n vanishNode) eval(row vanishRow, kids []vanishRow, env map[string]any) in
 // for every assignment of two optional parameters, NULL columns among
 // the rows.
 func TestPredVanishAgainstAReference(t *testing.T) {
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

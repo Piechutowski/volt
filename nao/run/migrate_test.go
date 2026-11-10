@@ -375,12 +375,12 @@ func TestMigrateStatusOnlyReads(t *testing.T) {
 	if _, err := MigrateUp(ctx, db, blogMigrations); err != nil {
 		t.Fatal(err)
 	}
-	ro, err := sql.Open("sqlite3", "file:"+path+"?mode=ro")
+	ro, err := OpenReadOnly("sqlite3", "file:"+path+"?mode=ro")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer ro.Close()
-	status, err = MigrateStatus(ctx, Wrap(ro), blogMigrations)
+	status, err = MigrateStatus(ctx, ro, blogMigrations)
 	if err != nil || len(status) != 2 || !status[0].Applied || !status[1].Applied {
 		t.Fatalf("status over a read-only connection: %+v %v, want two applied rows", status, err)
 	}

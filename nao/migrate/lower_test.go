@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Piechutowski/volt/internal/dbtest"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
@@ -41,16 +42,6 @@ func fixture(t *testing.T) (*ast.File, *check.Info) {
 		t.Fatal(err)
 	}
 	return parseChecked(t, filepath.Base(path), string(src))
-}
-
-func memoryDB(t *testing.T) run.DB {
-	t.Helper()
-	db, err := run.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return db
 }
 
 func TestLowerGolden(t *testing.T) {
@@ -171,7 +162,7 @@ func TestRebuildForgetsAnIndexNotRestated(t *testing.T) {
 	if len(ms[1].Up) != 4 {
 		t.Errorf("the rebuild has %d statements, want the new table, the copy, the drop and the rename: 4\n%s", len(ms[1].Up), strings.Join(ms[1].Up, ";\n"))
 	}
-	db := memoryDB(t)
+	db := dbtest.Open(t, "")
 	if _, err := run.MigrateUp(ctx, db, ms); err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +196,7 @@ func TestTypedDropOfAnIndexedColumnRoundTrips(t *testing.T) {
 	if got := strings.Join(ms[1].Up, ";\n"); got != strings.Join(wantUp, ";\n") {
 		t.Errorf("up of 0002:\n%s\nwant:\n%s", got, strings.Join(wantUp, ";\n"))
 	}
-	db := memoryDB(t)
+	db := dbtest.Open(t, "")
 	if _, err := run.MigrateUp(ctx, db, ms[:1]); err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +211,7 @@ func TestTypedDropOfAnIndexedColumnRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	targetDB := memoryDB(t)
+	targetDB := dbtest.Open(t, "")
 	if _, err := targetDB.Pool().ExecContext(ctx, string(ddl)); err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +262,7 @@ func TestRebuildUnderAViewOrTriggerFailsAtTheRename(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			db := memoryDB(t)
+			db := dbtest.Open(t, "")
 			applied, err := run.MigrateUp(ctx, db, ms)
 			if err == nil {
 				t.Fatalf("a rebuild under a %s ran through", tc.object)
@@ -306,7 +297,7 @@ func TestFoldMatchesTheSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foldDB := memoryDB(t)
+	foldDB := dbtest.Open(t, "")
 	if _, err := run.MigrateUp(ctx, foldDB, ms); err != nil {
 		t.Fatalf("the fold stopped: %v", err)
 	}
@@ -314,7 +305,7 @@ func TestFoldMatchesTheSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	targetDB := memoryDB(t)
+	targetDB := dbtest.Open(t, "")
 	if _, err := targetDB.Pool().ExecContext(ctx, string(ddl)); err != nil {
 		t.Fatalf("schema DDL: %v", err)
 	}
@@ -357,7 +348,7 @@ func foldDiff(t *testing.T, name, src string) []Drift {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foldDB := memoryDB(t)
+	foldDB := dbtest.Open(t, "")
 	if _, err := run.MigrateUp(ctx, foldDB, ms); err != nil {
 		t.Fatalf("the fold stopped: %v", err)
 	}
@@ -365,7 +356,7 @@ func foldDiff(t *testing.T, name, src string) []Drift {
 	if err != nil {
 		t.Fatal(err)
 	}
-	targetDB := memoryDB(t)
+	targetDB := dbtest.Open(t, "")
 	if _, err := targetDB.Pool().ExecContext(ctx, string(ddl)); err != nil {
 		t.Fatalf("schema DDL: %v", err)
 	}
@@ -420,7 +411,7 @@ func TestRebuildKeepsTheHighWaterMark(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db := memoryDB(t)
+	db := dbtest.Open(t, "")
 	if _, err := run.MigrateUp(ctx, db, ms[:1]); err != nil {
 		t.Fatal(err)
 	}
@@ -466,7 +457,7 @@ func TestReversibleFlatBodyRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db := memoryDB(t)
+	db := dbtest.Open(t, "")
 	first := ms[:2]
 	if _, err := run.MigrateUp(ctx, db, first); err != nil {
 		t.Fatal(err)
@@ -589,7 +580,7 @@ func TestLowerRebuildIntroducingAnAssignedKey(t *testing.T) {
 	if got := ms[1].Up[1]; got != want {
 		t.Errorf("copy statement:\n%s\nwant:\n%s", got, want)
 	}
-	db := memoryDB(t)
+	db := dbtest.Open(t, "")
 	if _, err := run.MigrateUp(context.Background(), db, ms); err != nil {
 		t.Fatal(err)
 	}
@@ -687,7 +678,7 @@ func TestExpressionDefaultAddFillsRowsWithoutARebuild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	targetDB := memoryDB(t)
+	targetDB := dbtest.Open(t, "")
 	if _, err := targetDB.Pool().ExecContext(ctx, string(ddl)); err != nil {
 		t.Fatal(err)
 	}
@@ -729,7 +720,7 @@ func TestExpressionDefaultAddYieldingNullRollsBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db := memoryDB(t)
+	db := dbtest.Open(t, "")
 	if _, err := run.MigrateUp(ctx, db, ms[:1]); err != nil {
 		t.Fatal(err)
 	}

@@ -19,6 +19,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Piechutowski/volt/internal/dbtest"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -99,19 +100,11 @@ var bytesDrivers = []string{"sqlite3", "sqlite3_nilblob"}
 
 func bytesDB(t *testing.T, driverName string) run.DB {
 	t.Helper()
-	db, err := run.Open(driverName, ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
 	ddl, err := os.ReadFile("volt_schema.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Pool().Exec(string(ddl)); err != nil {
-		t.Fatalf("generated DDL rejected by SQLite: %v", err)
-	}
-	return db
+	return dbtest.OpenDriver(t, driverName, string(ddl))
 }
 
 func stored(t *testing.T, db run.DB, table, col, where string, args ...any) (string, int) {

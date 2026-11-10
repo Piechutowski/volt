@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/Piechutowski/volt/internal/dbtest"
 	"github.com/Piechutowski/volt/nao/run"
 	"os"
 	"regexp"
@@ -232,11 +233,7 @@ func TestForeignKeyToAUniqueIndexedColumn(t *testing.T) {
 // folds to the schema.
 func TestMigrationAddsAUniqueColumnWithoutARebuild(t *testing.T) {
 	ctx := context.Background()
-	db, err := run.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := dbtest.Open(t, "")
 	at := -1
 	for i, m := range Migrations {
 		if m.Name == "0006__daily_hits_label_and_token" {
@@ -326,7 +323,7 @@ func TestOldLoweringFoldsEqual(t *testing.T) {
 		t.Fatalf("moved %d unique indexes inline; want every single-column one:\n%s", moved, old)
 	}
 
-	oldDB := ddlOpen(t, old)
+	oldDB := dbtest.Open(t, old)
 	var autoindexes int
 	if err := oldDB.Pool().QueryRow(uniqueConstraintsSQL).Scan(&autoindexes); err != nil {
 		t.Fatal(err)
@@ -356,22 +353,9 @@ func schemaDDL(t *testing.T) string {
 	return string(ddl)
 }
 
-func ddlOpen(t *testing.T, ddl string) run.DB {
-	t.Helper()
-	db, err := run.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	if _, err := db.Pool().Exec(ddl); err != nil {
-		t.Fatalf("DDL rejected: %v\n%s", err, ddl)
-	}
-	return db
-}
-
 func schemaRead(t *testing.T, ddl string) migrate.Schema {
 	t.Helper()
-	s, err := migrate.Read(context.Background(), ddlOpen(t, ddl).Pool())
+	s, err := migrate.Read(context.Background(), dbtest.Open(t, ddl).Pool())
 	if err != nil {
 		t.Fatal(err)
 	}

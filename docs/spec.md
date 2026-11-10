@@ -4725,10 +4725,11 @@ Migrations are untyped so that they may say anything that was once
 true. What is checked instead is their composition.
 
 1. **Definition.** The fold of a package is the structure of an empty
-   in-memory SQLite database after every migration of the package has
-   been applied in name order. The **target** is the structure of an
-   empty in-memory database after the schema's generated DDL
-   (§mapping-to-sqlite-ddl) has been applied.
+   SQLite database after every migration of the package has been
+   applied in name order. The **target** is the structure of an empty
+   database after the schema's generated DDL (§mapping-to-sqlite-ddl)
+   has been applied. Both are files in a temporary directory the tool
+   removes once it has compared them.
 2. **Structure** is, per table: its name; its columns as a set, each
    with name, declared type, `NOT NULL`, default as SQLite reports it
    (a default of `NULL`, in any case, read as none, since it means
@@ -4816,8 +4817,10 @@ true. What is checked instead is their composition.
    `volt migration up|down|status DSN [DIR]` operate on the SQLite
    database at `DSN`, a file path or a `file:` URI: `up` creates the
    database when it is missing, `status` and `down` open an existing
-   one only (a missing file is an error and nothing is created), and
-   all three refuse `:memory:`. `volt migration sql [DIR]` prints
+   one only (a missing file is an error and nothing is created),
+   `status` opens it through `run.OpenReadOnly` and changes nothing in
+   it, and all three refuse an in-memory DSN as `run.Open` does
+   (§generated-query-surface). `volt migration sql [DIR]` prints
    every migration's statements in both directions for review. Exit
    codes, the same from `gen`: 1 for drift, for a package the checker
    refuses (each command checks its package first and prints the
@@ -5410,11 +5413,18 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    is refused by `volt gen`, which names both, and reported before
    generation by `volt vet`, as a wrapper's collision is (`lint.md`,
    `dynname`).
-5. **The runner.** `run.Open(driver, dsn)` pins one connection and sets
-   WAL, `busy_timeout = 5000` and `foreign_keys = ON` on every
-   connection the pool opens, since SQLite keeps each setting per
-   connection; `run.Wrap` takes a pool the application opened, with
-   the settings it gave it. `run.Run(ctx, db, e)` performs one
+5. **The runner.** `run.Open(driver, dsn)` opens the database file at
+   `dsn`, pins one connection and sets WAL, `busy_timeout = 5000` and
+   `foreign_keys = ON` on every connection the pool opens, since SQLite
+   keeps each setting per connection. It refuses an in-memory DSN
+   (`:memory:`, `file::memory:`, `mode=memory`; `run.MemoryRefused`
+   names the refusal), since such a database lives on one connection
+   and is gone with it: tests open a file in their temporary directory
+   as production does. `run.OpenReadOnly(driver, dsn)` opens a file
+   for reading alone, its connections with `busy_timeout = 5000`,
+   `foreign_keys = ON` and `query_only = ON` and no change of journal
+   mode, so a write fails and the file stays as it was. They are the
+   only ways to make a `run.DB`. `run.Run(ctx, db, e)` performs one
    effect: every statement outside a transaction is prepared through
    the statement cache, keyed by its text, so identical shapes prepare
    once; a statement inside one runs on the transaction's connection
@@ -5454,8 +5464,7 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    shim answers with a 504 when the route's timeout expired
    (§route-loads) and a 499 when the client closed the request
    (§requests-and-responses). The transaction keeps its connection
-   either way, so an in-memory database, which lives as long as its
-   one connection, and the connection's settings outlive it. Inside a transaction the
+   either way, so the connection's settings outlive it. Inside a transaction the
    steps run in order because a transaction holds one connection,
    which runs one statement at a time anyway, and because SQLite rolls
    the whole transaction back when a write inside it is interrupted, as

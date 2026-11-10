@@ -327,7 +327,7 @@ func TestLayersDataOnlyProgram(t *testing.T) {
 		"db/0001__init.volt": "package db\n\nmigration 0001__init {\n  create table authors {\n    id    int    [pk]\n    email string [unique]\n    name  string\n  }\n" +
 			"  create table posts {\n    id        int    [pk]\n    author_id int    [ref: authors.id]\n    title     string\n    views     int    [default: 0]\n  }\n}\n",
 		"cmd/app/main.go": "package main\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n\t\"dataonly/db\"\n\t\"github.com/Piechutowski/volt/nao/run\"\n)\n\n" +
-			"func main() {\n\tctx := context.Background()\n\tconn, err := run.Open(\"sqlite3\", \":memory:\")\n\tif err != nil {\n\t\tpanic(err)\n\t}\n" +
+			"func main() {\n\tctx := context.Background()\n\tconn, err := run.Open(\"sqlite3\", \"app.db\")\n\tif err != nil {\n\t\tpanic(err)\n\t}\n" +
 			"\tif _, err := run.MigrateUp(ctx, conn, db.Migrations); err != nil {\n\t\tfmt.Println(err)\n\t}\n" +
 			"\ta, err := run.Run(ctx, conn, db.AuthorCreate(db.AuthorNew().EmailSet(\"ann@example.com\").NameSet(\"Ann\")))\n\tfmt.Println(a, err)\n" +
 			"\tposts, err := run.Run(ctx, conn, db.PostPopular(10))\n\tfmt.Println(len(posts), err)\n}\n",

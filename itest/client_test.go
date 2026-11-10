@@ -236,7 +236,7 @@ func TestClientHeader(t *testing.T) {
 // whole (spec §predicates, §query-routes, §generated-client).
 func TestClientOptionalParams(t *testing.T) {
 	ctx := context.Background()
-	dbh := fixtureDB()
+	dbh := fixtureDB(t)
 	two, err := run.Run(ctx, dbh, db.UserCreate(db.UserNew().EmailSet("two@example.com")))
 	if err != nil {
 		t.Fatal(err)

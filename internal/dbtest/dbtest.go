@@ -17,7 +17,14 @@ import (
 // closed when t ends.
 func Open(t testing.TB, ddl string) run.DB {
 	t.Helper()
-	db, err := run.Open("sqlite3", filepath.Join(t.TempDir(), "test.db"))
+	return OpenDriver(t, "sqlite3", ddl)
+}
+
+// OpenDriver is Open through the database/sql driver registered as
+// driverName, for a test that wraps mattn's.
+func OpenDriver(t testing.TB, driverName, ddl string) run.DB {
+	t.Helper()
+	db, err := run.Open(driverName, filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

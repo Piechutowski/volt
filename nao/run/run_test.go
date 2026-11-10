@@ -2,8 +2,10 @@ package run
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -63,5 +65,48 @@ func TestRunTransactionRollsBackOnError(t *testing.T) {
 	out, err := Run(ctx, db, rt.Tx(insert("a"), rt.All(insert("b"), insert("c")), count))
 	if err != nil || len(out) != 3 || out[2] != int64(3) {
 		t.Fatalf("Tx with a parallel step = %v, %v; want three rows counted inside the transaction", out, err)
+	}
+}
+
+func TestOpenRefusesAnInMemoryDatabase(t *testing.T) {
+	for _, dsn := range []string{":memory:", "file::memory:?cache=shared", "file:blog.db?mode=memory"} {
+		if _, err := Open("sqlite3", dsn); err == nil || !strings.Contains(err.Error(), "holds nothing") {
+			t.Errorf("Open(%q) = %v; want the in-memory refusal", dsn, err)
+		}
+		if _, err := OpenReadOnly("sqlite3", dsn); err == nil || !strings.Contains(err.Error(), "holds nothing") {
+			t.Errorf("OpenReadOnly(%q) = %v; want the in-memory refusal", dsn, err)
+		}
+	}
+	if err := MemoryRefused(filepath.Join(t.TempDir(), "blog.db")); err != nil {
+		t.Errorf("MemoryRefused of a file = %v", err)
+	}
+}
+
+func TestOpenReadOnlyRefusesWritesAndKeepsTheJournalMode(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "plain.db")
+	plain, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := plain.Exec("CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL)"); err != nil {
+		t.Fatal(err)
+	}
+	plain.Close()
+	db, err := OpenReadOnly("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := Run(ctx, db, rt.Exec{SQL: "INSERT INTO posts (title) VALUES ('one')"}); err == nil {
+		t.Error("a write through OpenReadOnly succeeded")
+	}
+	n, err := Run(ctx, db, rt.Lookup[int]{SQL: "SELECT count(*) FROM posts", Scan: rt.ScanOne[int]})
+	if err != nil || n != 0 {
+		t.Errorf("a read through OpenReadOnly = %d, %v", n, err)
+	}
+	var mode string
+	if err := db.Pool().QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil || mode != "delete" {
+		t.Errorf("journal_mode %q %v; want the file's delete kept", mode, err)
 	}
 }

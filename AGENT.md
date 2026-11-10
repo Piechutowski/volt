@@ -62,7 +62,9 @@ floor is the newest stable Go, declared in all three `go.mod` files.
 
 Code, tests, tools and scripts are Go. The database is SQLite through
 `mattn/go-sqlite3`, in tests as in production: a test opens a file in
-its temporary directory through `run.Open` (`internal/dbtest`). The only
+its temporary directory through `run.Open` (`internal/dbtest`), never
+an in-memory database, which `run.Open` refuses; `nao/rt`'s own tests,
+below `nao/run`, open the file through `database/sql`. The only
 program a test or tool runs is `go`, or a `volt` it built. No Python, no
 shell scripts, no other SQLite driver or engine, no other runtime, and
 no check that skips itself when a tool is missing: a check that seems
