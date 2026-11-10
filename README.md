@@ -54,15 +54,3 @@ effect is performed by generated code you can read.
 | `grammar/`, `zed-extension/` | the editor stack |
 | `itest/` | the fixture application served over `httptest`, drift-checked against the generator |
 | `docs/` | `spec.md`, `lint.md`, `editor.md`, `roadmap.md`, `plan.md` |
-
-## Crib sheet
-
-Requires Go 1.27+ and a C compiler. From the repository root, with
-`go install`'s directory on the path; `volt check` is silent when the
-packages are clean:
-
-```sh
-go install ./cmd/volt
-volt check ./itest/blog/... && volt routes ./itest/blog/app
-go test ./... ./lsp/... ./cmd/volt/...
-```
