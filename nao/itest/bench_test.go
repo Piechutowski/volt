@@ -54,3 +54,26 @@ func BenchmarkTransactionInsert10k(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkCreateMany10k is ten thousand rows through UserCreateMany
+// (spec §changesets): statements of as many rows as SQLite's parameters
+// hold, in one transaction.
+func BenchmarkCreateMany10k(b *testing.B) {
+	ctx := context.Background()
+	db := benchDB(b)
+	round := 0
+	b.ReportAllocs()
+	for b.Loop() {
+		b.StopTimer()
+		round++
+		us := benchUsers(round)
+		b.StartTimer()
+		cs := make([]UserChangeset, len(us))
+		for i, u := range us {
+			cs[i] = UserNew().From(u)
+		}
+		if _, err := run.Run(ctx, db, UserCreateMany(cs)); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

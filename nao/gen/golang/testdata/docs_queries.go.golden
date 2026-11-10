@@ -26,6 +26,14 @@ func PostList() rt.Query[Post] { return rt.Query[Post]{SQL: voltPostListSQL, Sca
 
 func PostCreate(c PostChangeset) rt.Write[Post] { return rt.Insert(c.Validate().Changeset) }
 
+func PostCreateMany(cs []PostChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Post], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func PostUpdate(c PostChangeset) rt.Write[Post] { return rt.Update(c.Validate().Changeset) }
 
 const voltPostDeleteSQL = `DELETE FROM "posts" WHERE "id" = ?`
@@ -60,6 +68,14 @@ func TagList() rt.Query[Tag] { return rt.Query[Tag]{SQL: voltTagListSQL, Scan: v
 
 func TagCreate(c TagChangeset) rt.Write[Tag] { return rt.Insert(c.Validate().Changeset) }
 
+func TagCreateMany(cs []TagChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Tag], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func TagUpdate(c TagChangeset) rt.Write[Tag] { return rt.Update(c.Validate().Changeset) }
 
 const voltTagDeleteSQL = `DELETE FROM "tags" WHERE "id" = ?`
@@ -87,6 +103,14 @@ const voltUserListSQL = `SELECT "id" FROM "users"`
 func UserList() rt.Query[User] { return rt.Query[User]{SQL: voltUserListSQL, Scan: voltUserScan} }
 
 func UserCreate(c UserChangeset) rt.Write[User] { return rt.Insert(c.Validate().Changeset) }
+
+func UserCreateMany(cs []UserChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[User], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 const voltUserDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
 

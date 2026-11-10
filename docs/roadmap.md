@@ -21,6 +21,7 @@ that lands it.
 | Generated Go client | no | built | |
 | Generated Elm client | no | missing | |
 | Models, CRUD, dynamic queries | Ecto / ActiveRecord | built | |
+| Bulk insert | insert_all / insert_all! | built (`<Model>CreateMany`: every row validated, all or nothing, multi-row statements cut to SQLite's parameter limit) | |
 | Changesets and validation | Ecto changesets / validations | built | |
 | Joins in declared queries | yes | built (`join` over relation names, `exists` over one without joining) | |
 | Optional filters in declared queries | yes | built (`:name?`, a term taken out of the predicate when its parameter is absent, which searches no index; routable from the query string as a scalar, a list from Go alone) | |

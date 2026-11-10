@@ -26,6 +26,14 @@ func UserList() rt.Query[User] { return rt.Query[User]{SQL: voltUserListSQL, Sca
 
 func UserCreate(c UserChangeset) rt.Write[User] { return rt.Insert(c.Validate().Changeset) }
 
+func UserCreateMany(cs []UserChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[User], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 const voltUserDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
 
 func UserDelete(id int) rt.Exec {
@@ -60,6 +68,14 @@ func CoreUserList() rt.Query[CoreUser] {
 
 func CoreUserCreate(c CoreUserChangeset) rt.Write[CoreUser] { return rt.Insert(c.Validate().Changeset) }
 
+func CoreUserCreateMany(cs []CoreUserChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[CoreUser], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func CoreUserUpdate(c CoreUserChangeset) rt.Write[CoreUser] { return rt.Update(c.Validate().Changeset) }
 
 const voltCoreUserDeleteSQL = `DELETE FROM "core_users" WHERE "id" = ?`
@@ -81,6 +97,14 @@ func X2faCodeList() rt.Query[X2faCode] {
 }
 
 func X2faCodeCreate(c X2faCodeChangeset) rt.Write[X2faCode] { return rt.Insert(c.Validate().Changeset) }
+
+func X2faCodeCreateMany(cs []X2faCodeChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[X2faCode], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 func X2faCodeUpdate(c X2faCodeChangeset) rt.Write[X2faCode] { return rt.Update(c.Validate().Changeset) }
 
@@ -111,6 +135,14 @@ func DigestList() rt.Query[Digest] {
 }
 
 func DigestCreate(c DigestChangeset) rt.Write[Digest] { return rt.Insert(c.Validate().Changeset) }
+
+func DigestCreateMany(cs []DigestChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Digest], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 func DigestUpdate(c DigestChangeset) rt.Write[Digest] { return rt.Update(c.Validate().Changeset) }
 

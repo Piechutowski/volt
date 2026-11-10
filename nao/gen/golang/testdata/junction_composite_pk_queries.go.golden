@@ -26,6 +26,14 @@ func UserList() rt.Query[User] { return rt.Query[User]{SQL: voltUserListSQL, Sca
 
 func UserCreate(c UserChangeset) rt.Write[User] { return rt.Insert(c.Validate().Changeset) }
 
+func UserCreateMany(cs []UserChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[User], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 const voltUserDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
 
 func UserDelete(id int) rt.Exec {
@@ -58,6 +66,14 @@ func RoleList() rt.Query[Role] { return rt.Query[Role]{SQL: voltRoleListSQL, Sca
 
 func RoleCreate(c RoleChangeset) rt.Write[Role] { return rt.Insert(c.Validate().Changeset) }
 
+func RoleCreateMany(cs []RoleChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Role], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func RoleUpdate(c RoleChangeset) rt.Write[Role] { return rt.Update(c.Validate().Changeset) }
 
 const voltRoleDeleteSQL = `DELETE FROM "roles" WHERE "id" = ?`
@@ -79,6 +95,14 @@ func UserRoleList() rt.Query[UserRole] {
 }
 
 func UserRoleCreate(c UserRoleChangeset) rt.Write[UserRole] { return rt.Insert(c.Validate().Changeset) }
+
+func UserRoleCreateMany(cs []UserRoleChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[UserRole], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 func UserRoleUpdate(c UserRoleChangeset) rt.Write[UserRole] { return rt.Update(c.Validate().Changeset) }
 

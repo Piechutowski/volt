@@ -28,6 +28,14 @@ func CategoryList() rt.Query[Category] {
 
 func CategoryCreate(c CategoryChangeset) rt.Write[Category] { return rt.Insert(c.Validate().Changeset) }
 
+func CategoryCreateMany(cs []CategoryChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Category], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func CategoryUpdate(c CategoryChangeset) rt.Write[Category] { return rt.Update(c.Validate().Changeset) }
 
 const voltCategoryDeleteSQL = `DELETE FROM "categories" WHERE "id" = ?`
@@ -50,6 +58,14 @@ func CategoryPathList() rt.Query[CategoryPath] {
 
 func CategoryPathCreate(c CategoryPathChangeset) rt.Write[CategoryPath] {
 	return rt.Insert(c.Validate().Changeset)
+}
+
+func CategoryPathCreateMany(cs []CategoryPathChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[CategoryPath], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
 }
 
 func CategoryPathUpdate(c CategoryPathChangeset) rt.Write[CategoryPath] {

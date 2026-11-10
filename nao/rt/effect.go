@@ -60,7 +60,7 @@ func executorFor(x Executor, writes bool) Executor {
 // Effect is a computation over the database that yields a T, described
 // as a value and performed by the runner (spec §values-and-effects): a
 // Query, a Lookup, a Write, an Exec, a With, a Transaction, an All, a
-// Then, a Map, an Atomic, a Pure or a Fail. Its methods are unexported,
+// Then, a Map, an Atomic, a Batch, a Pure or a Fail. Its methods are unexported,
 // so the set is sealed: a type of another package that embeds one of
 // these or an Effect is the effect it embeds (spec
 // §generated-query-surface).

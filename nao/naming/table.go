@@ -41,7 +41,7 @@ type Table struct {
 type TableNames struct {
 	Changeset, Column, Params, New                             string
 	Limit, Offset, Distinct, OrderBy, After, Set               string
-	Get, GetMany, List, Create, Update, Delete                 string
+	Get, GetMany, List, Create, CreateMany, Update, Delete     string
 	Query, Count, Exists, DeleteWhere, UpdateWhere             string
 	Scan, Desc, Values, Apply, Cast                            string
 	TableConst, ColumnsConst, GetConst, ListConst, DeleteConst string
@@ -51,7 +51,7 @@ func tableNamesBuild(m string) TableNames {
 	return TableNames{
 		Changeset: m + "Changeset", Column: m + "Column", Params: m + "Params", New: m + "New",
 		Limit: m + "Limit", Offset: m + "Offset", Distinct: m + "Distinct", OrderBy: m + "OrderBy", After: m + "After", Set: m + "Set",
-		Get: m + "Get", GetMany: m + "GetMany", List: m + "List", Create: m + "Create", Update: m + "Update", Delete: m + "Delete",
+		Get: m + "Get", GetMany: m + "GetMany", List: m + "List", Create: m + "Create", CreateMany: m + "CreateMany", Update: m + "Update", Delete: m + "Delete",
 		Query: m + "Query", Count: m + "Count", Exists: m + "Exists", DeleteWhere: m + "DeleteWhere", UpdateWhere: m + "UpdateWhere",
 		Scan: RowScan(m), Desc: "volt" + m + "Desc", Values: "volt" + m + "Values", Apply: "volt" + m + "Apply", Cast: "volt" + m + "Cast",
 		TableConst: "volt" + m + "TableSQL", ColumnsConst: "volt" + m + "ColumnsSQL",
@@ -65,7 +65,7 @@ func tableNamesBuild(m string) TableNames {
 // scope with the column handles.
 func (t *Table) functions() []string {
 	n := &t.Names
-	out := []string{n.Limit, n.Offset, n.Distinct, n.OrderBy, n.After, n.Set, n.List, n.Create, n.Query, n.Count, n.Exists, n.DeleteWhere, n.UpdateWhere}
+	out := []string{n.Limit, n.Offset, n.Distinct, n.OrderBy, n.After, n.Set, n.List, n.Create, n.CreateMany, n.Query, n.Count, n.Exists, n.DeleteWhere, n.UpdateWhere}
 	if len(t.PK) > 0 {
 		out = append(out, n.Get, n.Delete)
 		if len(t.PK) == 1 {

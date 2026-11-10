@@ -831,7 +831,7 @@ func (l *selectLowering) check() *SelectInfo {
 }
 
 var crudMethodSuffixes = map[string]bool{
-	"Get": true, "GetMany": true, "List": true, "Create": true,
+	"Get": true, "GetMany": true, "List": true, "Create": true, "CreateMany": true,
 	"Update": true, "Delete": true, "Count": true, "Exists": true,
 	"Query": true, "DeleteWhere": true, "UpdateWhere": true,
 	"Limit": true, "Offset": true, "OrderBy": true,

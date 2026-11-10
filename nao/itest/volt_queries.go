@@ -33,6 +33,14 @@ func UserList() rt.Query[User] { return rt.Query[User]{SQL: voltUserListSQL, Sca
 
 func UserCreate(c UserChangeset) rt.Write[User] { return rt.Insert(c.Validate().Changeset) }
 
+func UserCreateMany(cs []UserChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[User], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func UserUpdate(c UserChangeset) rt.Write[User] { return rt.Update(c.Validate().Changeset) }
 
 const voltUserDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
@@ -61,6 +69,14 @@ func OrderList() rt.Query[Order] { return rt.Query[Order]{SQL: voltOrderListSQL,
 
 func OrderCreate(c OrderChangeset) rt.Write[Order] { return rt.Insert(c.Validate().Changeset) }
 
+func OrderCreateMany(cs []OrderChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Order], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func OrderUpdate(c OrderChangeset) rt.Write[Order] { return rt.Update(c.Validate().Changeset) }
 
 const voltOrderDeleteSQL = `DELETE FROM "orders" WHERE "id" = ?`
@@ -82,6 +98,14 @@ func UserTagList() rt.Query[UserTag] {
 }
 
 func UserTagCreate(c UserTagChangeset) rt.Write[UserTag] { return rt.Insert(c.Validate().Changeset) }
+
+func UserTagCreateMany(cs []UserTagChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[UserTag], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 const voltUserTagDeleteSQL = `DELETE FROM "user_tags" WHERE "user_id" = ? AND "tag" = ?`
 
@@ -110,6 +134,14 @@ func PageViewList() rt.Query[PageView] {
 }
 
 func PageViewCreate(c PageViewChangeset) rt.Write[PageView] { return rt.Insert(c.Validate().Changeset) }
+
+func PageViewCreateMany(cs []PageViewChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[PageView], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 func PageViewUpdate(c PageViewChangeset) rt.Write[PageView] { return rt.Update(c.Validate().Changeset) }
 
@@ -143,6 +175,14 @@ func LinkClickCreate(c LinkClickChangeset) rt.Write[LinkClick] {
 	return rt.Insert(c.Validate().Changeset)
 }
 
+func LinkClickCreateMany(cs []LinkClickChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[LinkClick], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func LinkClickUpdate(c LinkClickChangeset) rt.Write[LinkClick] {
 	return rt.Update(c.Validate().Changeset)
 }
@@ -174,6 +214,14 @@ func SiteFlagList() rt.Query[SiteFlag] {
 }
 
 func SiteFlagCreate(c SiteFlagChangeset) rt.Write[SiteFlag] { return rt.Insert(c.Validate().Changeset) }
+
+func SiteFlagCreateMany(cs []SiteFlagChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[SiteFlag], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 func SiteFlagUpdate(c SiteFlagChangeset) rt.Write[SiteFlag] { return rt.Update(c.Validate().Changeset) }
 
@@ -213,6 +261,14 @@ func AttachmentCreate(c AttachmentChangeset) rt.Write[Attachment] {
 	return rt.Insert(c.Validate().Changeset)
 }
 
+func AttachmentCreateMany(cs []AttachmentChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Attachment], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func AttachmentUpdate(c AttachmentChangeset) rt.Write[Attachment] {
 	return rt.Update(c.Validate().Changeset)
 }
@@ -249,6 +305,14 @@ func BlobList() rt.Query[Blob] { return rt.Query[Blob]{SQL: voltBlobListSQL, Sca
 
 func BlobCreate(c BlobChangeset) rt.Write[Blob] { return rt.Insert(c.Validate().Changeset) }
 
+func BlobCreateMany(cs []BlobChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Blob], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func BlobUpdate(c BlobChangeset) rt.Write[Blob] { return rt.Update(c.Validate().Changeset) }
 
 const voltBlobDeleteSQL = `DELETE FROM "blobs" WHERE "hash" = ?`
@@ -276,6 +340,14 @@ func DailyHitList() rt.Query[DailyHit] {
 }
 
 func DailyHitCreate(c DailyHitChangeset) rt.Write[DailyHit] { return rt.Insert(c.Validate().Changeset) }
+
+func DailyHitCreateMany(cs []DailyHitChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[DailyHit], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 func DailyHitUpdate(c DailyHitChangeset) rt.Write[DailyHit] { return rt.Update(c.Validate().Changeset) }
 
@@ -313,6 +385,14 @@ func InviteList() rt.Query[Invite] {
 
 func InviteCreate(c InviteChangeset) rt.Write[Invite] { return rt.Insert(c.Validate().Changeset) }
 
+func InviteCreateMany(cs []InviteChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Invite], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func InviteUpdate(c InviteChangeset) rt.Write[Invite] { return rt.Update(c.Validate().Changeset) }
 
 const voltInviteDeleteSQL = `DELETE FROM "invites" WHERE "id" = ?`
@@ -343,6 +423,14 @@ func PostFlagList() rt.Query[PostFlag] {
 
 func PostFlagCreate(c PostFlagChangeset) rt.Write[PostFlag] { return rt.Insert(c.Validate().Changeset) }
 
+func PostFlagCreateMany(cs []PostFlagChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[PostFlag], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func PostFlagUpdate(c PostFlagChangeset) rt.Write[PostFlag] { return rt.Update(c.Validate().Changeset) }
 
 const voltPostFlagDeleteSQL = `DELETE FROM "post_flags" WHERE "id" = ?`
@@ -370,6 +458,14 @@ const voltBatchListSQL = `SELECT "opened_at", "label" FROM "batches"`
 func BatchList() rt.Query[Batch] { return rt.Query[Batch]{SQL: voltBatchListSQL, Scan: voltBatchScan} }
 
 func BatchCreate(c BatchChangeset) rt.Write[Batch] { return rt.Insert(c.Validate().Changeset) }
+
+func BatchCreateMany(cs []BatchChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Batch], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 func BatchUpdate(c BatchChangeset) rt.Write[Batch] { return rt.Update(c.Validate().Changeset) }
 
@@ -401,6 +497,14 @@ func BatchItemList() rt.Query[BatchItem] {
 
 func BatchItemCreate(c BatchItemChangeset) rt.Write[BatchItem] {
 	return rt.Insert(c.Validate().Changeset)
+}
+
+func BatchItemCreateMany(cs []BatchItemChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[BatchItem], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
 }
 
 func BatchItemUpdate(c BatchItemChangeset) rt.Write[BatchItem] {
@@ -435,6 +539,14 @@ func MetricEventList() rt.Query[MetricEvent] {
 
 func MetricEventCreate(c MetricEventChangeset) rt.Write[MetricEvent] {
 	return rt.Insert(c.Validate().Changeset)
+}
+
+func MetricEventCreateMany(cs []MetricEventChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[MetricEvent], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
 }
 
 func MetricEventUpdate(c MetricEventChangeset) rt.Write[MetricEvent] {

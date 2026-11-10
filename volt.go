@@ -114,12 +114,14 @@ func DefaultErrorHandler(r Request, err error) Response {
 // ProblemOf is the Problem the error spine writes for err (spec §formats):
 // an HTTPError's own status and message; a refused write, a *rt.Invalid,
 // as 409 when a unique field error is among its fields and 422 otherwise
-// (spec §changesets); a query's row miss (rt.ErrNotFound) as 404; each
+// (spec §changesets); a batch whose rows did not validate, a
+// *rt.InvalidRows, as 422; a query's row miss (rt.ErrNotFound) as 404; each
 // with the details of an error that itemizes them. ok is false for any
 // other error.
 func ProblemOf(err error) (p Problem, ok bool) {
 	var he HTTPError
 	var inv *rt.Invalid
+	var rows *rt.InvalidRows
 	switch {
 	case errors.As(err, &he):
 		p = Problem{Status: he.StatusCode(), Message: he.Error()}
@@ -130,6 +132,8 @@ func ProblemOf(err error) (p Problem, ok bool) {
 				p.Status = http.StatusConflict
 			}
 		}
+	case errors.As(err, &rows):
+		p = Problem{Status: http.StatusUnprocessableEntity, Message: rows.Error()}
 	case errors.Is(err, rt.ErrNotFound):
 		return Problem{Status: http.StatusNotFound, Message: "not found"}, true
 	default:

@@ -32,6 +32,14 @@ func UserList() rt.Query[User] { return rt.Query[User]{SQL: voltUserListSQL, Sca
 
 func UserCreate(c UserChangeset) rt.Write[User] { return rt.Insert(c.Validate().Changeset) }
 
+func UserCreateMany(cs []UserChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[User], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func UserUpdate(c UserChangeset) rt.Write[User] { return rt.Update(c.Validate().Changeset) }
 
 const voltUserDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
@@ -62,6 +70,14 @@ func UserProfileList() rt.Query[UserProfile] {
 
 func UserProfileCreate(c UserProfileChangeset) rt.Write[UserProfile] {
 	return rt.Insert(c.Validate().Changeset)
+}
+
+func UserProfileCreateMany(cs []UserProfileChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[UserProfile], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
 }
 
 func UserProfileUpdate(c UserProfileChangeset) rt.Write[UserProfile] {

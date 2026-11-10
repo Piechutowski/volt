@@ -115,6 +115,7 @@ func (e *queryEmitter) tableEmit(t *naming.Table) {
 	}
 	e.listEmit(t)
 	e.createEmit(t)
+	e.createManyEmit(t)
 	if len(t.PK) > 0 {
 		if len(t.NonPK()) > 0 {
 			e.updateEmit(t)
@@ -190,6 +191,14 @@ func (e *queryEmitter) listEmit(t *naming.Table) {
 func (e *queryEmitter) createEmit(t *naming.Table) {
 	funcLine(&e.body, fmt.Sprintf("func %s(c %s) rt.Write[%s]", t.Names.Create, t.Names.Changeset, t.Model),
 		"return rt.Insert(c.Validate().Changeset)")
+}
+
+func (e *queryEmitter) createManyEmit(t *naming.Table) {
+	b := &e.body
+	fmt.Fprintf(b, "func %s(cs []%s) rt.Batch {\n", t.Names.CreateMany, t.Names.Changeset)
+	fmt.Fprintf(b, "\tvoltCs := make([]rt.Changeset[%s], len(cs))\n", t.Model)
+	b.WriteString("\tfor voltI, voltC := range cs {\n\t\tvoltCs[voltI] = voltC.Validate().Changeset\n\t}\n")
+	b.WriteString("\treturn rt.InsertMany(voltCs)\n}\n\n")
 }
 
 func (e *queryEmitter) updateEmit(t *naming.Table) {

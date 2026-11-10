@@ -2840,12 +2840,14 @@ for a format suffix.
    `volt.Negotiate` before its first write, so its 406 writes nothing.
 5. **Error bodies** are structured: the default error handler writes a
    `volt.Problem` (status, message, and details: check, columns,
-   message, when the error itemizes them) in the negotiated format,
+   message, and the row's index as `row` for a batch's refusal, when
+   the error itemizes them) in the negotiated format,
    JSON when the client offered nothing usable. `volt.ProblemOf` finds
    it and is where the network layer chooses a status
    (§data-and-network-layers): an `HTTPError` keeps its own; a refused
    write, the data runtime's `*rt.Invalid` (§changesets), is 409 when a
-   `unique` field error is among its fields and 422 otherwise; a query's
+   `unique` field error is among its fields and 422 otherwise; a batch
+   whose rows did not validate, a `*rt.InvalidRows`, is 422; a query's
    row miss is 404; any other error has none and is the default
    handler's 500, `rt.ErrLimit` among them, a limit below 1 the
    application computed (§selects-over-groups). A rendered value is encoded before anything is
@@ -3862,7 +3864,7 @@ the optional projection narrows the emitted columns.
 
 1. The select name is an identifier; per target-member it mints
    the function `<Model><SelectName>` (§names). A select name that is a
-   generated suffix (`Get`, `GetMany`, `List`, `Create`, `Update`,
+   generated suffix (`Get`, `GetMany`, `List`, `Create`, `CreateMany`, `Update`,
    `Delete`, `Count`, `Exists`, `Query`, `DeleteWhere`, `UpdateWhere`,
    `Limit`, `Offset`, `OrderBy`, `Changeset`, `Column`, `Params`,
    `New`) is an error, and so is a minted function that takes the name
@@ -4347,7 +4349,7 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
    `unknown_field`, `custom`, a validator's name, or the database's
    `unique`, `foreign_key`, `not_null` (rule 10); the columns are the
    ones the check reads, and for `unknown_field` the key as sent.
-8. **`Create` and `Update`.** `<Model>Create(c)` is the `rt.Write`
+8. **`Create`, `CreateMany` and `Update`.** `<Model>Create(c)` is the `rt.Write`
    that validates and, if valid, inserts the marked columns and yields
    the stored row when the runner performs it (§generated-query-surface);
    a column never marked takes its database default or, lacking one,
@@ -4355,6 +4357,26 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
    (rule 10), a single-column primary key stored as `int` excepted,
    which the database assigns (rule 2); nothing marked inserts
    `DEFAULT VALUES`.
+   `<Model>CreateMany(cs)` is the `rt.Batch` (`rt.InsertMany`) that
+   inserts many rows in one transaction, all or nothing, and yields
+   how many it inserted; inside a transaction it joins it. Every
+   changeset validates as `Create`'s does; when any fails, the Batch
+   carries one `*rt.InvalidRows{Model, Rows}`, every invalid row as
+   `rt.RowInvalid{Index, Fields}` by its index in `cs`, in order, and
+   the runner returns it without running a statement. Valid rows are
+   grouped: consecutive changesets that mark the same columns share
+   multi-row `INSERT ... VALUES (...), (...)` statements of as many
+   rows as SQLite's 32,766 parameters hold, the parameter count
+   divided by the marked columns, so every full statement has one
+   text; a changeset that marks other columns starts a new group,
+   since `VALUES` takes no `DEFAULT`, and one that marks nothing
+   inserts `DEFAULT VALUES` alone. The statements carry no
+   `RETURNING`: SQLite returns a multi-row insert's rows in no
+   promised order, so neither rows nor keys can be matched to the
+   changesets given. A database refusal rolls the batch back and maps
+   onto `*rt.Invalid` as `Create`'s does (rule 10), naming no row,
+   since SQLite names none. An empty `cs` is a Batch with no
+   statement, which yields 0.
    `<Model>Update(c)` is the `rt.Write` that validates and, if valid,
    issues `UPDATE <table> SET <the marked columns> WHERE <the key of
    the row the changeset was made from> RETURNING` and returns the
@@ -4388,9 +4410,13 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
     answers 409 when a `unique` field error is among its fields and 422
     otherwise (§formats). It itemizes itself (`Details()`: check,
     columns, message), which the error spine renders into the error
-    body so a form can mark the fields. Any other database
+    body so a form can mark the fields. A batch whose rows did not
+    validate is one `*rt.InvalidRows` (rule 8), which the error spine
+    answers with 422 and itemizes the same way, each item carrying its
+    row's index as `row`. Any other database
     error is returned as is, and the bulk paths of rule 11 return the
-    driver's error unmapped.
+    driver's error unmapped; `CreateMany` is not one of them, since it
+    validates every row.
 11. **Bulk paths bypass.** `UpdateWhere` and `DeleteWhere` of the
     dynamic layer take assignments and predicates, never a row, and
     run no validator; `Delete` runs none either. They are the
@@ -5347,6 +5373,7 @@ func UserGetMany(ids []int) rt.Query[User]
 func UserGetByEmail(email string) rt.Lookup[User]
 func UserList() rt.Query[User]
 func UserCreate(c UserChangeset) rt.Write[User]
+func UserCreateMany(cs []UserChangeset) rt.Batch
 func UserUpdate(c UserChangeset) rt.Write[User]
 func UserDelete(id int) rt.Exec
 func UserQuery(opts ...rt.Opt[User]) rt.Query[User]
@@ -5362,14 +5389,15 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    the columns' declaration order, and `Update` writes by the key in
    that order; `Update` also needs a non-key column; `Create` and
    `Update` take a changeset and the Write yields the stored row
-   (§changesets). `<Model>GetMany(keys)` exists for a single-column
+   (§changesets); `<Model>CreateMany` takes a slice of them and the
+   Batch yields how many rows it inserted (§changesets). `<Model>GetMany(keys)` exists for a single-column
    key; missing keys are absent, not errors; an empty input is a
    Query with no statement, which yields nil.
    `<Model>GetBy<Column>` exists per column that carries `unique` and
    is not the whole key, a member of a composite key among them; a
    partial or an expression unique index makes no column unique, so it
-   gives none (§indexes). `<Model>List` and `<Model>Create` always
-   exist; a table without a key gets List, Create, GetBy and the
+   gives none (§indexes). `<Model>List`, `<Model>Create` and
+   `<Model>CreateMany` always exist; a table without a key gets List, Create, GetBy and the
    dynamic layer.
 2. A `Lookup` yields `rt.ErrNotFound` on a miss, a statement that
    returned no row, and so does an `Update` whose row vanished and a

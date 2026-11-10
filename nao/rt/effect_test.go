@@ -582,6 +582,7 @@ func TestEffectKindsDescribed(t *testing.T) {
 		"Lookup":       {Lookup[int]{SQL: "l"}, "lookup l []"},
 		"Write":        {Write[int]{SQL: "w"}, "write w []"},
 		"Exec":         {Exec{SQL: "e"}, "exec e []"},
+		"Batch":        {Batch{Steps: []Exec{{SQL: "e"}}}, "batch(exec e [])"},
 		"With":         {With[int, int, int, int]{Parent: Query[int]{SQL: "p"}, Child: "c"}, "with p []; children c []"},
 		"Transaction":  {Tx(Exec{SQL: "e"}), "tx(exec e [])"},
 		"Parallel":     {All(Exec{SQL: "e"}), "all(exec e [])"},

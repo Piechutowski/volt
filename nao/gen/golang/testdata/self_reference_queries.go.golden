@@ -28,6 +28,14 @@ func EmployeeList() rt.Query[Employee] {
 
 func EmployeeCreate(c EmployeeChangeset) rt.Write[Employee] { return rt.Insert(c.Validate().Changeset) }
 
+func EmployeeCreateMany(cs []EmployeeChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Employee], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func EmployeeUpdate(c EmployeeChangeset) rt.Write[Employee] { return rt.Update(c.Validate().Changeset) }
 
 const voltEmployeeDeleteSQL = `DELETE FROM "employees" WHERE "id" = ?`

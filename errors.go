@@ -43,6 +43,7 @@ var (
 // which columns it reads. It is an alias of an unnamed struct: nao's
 // runtime declares the identical alias, so its errors satisfy Detailer.
 type Detail = struct {
+	Row     *int     `json:"row,omitempty"`     // the index of the row a batch refused
 	Check   string   `json:"check"`             // the check's name or rendered form
 	Columns []string `json:"columns,omitempty"` // the columns the check reads
 	Message string   `json:"message"`           // the failure as text

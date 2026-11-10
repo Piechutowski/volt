@@ -32,6 +32,14 @@ func PostList() rt.Query[Post] { return rt.Query[Post]{SQL: voltPostListSQL, Sca
 
 func PostCreate(c PostChangeset) rt.Write[Post] { return rt.Insert(c.Validate().Changeset) }
 
+func PostCreateMany(cs []PostChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Post], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func PostUpdate(c PostChangeset) rt.Write[Post] { return rt.Update(c.Validate().Changeset) }
 
 const voltPostDeleteSQL = `DELETE FROM "posts" WHERE "id" = ?`
@@ -53,6 +61,14 @@ func PostTagList() rt.Query[PostTag] {
 }
 
 func PostTagCreate(c PostTagChangeset) rt.Write[PostTag] { return rt.Insert(c.Validate().Changeset) }
+
+func PostTagCreateMany(cs []PostTagChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[PostTag], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 const voltPostTagDeleteSQL = `DELETE FROM "post_tags" WHERE "post_id" = ? AND "tag" = ?`
 
@@ -80,6 +96,14 @@ func PingList() rt.Query[Ping] { return rt.Query[Ping]{SQL: voltPingListSQL, Sca
 
 func PingCreate(c PingChangeset) rt.Write[Ping] { return rt.Insert(c.Validate().Changeset) }
 
+func PingCreateMany(cs []PingChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Ping], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 const voltPingDeleteSQL = `DELETE FROM "pings" WHERE "id" = ?`
 
 func PingDelete(id int) rt.Exec {
@@ -105,6 +129,14 @@ const voltLevelListSQL = `SELECT "id", "label" FROM "levels"`
 func LevelList() rt.Query[Level] { return rt.Query[Level]{SQL: voltLevelListSQL, Scan: voltLevelScan} }
 
 func LevelCreate(c LevelChangeset) rt.Write[Level] { return rt.Insert(c.Validate().Changeset) }
+
+func LevelCreateMany(cs []LevelChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Level], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 func LevelUpdate(c LevelChangeset) rt.Write[Level] { return rt.Update(c.Validate().Changeset) }
 
