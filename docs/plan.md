@@ -272,17 +272,14 @@ section and that one:
    its memory statistics behind one global mutex, caps parallel reads at
    high core counts, and whether the readers need a cap below
    `GOMAXPROCS`.
-2. The readers' page caches: about 2 MB per connection at most, so up to
-   some 256 MB for 128 busy readers; whether `cache_size` or `mmap_size`
-   should change.
-3. The bulk insert's statement size: 1,000-row statements measured 16%
+2. The bulk insert's statement size: 1,000-row statements measured 16%
    faster than statements cut to the 32,766-parameter limit (37 ms
    against 44 ms for ten thousand rows); whether a fixed size replaces
    the limit.
-4. Double-quoted identifiers that name no column compile as string
+3. Double-quoted identifiers that name no column compile as string
    literals (`SQLITE_DQS=3` in mattn's build), so a misspelled column in
    generated SQL is not caught; how to catch it.
-5. A cancellable context makes mattn start a goroutine per statement and
+4. A cancellable context makes mattn start a goroutine per statement and
    per row; what that costs request traffic.
 
 ---

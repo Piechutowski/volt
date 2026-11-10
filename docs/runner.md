@@ -105,6 +105,31 @@ read never sees a write transaction before it commits.
 `rt.All` of reads now really runs in parallel; with one connection its
 steps queued.
 
+**Readers under write load.** Each connection keeps its own page cache,
+up to about 2 MB of RAM, so that the pages every lookup walks, the
+B-tree's root and interior pages, need no system call. A reader throws
+that cache away whenever a read transaction starts after another
+connection committed (`pager_reset` in `pagerBeginReadTransaction`), so
+behind an active writer the readers fetch those pages again from the
+operating system's copy. Measured with four readers doing 80,000 random
+key lookups in 200,000 rows while a writer commits one-row updates:
+
+| Writer | Two pools | One connection, the old design |
+|---|---|---|
+| none | 260 to 290 ms | 1,120 to 1,210 ms |
+| a commit every 1 ms | 365 to 395 ms | 1,110 to 1,140 ms |
+| commits back to back | 540 to 560 ms | 1,910 to 1,970 ms |
+
+At a commit a millisecond the writer uses almost no CPU, so the 40%
+slowdown is the readers refilling their caches. The two pools still read
+3.5 to 4.3 times faster under every load, since on one connection every
+read queues behind every other statement. Memory-mapped reads
+(`mmap_size`), which read the operating system's copy directly with
+nothing to throw away, measured the same with no writer or a commit a
+millisecond and about 20% slower with commits back to back, so the
+readers do not set it. The memory is not a concern either: 128 full
+caches are about 256 MB.
+
 **Migrations.** A migration that changes the journal mode needs the file
 to itself, and the readers' idle connection made it fail with `database
 is locked`. `MigrateUp` and `MigrateDown` close the idle readers before
@@ -227,17 +252,14 @@ Kept in `plan.md` step 21 until they are measured and settled:
    mattn's SQLite keeps memory statistics behind one global mutex
    (`SQLITE_DEFAULT_MEMSTATUS` is on), which may cap read scaling at
    high core counts; if it does, a cap on the readers is the remedy.
-2. **Readers' memory.** Each connection keeps its own page cache, up to
-   about 2 MB by default, filled with the pages it read: 128 busy
-   readers may hold some 256 MB.
-3. **Chunk size.** Statements of 1,000 rows were 16% faster than
+2. **Chunk size.** Statements of 1,000 rows were 16% faster than
    statements cut to the parameter limit; whether a fixed chunk should
    replace the limit is undecided.
-4. **Double-quoted identifiers.** mattn builds SQLite with
+3. **Double-quoted identifiers.** mattn builds SQLite with
    `SQLITE_DQS=3`, so a double-quoted identifier that names no column
    compiles as a string literal. Volt quotes every identifier, so a
    misspelled column in generated SQL would compile and match nothing;
    the generator tests cannot see it either.
-5. **Cancellable contexts.** With a context that can be cancelled, mattn
+4. **Cancellable contexts.** With a context that can be cancelled, mattn
    starts a goroutine per statement and per row to watch it; the numbers
    here used `context.Background()`, so request traffic pays more.
