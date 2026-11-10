@@ -1,23 +1,21 @@
 package golang_test
 
 import (
-	"encoding/json"
-	"os/exec"
+	"maps"
 	"path/filepath"
-	"strings"
+	"slices"
 	"testing"
 
+	"github.com/Piechutowski/volt/internal/dbtest"
 	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 	sqlitegen "github.com/Piechutowski/volt/nao/gen/sqlite"
 	"github.com/Piechutowski/volt/nao/naming"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func TestSelectsPrepare(t *testing.T) {
-	if _, err := exec.LookPath("python3"); err != nil {
-		t.Skip("python3 not available")
-	}
 	root := filepath.Join("testdata", "selects")
 	pr, err := lang.LoadDirs(disk.Source{}, root, []string{filepath.Join(root, "db")}, nil)
 	if err != nil {
@@ -40,8 +38,8 @@ func TestSelectsPrepare(t *testing.T) {
 		t.Fatalf("fixture declares too few select instantiations: %d", len(fns))
 	}
 	type stmtCase struct {
-		SQL string `json:"sql"`
-		N   int    `json:"n"`
+		SQL string
+		N   int
 	}
 	stmts := map[string]stmtCase{}
 	for _, fn := range fns {
@@ -58,26 +56,10 @@ func TestSelectsPrepare(t *testing.T) {
 			stmts[fn.TableKey+"."+fn.MethodSuffix+".children"] = stmtCase{SQL: child, N: 1}
 		}
 	}
-	input, err := json.Marshal(map[string]any{"ddl": string(ddl), "stmts": stmts})
-	if err != nil {
-		t.Fatal(err)
-	}
-	const driver = `
-import sqlite3, sys, json
-inp = json.load(sys.stdin)
-con = sqlite3.connect(":memory:")
-con.execute("PRAGMA foreign_keys = ON")
-con.executescript(inp["ddl"])
-for name, case in sorted(inp["stmts"].items()):
-    stmt, n = case["sql"], case["n"]
-    try:
-        con.execute("EXPLAIN " + stmt, [None] * n)
-    except Exception as e:
-        sys.exit(f"{name}: {e}\n  {stmt}")
-`
-	cmd := exec.Command("python3", "-c", driver)
-	cmd.Stdin = strings.NewReader(string(input))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Errorf("a select does not prepare against the generated DDL: %v\n%s", err, out)
+	db := dbtest.Open(t, string(ddl))
+	for _, name := range slices.Sorted(maps.Keys(stmts)) {
+		if err := dbtest.StatementPrepares(db, stmts[name].SQL, stmts[name].N); err != nil {
+			t.Errorf("select %s does not prepare against the generated DDL: %v", name, err)
+		}
 	}
 }

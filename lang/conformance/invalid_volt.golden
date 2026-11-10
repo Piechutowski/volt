@@ -1128,6 +1128,9 @@ app/routes.volt:10:50: error: spec/settings-whitelists: setting "default_limit" 
 ## i541_shared_action_two_docs.volt
 app/i541_shared_action_two_docs.volt:9:2: error: spec/scopes-and-routes: Posts.Index is documented by the route at app/i541_shared_action_two_docs.volt:7:2 already: one of the routes that share an action carries its doc comment (§handler-references, §doc-comments-in-generated-code)
 
+## i542_select_name_createmany.volt
+db/i542_select_name_createmany.volt:10:8: error: spec/selects-over-groups: select name "CreateMany" collides with the generated CRUD surface (§selects-over-groups)
+
 ## i54_group_type_disagree.volt
 db/i54_group_type_disagree.volt:19:29: error: spec/selects-over-groups: column "org" disagrees on type across "mixed": int in ks_seats; string in ms_revenue — the predicate cannot be checked for every member (§selects-over-groups)
 

@@ -34,6 +34,14 @@ func AuthorList() rt.Query[Author] {
 
 func AuthorCreate(c AuthorChangeset) rt.Write[Author] { return rt.Insert(c.Validate().Changeset) }
 
+func AuthorCreateMany(cs []AuthorChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Author], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func AuthorUpdate(c AuthorChangeset) rt.Write[Author] { return rt.Update(c.Validate().Changeset) }
 
 const voltAuthorDeleteSQL = `DELETE FROM "authors" WHERE "id" = ?`

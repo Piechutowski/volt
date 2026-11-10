@@ -29,6 +29,7 @@ const (
 // once. It stops at the first failure, a rt.MigrationError when the
 // migration itself did not run, and returns what was applied before it.
 func MigrateUp(ctx context.Context, db DB, migrations []rt.Migration) (applied []string, err error) {
+	db.readersIdleClose()
 	conn, err := db.pool.Conn(ctx)
 	if err != nil {
 		return nil, err
@@ -67,6 +68,7 @@ func MigrateUp(ctx context.Context, db DB, migrations []rt.Migration) (applied [
 // ledger row no migration has, an empty ledger and a row another
 // runner deleted first are errors.
 func MigrateDown(ctx context.Context, db DB, migrations []rt.Migration) (name string, err error) {
+	db.readersIdleClose()
 	conn, err := db.pool.Conn(ctx)
 	if err != nil {
 		return "", err

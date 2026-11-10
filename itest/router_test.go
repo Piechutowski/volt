@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Piechutowski/volt"
+	"github.com/Piechutowski/volt/internal/dbtest"
 	"github.com/Piechutowski/volt/itest/blog/app"
 	"github.com/Piechutowski/volt/itest/blog/db"
 	"github.com/Piechutowski/volt/nao/run"
@@ -119,45 +120,42 @@ type archive struct{}
 
 func (archive) Show(r volt.Request, stamp int) volt.Response { return echo(r, stamp) }
 
-func handler() http.Handler {
-	return handlerWithDB(nil)
+func handler(t testing.TB) http.Handler {
+	return handlerWithDB(t)
 }
 
-func handlerWithDB(t *testing.T) http.Handler {
+func handlerWithDB(t testing.TB) http.Handler {
 	h, _ := fixture(t)
 	return h
 }
 
-func fixture(t *testing.T) (http.Handler, *volt.Broker) {
-	if t == nil {
-		t = &testing.T{}
-	}
+func fixture(t testing.TB) (http.Handler, *volt.Broker) {
 	broker := &volt.Broker{Heartbeat: 20 * time.Millisecond}
-	return app.NewRouter(fixtureControllers(fixtureDB(), broker)), broker
+	return app.NewRouter(fixtureControllers(fixtureDB(t), broker)), broker
 }
 
-func fixtureDB() run.DB {
-	dbh, err := run.Open("sqlite3", ":memory:")
-	if err != nil {
-		panic(err)
-	}
-	ddl, err := os.ReadFile(filepath.Join("blog", "db", "volt_schema.sql"))
-	if err != nil {
-		panic(err)
-	}
-	if _, err := dbh.Pool().Exec(string(ddl)); err != nil {
-		panic(err)
-	}
+func fixtureDB(t testing.TB) run.DB {
+	t.Helper()
+	dbh := blogDB(t)
 	if _, err := run.Run(context.Background(), dbh, db.UserCreate(db.UserNew().EmailSet("one@example.com"))); err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	if _, err := run.Run(context.Background(), dbh, db.TagCreate(db.TagNew().SlugSet("go").NameSet("Go"))); err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	if _, err := run.Run(context.Background(), dbh, db.ProfileCreate(db.ProfileNew().UserIDSet(1).BioSet("one"))); err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	return dbh
+}
+
+func blogDB(t testing.TB) run.DB {
+	t.Helper()
+	ddl, err := os.ReadFile(filepath.Join("blog", "db", "volt_schema.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dbtest.Open(t, string(ddl))
 }
 
 func fixtureControllers(dbh run.DB, broker *volt.Broker) app.Controllers {
@@ -190,7 +188,7 @@ func serve(t *testing.T, h http.Handler, method, target string) (*httptest.Respo
 // assertion makes the enumeration total — a new named route without a
 // round-trip entry fails the test.
 func TestRoundTripTotality(t *testing.T) {
-	h := handler()
+	h := handler(t)
 
 	built := map[string]struct {
 		method string
@@ -313,7 +311,7 @@ func TestRoundTripTotality(t *testing.T) {
 }
 
 func TestTypedParamParseFailureIs404(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	for _, target := range []string{
 		"/users/abc", "/users/abc/avatar", "/users/99999999999999999999",
 		"/pages/abc", "/pages/99999999999999999999",
@@ -330,7 +328,7 @@ func TestTypedParamParseFailureIs404(t *testing.T) {
 }
 
 func TestUnknownPathIs404AndWrongMethodIs405(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	if rec, _ := serve(t, h, "GET", "/nope"); rec.Code != 404 {
 		t.Errorf("GET /nope: %d, want 404", rec.Code)
 	}
@@ -347,7 +345,7 @@ func TestUnknownPathIs404AndWrongMethodIs405(t *testing.T) {
 }
 
 func TestAnyVerbMatchesEveryMethod(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	for _, m := range []string{"GET", "POST", "DELETE", "PATCH"} {
 		rec, body := serve(t, h, m, "/ping")
 		if rec.Code != 200 || body["route"] != "/ping" {
@@ -357,7 +355,7 @@ func TestAnyVerbMatchesEveryMethod(t *testing.T) {
 }
 
 func TestResourcesUpdateIsPatch(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	if rec, body := serve(t, h, "PATCH", "/users/7"); rec.Code != 200 || body["route"] != "PATCH /users/{id}" {
 		t.Errorf("PATCH /users/7: status %d route %v", rec.Code, body["route"])
 	}
@@ -370,7 +368,7 @@ func TestResourcesUpdateIsPatch(t *testing.T) {
 }
 
 func TestWildcardCapturesRest(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	rec, body := serve(t, h, "GET", "/files/a/b%20c.txt")
 	if rec.Code != 200 {
 		t.Fatalf("status %d", rec.Code)
@@ -383,7 +381,7 @@ func TestWildcardCapturesRest(t *testing.T) {
 // TestPipelineOrder proves §scopes: plugs run in declaration order,
 // outermost first — volt.RequestID, TagOuter, TagInner.
 func TestPipelineOrder(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	rec, _ := serve(t, h, "GET", "/")
 	if rec.Header().Get("X-Request-ID") == "" {
 		t.Error("volt.RequestID did not run")
@@ -396,7 +394,7 @@ func TestPipelineOrder(t *testing.T) {
 // TestNestedScopePipelinesAppend proves §scopes: a nested scope's pipe
 // appends after the ancestors' — api's plugs run before extra's.
 func TestNestedScopePipelinesAppend(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	rec, body := serve(t, h, "GET", app.PathAdminStats())
 	if rec.Code != 200 || body["route"] != "GET /admin/stats" {
 		t.Fatalf("dispatch wrong: %d %v", rec.Code, body["route"])
@@ -450,7 +448,7 @@ func TestHeadMatchesGet(t *testing.T) {
 // TestQueryOptionsEndToEnd: a helper-built URL with query options still
 // dispatches to its route, params intact.
 func TestQueryOptionsEndToEnd(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	url := app.PathUser(7, volt.Query("tab", "posts"), volt.Query("q", "a b"))
 	if !strings.HasPrefix(url, "/users/7?") {
 		t.Fatalf("built URL = %q", url)
@@ -464,7 +462,7 @@ func TestQueryOptionsEndToEnd(t *testing.T) {
 // TestErrorSpine proves §scopes: a returned error reaches the
 // DSL-declared error_handler, which maps HTTPError to its status.
 func TestErrorSpine(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	rec, _ := serve(t, h, "GET", "/teapot")
 	if rec.Code != http.StatusTeapot {
 		t.Fatalf("status %d, want 418", rec.Code)
@@ -481,7 +479,7 @@ func TestErrorSpine(t *testing.T) {
 // declares its own error_handler, so its routes reach OpsErrors while
 // everything else still reaches the root scope's Errors.
 func TestNearestErrorHandlerWins(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	rec, _ := serve(t, h, "GET", app.PathOpsFail())
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status %d, want 503", rec.Code)
@@ -494,7 +492,7 @@ func TestNearestErrorHandlerWins(t *testing.T) {
 // TestParamTypesEndToEnd: each explicit parameter type round-trips its
 // value through helper, escaping, ServeMux and the typed shim.
 func TestParamTypesEndToEnd(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	cases := []struct{ url, wantRoute, wantParams string }{
 		{app.PathTag("hello world"), "GET /tags/{name}", "hello world"},
 		{app.PathPage(3), "GET /pages/{num}", "3"},
@@ -513,7 +511,7 @@ func TestParamTypesEndToEnd(t *testing.T) {
 // sample values dispatches to exactly that pattern. This covers rows
 // without helpers (Create/Update/Delete) too.
 func TestTableMatchesServedReality(t *testing.T) {
-	h := handler()
+	h := handler(t)
 	for _, row := range app.Table {
 		url := row.Pattern
 		for _, p := range row.Params {

@@ -4,16 +4,17 @@ import (
 	"bytes"
 	"flag"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"testing"
 
+	"github.com/Piechutowski/volt/internal/dbtest"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/parser"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -74,32 +75,23 @@ func TestGolden(t *testing.T) {
 }
 
 func TestGoldenExecutes(t *testing.T) {
-	if _, err := exec.LookPath("python3"); err != nil {
-		t.Skip("python3 not available")
-	}
-	const driver = `
-import sqlite3, sys
-con = sqlite3.connect(":memory:")
-con.execute("PRAGMA foreign_keys = ON")
-import datetime, uuid
-def _now(): return datetime.datetime.now().isoformat(sep=" ")
-con.create_function("now", 0, _now, deterministic=True)
-con.create_function("getdate", 0, _now, deterministic=True)
-con.create_function("uuid_generate_v4", 0, lambda: str(uuid.uuid4()), deterministic=True)
-con.executescript(sys.stdin.read())
-con.execute("PRAGMA foreign_key_check").fetchall() and sys.exit("foreign key violations")
-`
 	for _, golden := range goldenFiles(t) {
-		golden := golden
 		t.Run(filepath.Base(golden), func(t *testing.T) {
 			src, err := os.ReadFile(golden)
 			if err != nil {
 				t.Fatal(err)
 			}
-			cmd := exec.Command("python3", "-c", driver)
-			cmd.Stdin = bytes.NewReader(src)
-			if out, err := cmd.CombinedOutput(); err != nil {
-				t.Errorf("SQLite rejected %s: %v\n%s", golden, err, out)
+			db := dbtest.Open(t, string(src))
+			rows, err := db.Pool().Query("PRAGMA foreign_key_check")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer rows.Close()
+			if rows.Next() {
+				t.Errorf("%s: foreign key violations after the DDL", golden)
+			}
+			if err := rows.Err(); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}

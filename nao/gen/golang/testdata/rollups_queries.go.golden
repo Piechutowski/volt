@@ -28,6 +28,14 @@ func PageViewList() rt.Query[PageView] {
 
 func PageViewCreate(c PageViewChangeset) rt.Write[PageView] { return rt.Insert(c.Validate().Changeset) }
 
+func PageViewCreateMany(cs []PageViewChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[PageView], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func PageViewUpdate(c PageViewChangeset) rt.Write[PageView] { return rt.Update(c.Validate().Changeset) }
 
 const voltPageViewDeleteSQL = `DELETE FROM "page_views" WHERE "id" = ?`
@@ -60,6 +68,14 @@ func LinkClickCreate(c LinkClickChangeset) rt.Write[LinkClick] {
 	return rt.Insert(c.Validate().Changeset)
 }
 
+func LinkClickCreateMany(cs []LinkClickChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[LinkClick], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func LinkClickUpdate(c LinkClickChangeset) rt.Write[LinkClick] {
 	return rt.Update(c.Validate().Changeset)
 }
@@ -90,6 +106,14 @@ func HostList() rt.Query[Host] { return rt.Query[Host]{SQL: voltHostListSQL, Sca
 
 func HostCreate(c HostChangeset) rt.Write[Host] { return rt.Insert(c.Validate().Changeset) }
 
+func HostCreateMany(cs []HostChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Host], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func HostUpdate(c HostChangeset) rt.Write[Host] { return rt.Update(c.Validate().Changeset) }
 
 const voltHostDeleteSQL = `DELETE FROM "hosts" WHERE "id" = ?`
@@ -118,6 +142,14 @@ func VisitList() rt.Query[Visit] { return rt.Query[Visit]{SQL: voltVisitListSQL,
 
 func VisitCreate(c VisitChangeset) rt.Write[Visit] { return rt.Insert(c.Validate().Changeset) }
 
+func VisitCreateMany(cs []VisitChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Visit], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func VisitUpdate(c VisitChangeset) rt.Write[Visit] { return rt.Update(c.Validate().Changeset) }
 
 const voltVisitDeleteSQL = `DELETE FROM "visits" WHERE "id" = ?`
@@ -139,6 +171,14 @@ func MerchantList() rt.Query[Merchant] {
 }
 
 func MerchantCreate(c MerchantChangeset) rt.Write[Merchant] { return rt.Insert(c.Validate().Changeset) }
+
+func MerchantCreateMany(cs []MerchantChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Merchant], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 func MerchantUpdate(c MerchantChangeset) rt.Write[Merchant] { return rt.Update(c.Validate().Changeset) }
 
@@ -170,6 +210,14 @@ func MerchantPeriodList() rt.Query[MerchantPeriod] {
 
 func MerchantPeriodCreate(c MerchantPeriodChangeset) rt.Write[MerchantPeriod] {
 	return rt.Insert(c.Validate().Changeset)
+}
+
+func MerchantPeriodCreateMany(cs []MerchantPeriodChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[MerchantPeriod], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
 }
 
 func MerchantPeriodUpdate(c MerchantPeriodChangeset) rt.Write[MerchantPeriod] {

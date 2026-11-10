@@ -7,6 +7,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -60,7 +61,7 @@ func TestRefused(t *testing.T) {
 			t.Errorf("%q: details %+v", tc.msg, d)
 		}
 	}
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

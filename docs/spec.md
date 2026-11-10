@@ -2840,12 +2840,14 @@ for a format suffix.
    `volt.Negotiate` before its first write, so its 406 writes nothing.
 5. **Error bodies** are structured: the default error handler writes a
    `volt.Problem` (status, message, and details: check, columns,
-   message, when the error itemizes them) in the negotiated format,
+   message, and the row's index as `row` for a batch's refusal, when
+   the error itemizes them) in the negotiated format,
    JSON when the client offered nothing usable. `volt.ProblemOf` finds
    it and is where the network layer chooses a status
    (§data-and-network-layers): an `HTTPError` keeps its own; a refused
    write, the data runtime's `*rt.Invalid` (§changesets), is 409 when a
-   `unique` field error is among its fields and 422 otherwise; a query's
+   `unique` field error is among its fields and 422 otherwise; a batch
+   whose rows did not validate, a `*rt.InvalidRows`, is 422; a query's
    row miss is 404; any other error has none and is the default
    handler's 500, `rt.ErrLimit` among them, a limit below 1 the
    application computed (§selects-over-groups). A rendered value is encoded before anything is
@@ -3862,7 +3864,7 @@ the optional projection narrows the emitted columns.
 
 1. The select name is an identifier; per target-member it mints
    the function `<Model><SelectName>` (§names). A select name that is a
-   generated suffix (`Get`, `GetMany`, `List`, `Create`, `Update`,
+   generated suffix (`Get`, `GetMany`, `List`, `Create`, `CreateMany`, `Update`,
    `Delete`, `Count`, `Exists`, `Query`, `DeleteWhere`, `UpdateWhere`,
    `Limit`, `Offset`, `OrderBy`, `Changeset`, `Column`, `Params`,
    `New`) is an error, and so is a minted function that takes the name
@@ -4347,7 +4349,7 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
    `unknown_field`, `custom`, a validator's name, or the database's
    `unique`, `foreign_key`, `not_null` (rule 10); the columns are the
    ones the check reads, and for `unknown_field` the key as sent.
-8. **`Create` and `Update`.** `<Model>Create(c)` is the `rt.Write`
+8. **`Create`, `CreateMany` and `Update`.** `<Model>Create(c)` is the `rt.Write`
    that validates and, if valid, inserts the marked columns and yields
    the stored row when the runner performs it (§generated-query-surface);
    a column never marked takes its database default or, lacking one,
@@ -4355,6 +4357,26 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
    (rule 10), a single-column primary key stored as `int` excepted,
    which the database assigns (rule 2); nothing marked inserts
    `DEFAULT VALUES`.
+   `<Model>CreateMany(cs)` is the `rt.Batch` (`rt.InsertMany`) that
+   inserts many rows in one transaction, all or nothing, and yields
+   how many it inserted; inside a transaction it joins it. Every
+   changeset validates as `Create`'s does; when any fails, the Batch
+   carries one `*rt.InvalidRows{Model, Rows}`, every invalid row as
+   `rt.RowInvalid{Index, Fields}` by its index in `cs`, in order, and
+   the runner returns it without running a statement. Valid rows are
+   grouped: consecutive changesets that mark the same columns share
+   multi-row `INSERT ... VALUES (...), (...)` statements of as many
+   rows as SQLite's 32,766 parameters hold, the parameter count
+   divided by the marked columns, so every full statement has one
+   text; a changeset that marks other columns starts a new group,
+   since `VALUES` takes no `DEFAULT`, and one that marks nothing
+   inserts `DEFAULT VALUES` alone. The statements carry no
+   `RETURNING`: SQLite returns a multi-row insert's rows in no
+   promised order, so neither rows nor keys can be matched to the
+   changesets given. A database refusal rolls the batch back and maps
+   onto `*rt.Invalid` as `Create`'s does (rule 10), naming no row,
+   since SQLite names none. An empty `cs` is a Batch with no
+   statement, which yields 0.
    `<Model>Update(c)` is the `rt.Write` that validates and, if valid,
    issues `UPDATE <table> SET <the marked columns> WHERE <the key of
    the row the changeset was made from> RETURNING` and returns the
@@ -4388,9 +4410,13 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
     answers 409 when a `unique` field error is among its fields and 422
     otherwise (§formats). It itemizes itself (`Details()`: check,
     columns, message), which the error spine renders into the error
-    body so a form can mark the fields. Any other database
+    body so a form can mark the fields. A batch whose rows did not
+    validate is one `*rt.InvalidRows` (rule 8), which the error spine
+    answers with 422 and itemizes the same way, each item carrying its
+    row's index as `row`. Any other database
     error is returned as is, and the bulk paths of rule 11 return the
-    driver's error unmapped.
+    driver's error unmapped; `CreateMany` is not one of them, since it
+    validates every row.
 11. **Bulk paths bypass.** `UpdateWhere` and `DeleteWhere` of the
     dynamic layer take assignments and predicates, never a row, and
     run no validator; `Delete` runs none either. They are the
@@ -4725,10 +4751,11 @@ Migrations are untyped so that they may say anything that was once
 true. What is checked instead is their composition.
 
 1. **Definition.** The fold of a package is the structure of an empty
-   in-memory SQLite database after every migration of the package has
-   been applied in name order. The **target** is the structure of an
-   empty in-memory database after the schema's generated DDL
-   (§mapping-to-sqlite-ddl) has been applied.
+   SQLite database after every migration of the package has been
+   applied in name order. The **target** is the structure of an empty
+   database after the schema's generated DDL (§mapping-to-sqlite-ddl)
+   has been applied. Both are files in a temporary directory the tool
+   removes once it has compared them.
 2. **Structure** is, per table: its name; its columns as a set, each
    with name, declared type, `NOT NULL`, default as SQLite reports it
    (a default of `NULL`, in any case, read as none, since it means
@@ -4816,8 +4843,10 @@ true. What is checked instead is their composition.
    `volt migration up|down|status DSN [DIR]` operate on the SQLite
    database at `DSN`, a file path or a `file:` URI: `up` creates the
    database when it is missing, `status` and `down` open an existing
-   one only (a missing file is an error and nothing is created), and
-   all three refuse `:memory:`. `volt migration sql [DIR]` prints
+   one only (a missing file is an error and nothing is created),
+   `status` opens it through `run.OpenReadOnly` and changes nothing in
+   it, and all three refuse an in-memory DSN as `run.Open` does
+   (§generated-query-surface). `volt migration sql [DIR]` prints
    every migration's statements in both directions for review. Exit
    codes, the same from `gen`: 1 for drift, for a package the checker
    refuses (each command checks its package first and prints the
@@ -5344,6 +5373,7 @@ func UserGetMany(ids []int) rt.Query[User]
 func UserGetByEmail(email string) rt.Lookup[User]
 func UserList() rt.Query[User]
 func UserCreate(c UserChangeset) rt.Write[User]
+func UserCreateMany(cs []UserChangeset) rt.Batch
 func UserUpdate(c UserChangeset) rt.Write[User]
 func UserDelete(id int) rt.Exec
 func UserQuery(opts ...rt.Opt[User]) rt.Query[User]
@@ -5359,14 +5389,15 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    the columns' declaration order, and `Update` writes by the key in
    that order; `Update` also needs a non-key column; `Create` and
    `Update` take a changeset and the Write yields the stored row
-   (§changesets). `<Model>GetMany(keys)` exists for a single-column
+   (§changesets); `<Model>CreateMany` takes a slice of them and the
+   Batch yields how many rows it inserted (§changesets). `<Model>GetMany(keys)` exists for a single-column
    key; missing keys are absent, not errors; an empty input is a
    Query with no statement, which yields nil.
    `<Model>GetBy<Column>` exists per column that carries `unique` and
    is not the whole key, a member of a composite key among them; a
    partial or an expression unique index makes no column unique, so it
-   gives none (§indexes). `<Model>List` and `<Model>Create` always
-   exist; a table without a key gets List, Create, GetBy and the
+   gives none (§indexes). `<Model>List`, `<Model>Create` and
+   `<Model>CreateMany` always exist; a table without a key gets List, Create, GetBy and the
    dynamic layer.
 2. A `Lookup` yields `rt.ErrNotFound` on a miss, a statement that
    returned no row, and so does an `Update` whose row vanished and a
@@ -5410,16 +5441,45 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    is refused by `volt gen`, which names both, and reported before
    generation by `volt vet`, as a wrapper's collision is (`lint.md`,
    `dynname`).
-5. **The runner.** `run.Open(driver, dsn)` pins one connection and sets
-   WAL, `busy_timeout = 5000` and `foreign_keys = ON` on every
-   connection the pool opens, since SQLite keeps each setting per
-   connection; `run.Wrap` takes a pool the application opened, with
-   the settings it gave it. `run.Run(ctx, db, e)` performs one
+5. **The runner.** `run.Open(driver, dsn)` opens the database file at
+   `dsn` as two pools, since SQLite under WAL lets one writer and any
+   number of readers work at once. The writer is one connection with
+   WAL, `busy_timeout = 5000` and `foreign_keys = ON`; the readers are
+   as many connections as `GOMAXPROCS`, held open and idle once
+   opened, with `busy_timeout = 5000`, `foreign_keys = ON` and
+   `query_only = ON`, so a reader that is handed a write fails. The
+   runner compares `GOMAXPROCS` with the readers' size whenever it
+   hands out a reader and resizes the pool when it changed, as Go
+   follows the CPUs, the affinity mask and the cgroup quota it runs
+   under; a smaller size closes the readers left idle. SQLite keeps
+   each setting per connection, so the pools set them on every
+   connection they open. An effect that cannot write runs on a
+   reader, wherever it is performed outside a transaction: at
+   `run.Run`, as a step of a `Parallel`, as either half of a `Then`;
+   every other one runs on the writer, and inside a transaction
+   every statement runs on the transaction's connection. A read that
+   starts after a write committed sees it, since every read
+   transaction under WAL starts from the last commit; a read never
+   waits for the writer and never sees a write transaction before it
+   commits. `MigrateUp` and `MigrateDown` close the idle readers
+   before they run, so a migration that needs the file to itself in
+   this process, one that changes the journal mode, finds it so. It refuses an in-memory DSN
+   (`:memory:`, `file::memory:`, `mode=memory`; `run.MemoryRefused`
+   names the refusal), since such a database lives on one connection
+   and is gone with it: tests open a file in their temporary directory
+   as production does. `run.OpenReadOnly(driver, dsn)` opens a file
+   for reading alone, its connections with `busy_timeout = 5000`,
+   `foreign_keys = ON` and `query_only = ON` and no change of journal
+   mode, readers only, so a write fails and the file stays as it was. They are the
+   only ways to make a `run.DB`. `run.Run(ctx, db, e)` performs one
    effect: every statement outside a transaction is prepared through
-   the statement cache, keyed by its text, so identical shapes prepare
-   once; a statement inside one runs on the transaction's connection
-   and is prepared there each time, since a cached statement belongs
-   to the pool and not to one connection. A
+   its pool's statement cache, keyed by its text, so identical shapes
+   prepare once per connection; a statement inside one runs on the transaction's connection,
+   which the pool's cached statements cannot reach while the
+   transaction holds it, and is prepared there once per transaction:
+   the transaction keeps each distinct text it prepared, up to 64,
+   runs a text past those unprepared, and closes every one before it
+   commits or rolls back, whatever ends it. A
    `Transaction` runs its steps on one transaction that commits when
    every step succeeded and rolls back on the first error or a panic, a
    `Transaction` inside one joins it. A transaction that can write
@@ -5433,12 +5493,13 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    context's error: SQLite's own wait sees no context. A transaction
    whose effects can only read, a `With`, and a `Transaction`, a
    `Parallel`, a `Map` or an `Atomic` of `Query`, `Lookup`, `With`,
-   `Pure` and `Fail` alone, begins deferred (`BEGIN`): it takes one
-   snapshot at its first read and no lock, so under WAL it reads
-   beside a writer without waiting and beside other readers at once.
+   `Pure` and `Fail` alone, runs on one reader and begins deferred
+   (`BEGIN`): it takes one snapshot at its first read and no lock, so
+   its reads agree with each other, and it reads beside the writer
+   without waiting and beside other readers at once.
    A `Then` counts as writing, since what its `next` returns is not
-   known before it runs. With the one connection `run.Open` pins the
-   transactions run one after another either way. A statement outside
+   known before it runs. The writer's one connection runs the
+   transactions that can write one after another. A statement outside
    a transaction that finds the write lock held, by another connection
    or another process, waits under SQLite's own busy handler, which no
    context interrupts, so a route's deadline (§route-loads) reaches it
@@ -5454,8 +5515,7 @@ func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec
    shim answers with a 504 when the route's timeout expired
    (§route-loads) and a 499 when the client closed the request
    (§requests-and-responses). The transaction keeps its connection
-   either way, so an in-memory database, which lives as long as its
-   one connection, and the connection's settings outlive it. Inside a transaction the
+   either way, so the connection's settings outlive it. Inside a transaction the
    steps run in order because a transaction holds one connection,
    which runs one statement at a time anyway, and because SQLite rolls
    the whole transaction back when a write inside it is interrupted, as

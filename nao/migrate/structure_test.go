@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Piechutowski/volt/internal/dbtest"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
@@ -14,7 +15,7 @@ import (
 
 func ddlDB(t *testing.T, ddl string) *sql.DB {
 	t.Helper()
-	db := memoryDB(t).Pool()
+	db := dbtest.Open(t, "").Pool()
 	if _, err := db.Exec(ddl); err != nil {
 		t.Fatalf("DDL rejected: %v\n%s", err, ddl)
 	}
@@ -445,7 +446,7 @@ func TestDriftCloses(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%v\n%s", err, src)
 			}
-			db := memoryDB(t)
+			db := dbtest.Open(t, "")
 			if _, err := run.MigrateUp(ctx, db, ms[:1]); err != nil {
 				t.Fatalf("%v\n%s", err, src)
 			}

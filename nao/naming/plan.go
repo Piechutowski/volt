@@ -218,6 +218,8 @@ func (pl *Plan) QueryName(name string) (string, bool) {
 			if len(t.PK) == 1 {
 				return fmt.Sprintf("the method %s of table %q", name, tbl), true
 			}
+		case n.CreateMany:
+			return fmt.Sprintf("the method %s of table %q", name, tbl), true
 		case n.Query, n.Count, n.Exists, n.DeleteWhere, n.UpdateWhere:
 			return fmt.Sprintf("the dynamic-layer method %s of table %q", name, tbl), true
 		}
@@ -767,6 +769,13 @@ func (b *nameBase) update(tables []*Table) {
 		if !current[t] {
 			b.remove(t)
 		}
+	}
+	if len(b.origins) == 0 {
+		n := 0
+		for _, t := range tables {
+			n += len(t.names)
+		}
+		b.origins = make(map[string]nameSlot, n)
 	}
 	for _, t := range tables {
 		if !b.models[t] {

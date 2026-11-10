@@ -26,6 +26,14 @@ func MenuList() rt.Query[Menu] { return rt.Query[Menu]{SQL: voltMenuListSQL, Sca
 
 func MenuCreate(c MenuChangeset) rt.Write[Menu] { return rt.Insert(c.Validate().Changeset) }
 
+func MenuCreateMany(cs []MenuChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Menu], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func MenuUpdate(c MenuChangeset) rt.Write[Menu] { return rt.Update(c.Validate().Changeset) }
 
 const voltMenuDeleteSQL = `DELETE FROM "menus" WHERE "id" = ?`
@@ -62,6 +70,14 @@ func OrderStatusList() rt.Query[OrderStatus] {
 
 func OrderStatusCreate(c OrderStatusChangeset) rt.Write[OrderStatus] {
 	return rt.Insert(c.Validate().Changeset)
+}
+
+func OrderStatusCreateMany(cs []OrderStatusChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[OrderStatus], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
 }
 
 func OrderStatusUpdate(c OrderStatusChangeset) rt.Write[OrderStatus] {

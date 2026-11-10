@@ -182,8 +182,8 @@ kind follows nullability and the nesting depth is one.
 ### Documentation policy
 
 After step 1 the repository's prose is: `README.md`, `AGENT.md`,
-`docs/spec.md`, `docs/lint.md`, `docs/editor.md`, `docs/roadmap.md` and
-this file. Nothing else carries opinion. `hypotheses.md`,
+`docs/spec.md`, `docs/lint.md`, `docs/editor.md`, `docs/runner.md`,
+`docs/roadmap.md` and this file. Nothing else carries opinion. `hypotheses.md`,
 `entropy-and-purity-report.md` and the spec's non-goals are deleted; a
 decision that was settled lives in the spec as a rule, an open one lives
 nowhere until the maintainer settles it. The roadmap is a status table
@@ -252,6 +252,38 @@ Deferred: the language first, then non-core features and tooling.
 
 ---
 
+## Step 20. No external tools in the performance report
+
+`internal/perfsweep` describes the machine by running `uname`, `sysctl`,
+`sw_vers` and `git` (AGENT.md, the stack). It reads them from the
+system instead: the kernel release from `/proc` on Linux and through
+`syscall.Sysctl` on macOS, the commit from `.git` itself. The `+dirty`
+mark needs `git status` and goes, unless the report takes it from the
+build's own VCS stamp.
+
+---
+
+## Step 21. Open questions of the runner
+
+Measure and settle what `docs/runner.md` section 6 lists, then delete this
+section and that one:
+
+1. Reader scaling past four cores: whether mattn's SQLite, built with
+   its memory statistics behind one global mutex, caps parallel reads at
+   high core counts, and whether the readers need a cap below
+   `GOMAXPROCS`.
+2. The bulk insert's statement size: 1,000-row statements measured 16%
+   faster than statements cut to the 32,766-parameter limit (37 ms
+   against 44 ms for ten thousand rows); whether a fixed size replaces
+   the limit.
+3. Double-quoted identifiers that name no column compile as string
+   literals (`SQLITE_DQS=3` in mattn's build), so a misspelled column in
+   generated SQL is not caught; how to catch it.
+4. A cancellable context makes mattn start a goroutine per statement and
+   per row; what that costs request traffic.
+
+---
+
 ## Verification bar
 
 Before claiming any step done:
@@ -266,13 +298,15 @@ gofmt -l . | grep -v zed-extension      # empty
 
 Goldens: `go test ./gen/router -update`, `go test ./nao/gen/... -update`,
 read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
-`editor.md` checklist, `./scripts/sync-grammar.sh`.
+`editor.md` checklist, `go run ./scripts/sync-grammar`.
 
 ## Order
 
 | Step | Depends on | Lands |
 |---|---|---|
 | 5, 13 to 19 | | deferred |
+| 20 | | next |
+| 21 | | open: measure first |
 
 The blog fixture under `itest/blog` is the application every step
 rebuilds. Measured at each step on it and recorded in the commit

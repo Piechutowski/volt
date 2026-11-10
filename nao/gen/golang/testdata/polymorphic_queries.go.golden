@@ -28,6 +28,14 @@ func CommentList() rt.Query[Comment] {
 
 func CommentCreate(c CommentChangeset) rt.Write[Comment] { return rt.Insert(c.Validate().Changeset) }
 
+func CommentCreateMany(cs []CommentChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Comment], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func CommentUpdate(c CommentChangeset) rt.Write[Comment] { return rt.Update(c.Validate().Changeset) }
 
 const voltCommentDeleteSQL = `DELETE FROM "comments" WHERE "id" = ?`

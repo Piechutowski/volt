@@ -2,6 +2,7 @@ package itest
 
 import (
 	"context"
+	"github.com/Piechutowski/volt/internal/dbtest"
 	"github.com/Piechutowski/volt/nao/run"
 	"os"
 	"testing"
@@ -14,11 +15,7 @@ import (
 // has the structure of volt_schema.sql, and runs a query on it.
 func TestMigrateBuildsTheSchema(t *testing.T) {
 	ctx := context.Background()
-	db, err := run.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := dbtest.Open(t, "")
 	if _, err := run.MigrateUp(ctx, db, Migrations); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
@@ -38,18 +35,11 @@ func TestMigrateBuildsTheSchema(t *testing.T) {
 		}
 	}
 
-	target, err := run.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer target.Close()
 	ddl, err := os.ReadFile("volt_schema.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := target.Pool().ExecContext(ctx, string(ddl)); err != nil {
-		t.Fatal(err)
-	}
+	target := dbtest.Open(t, string(ddl))
 	fold, err := migrate.Read(ctx, db.Pool())
 	if err != nil {
 		t.Fatal(err)

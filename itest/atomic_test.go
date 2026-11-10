@@ -11,8 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -76,8 +74,7 @@ func brokenSignupHandler(email string) volt.HandlerFunc {
 // calls describe the same effect whatever next would make of it.
 func TestAtomicThroughTheShim(t *testing.T) {
 	ctx := context.Background()
-	dbh := fixtureDB()
-	defer dbh.Close()
+	dbh := fixtureDB(t)
 	serveSignup := func(h volt.HandlerFunc) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
 		volt.Handler("POST /signup", h, app.Errors, run.Performer(dbh)).ServeHTTP(rec, httptest.NewRequest("POST", "/signup", nil))
@@ -138,8 +135,7 @@ func TestAtomicThroughTheShim(t *testing.T) {
 // of the panicking request stored.
 func TestAtomicRefusalAndPanicThroughTheShim(t *testing.T) {
 	ctx := context.Background()
-	dbh := fixtureDB()
-	defer dbh.Close()
+	dbh := fixtureDB(t)
 	stored := func(email string) bool {
 		t.Helper()
 		_, err := run.Run(ctx, dbh, db.UserGetByEmail(email))
@@ -215,7 +211,7 @@ func slowSignupHandler(email string, mapped bool) volt.HandlerFunc {
 // context ended keeps that connection.
 func TestAtomicTimeoutAnswers504(t *testing.T) {
 	ctx := context.Background()
-	dbh := memoryBlog(t)
+	dbh := blogDB(t)
 	for _, mapped := range []bool{true, false} {
 		email := fmt.Sprintf("slow-%t@example.com", mapped)
 		rec := httptest.NewRecorder()
@@ -229,23 +225,6 @@ func TestAtomicTimeoutAnswers504(t *testing.T) {
 	}
 }
 
-func memoryBlog(t *testing.T) run.DB {
-	t.Helper()
-	dbh, err := run.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { dbh.Close() })
-	ddl, err := os.ReadFile(filepath.Join("blog", "db", "volt_schema.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := dbh.Pool().Exec(string(ddl)); err != nil {
-		t.Fatal(err)
-	}
-	return dbh
-}
-
 // TestClientLeavingMidAtomicAnswers499 proves a request whose client
 // closed it while an Atomic ran (spec §requests-and-responses): the
 // transaction rolls back, the shim answers 499 through the error
@@ -253,7 +232,7 @@ func memoryBlog(t *testing.T) run.DB {
 // connection, its rows and its foreign keys.
 func TestClientLeavingMidAtomicAnswers499(t *testing.T) {
 	ctx := context.Background()
-	dbh := memoryBlog(t)
+	dbh := blogDB(t)
 	var logged bytes.Buffer
 	defer slog.SetDefault(slog.Default())
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
@@ -274,6 +253,6 @@ func TestClientLeavingMidAtomicAnswers499(t *testing.T) {
 		t.Error("a profile of a user that does not exist was stored after the client left; want foreign_keys = ON to refuse it")
 	}
 	if _, err := run.Run(ctx, dbh, db.UserCreate(db.UserNew().EmailSet("after@example.com"))); err != nil {
-		t.Errorf("the in-memory database after the client left: %v; want it serving", err)
+		t.Errorf("the database after the client left: %v; want it serving", err)
 	}
 }

@@ -28,6 +28,14 @@ func CurrencyList() rt.Query[Currency] {
 
 func CurrencyCreate(c CurrencyChangeset) rt.Write[Currency] { return rt.Insert(c.Validate().Changeset) }
 
+func CurrencyCreateMany(cs []CurrencyChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Currency], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func CurrencyUpdate(c CurrencyChangeset) rt.Write[Currency] { return rt.Update(c.Validate().Changeset) }
 
 const voltCurrencyDeleteSQL = `DELETE FROM "currencies" WHERE "code" = ?`
@@ -55,6 +63,14 @@ const voltRateListSQL = `SELECT "id", "currency_code", "rate", "fetched_at", "ac
 func RateList() rt.Query[Rate] { return rt.Query[Rate]{SQL: voltRateListSQL, Scan: voltRateScan} }
 
 func RateCreate(c RateChangeset) rt.Write[Rate] { return rt.Insert(c.Validate().Changeset) }
+
+func RateCreateMany(cs []RateChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Rate], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 func RateUpdate(c RateChangeset) rt.Write[Rate] { return rt.Update(c.Validate().Changeset) }
 

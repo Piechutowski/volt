@@ -32,6 +32,14 @@ func UserList() rt.Query[User] { return rt.Query[User]{SQL: voltUserListSQL, Sca
 
 func UserCreate(c UserChangeset) rt.Write[User] { return rt.Insert(c.Validate().Changeset) }
 
+func UserCreateMany(cs []UserChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[User], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func UserUpdate(c UserChangeset) rt.Write[User] { return rt.Update(c.Validate().Changeset) }
 
 const voltUserDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
@@ -62,6 +70,14 @@ func ProfileList() rt.Query[Profile] {
 
 func ProfileCreate(c ProfileChangeset) rt.Write[Profile] { return rt.Insert(c.Validate().Changeset) }
 
+func ProfileCreateMany(cs []ProfileChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Profile], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func ProfileUpdate(c ProfileChangeset) rt.Write[Profile] { return rt.Update(c.Validate().Changeset) }
 
 const voltProfileDeleteSQL = `DELETE FROM "profiles" WHERE "user_id" = ?`
@@ -89,6 +105,14 @@ const voltTagListSQL = `SELECT "slug", "name" FROM "tags"`
 func TagList() rt.Query[Tag] { return rt.Query[Tag]{SQL: voltTagListSQL, Scan: voltTagScan} }
 
 func TagCreate(c TagChangeset) rt.Write[Tag] { return rt.Insert(c.Validate().Changeset) }
+
+func TagCreateMany(cs []TagChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[Tag], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 func TagUpdate(c TagChangeset) rt.Write[Tag] { return rt.Update(c.Validate().Changeset) }
 
@@ -122,6 +146,14 @@ func MsRevenueCreate(c MsRevenueChangeset) rt.Write[MsRevenue] {
 	return rt.Insert(c.Validate().Changeset)
 }
 
+func MsRevenueCreateMany(cs []MsRevenueChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[MsRevenue], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
+
 func MsRevenueUpdate(c MsRevenueChangeset) rt.Write[MsRevenue] {
 	return rt.Update(c.Validate().Changeset)
 }
@@ -153,6 +185,14 @@ func MsUsageList() rt.Query[MsUsage] {
 }
 
 func MsUsageCreate(c MsUsageChangeset) rt.Write[MsUsage] { return rt.Insert(c.Validate().Changeset) }
+
+func MsUsageCreateMany(cs []MsUsageChangeset) rt.Batch {
+	voltCs := make([]rt.Changeset[MsUsage], len(cs))
+	for voltI, voltC := range cs {
+		voltCs[voltI] = voltC.Validate().Changeset
+	}
+	return rt.InsertMany(voltCs)
+}
 
 func MsUsageUpdate(c MsUsageChangeset) rt.Write[MsUsage] { return rt.Update(c.Validate().Changeset) }
 

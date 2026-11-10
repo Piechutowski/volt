@@ -102,3 +102,28 @@ type teapotAround struct{ err error }
 func (e *teapotAround) Error() string   { return "teapot: " + e.err.Error() }
 func (e *teapotAround) Unwrap() error   { return e.err }
 func (e *teapotAround) StatusCode() int { return http.StatusTeapot }
+
+// TestProblemOfInvalidRows proves a batch's refusal through the error
+// spine (spec §formats, §changesets): a *rt.InvalidRows is a 422 whose
+// details carry each field error with its row's index.
+func TestProblemOfInvalidRows(t *testing.T) {
+	err := fmt.Errorf("import: %w", &rt.InvalidRows{Model: "Post", Rows: []rt.RowInvalid{
+		{Index: 0, Fields: []rt.FieldError{{Check: "required", Columns: []string{"title"}, Message: "title is required"}}},
+		{Index: 7, Fields: []rt.FieldError{{Check: "custom", Columns: []string{"slug"}, Message: "taken"}}},
+	}})
+	p, ok := ProblemOf(err)
+	if !ok || p.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("ProblemOf(InvalidRows) = %+v, %v; want a 422", p, ok)
+	}
+	if len(p.Details) != 2 || p.Details[0].Row == nil || *p.Details[0].Row != 0 || p.Details[1].Row == nil || *p.Details[1].Row != 7 {
+		t.Fatalf("details %+v; want rows 0 and 7", p.Details)
+	}
+	body, jerr := json.Marshal(p)
+	if jerr != nil || !strings.Contains(string(body), `"row":0`) || !strings.Contains(string(body), `"row":7`) {
+		t.Fatalf("the body %s %v; want each detail's row, row 0 included", body, jerr)
+	}
+	single, _ := ProblemOf(&rt.Invalid{Model: "Post", Fields: []rt.FieldError{{Check: "required", Columns: []string{"title"}, Message: "title is required"}}})
+	if b, _ := json.Marshal(single); strings.Contains(string(b), `"row"`) {
+		t.Fatalf("a single refused write's body %s names a row", b)
+	}
+}

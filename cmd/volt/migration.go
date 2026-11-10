@@ -297,8 +297,8 @@ func migrationDatabase(ctx context.Context, c *cli.Command, sub string) (run.DB,
 		return run.DB{}, nil, cli.Exit("migration "+sub+": DSN [DIR]", 2)
 	}
 	dsn := c.Args().Get(0)
-	if dsnIsMemory(dsn) {
-		return run.DB{}, nil, cli.Exit("migration "+sub+": "+dsn+" holds nothing once the command returns; name a file", 2)
+	if err := run.MemoryRefused(dsn); err != nil {
+		return run.DB{}, nil, cli.Exit("migration "+sub+": "+err.Error(), 2)
 	}
 	pkg, err := migrationPackage(argOr(c, 1, "."))
 	if err != nil {
@@ -321,21 +321,15 @@ func migrationDatabase(ctx context.Context, c *cli.Command, sub string) (run.DB,
 func databaseOpen(ctx context.Context, sub, dsn string) (run.DB, error) {
 	switch sub {
 	case "status":
-		db, err := sql.Open(sqliteDriver, dsnWithMode(dsn, "ro"))
-		if err != nil {
-			return run.DB{}, err
-		}
-		db.SetMaxOpenConns(1)
-		if _, err := db.ExecContext(ctx, "PRAGMA busy_timeout = 5000"); err != nil {
-			_ = db.Close()
-			return run.DB{}, err
-		}
-		return run.Wrap(db), nil
+		dsn = dsnWithMode(dsn, "ro")
 	case "down":
 		dsn = dsnWithMode(dsn, "rw")
 	}
 	if err := databasePing(ctx, dsn); err != nil {
 		return run.DB{}, err
+	}
+	if sub == "status" {
+		return run.OpenReadOnly(sqliteDriver, dsn)
 	}
 	return run.Open(sqliteDriver, dsn)
 }
@@ -352,10 +346,6 @@ func databasePing(ctx context.Context, dsn string) error {
 	return db.PingContext(ctx)
 }
 
-func dsnIsMemory(dsn string) bool {
-	return dsn == ":memory:" || strings.HasPrefix(dsn, "file::memory:") || strings.Contains(dsn, "mode=memory")
-}
-
 func dsnWithMode(dsn, mode string) string {
 	if strings.HasPrefix(dsn, "file:") {
 		sep := "?"
@@ -368,7 +358,7 @@ func dsnWithMode(dsn, mode string) string {
 }
 
 func sqliteGuard(driver string) error {
-	db, err := sql.Open(driver, ":memory:")
+	db, err := sql.Open(driver, "")
 	if err == nil {
 		defer db.Close()
 		var one int
@@ -384,18 +374,23 @@ func sqliteGuard(driver string) error {
 }
 
 // foldCheck applies the package's migrations, lowered to ms, to one
-// empty in-memory database and its schema's DDL to another, and returns
-// the drift between them (spec §the-fold). A migration SQLite refuses
-// stops the fold with SQLite's own message, in either direction: once
-// the fold is read, the reversible migrations above the last
-// irreversible one are reverted from the top and applied again
-// (§the-fold).
+// empty database file and its schema's DDL to another, both in a
+// temporary directory removed afterwards, and returns the drift between
+// them (spec §the-fold). A migration SQLite refuses stops the fold with
+// SQLite's own message, in either direction: once the fold is read, the
+// reversible migrations above the last irreversible one are reverted
+// from the top and applied again (§the-fold).
 func foldCheck(ctx context.Context, pkg *lang.Package, ms []rt.Migration) ([]migrate.Drift, error) {
 	ddl, err := sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: "package " + pkg.Path})
 	if err != nil {
 		return nil, err
 	}
-	foldDB, err := run.Open(sqliteDriver, ":memory:")
+	dir, err := os.MkdirTemp("", "volt-fold-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	foldDB, err := run.Open(sqliteDriver, filepath.Join(dir, "fold.db"))
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +398,7 @@ func foldCheck(ctx context.Context, pkg *lang.Package, ms []rt.Migration) ([]mig
 	if _, err := run.MigrateUp(ctx, foldDB, ms); err != nil {
 		return nil, foldStopped("", err)
 	}
-	targetDB, err := run.Open(sqliteDriver, ":memory:")
+	targetDB, err := run.Open(sqliteDriver, filepath.Join(dir, "target.db"))
 	if err != nil {
 		return nil, err
 	}

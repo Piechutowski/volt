@@ -216,9 +216,9 @@ func (h statementCount) WithGroup(string) slog.Handler      { return h }
 
 // countedHandler is the fixture's router over a database that counts the
 // statements it runs.
-func countedHandler() (http.Handler, *atomic.Int64) {
+func countedHandler(t testing.TB) (http.Handler, *atomic.Int64) {
 	var n atomic.Int64
-	dbh := fixtureDB().WithLogger(slog.New(statementCount{&n}))
+	dbh := fixtureDB(t).WithLogger(slog.New(statementCount{&n}))
 	return app.NewRouter(fixtureControllers(dbh, &volt.Broker{})), &n
 }
 
@@ -227,7 +227,7 @@ func countedHandler() (http.Handler, *atomic.Int64) {
 // keeps the first rows in order, and a value below 1 is a 400 naming the
 // parameter that runs no statement, as a missing or unparseable one is.
 func TestQueryRouteLimitParam(t *testing.T) {
-	h, ran := countedHandler()
+	h, ran := countedHandler(t)
 	call(h, "POST", "/api/users", strings.NewReader(`{"email":"two@example.com"}`))
 	call(h, "POST", "/api/users", strings.NewReader(`{"email":"three@example.com"}`))
 
@@ -260,7 +260,7 @@ func TestQueryRouteLimitParam(t *testing.T) {
 // below 1 from either is a 400 naming its key before any load runs, the
 // route's earlier load of the user included.
 func TestLoadLimitParam(t *testing.T) {
-	h, ran := countedHandler()
+	h, ran := countedHandler(t)
 	call(h, "POST", "/api/users", strings.NewReader(`{"email":"two@example.com"}`))
 	call(h, "POST", "/api/users", strings.NewReader(`{"email":"three@example.com"}`))
 
@@ -296,7 +296,7 @@ func TestLoadLimitParam(t *testing.T) {
 // rule, so the key present feeds both and the key missing is a 400 naming
 // it before any load runs, the optional binding notwithstanding.
 func TestLoadKeyBindsTwice(t *testing.T) {
-	h, ran := countedHandler()
+	h, ran := countedHandler(t)
 	call(h, "POST", "/api/users", strings.NewReader(`{"email":"two@example.com"}`))
 	call(h, "POST", "/api/users", strings.NewReader(`{"email":"three@example.com"}`))
 
@@ -321,7 +321,7 @@ func TestLoadKeyBindsTwice(t *testing.T) {
 // path parameters, before the scope load runs or halts, and one from the
 // query string where it binds, after the scope load, as every query key is.
 func TestScopeLoadLimitParam(t *testing.T) {
-	h, ran := countedHandler()
+	h, ran := countedHandler(t)
 	call(h, "POST", "/api/users", strings.NewReader(`{"email":"two@example.com"}`))
 	call(h, "POST", "/api/users", strings.NewReader(`{"email":"three@example.com"}`))
 

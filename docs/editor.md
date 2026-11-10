@@ -159,8 +159,8 @@ download-from-releases step: this extension is local-first, and
 `go install ./cmd/volt` is the installer, with cgo (a C compiler on
 the path), since the tool carries its own SQLite.
 
-**The local grammar mirror** (`scripts/sync-grammar.sh`): Zed loads
-grammars from a *git repository* even for dev extensions. The script
+**The local grammar mirror** (`go run ./scripts/sync-grammar`): Zed loads
+grammars from a *git repository* even for dev extensions. The tool
 regenerates `src/parser.c` if the pinned tree-sitter CLI is present
 (section 5), mirrors
 `grammar/` into `~/.cache/volt/tree-sitter-volt-git`, commits there,
@@ -394,7 +394,7 @@ agree. The LSP picks it up automatically.
 
 **Grammar change**: edit `grammar.js` → `tree-sitter generate` →
 `tree-sitter test` → section 8's differential checks →
-`./scripts/sync-grammar.sh` → Rebuild in Zed.
+`go run ./scripts/sync-grammar` → Rebuild in Zed.
 
 The CLI is pinned: `grammar/package-lock.json` holds tree-sitter-cli
 0.25.10, the version the first line of `src/parser.c` names, and
@@ -402,7 +402,7 @@ The CLI is pinned: `grammar/package-lock.json` holds tree-sitter-cli
 `grammar/node_modules/.bin/tree-sitter`. Run that one: another version
 rewrites the committed `src/` from an unchanged `grammar.js` (0.27.1
 rewrites `src/parser.c` and `src/tree_sitter/array.h`).
-`sync-grammar.sh` regenerates with the pinned version only, from
+`sync-grammar` regenerates with the pinned version only, from
 `grammar/node_modules/.bin` or from the `PATH`, and otherwise leaves
 `src/` as committed and says so. Moving the pin is a change of its
 own: update the lockfile, regenerate, and commit both.

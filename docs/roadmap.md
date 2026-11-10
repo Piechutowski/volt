@@ -21,6 +21,7 @@ that lands it.
 | Generated Go client | no | built | |
 | Generated Elm client | no | missing | |
 | Models, CRUD, dynamic queries | Ecto / ActiveRecord | built | |
+| Bulk insert | insert_all / insert_all! | built (`<Model>CreateMany`: every row validated, all or nothing, multi-row statements cut to SQLite's parameter limit) | |
 | Changesets and validation | Ecto changesets / validations | built | |
 | Joins in declared queries | yes | built (`join` over relation names, `exists` over one without joining) | |
 | Optional filters in declared queries | yes | built (`:name?`, a term taken out of the predicate when its parameter is absent, which searches no index; routable from the query string as a scalar, a list from Go alone) | |
@@ -31,6 +32,7 @@ that lands it.
 | Migration generation from drift | yes | not planned: a migration is written by hand, and the checker folds the migrations against the schema instead of guessing one from a diff | |
 | Seeds | yes | built (`records`) | |
 | Transactions | yes | built (as values; `rt.Atomic` over `rt.Then` for writes that use an earlier write's key) | |
+| Reads beside writes | connection pool | built (one writer connection and `GOMAXPROCS` readers under WAL, an effect routed by whether it can write) | |
 | Sessions | yes | missing | |
 | Password hashing | yes | missing | |
 | CSRF | yes | missing | |

@@ -5,13 +5,16 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Piechutowski/volt/internal/dbtest"
 	"github.com/Piechutowski/volt/nao/rt"
 	"github.com/Piechutowski/volt/nao/run"
 )
@@ -48,7 +51,7 @@ const slowWriteSQL = "UPDATE users SET name = name WHERE (WITH RECURSIVE c(x) AS
 // ends between two statements, inside a write SQLite rolls back when
 // interrupted, or beside a failing sibling of a top-level Parallel
 // fails with the context's error and rolls back, and the connection
-// stays, with an in-memory database's rows and foreign_keys = ON.
+// stays, with its rows and foreign_keys = ON.
 func TestTransactionTheContextEndsKeepsItsConnection(t *testing.T) {
 	db := newDB(t)
 	u := seedUser(t, db, "ann@example.com")
@@ -126,30 +129,16 @@ func TestOpenSetsThePragmasOnEveryConnection(t *testing.T) {
 }
 
 // TestAtomicCheckUnderAPool proves the check inside a transaction that
-// spec §generated-query-surface spells, an Atomic over a Then, over a
-// pool of several connections run.Wrap takes: twenty Atomics at once, each reading an
-// order and shipping it only while pending, ship it once and refuse the
-// rest with their Fail, none failing with database is locked, since a
-// transaction begins immediately and waits for the write lock under the
-// pool's busy_timeout.
+// spec §generated-query-surface spells, an Atomic over a Then, over
+// several DBs on one file, as several processes hold it: twenty Atomics
+// at once, each reading an order and shipping it only while pending,
+// ship it once and refuse the rest with their Fail, none failing with
+// database is locked, since a transaction begins immediately and waits
+// for the write lock under the busy timeout.
 func TestAtomicCheckUnderAPool(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "pool.db")
-	opened, err := run.Open("sqlite3", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := opened.Close(); err != nil {
-		t.Fatal(err)
-	}
-	pool, err := sql.Open("sqlite3", "file:"+path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on")
-	if err != nil {
-		t.Fatal(err)
-	}
-	pool.SetMaxOpenConns(8)
-	db := run.Wrap(pool)
-	defer db.Close()
-	ddlApply(t, db)
+	dbs := dbsOpen(t, 4)
+	db := dbs[0]
 	u := seedUser(t, db, "ann@example.com")
 	shipped := errors.New("already shipped")
 	ship := func(id int) rt.Effect[Order] {
@@ -168,9 +157,9 @@ func TestAtomicCheckUnderAPool(t *testing.T) {
 		var mu sync.Mutex
 		outcomes := map[string]int{}
 		var wg sync.WaitGroup
-		for range 20 {
+		for i := range 20 {
 			wg.Go(func() {
-				_, err := run.Run(ctx, db, ship(o.ID))
+				_, err := run.Run(ctx, dbs[i%len(dbs)], ship(o.ID))
 				key := "shipped"
 				switch {
 				case errors.Is(err, shipped):
@@ -190,25 +179,20 @@ func TestAtomicCheckUnderAPool(t *testing.T) {
 	}
 }
 
-func poolOpen(t *testing.T, conns int) run.DB {
+func dbsOpen(t *testing.T, n int) []run.DB {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "pool.db")
-	opened, err := run.Open("sqlite3", path)
-	if err != nil {
-		t.Fatal(err)
+	path := filepath.Join(t.TempDir(), "shared.db")
+	dbs := make([]run.DB, n)
+	for i := range dbs {
+		db, err := run.Open("sqlite3", path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { db.Close() })
+		dbs[i] = db
 	}
-	if err := opened.Close(); err != nil {
-		t.Fatal(err)
-	}
-	pool, err := sql.Open("sqlite3", "file:"+path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on")
-	if err != nil {
-		t.Fatal(err)
-	}
-	pool.SetMaxOpenConns(conns)
-	db := run.Wrap(pool)
-	t.Cleanup(func() { db.Close() })
-	ddlApply(t, db)
-	return db
+	ddlApply(t, dbs[0])
+	return dbs
 }
 
 func writeLockHold(t *testing.T, db run.DB) {
@@ -229,14 +213,15 @@ func writeLockHold(t *testing.T, db run.DB) {
 // TestReadTransactionBesideAWriter proves that a transaction of reads
 // alone begins deferred (spec §generated-query-surface, the runner): a
 // With, and an Atomic and a Transaction of reads, read their snapshot
-// at once while another connection of the pool holds the write lock,
-// where an immediate begin would wait for it and fail with database is
-// locked after the busy timeout.
+// at once while another DB on the file holds the write lock, where an
+// immediate begin would wait for it and fail with database is locked
+// after the busy timeout.
 func TestReadTransactionBesideAWriter(t *testing.T) {
 	ctx := context.Background()
-	db := poolOpen(t, 4)
+	dbs := dbsOpen(t, 2)
+	db := dbs[0]
 	seedUser(t, db, "ann@example.com")
-	writeLockHold(t, db)
+	writeLockHold(t, dbs[1])
 	start := time.Now()
 	if got, err := run.Run(ctx, db, UserEveryone()); err != nil || len(got) != 1 {
 		t.Fatalf("a with select beside a writer = %v, %v", got, err)
@@ -259,8 +244,9 @@ func TestReadTransactionBesideAWriter(t *testing.T) {
 // the deadline or the cancellation, not database is locked after the
 // busy timeout, and once the lock is free it takes it.
 func TestWriteBeginEndsWithItsContext(t *testing.T) {
-	db := poolOpen(t, 2)
-	conn, err := db.Pool().Conn(context.Background())
+	dbs := dbsOpen(t, 2)
+	db := dbs[0]
+	conn, err := dbs[1].Pool().Conn(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,21 +328,35 @@ func TestUnreadRowKeepsNoConnection(t *testing.T) {
 	}
 }
 
-type pragmaCutConnector struct {
+type pragmaCutDriver struct {
 	inner driver.Driver
-	dsn   string
 	cut   func()
 	sent  func(query string)
 }
 
-func (c pragmaCutConnector) Driver() driver.Driver { return c.inner }
-
-func (c pragmaCutConnector) Connect(context.Context) (driver.Conn, error) {
-	conn, err := c.inner.Open(c.dsn)
+func (d pragmaCutDriver) Open(name string) (driver.Conn, error) {
+	conn, err := d.inner.Open(name)
 	if err != nil {
 		return nil, err
 	}
-	return pragmaCutConn{Conn: conn, cut: c.cut, sent: c.sent}, nil
+	return pragmaCutConn{Conn: conn, cut: d.cut, sent: d.sent}, nil
+}
+
+var pragmaCutDrivers atomic.Int64
+
+func pragmaCutOpen(t *testing.T, cut func(), sent func(query string)) run.DB {
+	t.Helper()
+	probe, err := sql.Open("sqlite3", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner := probe.Driver()
+	_ = probe.Close()
+	name := fmt.Sprintf("sqlite3_pragma_cut_%d", pragmaCutDrivers.Add(1))
+	sql.Register(name, pragmaCutDriver{inner: inner, cut: cut, sent: sent})
+	db := dbtest.OpenDriver(t, name, "")
+	ddlApply(t, db)
+	return db
 }
 
 type pragmaCutConn struct {
@@ -390,21 +390,10 @@ func (c pragmaCutConn) QueryContext(ctx context.Context, query string, args []dr
 // as go-sqlite3 reports an interrupted pragma, fails the transaction
 // with the context's error, and the connection's timeout stays 5000.
 func TestWriteBeginRestoresTheBusyTimeout(t *testing.T) {
-	probe, err := sql.Open("sqlite3", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	inner := probe.Driver()
-	_ = probe.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	dsn := "file:" + filepath.Join(t.TempDir(), "cut.db") + "?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on"
-	pool := sql.OpenDB(pragmaCutConnector{inner: inner, dsn: dsn, cut: cancel})
-	pool.SetMaxOpenConns(1)
-	db := run.Wrap(pool)
-	defer db.Close()
-	ddlApply(t, db)
-	_, err = run.Run(ctx, db, rt.Atomic(UserCreate(UserNew().EmailSet("a@example.com").NameSet("Ann"))))
+	db := pragmaCutOpen(t, cancel, nil)
+	_, err := run.Run(ctx, db, rt.Atomic(UserCreate(UserNew().EmailSet("a@example.com").NameSet("Ann"))))
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("a write whose context ended at the pragma = %v; want context.Canceled", err)
 	}
@@ -424,12 +413,6 @@ func TestWriteBeginRestoresTheBusyTimeout(t *testing.T) {
 // gone takes no write lock from the writers still waiting for it, and
 // the timeout it set is restored.
 func TestWriteBeginOfAnEndedContextTakesNoLock(t *testing.T) {
-	probe, err := sql.Open("sqlite3", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	inner := probe.Driver()
-	_ = probe.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var mu sync.Mutex
@@ -439,16 +422,11 @@ func TestWriteBeginOfAnEndedContextTakesNoLock(t *testing.T) {
 		sent = append(sent, query)
 		mu.Unlock()
 	}
-	dsn := "file:" + filepath.Join(t.TempDir(), "ended.db") + "?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on"
-	pool := sql.OpenDB(pragmaCutConnector{inner: inner, dsn: dsn, cut: cancel, sent: record})
-	pool.SetMaxOpenConns(1)
-	db := run.Wrap(pool)
-	defer db.Close()
-	ddlApply(t, db)
+	db := pragmaCutOpen(t, cancel, record)
 	mu.Lock()
 	sent = nil
 	mu.Unlock()
-	_, err = run.Run(ctx, db, rt.Atomic(UserCreate(UserNew().EmailSet("a@example.com").NameSet("Ann"))))
+	_, err := run.Run(ctx, db, rt.Atomic(UserCreate(UserNew().EmailSet("a@example.com").NameSet("Ann"))))
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("a write whose context ended at the pragma = %v; want context.Canceled", err)
 	}
