@@ -24,12 +24,13 @@ import (
 )
 
 const (
-	styleFunctionLinesMax = 70
-	styleLineColumnsMax   = 100
-	styleTabColumns       = 4
-	styleExprDepthMax     = 64
-	styleLedgerPath       = "testdata/style.ledger"
-	styleDocPath          = "../../docs/style.md"
+	styleFunctionLinesMax   = 70
+	styleLineColumnsMax     = 100
+	styleTabColumns         = 4
+	styleExpressionDepthMax = 64
+	styleGraphVisitsMax     = 1 << 20
+	styleLedgerPath         = "testdata/style.ledger"
+	styleDocPath            = "../../docs/style.md"
 )
 
 const (
@@ -37,7 +38,7 @@ const (
 	ruleLineLength       = "line-length"
 	ruleRecursion        = "recursion"
 	ruleArgumentMutation = "argument-mutation"
-	rulePackageState     = "package-state"
+	rulePackageWrite     = "package-write"
 	ruleErrorDiscarded   = "error-discarded"
 	ruleLoopUnbounded    = "loop-unbounded"
 	ruleFileName         = "file-name"
@@ -49,7 +50,7 @@ var styleLimits = map[string]int{
 	ruleLineLength:       styleLineColumnsMax,
 	ruleRecursion:        0,
 	ruleArgumentMutation: 0,
-	rulePackageState:     0,
+	rulePackageWrite:     0,
 	ruleErrorDiscarded:   0,
 	ruleLoopUnbounded:    0,
 	ruleFileName:         0,
@@ -59,7 +60,7 @@ var styleLimits = map[string]int{
 var styleExampleRules = []string{
 	ruleRecursion,
 	ruleArgumentMutation,
-	rulePackageState,
+	rulePackageWrite,
 	ruleErrorDiscarded,
 	ruleLoopUnbounded,
 }
@@ -84,12 +85,16 @@ var styleInventory = map[string]bool{
 	module + ".Broker":             true,
 }
 
-var styleSkipDirs = map[string]bool{
+var styleSkipDirectories = map[string]bool{
 	".git":          true,
 	"grammar":       true,
 	"node_modules":  true,
 	"zed-extension": true,
 }
+
+var styleCodeSuffixes = []string{".go", ".go.golden", ".volt", ".sql", ".sql.golden"}
+
+var styleGoSuffixes = []string{".go", ".go.golden"}
 
 var styleFileNamePattern = regexp.MustCompile(`^[a-z0-9]+(_[a-z0-9]+)*\.go(\.golden)?$`)
 
@@ -124,18 +129,57 @@ var styleFprints = map[string]bool{
 	"fmt.Fprintln": true,
 }
 
+var styleFiniteIterators = map[string]bool{
+	"bytes.FieldsFuncSeq":   true,
+	"bytes.FieldsSeq":       true,
+	"bytes.Lines":           true,
+	"bytes.SplitAfterSeq":   true,
+	"bytes.SplitSeq":        true,
+	"maps.All":              true,
+	"maps.Keys":             true,
+	"maps.Values":           true,
+	"slices.All":            true,
+	"slices.Backward":       true,
+	"slices.Values":         true,
+	"strings.FieldsFuncSeq": true,
+	"strings.FieldsSeq":     true,
+	"strings.Lines":         true,
+	"strings.SplitAfterSeq": true,
+	"strings.SplitSeq":      true,
+}
+
 type styleFinding struct {
 	rule  string
 	key   string
 	value int
 }
 
-type styleTyped struct {
+type styleRepository struct {
+	root string
+}
+
+type styleSource struct {
 	name string
-	file *ast.File
-	info *types.Info
-	pkg  *types.Package
-	keys map[*ast.FuncDecl]string
+	text []byte
+}
+
+type styleUnit struct {
+	key        string
+	name       *ast.Ident
+	receiver   *ast.FieldList
+	parameters *ast.FieldList
+	body       *ast.BlockStmt
+	start      token.Pos
+	end        token.Pos
+	init       bool
+}
+
+type styleTyped struct {
+	name         string
+	file         *ast.File
+	information  *types.Info
+	typesPackage *types.Package
+	units        []styleUnit
 }
 
 type styleWrite struct {
@@ -150,69 +194,52 @@ type styleGraph struct {
 	closures map[*types.Func]bool
 }
 
+type styleLedger struct {
+	found    map[string]int
+	recorded map[string]int
+}
+
 type styleExample struct {
 	rule string
 	bad  bool
-	src  string
+	text string
 	line int
 }
 
 func TestStyleLedger(t *testing.T) {
-	got := styleFold(styleFindingsAll(t))
-	want, exists := styleLedgerRead(t)
-	if *update && !exists {
-		styleLedgerWrite(t, got)
-		return
-	}
-	grown, shrunk := styleLedgerDiff(got, want)
+	repository := styleRepository{root: styleRootFind(t)}
+	findings := styleSourceFindings(t, repository.sources(t))
+	findings = append(findings, styleTypedFindingsAll(t, repository, gatePackages(t))...)
+	findings = append(findings, styleDependencyFindings(repository.requirements(t))...)
+	ledger := styleLedger{found: styleFindingsFold(findings), recorded: styleLedgerRead(t)}
+	grown, shrunk := styleLedgerDiff(ledger)
 	for _, entry := range grown {
 		t.Errorf("style debt grew, bring the code back to docs/style.md: %s", entry)
 	}
-	if *update && len(grown) == 0 {
-		styleLedgerWrite(t, got)
+	if !*update {
+		for _, entry := range shrunk {
+			t.Errorf("style debt shrank, lower the ledger with "+
+				"go test ./cmd/volt -run TestStyleLedger -update: %s", entry)
+		}
 		return
 	}
-	for _, entry := range shrunk {
-		t.Errorf("style debt shrank, lower the ledger with "+
-			"go test ./cmd/volt -run TestStyleLedger -update: %s", entry)
+	if len(grown) == 0 {
+		styleLedgerWrite(t, ledger.found)
 	}
 }
 
-func TestStyleDocumentsTheGate(t *testing.T) {
-	src, err := os.ReadFile(styleDocPath)
+func TestStyleDoc(t *testing.T) {
+	text, err := os.ReadFile(styleDocPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc := string(src)
+	doc := string(text)
 	styleDocLimitsCheck(t, doc)
 	styleDocDependenciesCheck(t, doc)
 	styleDocExamplesCheck(t, doc)
 }
 
-func styleFindingsAll(t *testing.T) []styleFinding {
-	t.Helper()
-	root := styleRoot(t)
-	var findings []styleFinding
-	for _, path := range styleSourcePaths(t, root) {
-		findings = append(findings, styleSyntaxFindings(t, root, path)...)
-	}
-	typed := styleTypedFiles(t, root, gatePackages(t))
-	for _, file := range typed {
-		findings = append(findings, styleTypedFindings(file)...)
-	}
-	findings = append(findings, styleRecursive(styleGraphBuild(typed))...)
-	return append(findings, styleDependencyFindings(t, root)...)
-}
-
-func styleFold(findings []styleFinding) map[string]int {
-	folded := map[string]int{}
-	for _, finding := range findings {
-		folded[finding.rule+" "+finding.key] += finding.value
-	}
-	return folded
-}
-
-func styleRoot(t *testing.T) string {
+func styleRootFind(t *testing.T) string {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -221,135 +248,222 @@ func styleRoot(t *testing.T) string {
 	return root
 }
 
-func styleRel(t *testing.T, root string, path string) string {
+func (repository styleRepository) relative(t *testing.T, path string) string {
 	t.Helper()
-	rel, err := filepath.Rel(root, path)
+	relative, err := filepath.Rel(repository.root, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return filepath.ToSlash(rel)
+	return filepath.ToSlash(relative)
 }
 
-func styleSourcePaths(t *testing.T, root string) []string {
+func (repository styleRepository) sources(t *testing.T) []styleSource {
 	t.Helper()
-	var paths []string
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+	var sources []styleSource
+	err := filepath.WalkDir(repository.root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() && styleSkipDirs[entry.Name()] {
-			return filepath.SkipDir
-		}
 		if entry.IsDir() {
+			if styleSkipDirectories[entry.Name()] {
+				return filepath.SkipDir
+			}
 			return nil
 		}
-		if strings.HasSuffix(path, ".go") || strings.HasSuffix(path, ".go.golden") {
-			paths = append(paths, path)
+		if !styleSuffixed(path, styleCodeSuffixes) {
+			return nil
 		}
+		text, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		sources = append(sources, styleSource{repository.relative(t, path), text})
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	sort.Strings(paths)
-	return paths
+	sort.Slice(sources, func(i, j int) bool { return sources[i].name < sources[j].name })
+	return sources
 }
 
-func styleSyntaxFindings(t *testing.T, root string, path string) []styleFinding {
+func (repository styleRepository) requirements(t *testing.T) map[string][]string {
 	t.Helper()
-	src, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
+	requirements := map[string][]string{}
+	for gomod := range styleDependencies {
+		text, err := os.ReadFile(filepath.Join(repository.root, gomod))
+		if err != nil {
+			t.Fatal(err)
+		}
+		requirements[gomod] = styleRequirements(text)
 	}
-	name := styleRel(t, root, path)
-	findings := styleLineFindings(name, src)
-	if !styleFileNamePattern.MatchString(filepath.Base(name)) {
-		findings = append(findings, styleFinding{ruleFileName, name, 1})
-	}
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, path, src, parser.SkipObjectResolution)
-	if err != nil {
-		t.Fatalf("%s: %v", name, err)
-	}
-	return append(findings, styleDeclFindings(fset, name, file)...)
+	return requirements
 }
 
-func styleLineFindings(name string, src []byte) []styleFinding {
+func styleSuffixed(path string, suffixes []string) bool {
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(path, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+func styleFindingsFold(findings []styleFinding) map[string]int {
+	folded := map[string]int{}
+	for _, finding := range findings {
+		folded[finding.rule+" "+finding.key] += finding.value
+	}
+	return folded
+}
+
+func styleFindingNonZero(finding styleFinding) []styleFinding {
+	if finding.value == 0 {
+		return nil
+	}
+	return []styleFinding{finding}
+}
+
+func styleSourceFindings(t *testing.T, sources []styleSource) []styleFinding {
+	t.Helper()
+	var findings []styleFinding
+	for _, source := range sources {
+		findings = append(findings, styleLineFindings(source)...)
+		if !styleSuffixed(source.name, styleGoSuffixes) {
+			continue
+		}
+		if !styleFileNamePattern.MatchString(filepath.Base(source.name)) {
+			findings = append(findings, styleFinding{ruleFileName, source.name, 1})
+		}
+		fileSet := token.NewFileSet()
+		mode := parser.SkipObjectResolution
+		file, err := parser.ParseFile(fileSet, source.name, source.text, mode)
+		if err != nil {
+			t.Fatalf("%s: %v", source.name, err)
+		}
+		findings = append(findings, styleUnitFindings(fileSet, styleUnits(source.name, file))...)
+	}
+	return findings
+}
+
+func styleLineFindings(source styleSource) []styleFinding {
 	count := 0
-	for _, line := range strings.Split(string(src), "\n") {
+	for _, line := range strings.Split(string(source.text), "\n") {
 		columns := utf8.RuneCountInString(line) + strings.Count(line, "\t")*(styleTabColumns-1)
 		if columns > styleLineColumnsMax {
 			count++
 		}
 	}
-	if count == 0 {
-		return nil
-	}
-	return []styleFinding{{ruleLineLength, name, count}}
+	return styleFindingNonZero(styleFinding{ruleLineLength, source.name, count})
 }
 
-func styleFuncKeys(name string, file *ast.File) map[*ast.FuncDecl]string {
-	keys := map[*ast.FuncDecl]string{}
+func styleUnits(name string, file *ast.File) []styleUnit {
+	var units []styleUnit
 	seen := map[string]int{}
-	for _, decl := range file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
+	for _, declaration := range file.Decls {
+		switch declared := declaration.(type) {
+		case *ast.FuncDecl:
+			if declared.Body == nil {
+				continue
+			}
+			key := name + ":" + styleFunctionName(declared)
+			seen[key]++
+			if seen[key] > 1 {
+				key += "#" + strconv.Itoa(seen[key])
+			}
+			units = append(units, styleUnit{
+				key:        key,
+				name:       declared.Name,
+				receiver:   declared.Recv,
+				parameters: declared.Type.Params,
+				body:       declared.Body,
+				start:      declared.Pos(),
+				end:        declared.End(),
+				init:       declared.Recv == nil && declared.Name.Name == "init",
+			})
+		case *ast.GenDecl:
+			units = append(units, styleLiteralUnits(name, declared)...)
+		}
+	}
+	return units
+}
+
+func styleLiteralUnits(name string, declaration *ast.GenDecl) []styleUnit {
+	if declaration.Tok != token.VAR {
+		return nil
+	}
+	var units []styleUnit
+	for _, specification := range declaration.Specs {
+		value, ok := specification.(*ast.ValueSpec)
 		if !ok {
 			continue
 		}
-		key := name + ":" + styleFuncName(fn)
-		seen[key]++
-		if seen[key] > 1 {
-			key += "#" + strconv.Itoa(seen[key])
+		for index, expression := range value.Values {
+			literal, ok := ast.Unparen(expression).(*ast.FuncLit)
+			if !ok {
+				continue
+			}
+			units = append(units, styleUnit{
+				key:        name + ":" + value.Names[index].Name,
+				parameters: literal.Type.Params,
+				body:       literal.Body,
+				start:      literal.Pos(),
+				end:        literal.End(),
+			})
 		}
-		keys[fn] = key
 	}
-	return keys
+	return units
 }
 
-func styleFuncName(fn *ast.FuncDecl) string {
-	if fn.Recv == nil || len(fn.Recv.List) == 0 {
-		return fn.Name.Name
+func styleFunctionName(function *ast.FuncDecl) string {
+	if function.Recv == nil || len(function.Recv.List) == 0 {
+		return function.Name.Name
 	}
-	recv := fn.Recv.List[0].Type
+	receiver := function.Recv.List[0].Type
 	star := ""
-	if pointer, ok := recv.(*ast.StarExpr); ok {
-		star, recv = "*", pointer.X
+	if pointer, ok := receiver.(*ast.StarExpr); ok {
+		star, receiver = "*", pointer.X
 	}
-	switch generic := recv.(type) {
+	switch generic := receiver.(type) {
 	case *ast.IndexExpr:
-		recv = generic.X
+		receiver = generic.X
 	case *ast.IndexListExpr:
-		recv = generic.X
+		receiver = generic.X
 	}
-	if id, ok := recv.(*ast.Ident); ok {
-		return "(" + star + id.Name + ")." + fn.Name.Name
+	typeName := "?"
+	if identifier, ok := receiver.(*ast.Ident); ok {
+		typeName = identifier.Name
 	}
-	return "(" + star + "?)." + fn.Name.Name
+	return "(" + star + typeName + ")." + function.Name.Name
 }
 
-func styleDeclFindings(fset *token.FileSet, name string, file *ast.File) []styleFinding {
-	keys := styleFuncKeys(name, file)
+func styleUnitFindings(fileSet *token.FileSet, units []styleUnit) []styleFinding {
 	var findings []styleFinding
-	for _, decl := range file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Body == nil {
-			continue
-		}
-		lines := fset.Position(fn.End()).Line - fset.Position(fn.Pos()).Line + 1
+	for _, unit := range units {
+		lines := fileSet.Position(unit.end).Line - fileSet.Position(unit.start).Line + 1
 		if lines > styleFunctionLinesMax {
-			findings = append(findings, styleFinding{ruleFunctionLength, keys[fn], lines})
+			findings = append(findings, styleFinding{ruleFunctionLength, unit.key, lines})
 		}
-		if count := styleLoopsUnbounded(fn.Body); count > 0 {
-			findings = append(findings, styleFinding{ruleLoopUnbounded, keys[fn], count})
-		}
+		loops := styleFinding{ruleLoopUnbounded, unit.key, styleForLoopsUnboundedCount(unit.body)}
+		findings = append(findings, styleFindingNonZero(loops)...)
 	}
 	return findings
 }
 
-func styleLoopsUnbounded(body *ast.BlockStmt) int {
+func styleForLoopsUnboundedCount(body *ast.BlockStmt) int {
+	labels := map[*ast.ForStmt]string{}
 	count := 0
 	ast.Inspect(body, func(node ast.Node) bool {
-		if loop, ok := node.(*ast.ForStmt); ok && !styleLoopBounded(loop) {
+		if labeled, ok := node.(*ast.LabeledStmt); ok {
+			if loop, ok := labeled.Stmt.(*ast.ForStmt); ok {
+				labels[loop] = labeled.Label.Name
+			}
+		}
+		loop, ok := node.(*ast.ForStmt)
+		if !ok {
+			return true
+		}
+		if !styleLoopBounded(loop, labels[loop]) {
 			count++
 		}
 		return true
@@ -357,31 +471,167 @@ func styleLoopsUnbounded(body *ast.BlockStmt) int {
 	return count
 }
 
-func styleLoopBounded(loop *ast.ForStmt) bool {
+func styleLoopBounded(loop *ast.ForStmt, label string) bool {
 	if loop.Cond == nil {
-		return styleLoopEndless(loop.Body)
+		return styleLoopEndless(loop.Body, label)
 	}
-	counter := styleLoopCounter(loop.Post)
-	return counter != "" && styleCondBounds(loop.Cond, counter)
+	counter, step := styleLoopCounter(loop.Post)
+	if counter == "" {
+		return false
+	}
+	if styleWritten(loop.Body, []string{counter}) {
+		return false
+	}
+	return styleConditionBounds(loop, counter, step)
 }
 
-func styleLoopCounter(post ast.Stmt) string {
+func styleLoopCounter(post ast.Stmt) (string, int) {
 	var target ast.Expr
-	switch x := post.(type) {
+	step := 0
+	switch statement := post.(type) {
 	case *ast.IncDecStmt:
-		target = x.X
+		target, step = statement.X, 1
+		if statement.Tok == token.DEC {
+			step = -1
+		}
 	case *ast.AssignStmt:
-		if len(x.Lhs) == 1 && (x.Tok == token.ADD_ASSIGN || x.Tok == token.SUB_ASSIGN) {
-			target = x.Lhs[0]
+		if len(statement.Lhs) != 1 {
+			return "", 0
+		}
+		switch statement.Tok {
+		case token.ADD_ASSIGN:
+			target, step = statement.Lhs[0], 1
+		case token.SUB_ASSIGN:
+			target, step = statement.Lhs[0], -1
 		}
 	}
-	if id, ok := ast.Unparen(target).(*ast.Ident); ok {
-		return id.Name
+	if identifier, ok := ast.Unparen(target).(*ast.Ident); ok {
+		return identifier.Name, step
 	}
-	return ""
+	return "", 0
 }
 
-func styleLoopEndless(body *ast.BlockStmt) bool {
+func styleConditionBounds(loop *ast.ForStmt, counter string, step int) bool {
+	pending := []ast.Expr{loop.Cond}
+	index := 0
+	for ; index < len(pending) && index < styleExpressionDepthMax; index++ {
+		binary, ok := ast.Unparen(pending[index]).(*ast.BinaryExpr)
+		if !ok {
+			continue
+		}
+		if binary.Op == token.LAND {
+			pending = append(pending, binary.X, binary.Y)
+			continue
+		}
+		bound := styleComparisonBound(binary, counter, step)
+		if bound == nil {
+			continue
+		}
+		if !styleWritten(loop.Body, styleExpressionPaths(bound)) {
+			return true
+		}
+	}
+	if index < len(pending) {
+		panic("styleConditionBounds: a condition deeper than styleExpressionDepthMax")
+	}
+	return false
+}
+
+func styleComparisonBound(binary *ast.BinaryExpr, counter string, step int) ast.Expr {
+	rising := binary.Op == token.LSS || binary.Op == token.LEQ
+	falling := binary.Op == token.GTR || binary.Op == token.GEQ
+	if styleIdentifierNamed(binary.X, counter) {
+		if (rising && step > 0) || (falling && step < 0) {
+			return binary.Y
+		}
+		return nil
+	}
+	if styleIdentifierNamed(binary.Y, counter) {
+		if (falling && step > 0) || (rising && step < 0) {
+			return binary.X
+		}
+	}
+	return nil
+}
+
+func styleExpressionPaths(expression ast.Expr) []string {
+	var paths []string
+	ast.Inspect(expression, func(node ast.Node) bool {
+		if path := styleExpressionPath(node); path != "" {
+			paths = append(paths, path)
+		}
+		return true
+	})
+	return paths
+}
+
+func styleExpressionPath(node ast.Node) string {
+	current := node
+	path := ""
+	for depth := 0; depth < styleExpressionDepthMax; depth++ {
+		switch typed := current.(type) {
+		case *ast.Ident:
+			return strings.TrimSuffix(typed.Name+"."+path, ".")
+		case *ast.SelectorExpr:
+			path = strings.TrimSuffix(typed.Sel.Name+"."+path, ".")
+			current = ast.Unparen(typed.X)
+		case *ast.ParenExpr:
+			current = typed.X
+		default:
+			return ""
+		}
+	}
+	panic("styleExpressionPath: an expression deeper than styleExpressionDepthMax")
+}
+
+func styleWritten(body *ast.BlockStmt, paths []string) bool {
+	written := false
+	ast.Inspect(body, func(node ast.Node) bool {
+		for _, target := range styleAssignedPaths(node) {
+			if slices.Contains(paths, target) {
+				written = true
+			}
+		}
+		return !written
+	})
+	return written
+}
+
+func styleAssignedPaths(node ast.Node) []string {
+	var targets []ast.Expr
+	switch statement := node.(type) {
+	case *ast.AssignStmt:
+		if statement.Tok != token.DEFINE {
+			targets = statement.Lhs
+		}
+	case *ast.IncDecStmt:
+		targets = []ast.Expr{statement.X}
+	case *ast.RangeStmt:
+		if statement.Tok == token.ASSIGN {
+			targets = styleExpressionsPresent(statement.Key, statement.Value)
+		}
+	}
+	var paths []string
+	for _, target := range targets {
+		if path := styleExpressionPath(ast.Unparen(target)); path != "" {
+			paths = append(paths, path)
+		}
+	}
+	return paths
+}
+
+func styleExpressionsPresent(expressions ...ast.Expr) []ast.Expr {
+	var present []ast.Expr
+	for _, expression := range expressions {
+		if expression != nil {
+			present = append(present, expression)
+		}
+	}
+	return present
+}
+
+func styleLoopEndless(body *ast.BlockStmt, label string) bool {
+	inner := styleInnerLabels(body)
 	exits := 0
 	var stack []ast.Node
 	ast.Inspect(body, func(node ast.Node) bool {
@@ -389,10 +639,15 @@ func styleLoopEndless(body *ast.BlockStmt) bool {
 			stack = stack[:len(stack)-1]
 			return true
 		}
-		if _, ok := node.(*ast.FuncLit); ok {
+		if _, literal := node.(*ast.FuncLit); literal {
 			return false
 		}
-		if styleLoopExit(node, stack) {
+		if branch, ok := node.(*ast.BranchStmt); ok {
+			if styleBranchExits(branch, stack, inner, label) {
+				exits++
+			}
+		}
+		if _, ok := node.(*ast.ReturnStmt); ok {
 			exits++
 		}
 		stack = append(stack, node)
@@ -401,257 +656,302 @@ func styleLoopEndless(body *ast.BlockStmt) bool {
 	return exits == 0
 }
 
-func styleLoopExit(node ast.Node, stack []ast.Node) bool {
-	switch x := node.(type) {
-	case *ast.ReturnStmt:
-		return true
-	case *ast.BranchStmt:
-		if x.Tok == token.GOTO || x.Label != nil {
-			return true
-		}
-		if x.Tok != token.BREAK {
+func styleInnerLabels(body *ast.BlockStmt) map[string]bool {
+	labels := map[string]bool{}
+	ast.Inspect(body, func(node ast.Node) bool {
+		if _, literal := node.(*ast.FuncLit); literal {
 			return false
 		}
-		for _, outer := range stack {
-			switch outer.(type) {
-			case *ast.ForStmt, *ast.RangeStmt, *ast.SelectStmt:
-				return false
-			case *ast.SwitchStmt, *ast.TypeSwitchStmt:
-				return false
-			}
+		if labeled, ok := node.(*ast.LabeledStmt); ok {
+			labels[labeled.Label.Name] = true
 		}
 		return true
-	}
-	return false
+	})
+	return labels
 }
 
-func styleCondBounds(cond ast.Expr, counter string) bool {
-	pending := []ast.Expr{cond}
-	for index := 0; index < len(pending); index++ {
-		binary, ok := ast.Unparen(pending[index]).(*ast.BinaryExpr)
-		if !ok {
-			continue
+func styleBranchExits(
+	branch *ast.BranchStmt, stack []ast.Node, inner map[string]bool, label string,
+) bool {
+	if branch.Tok == token.GOTO {
+		return true
+	}
+	if branch.Label != nil {
+		if inner[branch.Label.Name] {
+			return false
 		}
-		switch binary.Op {
-		case token.LAND:
-			pending = append(pending, binary.X, binary.Y)
-		case token.LSS, token.LEQ, token.GTR, token.GEQ:
-			if styleIsIdent(binary.X, counter) || styleIsIdent(binary.Y, counter) {
-				return true
-			}
+		return branch.Tok != token.CONTINUE || branch.Label.Name != label
+	}
+	if branch.Tok != token.BREAK {
+		return false
+	}
+	for _, outer := range stack {
+		switch outer.(type) {
+		case *ast.ForStmt, *ast.RangeStmt, *ast.SelectStmt:
+			return false
+		case *ast.SwitchStmt, *ast.TypeSwitchStmt:
+			return false
 		}
 	}
-	return false
+	return true
 }
 
-func styleIsIdent(expr ast.Expr, name string) bool {
-	id, ok := ast.Unparen(expr).(*ast.Ident)
-	return ok && id.Name == name
+func styleIdentifierNamed(expression ast.Expr, name string) bool {
+	identifier, ok := ast.Unparen(expression).(*ast.Ident)
+	return ok && identifier.Name == name
 }
 
 func styleTypedScope(path string) bool {
-	if !strings.HasPrefix(path, module) || strings.Contains(path, "/testdata/") {
+	if !strings.HasPrefix(path, module) {
+		return false
+	}
+	if strings.Contains(path, "/testdata/") {
 		return false
 	}
 	return !strings.HasPrefix(path, module+"/lang/conformance/snippets/")
 }
 
-func styleTypedFiles(t *testing.T, root string, pkgs []*packages.Package) []styleTyped {
+func styleTypedFiles(
+	t *testing.T, repository styleRepository, loaded []*packages.Package,
+) []styleTyped {
 	t.Helper()
 	var files []styleTyped
-	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
-		if !styleTypedScope(pkg.PkgPath) {
+	packages.Visit(loaded, nil, func(candidate *packages.Package) {
+		if !styleTypedScope(candidate.PkgPath) {
 			return
 		}
-		for _, file := range pkg.Syntax {
-			name := styleRel(t, root, pkg.Fset.File(file.Pos()).Name())
-			keys := styleFuncKeys(name, file)
-			files = append(files, styleTyped{name, file, pkg.TypesInfo, pkg.Types, keys})
+		if len(candidate.Errors) > 0 {
+			t.Fatalf("%s: %v", candidate.PkgPath, candidate.Errors[0])
+		}
+		for _, file := range candidate.Syntax {
+			name := repository.relative(t, candidate.Fset.File(file.Pos()).Name())
+			typed := styleTyped{
+				name:         name,
+				file:         file,
+				information:  candidate.TypesInfo,
+				typesPackage: candidate.Types,
+				units:        styleUnits(name, file),
+			}
+			files = append(files, typed)
 		}
 	})
 	sort.Slice(files, func(i, j int) bool { return files[i].name < files[j].name })
 	return files
 }
 
+func styleTypedFindingsAll(
+	t *testing.T, repository styleRepository, loaded []*packages.Package,
+) []styleFinding {
+	t.Helper()
+	typed := styleTypedFiles(t, repository, loaded)
+	var findings []styleFinding
+	for _, file := range typed {
+		findings = append(findings, styleTypedFindings(file)...)
+	}
+	return append(findings, styleRecursionFindings(styleGraphBuild(typed))...)
+}
+
 func styleTypedFindings(file styleTyped) []styleFinding {
 	var findings []styleFinding
-	for _, decl := range file.file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Body == nil {
-			continue
+	information := file.information
+	for _, unit := range file.units {
+		writes := styleWrites(information, unit.body)
+		counted := []styleFinding{
+			{ruleArgumentMutation, unit.key, styleArgumentWritesCount(information, unit, writes)},
+			{ruleErrorDiscarded, unit.key, styleErrorsDiscardedCount(information, unit.body)},
+			{ruleLoopUnbounded, unit.key, styleRangeLoopsUnboundedCount(information, unit.body)},
 		}
-		key := file.keys[fn]
-		writes := styleWrites(file.info, fn.Body)
-		if count := styleArgumentWrites(file.info, fn, writes); count > 0 {
-			findings = append(findings, styleFinding{ruleArgumentMutation, key, count})
+		for _, finding := range counted {
+			findings = append(findings, styleFindingNonZero(finding)...)
 		}
-		if count := styleErrorsDiscarded(file.info, fn.Body); count > 0 {
-			findings = append(findings, styleFinding{ruleErrorDiscarded, key, count})
-		}
-		if count := styleChannelLoops(file.info, fn.Body); count > 0 {
-			findings = append(findings, styleFinding{ruleLoopUnbounded, key, count})
-		}
-		if fn.Recv != nil || fn.Name.Name != "init" {
+		if !unit.init {
 			findings = append(findings, stylePackageWrites(writes)...)
 		}
 	}
 	return findings
 }
 
-func styleWrites(info *types.Info, body *ast.BlockStmt) []styleWrite {
+func styleWrites(information *types.Info, body *ast.BlockStmt) []styleWrite {
 	var writes []styleWrite
 	ast.Inspect(body, func(node ast.Node) bool {
-		switch x := node.(type) {
-		case *ast.AssignStmt:
-			if x.Tok != token.DEFINE {
-				writes = append(writes, styleExprWrites(info, x.Lhs)...)
-			}
-		case *ast.IncDecStmt:
-			writes = append(writes, styleExprWrites(info, []ast.Expr{x.X})...)
-		case *ast.UnaryExpr:
-			if x.Op == token.AND {
-				writes = append(writes, styleThrough(info, x.X)...)
-			}
-		case *ast.CallExpr:
-			writes = append(writes, styleCallWrites(info, x)...)
-		}
+		writes = append(writes, styleNodeWrites(information, node)...)
 		return true
 	})
 	return writes
 }
 
-func styleExprWrites(info *types.Info, exprs []ast.Expr) []styleWrite {
+func styleNodeWrites(information *types.Info, node ast.Node) []styleWrite {
+	switch current := node.(type) {
+	case *ast.AssignStmt:
+		if current.Tok == token.DEFINE {
+			return nil
+		}
+		return styleExpressionWrites(information, current.Lhs)
+	case *ast.IncDecStmt:
+		return styleExpressionWrites(information, []ast.Expr{current.X})
+	case *ast.RangeStmt:
+		if current.Tok != token.ASSIGN {
+			return nil
+		}
+		present := styleExpressionsPresent(current.Key, current.Value)
+		return styleExpressionWrites(information, present)
+	case *ast.UnaryExpr:
+		if current.Op == token.AND {
+			return styleAddressWrites(information, current.X)
+		}
+	case *ast.CallExpr:
+		return styleCallWrites(information, current)
+	}
+	return nil
+}
+
+func styleExpressionWrites(information *types.Info, expressions []ast.Expr) []styleWrite {
 	var writes []styleWrite
-	for _, expr := range exprs {
-		if root, shared := styleWriteRoot(info, expr); root != nil {
+	for _, expression := range expressions {
+		if root, shared := styleWriteRoot(information, expression); root != nil {
 			writes = append(writes, styleWrite{root, shared, false})
 		}
 	}
 	return writes
 }
 
-func styleThrough(info *types.Info, expr ast.Expr) []styleWrite {
-	root, _ := styleWriteRoot(info, expr)
+func styleAddressWrites(information *types.Info, expression ast.Expr) []styleWrite {
+	root, _ := styleWriteRoot(information, expression)
 	if root == nil {
 		return nil
 	}
 	return []styleWrite{{root, true, true}}
 }
 
-func styleCallWrites(info *types.Info, call *ast.CallExpr) []styleWrite {
-	if id, ok := ast.Unparen(call.Fun).(*ast.Ident); ok {
-		builtin, ok := info.Uses[id].(*types.Builtin)
-		if ok && styleBuiltinMutators[builtin.Name()] && len(call.Args) > 0 {
-			return styleShared(info, call.Args[0])
-		}
-	}
-	if callee := typeutil.StaticCallee(info, call); callee != nil {
-		index, ok := stdlibMutators[callee.Origin().FullName()]
-		if ok && index < len(call.Args) {
-			return styleShared(info, call.Args[index])
-		}
-	}
-	selector, ok := ast.Unparen(call.Fun).(*ast.SelectorExpr)
-	if !ok {
-		return nil
-	}
-	selection := info.Selections[selector]
-	if selection == nil || selection.Kind() != types.MethodVal {
-		return nil
-	}
-	method := selection.Obj().(*types.Func)
-	_, pointerRecv := method.Type().(*types.Signature).Recv().Type().(*types.Pointer)
-	_, pointerBase := styleUnderlying(info.TypeOf(selector.X)).(*types.Pointer)
-	if !pointerRecv || pointerBase || styleAtomicLoad(method) {
-		return nil
-	}
-	return styleThrough(info, selector.X)
-}
-
-func styleShared(info *types.Info, expr ast.Expr) []styleWrite {
-	root, _ := styleWriteRoot(info, expr)
+func styleSharedWrites(information *types.Info, expression ast.Expr) []styleWrite {
+	root, _ := styleWriteRoot(information, expression)
 	if root == nil {
 		return nil
 	}
 	return []styleWrite{{root, true, false}}
 }
 
-func styleAtomicLoad(method *types.Func) bool {
+func styleCallWrites(information *types.Info, call *ast.CallExpr) []styleWrite {
+	if identifier, ok := ast.Unparen(call.Fun).(*ast.Ident); ok {
+		builtin, ok := information.Uses[identifier].(*types.Builtin)
+		if ok && styleBuiltinMutators[builtin.Name()] && len(call.Args) > 0 {
+			return styleSharedWrites(information, call.Args[0])
+		}
+	}
+	if callee := typeutil.StaticCallee(information, call); callee != nil {
+		index, ok := stdlibMutators[callee.Origin().FullName()]
+		if ok && index < len(call.Args) {
+			return styleSharedWrites(information, call.Args[index])
+		}
+	}
+	selector, ok := ast.Unparen(call.Fun).(*ast.SelectorExpr)
+	if !ok {
+		return nil
+	}
+	selection := information.Selections[selector]
+	if selection == nil || selection.Kind() != types.MethodVal {
+		return nil
+	}
+	method := selection.Obj().(*types.Func)
+	_, pointerReceiver := method.Type().(*types.Signature).Recv().Type().(*types.Pointer)
+	_, pointerBase := styleUnderlying(information.TypeOf(selector.X)).(*types.Pointer)
+	if !pointerReceiver || pointerBase || styleMethodAtomicLoad(method) {
+		return nil
+	}
+	return styleAddressWrites(information, selector.X)
+}
+
+func styleMethodAtomicLoad(method *types.Func) bool {
 	if method.Pkg() == nil || method.Pkg().Path() != "sync/atomic" {
 		return false
 	}
 	return strings.HasPrefix(method.Name(), "Load")
 }
 
-func styleUnderlying(t types.Type) types.Type {
-	if t == nil {
+func styleUnderlying(valueType types.Type) types.Type {
+	if valueType == nil {
 		return nil
 	}
-	return t.Underlying()
+	return valueType.Underlying()
 }
 
-func styleWriteRoot(info *types.Info, expr ast.Expr) (*types.Var, bool) {
-	current, shared := expr, false
-	for depth := 0; depth < styleExprDepthMax; depth++ {
-		switch x := ast.Unparen(current).(type) {
+func styleWriteRoot(information *types.Info, expression ast.Expr) (*types.Var, bool) {
+	current, shared := expression, false
+	for depth := 0; depth < styleExpressionDepthMax; depth++ {
+		switch typed := ast.Unparen(current).(type) {
 		case *ast.Ident:
-			root, _ := info.Uses[x].(*types.Var)
+			root, _ := information.Uses[typed].(*types.Var)
 			return root, shared
 		case *ast.StarExpr:
-			current, shared = x.X, true
+			current, shared = typed.X, true
 		case *ast.IndexExpr:
-			current, shared = x.X, shared || styleReference(info.TypeOf(x.X))
+			current, shared = typed.X, shared || styleTypeShares(information.TypeOf(typed.X))
+		case *ast.SliceExpr:
+			current, shared = typed.X, shared || styleTypeShares(information.TypeOf(typed.X))
 		case *ast.SelectorExpr:
-			selection := info.Selections[x]
+			selection := information.Selections[typed]
 			if selection == nil {
-				root, _ := info.Uses[x.Sel].(*types.Var)
+				root, _ := information.Uses[typed.Sel].(*types.Var)
 				return root, shared
 			}
-			current, shared = x.X, shared || selection.Indirect()
+			current, shared = typed.X, shared || selection.Indirect()
 		default:
 			return nil, false
 		}
 	}
-	return nil, false
+	panic("styleWriteRoot: an expression deeper than styleExpressionDepthMax")
 }
 
-func styleReference(t types.Type) bool {
-	if _, ok := t.(*types.TypeParam); ok {
+func styleTypeShares(valueType types.Type) bool {
+	if _, ok := valueType.(*types.TypeParam); ok {
 		return true
 	}
-	switch styleUnderlying(t).(type) {
+	switch styleUnderlying(valueType).(type) {
 	case *types.Slice, *types.Map, *types.Pointer:
 		return true
 	}
 	return false
 }
 
-func styleArgumentWrites(info *types.Info, fn *ast.FuncDecl, writes []styleWrite) int {
-	lists := []*ast.FieldList{fn.Recv, fn.Type.Params}
-	ast.Inspect(fn.Body, func(node ast.Node) bool {
-		if lit, ok := node.(*ast.FuncLit); ok {
-			lists = append(lists, lit.Type.Params)
-		}
-		return true
-	})
-	params := map[*types.Var]bool{}
-	for _, list := range lists {
-		for _, field := range styleFields(list) {
-			for _, name := range field.Names {
-				param, ok := info.Defs[name].(*types.Var)
-				if ok && !styleInventoried(param.Type()) {
-					params[param] = true
-				}
-			}
-		}
-	}
+func styleArgumentWritesCount(information *types.Info, unit styleUnit, writes []styleWrite) int {
+	parameters := styleParameters(information, unit)
 	count := 0
 	for _, write := range writes {
-		if params[write.root] && write.shared && !write.through {
+		if !parameters[write.root] {
+			continue
+		}
+		if write.shared && !write.through {
 			count++
 		}
 	}
 	return count
+}
+
+func styleParameters(information *types.Info, unit styleUnit) map[*types.Var]bool {
+	lists := []*ast.FieldList{unit.receiver, unit.parameters}
+	ast.Inspect(unit.body, func(node ast.Node) bool {
+		if literal, ok := node.(*ast.FuncLit); ok {
+			lists = append(lists, literal.Type.Params)
+		}
+		return true
+	})
+	inventoried := styleReceiverInventoried(information, unit.receiver)
+	parameters := map[*types.Var]bool{}
+	for _, list := range lists {
+		for _, field := range styleFields(list) {
+			for _, name := range field.Names {
+				parameter, ok := information.Defs[name].(*types.Var)
+				if !ok {
+					continue
+				}
+				if inventoried && styleInventoried(parameter.Type()) {
+					continue
+				}
+				parameters[parameter] = true
+			}
+		}
+	}
+	return parameters
 }
 
 func styleFields(list *ast.FieldList) []*ast.Field {
@@ -661,11 +961,18 @@ func styleFields(list *ast.FieldList) []*ast.Field {
 	return list.List
 }
 
-func styleInventoried(t types.Type) bool {
-	if pointer, ok := t.(*types.Pointer); ok {
-		t = pointer.Elem()
+func styleReceiverInventoried(information *types.Info, receiver *ast.FieldList) bool {
+	if receiver == nil || len(receiver.List) == 0 {
+		return false
 	}
-	named, ok := t.(*types.Named)
+	return styleInventoried(information.TypeOf(receiver.List[0].Type))
+}
+
+func styleInventoried(valueType types.Type) bool {
+	if pointer, ok := valueType.(*types.Pointer); ok {
+		valueType = pointer.Elem()
+	}
+	named, ok := valueType.(*types.Named)
 	if !ok || named.Obj().Pkg() == nil {
 		return false
 	}
@@ -680,51 +987,93 @@ func stylePackageWrites(writes []styleWrite) []styleFinding {
 			continue
 		}
 		key := root.Pkg().Path() + "." + root.Name()
-		findings = append(findings, styleFinding{rulePackageState, key, 1})
+		findings = append(findings, styleFinding{rulePackageWrite, key, 1})
 	}
 	return findings
 }
 
-func styleErrorsDiscarded(info *types.Info, body *ast.BlockStmt) int {
+func styleErrorsDiscardedCount(information *types.Info, body *ast.BlockStmt) int {
 	count := 0
 	ast.Inspect(body, func(node ast.Node) bool {
-		var call *ast.CallExpr
-		switch x := node.(type) {
-		case *ast.ExprStmt:
-			call, _ = ast.Unparen(x.X).(*ast.CallExpr)
-		case *ast.DeferStmt:
-			call = x.Call
-		case *ast.GoStmt:
-			call = x.Call
-		}
-		if call != nil && styleReturnsError(info, call) && !styleErrorNeverFails(info, call) {
-			count++
-		}
+		count += styleNodeDiscards(information, node)
 		return true
 	})
 	return count
 }
 
-func styleReturnsError(info *types.Info, call *ast.CallExpr) bool {
+func styleNodeDiscards(information *types.Info, node ast.Node) int {
+	switch statement := node.(type) {
+	case *ast.ExprStmt:
+		call, _ := ast.Unparen(statement.X).(*ast.CallExpr)
+		return styleCallDiscards(information, call)
+	case *ast.DeferStmt:
+		return styleCallDiscards(information, statement.Call)
+	case *ast.GoStmt:
+		return styleCallDiscards(information, statement.Call)
+	case *ast.AssignStmt:
+		return styleBlankDiscards(information, statement)
+	}
+	return 0
+}
+
+func styleCallDiscards(information *types.Info, call *ast.CallExpr) int {
+	if call == nil || !styleErrorResult(information, call) {
+		return 0
+	}
+	if styleCallNeverFails(information, call) {
+		return 0
+	}
+	return 1
+}
+
+func styleBlankDiscards(information *types.Info, assignment *ast.AssignStmt) int {
+	if len(assignment.Rhs) != 1 || len(assignment.Lhs) < 2 {
+		return 0
+	}
+	call, ok := ast.Unparen(assignment.Rhs[0]).(*ast.CallExpr)
+	if !ok || styleCallNeverFails(information, call) {
+		return 0
+	}
+	tuple, ok := information.TypeOf(call).(*types.Tuple)
+	if !ok || tuple.Len() != len(assignment.Lhs) {
+		return 0
+	}
+	count := 0
+	for index, target := range assignment.Lhs {
+		if !styleIdentifierNamed(target, "_") {
+			continue
+		}
+		if styleImplementsError(tuple.At(index).Type()) {
+			count++
+		}
+	}
+	return count
+}
+
+func styleImplementsError(valueType types.Type) bool {
 	errorType := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
-	result := info.TypeOf(call)
+	return types.Implements(valueType, errorType)
+}
+
+func styleErrorResult(information *types.Info, call *ast.CallExpr) bool {
+	result := information.TypeOf(call)
 	if result == nil {
 		return false
 	}
 	tuple, ok := result.(*types.Tuple)
 	if !ok {
-		return types.Implements(result, errorType)
+		return styleImplementsError(result)
 	}
 	for index := 0; index < tuple.Len(); index++ {
-		if types.Implements(tuple.At(index).Type(), errorType) {
+		if styleImplementsError(tuple.At(index).Type()) {
 			return true
 		}
 	}
 	return false
 }
 
-func styleErrorNeverFails(info *types.Info, call *ast.CallExpr) bool {
-	callee, ok := typeutil.Callee(info, call).(*types.Func)
+func styleCallNeverFails(information *types.Info, call *ast.CallExpr) bool {
+	callee, ok := typeutil.Callee(information, call).(*types.Func)
 	if !ok {
 		return false
 	}
@@ -734,23 +1083,45 @@ func styleErrorNeverFails(info *types.Info, call *ast.CallExpr) bool {
 	if !styleFprints[callee.FullName()] || len(call.Args) == 0 {
 		return false
 	}
-	writer := info.TypeOf(call.Args[0])
+	writer := information.TypeOf(call.Args[0])
 	return writer != nil && styleNeverFailWriters[writer.String()]
 }
 
-func styleChannelLoops(info *types.Info, body *ast.BlockStmt) int {
+func styleRangeLoopsUnboundedCount(information *types.Info, body *ast.BlockStmt) int {
 	count := 0
 	ast.Inspect(body, func(node ast.Node) bool {
 		loop, ok := node.(*ast.RangeStmt)
 		if !ok {
 			return true
 		}
-		if _, channel := styleUnderlying(info.TypeOf(loop.X)).(*types.Chan); channel {
+		if !styleRangeBounded(information, loop) {
 			count++
 		}
 		return true
 	})
 	return count
+}
+
+func styleRangeBounded(information *types.Info, loop *ast.RangeStmt) bool {
+	switch styleUnderlying(information.TypeOf(loop.X)).(type) {
+	case *types.Chan:
+		return false
+	case *types.Signature:
+		return styleIteratorFinite(information, loop.X)
+	}
+	return true
+}
+
+func styleIteratorFinite(information *types.Info, expression ast.Expr) bool {
+	call, ok := ast.Unparen(expression).(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	callee := typeutil.StaticCallee(information, call)
+	if callee == nil {
+		return false
+	}
+	return styleFiniteIterators[callee.Origin().FullName()]
 }
 
 func styleGraphBuild(files []styleTyped) styleGraph {
@@ -760,77 +1131,80 @@ func styleGraphBuild(files []styleTyped) styleGraph {
 		closures: map[*types.Func]bool{},
 	}
 	for _, file := range files {
-		for _, decl := range file.file.Decls {
-			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Body == nil {
+		for _, unit := range file.units {
+			if unit.name == nil {
 				continue
 			}
-			obj, ok := file.info.Defs[fn.Name].(*types.Func)
+			node, ok := file.information.Defs[unit.name].(*types.Func)
 			if !ok {
 				continue
 			}
-			graph.keys[obj] = file.keys[fn]
-			graph.edges[obj] = styleFuncRefs(file.info, fn.Body)
-			graph.closures[obj] = styleClosureRecursive(file.info, fn.Body)
+			graph.keys[node] = unit.key
+			graph.edges[node] = styleCallees(file.information, unit.body)
+			graph.closures[node] = styleClosureRecursive(file.information, unit.body)
 		}
 	}
 	return graph
 }
 
-func styleFuncRefs(info *types.Info, body *ast.BlockStmt) []*types.Func {
+func styleCallees(information *types.Info, body *ast.BlockStmt) []*types.Func {
 	seen := map[*types.Func]bool{}
-	var refs []*types.Func
+	var callees []*types.Func
 	ast.Inspect(body, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
-		for _, expr := range append([]ast.Expr{call.Fun}, call.Args...) {
-			fn := styleFuncNamed(info, expr)
-			if fn != nil && !seen[fn] {
-				seen[fn] = true
-				refs = append(refs, fn)
+		for _, expression := range append([]ast.Expr{call.Fun}, call.Args...) {
+			callee := styleFunctionNamed(information, expression)
+			if callee == nil || seen[callee] {
+				continue
 			}
+			seen[callee] = true
+			callees = append(callees, callee)
 		}
 		return true
 	})
-	return refs
+	return callees
 }
 
-func styleFuncNamed(info *types.Info, expr ast.Expr) *types.Func {
-	current := ast.Unparen(expr)
-	for depth := 0; depth < styleExprDepthMax; depth++ {
-		switch x := current.(type) {
+func styleFunctionNamed(information *types.Info, expression ast.Expr) *types.Func {
+	current := ast.Unparen(expression)
+	for depth := 0; depth < styleExpressionDepthMax; depth++ {
+		switch typed := current.(type) {
 		case *ast.Ident:
-			fn, _ := info.Uses[x].(*types.Func)
-			if fn == nil {
+			function, _ := information.Uses[typed].(*types.Func)
+			if function == nil {
 				return nil
 			}
-			return fn.Origin()
+			return function.Origin()
 		case *ast.SelectorExpr:
-			current = x.Sel
+			current = typed.Sel
 		case *ast.IndexExpr:
-			current = ast.Unparen(x.X)
+			current = ast.Unparen(typed.X)
 		case *ast.IndexListExpr:
-			current = ast.Unparen(x.X)
+			current = ast.Unparen(typed.X)
 		default:
 			return nil
 		}
 	}
-	return nil
+	panic("styleFunctionNamed: an expression deeper than styleExpressionDepthMax")
 }
 
-func styleClosureRecursive(info *types.Info, body *ast.BlockStmt) bool {
+func styleClosureRecursive(information *types.Info, body *ast.BlockStmt) bool {
 	found := false
 	ast.Inspect(body, func(node ast.Node) bool {
-		assign, ok := node.(*ast.AssignStmt)
-		if !ok || len(assign.Lhs) != len(assign.Rhs) {
+		assignment, ok := node.(*ast.AssignStmt)
+		if !ok || len(assignment.Lhs) != len(assignment.Rhs) {
 			return !found
 		}
-		for index, rhs := range assign.Rhs {
-			lit, isLit := ast.Unparen(rhs).(*ast.FuncLit)
-			id, isIdent := assign.Lhs[index].(*ast.Ident)
-			if isLit && isIdent && styleUses(info, lit.Body, info.ObjectOf(id)) {
+		for index, value := range assignment.Rhs {
+			literal, isLiteral := ast.Unparen(value).(*ast.FuncLit)
+			identifier, isIdentifier := assignment.Lhs[index].(*ast.Ident)
+			if !isLiteral || !isIdentifier {
+				continue
+			}
+			if styleObjectUsed(information, literal.Body, information.ObjectOf(identifier)) {
 				found = true
 			}
 		}
@@ -839,10 +1213,13 @@ func styleClosureRecursive(info *types.Info, body *ast.BlockStmt) bool {
 	return found
 }
 
-func styleUses(info *types.Info, body *ast.BlockStmt, obj types.Object) bool {
+func styleObjectUsed(information *types.Info, body *ast.BlockStmt, object types.Object) bool {
+	if object == nil {
+		return false
+	}
 	used := false
 	ast.Inspect(body, func(node ast.Node) bool {
-		if id, ok := node.(*ast.Ident); ok && obj != nil && info.Uses[id] == obj {
+		if identifier, ok := node.(*ast.Ident); ok && information.Uses[identifier] == object {
 			used = true
 		}
 		return !used
@@ -850,20 +1227,21 @@ func styleUses(info *types.Info, body *ast.BlockStmt, obj types.Object) bool {
 	return used
 }
 
-func styleRecursive(graph styleGraph) []styleFinding {
+func styleRecursionFindings(graph styleGraph) []styleFinding {
 	var findings []styleFinding
-	for fn, key := range graph.keys {
-		if graph.closures[fn] || styleReaches(graph.edges, fn) {
+	for node, key := range graph.keys {
+		if graph.closures[node] || styleNodeReachesItself(graph.edges, node) {
 			findings = append(findings, styleFinding{ruleRecursion, key, 1})
 		}
 	}
 	return findings
 }
 
-func styleReaches(edges map[*types.Func][]*types.Func, start *types.Func) bool {
+func styleNodeReachesItself(edges map[*types.Func][]*types.Func, start *types.Func) bool {
 	seen := map[*types.Func]bool{}
 	queue := slices.Clone(edges[start])
-	for head := 0; head < len(queue); head++ {
+	head := 0
+	for ; head < len(queue) && head < styleGraphVisitsMax; head++ {
 		next := queue[head]
 		if next == start {
 			return true
@@ -874,31 +1252,29 @@ func styleReaches(edges map[*types.Func][]*types.Func, start *types.Func) bool {
 		seen[next] = true
 		queue = append(queue, edges[next]...)
 	}
+	if head < len(queue) {
+		panic("styleNodeReachesItself: the call graph is larger than styleGraphVisitsMax")
+	}
 	return false
 }
 
-func styleDependencyFindings(t *testing.T, root string) []styleFinding {
-	t.Helper()
+func styleDependencyFindings(requirements map[string][]string) []styleFinding {
 	var findings []styleFinding
-	for gomod, allowed := range styleDependencies {
-		for _, required := range styleRequires(t, filepath.Join(root, gomod)) {
-			if !slices.Contains(allowed, required) {
-				findings = append(findings, styleFinding{ruleDependency, gomod + ":" + required, 1})
+	for gomod, required := range requirements {
+		for _, requirement := range required {
+			if !slices.Contains(styleDependencies[gomod], requirement) {
+				key := gomod + ":" + requirement
+				findings = append(findings, styleFinding{ruleDependency, key, 1})
 			}
 		}
 	}
 	return findings
 }
 
-func styleRequires(t *testing.T, path string) []string {
-	t.Helper()
-	src, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+func styleRequirements(text []byte) []string {
 	var required []string
 	block := false
-	for _, line := range strings.Split(string(src), "\n") {
+	for _, line := range strings.Split(string(text), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) == 0 || strings.HasPrefix(fields[0], "//") {
 			continue
@@ -910,27 +1286,32 @@ func styleRequires(t *testing.T, path string) []string {
 			}
 			continue
 		}
-		if fields[0] == "require" && len(fields) > 1 {
-			block = fields[1] == "("
-			if !block {
-				required = append(required, fields[1])
-			}
+		if fields[0] != "require" || len(fields) < 2 {
+			continue
+		}
+		block = fields[1] == "("
+		if !block {
+			required = append(required, fields[1])
 		}
 	}
 	return required
 }
 
-func styleLedgerRead(t *testing.T) (map[string]int, bool) {
+func styleLedgerRead(t *testing.T) map[string]int {
 	t.Helper()
-	src, err := os.ReadFile(styleLedgerPath)
+	text, err := os.ReadFile(styleLedgerPath)
 	if errors.Is(err, fs.ErrNotExist) {
-		return map[string]int{}, false
+		t.Fatalf("%s is missing: it holds the style debt older than docs/style.md, "+
+			"and -update never recreates it", styleLedgerPath)
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	ledger := map[string]int{}
-	for number, line := range strings.Split(strings.TrimSuffix(string(src), "\n"), "\n") {
+	recorded := map[string]int{}
+	for number, line := range strings.Split(string(text), "\n") {
+		if line == "" {
+			continue
+		}
 		cut := strings.LastIndexByte(line, ' ')
 		if cut < 0 {
 			t.Fatalf("%s:%d: want <rule> <key> <value>", styleLedgerPath, number+1)
@@ -939,37 +1320,39 @@ func styleLedgerRead(t *testing.T) (map[string]int, bool) {
 		if err != nil {
 			t.Fatalf("%s:%d: %v", styleLedgerPath, number+1, err)
 		}
-		ledger[line[:cut]] = value
+		recorded[line[:cut]] = value
 	}
-	return ledger, true
+	return recorded
 }
 
-func styleLedgerWrite(t *testing.T, ledger map[string]int) {
+func styleLedgerWrite(t *testing.T, found map[string]int) {
 	t.Helper()
-	keys := make([]string, 0, len(ledger))
-	for key := range ledger {
+	keys := make([]string, 0, len(found))
+	for key := range found {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	var b strings.Builder
+	var builder strings.Builder
 	for _, key := range keys {
-		fmt.Fprintf(&b, "%s %d\n", key, ledger[key])
+		fmt.Fprintf(&builder, "%s %d\n", key, found[key])
 	}
-	if err := os.WriteFile(styleLedgerPath, []byte(b.String()), 0o644); err != nil {
+	if err := os.WriteFile(styleLedgerPath, []byte(builder.String()), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func styleLedgerDiff(got map[string]int, want map[string]int) ([]string, []string) {
+func styleLedgerDiff(ledger styleLedger) ([]string, []string) {
 	var grown, shrunk []string
-	for key, value := range got {
-		if value > want[key] {
-			grown = append(grown, fmt.Sprintf("%s %d, ledger %d", key, value, want[key]))
+	for key, value := range ledger.found {
+		if value > ledger.recorded[key] {
+			entry := fmt.Sprintf("%s %d, ledger %d", key, value, ledger.recorded[key])
+			grown = append(grown, entry)
 		}
 	}
-	for key, value := range want {
-		if got[key] < value {
-			shrunk = append(shrunk, fmt.Sprintf("%s %d, ledger %d", key, got[key], value))
+	for key, value := range ledger.recorded {
+		if ledger.found[key] < value {
+			entry := fmt.Sprintf("%s %d, ledger %d", key, ledger.found[key], value)
+			shrunk = append(shrunk, entry)
 		}
 	}
 	sort.Strings(grown)
@@ -1009,8 +1392,11 @@ func styleDocLimitsCheck(t *testing.T, doc string) {
 	t.Helper()
 	documented := map[string]string{}
 	for _, cells := range styleDocTableRows(doc) {
-		codes := styleDocCodes(cells[min(1, len(cells)-1)])
-		if len(cells) == 4 && len(codes) == 1 && styleRulePattern.MatchString(codes[0]) {
+		if len(cells) != 4 {
+			continue
+		}
+		codes := styleDocCodes(cells[1])
+		if len(codes) == 1 && styleRulePattern.MatchString(codes[0]) {
 			documented[codes[0]] = cells[3]
 		}
 	}
@@ -1066,7 +1452,7 @@ func styleDocExamples(doc string) []styleExample {
 			examples = append(examples, *current)
 			current = nil
 		case current != nil:
-			current.src += line + "\n"
+			current.text += line + "\n"
 		}
 	}
 	return examples
@@ -1103,25 +1489,26 @@ func styleDocExamplesCheck(t *testing.T, doc string) {
 
 func styleSnippetFindings(t *testing.T, example styleExample) []styleFinding {
 	t.Helper()
-	fset := token.NewFileSet()
-	src := "package example\n\n" + example.src
-	file, err := parser.ParseFile(fset, "example.go", src, parser.SkipObjectResolution)
+	fileSet := token.NewFileSet()
+	text := "package example\n\n" + example.text
+	file, err := parser.ParseFile(fileSet, "example.go", text, parser.SkipObjectResolution)
 	if err != nil {
 		t.Fatalf("docs/style.md:%d: %v", example.line, err)
 	}
-	info := &types.Info{
+	information := &types.Info{
 		Types:      map[ast.Expr]types.TypeAndValue{},
 		Defs:       map[*ast.Ident]types.Object{},
 		Uses:       map[*ast.Ident]types.Object{},
 		Selections: map[*ast.SelectorExpr]*types.Selection{},
 	}
 	config := types.Config{Importer: importer.Default()}
-	pkg, err := config.Check("example", fset, []*ast.File{file}, info)
+	checked, err := config.Check("example", fileSet, []*ast.File{file}, information)
 	if err != nil {
 		t.Fatalf("docs/style.md:%d: %v", example.line, err)
 	}
-	typed := styleTyped{"example.go", file, info, pkg, styleFuncKeys("example.go", file)}
-	findings := styleDeclFindings(fset, typed.name, file)
+	units := styleUnits("example.go", file)
+	typed := styleTyped{"example.go", file, information, checked, units}
+	findings := styleUnitFindings(fileSet, units)
 	findings = append(findings, styleTypedFindings(typed)...)
-	return append(findings, styleRecursive(styleGraphBuild([]styleTyped{typed}))...)
+	return append(findings, styleRecursionFindings(styleGraphBuild([]styleTyped{typed}))...)
 }

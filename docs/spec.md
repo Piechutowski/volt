@@ -41,7 +41,7 @@ suspicious schemas, every rule with executable examples — is
 
 ## Values and effects
 
-The generated code and the runtime keep four rules. They are the
+The generated code and the runtime keep five rules. They are the
 functional style, avoiding mutation and avoiding side effects, held by
 the generator and `volt vet` where Go itself holds nothing.
 

@@ -7,7 +7,8 @@ How `nao/run` meets SQLite: its connections, its prepared statements,
 how it picks a connection for an effect, how it inserts many rows, and
 why it does not batch writes.
 The rules are normative in `spec.md` (§generated-query-surface, the
-runner, and §changesets, `Create`, `CreateMany` and `Update`); this file says why they are what they are and
+runner, and §changesets, `Create`, `CreateMany` and `Update`), and how
+the code is written in `style.md`; this file says why they are what they are and
 what was measured on the way. Every number here comes from one 4-core
 Linux container with mattn/go-sqlite3 and a database file on disk; read
 them as proportions, not as promises.
@@ -267,51 +268,65 @@ Kept in `plan.md` step 21 until they are measured and settled:
 
 ## 7. Batching writes, not built
 
-Not built, by the maintainer's decision: requests are served one by
-one, each write in its own transaction (`style.md` S10). This note
-records how batching would work, for the day the question is reopened.
+Not built, by the maintainer's decision: each request is served on its
+own, and its writes commit in that request's own transactions, never in
+one shared with another request (`style.md` S10). This note records how
+batching would work, for the day the question is reopened.
 
 **How it would work.** Every effect that can write already waits in Go
 for the writer's one connection (section 1). A batching writer would
-turn that wait into a queue: one goroutine owns the writer and takes up
-to N waiting writes from a bounded channel, or whatever arrived within
-a short window such as a millisecond. It runs them in one
-`BEGIN IMMEDIATE`, each request's writes inside its own `SAVEPOINT`, so
-a request whose write fails, a constraint violation say, is rolled back
-to its savepoint alone while the others go on. It commits once and then
-answers each waiting handler with its own result. All of it is the
-standard library: `net/http`, channels, `time`, `context` and
-`database/sql`.
+turn that wait into a queue in `nao/run`: one goroutine owns the writer
+and takes up to N waiting writes from a bounded channel, or whatever
+arrived within a short window such as a millisecond. It runs them in
+one `BEGIN IMMEDIATE`, each request's writes inside its own
+`SAVEPOINT`, so a request whose write fails, a constraint violation
+say, is rolled back to its savepoint alone while the others go on. It
+commits once and then answers each waiting handler with its own result.
+The queue needs only channels, `time`, `context` and `database/sql`;
+the 503 for a full queue is the shim's answer when the runner reports
+it, since `nao/run` links no `net/http` (spec §data-and-network-layers).
 
 **What it would gain.** One commit per batch instead of one per
 request, so the gain is as large as a commit's fixed cost, and today
-that cost is small. mattn builds SQLite with
-`SQLITE_DEFAULT_WAL_SYNCHRONOUS=1`, so in WAL mode a commit does not
-wait for the disk: the WAL is synced at checkpoints, and a power loss
-can lose the last commits but cannot corrupt the file. Section 1
-measured 400 one-row write transactions in 12 ms, about 30 µs each, on
-that setting. Under `synchronous = FULL` every commit waits for an fsync
-of the WAL, which costs from tens of microseconds to tens of
-milliseconds depending on the disk, and there batching pays off by a
-large factor. Reads gain nothing: under WAL they already run in
+that cost is small. mattn opens every connection with
+`PRAGMA synchronous = NORMAL`, the default of its `_synchronous` DSN
+parameter (its build's `SQLITE_DEFAULT_WAL_SYNCHRONOUS=1` would give
+the same), so in WAL mode a commit does not wait for the disk: the WAL
+is synced at checkpoints, and a power loss can lose the last commits
+but cannot corrupt the file. Section 1 measured 400 one-row write
+transactions in 12 ms, about 30 µs each, on that setting. Under
+`synchronous = FULL` (`_synchronous=FULL` in the DSN, or the pragma
+among the writer's) every commit waits for an fsync of the WAL, which by
+estimate, not measured here, costs from tens of microseconds to tens of
+milliseconds depending on the disk, and there batching would pay off by
+a large factor. Reads gain nothing: under WAL they already run in
 parallel on the readers.
 
 **What it would cost.**
 
 - **Latency.** A write waits up to the window before it starts.
-- **Shared failure.** An error that ends the transaction (a full disk,
-  an I/O error) or a failed `COMMIT` fails every request of the batch.
+- **Shared failure.** An error that ends the transaction (an
+  interrupted write, a full disk, an I/O error) or a failed `COMMIT`
+  fails every request of the batch: SQLite rolls the whole transaction
+  back when a write inside it is interrupted (spec
+  §generated-query-surface).
 - **Head-of-line blocking.** One long transaction holds the whole
   batch, so each request's work needs a bound (`style.md` S2).
 - **Cancellation.** A request whose context ends while it is queued
-  leaves the queue before it runs; once its savepoint is open it can
-  only be rolled back to it.
+  leaves the queue before it runs. Once its turn comes, its writes run
+  under `context.WithoutCancel`, with its own context checked between
+  statements and its savepoint rolled back when that context has ended,
+  since an interrupted write would roll the whole batch back.
+- **Order.** The requests of a batch run in the order the writer's
+  goroutine takes them from its channel, which is arrival order. Today
+  the writer imposes no order, since database/sql hands its one
+  connection to a random waiter, so the order would be a guarantee to
+  decide, not one to keep.
 - **Semantics to keep.** `Then(write, read)` reads after its batch
-  commits; the requests of a batch run in arrival order, which is the
-  order the single writer imposes today; `rt.Batch` and `CreateMany`
-  already batch the rows of one request (section 4).
-- **Backpressure.** The queue has a bound, and a full queue answers 503
-  instead of growing.
+  commits; `rt.Batch` and `CreateMany` already batch the rows of one
+  request (section 4).
+- **Backpressure.** The queue has a bound, and a full queue is answered
+  with a 503 instead of growing.
 
 **What to measure first.** The commit cost on the production disk under
 `NORMAL` and under `FULL`; throughput and p99 latency at 1, 4, 16 and 64

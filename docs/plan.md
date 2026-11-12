@@ -72,8 +72,9 @@ boundaries only; owned state only; `urfave/cli/v3` replaced by the
 standard library while golang.org/x/tools and mattn stay; requests
 served one by one, with own-pace batching for the worker, the broker
 and the loops. Comments and commit messages stay the maintainer's. The
-debt older than the style is the style gate's ledger, and steps 22 to
-34 pay it off.
+debt older than the style is inventoried: the style gate's ledger holds
+the debt to the gated rules, steps 22 to 34 carry the debt to the rest,
+and the same steps pay both off.
 
 ### What Go cannot check, and how Volt closes it
 
@@ -274,13 +275,14 @@ section and that one:
 
 ## Steps 22 to 34. Paying off the style debt
 
-`docs/style.md` is the standard and `cmd/volt/testdata/style.ledger` the
-inventory of what the code owes it: 903 lines when the style landed. A
+`docs/style.md` is the standard. `cmd/volt/testdata/style.ledger`
+inventories the debt to its gated rules, 1,216 lines when the style
+landed, and these steps carry the debt to the rules held in review. A
 step lowers the ledger with `go test ./cmd/volt -run TestStyleLedger
--update` in the commit that pays, and deletes its section when its
-rule's lines are gone. A step that changes generated code changes the
-generator, refreshes the goldens and the fixtures, and updates the spec
-where the spec fixes the output.
+-update` in the commit that pays, and deletes its section when its debt
+is gone. A step that changes generated code changes the generator,
+refreshes the goldens and the fixtures, and updates the spec where the
+spec fixes the output.
 
 ## Step 22. The assert package
 
@@ -290,32 +292,39 @@ code: `assert.That(ok bool)` panics when `ok` is false, and
 `assert.Unreachable()` panics always, for the `default` of a sealed
 switch. The panic value names the caller's file and line, found only on
 failure. Assertions stay on in production. A failure inside a request
-is not recovered: `net/http` recovers a handler's panic, so the shim
-logs the failure and exits the process, and the spec says so where it
-describes the shim. Generated files import the package: the spec's
-list of what generated files import and AGENT.md's change in the same
-commit. The style gate gains `assertion-density`, at least two
-assertions per function on average in each package, counted over calls
-into `assert`; the ledger records each package's shortfall, which only
-shrinks, and S5 turns from review to gate.
+ends the process: `net/http` recovers a handler's panic, so the shim
+logs the failure and exits, and spec §generated-query-surface, which
+today has a panic end its request alone, changes in the same commit.
+`renderEncode` stops recovering every panic into an error, so an
+assertion failure there crashes too. Generated files import the
+package: the spec's list of what generated files import and AGENT.md's
+change in the same commit. The style gate gains `assertion-density`, at
+least two assertions per function on average in each package, counted
+over calls into `assert`; the ledger records each package's shortfall,
+which only shrinks, and S5 turns from review to gate.
 
 ## Step 23. Limits
 
-`style.md` S2, S3 and S12. Every input and every structure that grows
-gets a named limit (`fileBytesMax`, `nestingDepthMax`), asserted where
-the program guarantees it and reported where input crosses it:
+`style.md` S2, S3, S10 and S12. Every input and every structure that
+grows gets a named limit (`fileBytesMax`, `nestingDepthMax`), asserted
+where the program guarantees it and reported where input crosses it:
 
 - the language: the size of a source file, the number of tokens, the
   nesting depth of predicates, arithmetic and scopes; the spec states
   each, with a diagnostic that cites its section;
 - the network runtime: the server's timeouts and header size, the size
-  of a request body, the event broker's log and each subscriber's
-  channel, the client's response size and timeouts;
+  of a request body, the event broker's log, each subscriber's channel
+  and buffer, the client's response size and timeouts;
 - the data runtime: the rows a list effect may return, the busy retry;
 - the tools: the size of a language server message, the number of open
   documents, the size of what `volt gen` writes.
 
-Calls that relied on a library default pass the option explicitly.
+Calls that relied on a library default pass the option explicitly,
+among them `PRAGMA synchronous = NORMAL` among the writer's and the
+readers' pragmas, which mattn's DSN default sets today. The broker runs
+at its own pace (S10): `Publish` appends to the bounded log, and each
+stream wakes on an interval or a heartbeat and sends a bounded batch of
+what the log gained, instead of sending each event as it is published.
 
 ## Step 24. No recursion
 
@@ -327,7 +336,8 @@ server, `lang/ast.Inspect`, and the renderers and comparisons of
 `nao/rt`. Each becomes a loop over an explicit stack whose depth is
 bounded by step 23's nesting limit and asserted; the parsers of
 predicates and arithmetic become precedence climbing over an operator
-stack.
+stack. The parsers stop panicking on a syntax error and recovering it
+(`bailout` in `lang/parser`): an error is a value they return (S1).
 
 ## Step 25. Owned state
 
@@ -346,19 +356,25 @@ broker's inventoried state.
 
 ## Step 26. Every error handled
 
-`style.md` S8. 87 dropped error results in 48 functions: the `Close` of
+`style.md` S8. 94 dropped error results in 54 functions: the `Close` of
 rows and connections in `nao/migrate` and `nao/run`, the output writes
-and database closes of `cmd/volt`, the scripts. A `Close` error joins
-the function's error; an output write that fails is reported once and
-ends the command with exit 1.
+and database closes of `cmd/volt`, the scripts, and the blanks of
+`strconv` parses in the root package's event replay. A `Close` error
+joins the function's error; an output write that fails is reported once
+and ends the command with exit 1; a parse that fails is handled.
 
 ## Step 27. Bounded loops
 
-`style.md` S2. 145 loops in 126 functions are neither counted, finite
+`style.md` S2. 156 loops in 133 functions are neither counted, finite
 nor provably endless, most of them the scanning loops of
-`lang/scanner` (19) and `lang/parser` (38) and the EBNF tools (17).
-Each becomes a counted loop bounded by step 23's limits, with an
-assertion after it that the bound was not the reason it stopped.
+`lang/parser` (38), `lang/scanner` (19) and the EBNF tools (17), and
+counted loops whose body moves the counter. Each becomes a counted loop
+bounded by step 23's limits, with an assertion after it that the bound
+was not the reason it stopped. An event loop, one that serves a
+connection or the process and ends with its input or its context (the
+broker's stream, the language server's transport, the client's
+stream), is not capped: S2 names its shape, and the gate gains a check
+for it.
 
 ## Step 28. Short functions
 
@@ -370,25 +386,28 @@ function of 620 lines in the blog fixture is split by scope; then
 
 ## Step 29. 100 columns
 
-`style.md` L2. 3,867 lines in 290 files are wider than 100 columns:
-1,153 in hand-written code, 1,840 in tests, 370 in the generated
-fixtures and 504 in `testdata` and the goldens. `gofmt` does not wrap,
-so hand-written code is wrapped by hand and the generators wrap what
-they write, long SQL included.
+`style.md` L2. 4,238 lines in 590 files are wider than 100 columns:
+1,153 in hand-written Go, 1,840 in Go tests, 370 in the generated
+fixtures, 504 in `testdata` and the goldens, 370 in Volt sources and
+one in SQL. `gofmt` does not wrap, so hand-written code is wrapped by
+hand and the generators wrap what they write, long SQL included.
 
 ## Step 30. Fixed-size integers at the boundaries
 
 `style.md` S4. Generated models, changesets, wire types and the
-runtime's stored or sent values use a fixed size; the spec decides what
-the schema's `int` means for a column and for the wire, and the
-generators follow.
+runtime's stored or sent values use a fixed size. Spec §go-types, which
+maps the schema's `int` to Go's `int` on 64-bit targets today, decides
+what `int` means for a column and for the wire, and the generators
+follow; conversions to a narrower type and boundary arithmetic that can
+overflow are checked.
 
 ## Step 31. Names
 
-`style.md` N1 to N11. Qualifiers and units move last, abbreviations
-are spelled out, swappable parameters become options structs, in the
-hand-written code and in what the generators emit; the spec decides the
-spelling of every generated name it fixes.
+`style.md` N1 to N14. Qualifiers and units move last, durations become
+`time.Duration`, abbreviations are spelled out, swappable parameters
+become options structs and flags get long names, in the hand-written
+code and in what the generators emit; the spec decides the spelling of
+every generated name it fixes.
 
 ## Step 32. The tool without `urfave/cli`
 
@@ -398,21 +417,41 @@ library's `flag`, keeping every command, flag and exit code; the ledger's
 
 ## Step 33. The gates reach further
 
-`style.md` F5 and section 8. The type checks of the style gate reach the
-test files, and the purity gate extends from the memoized computations
-to every phase: the scanner, the parser, the checker, the fold, the
-generators and the formatter.
+`style.md` F4, F5, S9 and section 8. The type checks of the style gate
+reach the test files, while `testdata` and the conformance snippets
+stay outside them. The purity gate extends from the memoized
+computations to every phase: the scanner, the parser, the checker, the
+fold and the generators. A layers test holds the import graph to F4's
+inventory: the packages that import `database/sql` are `nao/rt`,
+`nao/run`, `nao/migrate`, the `nao/itest` fixture and the tool, and the
+list does not grow;
+nothing under `lang/`, `gen/` or `nao/gen` imports `nao/run` or the root
+package. Part 0's import boundaries say `nao/rt` imports no
+`database/sql`, which is not true today; the maintainer settles which
+of the two changes. The bar runs the
+`nilness` and `unusedwrite` analyzers of golang.org/x/tools beside
+`go vet`.
 
 ## Step 34. Verification
 
-`style.md` section 6. Native fuzz targets for the scanner, the parser,
-the checker and every decoder of a request, with their corpora checked
-in; failure injection in `nao/run` and the migrations (a wrapping
-driver that fails the Nth call, `PRAGMA max_page_count` for a full
-database, a child process killed in the middle of a write), each run
-ending in `PRAGMA integrity_check`; seeds printed by every randomized
-test; a coverage floor per package that does not fall; and the bar run
-on every push.
+`style.md` section 6:
+
+- V3: native fuzz targets for the scanner, the parser, the checker and
+  every decoder of a request, with their corpora checked in, replayed by
+  `go test` and run under `go test -fuzz` before a release;
+- V4: failure injection in `nao/run` and the migrations through a
+  wrapping driver that fails the Nth call once and then persistently,
+  `PRAGMA max_page_count` for a full database and a child process killed
+  in the middle of a write, each run ending in `PRAGMA integrity_check`;
+- V5: seeds printed by every randomized test, and a simulated executor
+  behind `rt.Perform` with a seeded order for the steps of a `Parallel`;
+- V6: a coverage floor per package that does not fall, and a test-only
+  record of both outcomes of each boundary condition;
+- V8 and V9: the round trips and the agreement of fast and plain paths;
+- V10: the tests of the packages that start goroutines or hold
+  inventoried state check that no goroutine, connection or statement
+  outlives them; the bar already races `nao` and the root package;
+- V11: the bar run on every push.
 
 ---
 
@@ -424,7 +463,7 @@ Before claiming any step done:
 go build ./... ./lsp/... ./cmd/volt/...
 go vet   ./... ./lsp/... ./cmd/volt/...
 go test  ./... ./lsp/... ./cmd/volt/...
-go test  -race ./lang/... ./lsp/...
+go test  -race ./lang/... ./lsp/... ./nao/... .
 gofmt -l . | grep -v zed-extension      # empty
 ```
 

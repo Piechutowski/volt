@@ -74,7 +74,7 @@ var stdlibMutators = map[string]int{
 	"slices.Sort": 0, "slices.SortFunc": 0, "slices.SortStableFunc": 0, "slices.Reverse": 0,
 	"slices.Delete": 0, "slices.DeleteFunc": 0, "slices.Insert": 0, "slices.Replace": 0,
 	"slices.Compact": 0, "slices.CompactFunc": 0,
-	"maps.Copy": 0, "maps.DeleteFunc": 0,
+	"maps.Copy": 0, "maps.DeleteFunc": 0, "maps.Insert": 0,
 }
 
 var valuePackages = map[string][]string{

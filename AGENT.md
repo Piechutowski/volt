@@ -27,10 +27,12 @@ Seven files in `docs/` and the README, nothing else carries prose:
   section it proves, the EBNF is executed against the parser, and
   every diagnostic cites the section it enforces as `spec/<anchor>`.
 - `style.md`: how Volt's code is written, TigerStyle translated to Go
-  joined with the functional rules, normative for every line of the
-  repository and every line `volt gen` writes. The rules marked gate
-  are checked by `cmd/volt/style_test.go`, whose ledger lists the debt
-  older than the style and only shrinks; its examples are executable.
+  joined with the functional rules, normative for every Go, Volt and
+  SQL line of the repository and every line `volt gen` writes; the
+  editor stack is excepted (`style.md` D2). The rules marked gate are
+  checked by `cmd/volt/style_test.go`, whose ledger lists the debt to
+  them that is older than the style and only shrinks; its examples are
+  executable.
 - `lint.md` — every vet rule with executable examples; a test fails
   the build if it drifts.
 - `editor.md` — grammar, Zed extension, language server, and the
@@ -42,10 +44,11 @@ Seven files in `docs/` and the README, nothing else carries prose:
   `spec.md`.
 - `roadmap.md` — what is built and what is not; a status changes in
   the commit that lands it.
-- `plan.md` — the one forward-looking document: the decisions made
-  and the steps that remain, in order; a step deletes its section in
-  the commit that lands it, and a deferred step keeps one line saying
-  so.
+- `plan.md`: the one forward-looking document, apart from `runner.md`
+  section 7, the maintainer's note on batching writes: the decisions
+  made and the steps that remain, in order; a step deletes its section
+  in the commit that lands it, and a deferred step keeps one line
+  saying so.
 
 No doc is ever knowingly wrong: a change whose blast radius reaches a
 doc updates the doc in the same commit. Never weaken a test to get
@@ -105,7 +108,7 @@ removes them.
 go build ./... ./lsp/... ./cmd/volt/...
 go vet   ./... ./lsp/... ./cmd/volt/...
 go test  ./... ./lsp/... ./cmd/volt/...
-go test  -race ./lang/... ./lsp/...
+go test  -race ./lang/... ./lsp/... ./nao/... .
 gofmt -l . | grep -v zed-extension        # must be empty
 ```
 
@@ -128,13 +131,18 @@ is a golden (`cmd/volt/lsp_session_test.go`).
   `OrderStateKnown`; internals too. Carve-outs: Go-mandated
   interface methods, `New*`/`is*`/`has*`, stdlib-parallel APIs, cursor
   primitives, LSP handlers named after protocol methods. Qualifiers and
-  units go last (`delayMsMax`, `style.md` N1).
-- Comments are the maintainer's: for now an agent writes none, doc
-  comments included (`style.md` C1). The comments there are doc
+  units go last (`queueLengthMax`, `style.md` N1).
+- Comments are the maintainer's: for now an agent writes no comment in
+  Go or Volt source, doc comments included (`style.md` C1), apart from
+  directives, the generated header, the `// spec: §…` tag of a
+  conformance snippet and the doc comments a fixture or a snippet
+  needs in order to test them. The maintainer's comments are doc
   comments on exported identifiers, one or two sentences citing the
-  spec section (`§columns`), and directives. Nothing else is commented;
-  a generated file carries the header and the doc comments of its
-  schema (spec §doc-comments-in-generated-code) and nothing else.
+  spec section (`§columns`). Nothing else is commented; a generated
+  file carries the header and the doc comments of its schema (spec
+  §doc-comments-in-generated-code) and nothing else. An agent's
+  reasons go into the spec, `runner.md` or `plan.md` section its change
+  touches.
 - Generated files start with the `Code generated … DO NOT EDIT.`
   marker; the CLI refuses to overwrite a file without it. Generated
   data files import the standard library, `nao/rt` and the packages of

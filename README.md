@@ -48,8 +48,9 @@ Volt's own code and the code it generates are held to
 style, translated to Go and joined with the functional rules. The style
 puts safety first: a limit on everything, assertions, no recursion,
 every error handled. A gate in the test suite checks the mechanical
-rules, and its ledger lists the debt older than the style, which only
-shrinks; `docs/plan.md` orders the work that pays it off.
+rules, and its ledger lists the debt to them that is older than the
+style, which only shrinks; `docs/plan.md` carries the rest of the debt
+and orders the work that pays both off.
 
 ## Layout
 
