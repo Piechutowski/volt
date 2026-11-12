@@ -824,11 +824,11 @@ func voltSiteFlagCast(c rt.Changeset[SiteFlag], p rt.Params[SiteFlag], i int) (r
 }
 
 type Attachment struct {
-	ID     int             `db:"id" json:"id"`
-	Name   string          `db:"name" json:"name"`
-	Body   []byte          `db:"body" json:"body"`
-	Thumb  rt.Null[[]byte] `db:"thumb" json:"thumb"`
-	Digest []byte          `db:"digest" json:"digest"`
+	ID     int               `db:"id" json:"id"`
+	Name   string            `db:"name" json:"name"`
+	Body   rt.Bytes          `db:"body" json:"body"`
+	Thumb  rt.Null[rt.Bytes] `db:"thumb" json:"thumb"`
+	Digest rt.Bytes          `db:"digest" json:"digest"`
 }
 
 type AttachmentColumn = rt.ColumnOf[Attachment]
@@ -838,9 +838,9 @@ type AttachmentParams = rt.Params[Attachment]
 var (
 	AttachmentID     = rt.Column[Attachment, int]{Name: "id"}
 	AttachmentName   = rt.Column[Attachment, string]{Name: "name"}
-	AttachmentBody   = rt.Column[Attachment, []byte]{Name: "body"}
-	AttachmentThumb  = rt.NullColumn[Attachment, []byte]{Column: rt.Column[Attachment, []byte]{Name: "thumb"}}
-	AttachmentDigest = rt.Column[Attachment, []byte]{Name: "digest"}
+	AttachmentBody   = rt.Column[Attachment, rt.Bytes]{Name: "body"}
+	AttachmentThumb  = rt.NullColumn[Attachment, rt.Bytes]{Column: rt.Column[Attachment, rt.Bytes]{Name: "thumb"}}
+	AttachmentDigest = rt.Column[Attachment, rt.Bytes]{Name: "digest"}
 )
 
 var voltAttachmentDesc = &rt.Desc[Attachment]{
@@ -882,15 +882,15 @@ func (c AttachmentChangeset) NameSet(v string) AttachmentChangeset {
 	return AttachmentChangeset{rt.Set(c.Changeset, 1, func(voltR *Attachment) { voltR.Name = v })}
 }
 
-func (c AttachmentChangeset) BodySet(v []byte) AttachmentChangeset {
+func (c AttachmentChangeset) BodySet(v rt.Bytes) AttachmentChangeset {
 	return AttachmentChangeset{rt.Set(c.Changeset, 2, func(voltR *Attachment) { voltR.Body = v })}
 }
 
-func (c AttachmentChangeset) ThumbSet(v rt.Null[[]byte]) AttachmentChangeset {
+func (c AttachmentChangeset) ThumbSet(v rt.Null[rt.Bytes]) AttachmentChangeset {
 	return AttachmentChangeset{rt.Set(c.Changeset, 3, func(voltR *Attachment) { voltR.Thumb = v })}
 }
 
-func (c AttachmentChangeset) DigestSet(v []byte) AttachmentChangeset {
+func (c AttachmentChangeset) DigestSet(v rt.Bytes) AttachmentChangeset {
 	return AttachmentChangeset{rt.Set(c.Changeset, 4, func(voltR *Attachment) { voltR.Digest = v })}
 }
 
@@ -904,12 +904,12 @@ func (c AttachmentChangeset) ErrorAdd(col AttachmentColumn, msg string) Attachme
 
 func voltAttachmentScan(r rt.Row) (Attachment, error) {
 	var voltV Attachment
-	voltErr := r.Scan(&voltV.ID, &voltV.Name, (*rt.Bytes)(&voltV.Body), &voltV.Thumb, (*rt.Bytes)(&voltV.Digest))
+	voltErr := r.Scan(&voltV.ID, &voltV.Name, &voltV.Body, &voltV.Thumb, &voltV.Digest)
 	return voltV, rt.Refused("Attachment", voltErr)
 }
 
 func voltAttachmentValues(voltR Attachment) []any {
-	return []any{voltR.ID, voltR.Name, rt.Bytes(voltR.Body), voltR.Thumb, rt.Bytes(voltR.Digest)}
+	return []any{voltR.ID, voltR.Name, voltR.Body, voltR.Thumb, voltR.Digest}
 }
 
 func voltAttachmentApply(voltData, voltVals Attachment, voltSet []bool) Attachment {
@@ -947,19 +947,19 @@ func voltAttachmentCast(c rt.Changeset[Attachment], p rt.Params[Attachment], i i
 		}
 		return AttachmentChangeset{c}.NameSet(voltV).Changeset, nil
 	case 2:
-		voltV, voltOK, voltErr := rt.Field(p, "body", "[]byte", false, func(voltR *Attachment) []byte { return voltR.Body })
+		voltV, voltOK, voltErr := rt.Field(p, "body", "[]byte", false, func(voltR *Attachment) rt.Bytes { return voltR.Body })
 		if voltErr != nil || !voltOK {
 			return c, voltErr
 		}
 		return AttachmentChangeset{c}.BodySet(voltV).Changeset, nil
 	case 3:
-		voltV, voltOK, voltErr := rt.Field(p, "thumb", "[]byte", true, func(voltR *Attachment) rt.Null[[]byte] { return voltR.Thumb })
+		voltV, voltOK, voltErr := rt.Field(p, "thumb", "[]byte", true, func(voltR *Attachment) rt.Null[rt.Bytes] { return voltR.Thumb })
 		if voltErr != nil || !voltOK {
 			return c, voltErr
 		}
 		return AttachmentChangeset{c}.ThumbSet(voltV).Changeset, nil
 	case 4:
-		voltV, voltOK, voltErr := rt.Field(p, "digest", "[]byte", false, func(voltR *Attachment) []byte { return voltR.Digest })
+		voltV, voltOK, voltErr := rt.Field(p, "digest", "[]byte", false, func(voltR *Attachment) rt.Bytes { return voltR.Digest })
 		if voltErr != nil || !voltOK {
 			return c, voltErr
 		}
@@ -969,9 +969,9 @@ func voltAttachmentCast(c rt.Changeset[Attachment], p rt.Params[Attachment], i i
 }
 
 type Blob struct {
-	Hash []byte `db:"hash" json:"hash"`
-	Tag  []byte `db:"tag" json:"tag"`
-	Size int    `db:"size" json:"size"`
+	Hash rt.Bytes `db:"hash" json:"hash"`
+	Tag  rt.Bytes `db:"tag" json:"tag"`
+	Size int      `db:"size" json:"size"`
 }
 
 type BlobColumn = rt.ColumnOf[Blob]
@@ -979,8 +979,8 @@ type BlobColumn = rt.ColumnOf[Blob]
 type BlobParams = rt.Params[Blob]
 
 var (
-	BlobHash = rt.Column[Blob, []byte]{Name: "hash"}
-	BlobTag  = rt.Column[Blob, []byte]{Name: "tag"}
+	BlobHash = rt.Column[Blob, rt.Bytes]{Name: "hash"}
+	BlobTag  = rt.Column[Blob, rt.Bytes]{Name: "tag"}
 	BlobSize = rt.Column[Blob, int]{Name: "size"}
 )
 
@@ -1007,11 +1007,11 @@ func (r Blob) Changeset() BlobChangeset { return BlobChangeset{rt.ChangesetOf(vo
 
 func (c BlobChangeset) From(r Blob) BlobChangeset { return BlobChangeset{c.Changeset.From(r)} }
 
-func (c BlobChangeset) HashSet(v []byte) BlobChangeset {
+func (c BlobChangeset) HashSet(v rt.Bytes) BlobChangeset {
 	return BlobChangeset{rt.Set(c.Changeset, 0, func(voltR *Blob) { voltR.Hash = v })}
 }
 
-func (c BlobChangeset) TagSet(v []byte) BlobChangeset {
+func (c BlobChangeset) TagSet(v rt.Bytes) BlobChangeset {
 	return BlobChangeset{rt.Set(c.Changeset, 1, func(voltR *Blob) { voltR.Tag = v })}
 }
 
@@ -1029,13 +1029,11 @@ func (c BlobChangeset) ErrorAdd(col BlobColumn, msg string) BlobChangeset {
 
 func voltBlobScan(r rt.Row) (Blob, error) {
 	var voltV Blob
-	voltErr := r.Scan((*rt.Bytes)(&voltV.Hash), (*rt.Bytes)(&voltV.Tag), &voltV.Size)
+	voltErr := r.Scan(&voltV.Hash, &voltV.Tag, &voltV.Size)
 	return voltV, rt.Refused("Blob", voltErr)
 }
 
-func voltBlobValues(voltR Blob) []any {
-	return []any{rt.Bytes(voltR.Hash), rt.Bytes(voltR.Tag), voltR.Size}
-}
+func voltBlobValues(voltR Blob) []any { return []any{voltR.Hash, voltR.Tag, voltR.Size} }
 
 func voltBlobApply(voltData, voltVals Blob, voltSet []bool) Blob {
 	voltR := voltData
@@ -1054,13 +1052,13 @@ func voltBlobApply(voltData, voltVals Blob, voltSet []bool) Blob {
 func voltBlobCast(c rt.Changeset[Blob], p rt.Params[Blob], i int) (rt.Changeset[Blob], error) {
 	switch i {
 	case 0:
-		voltV, voltOK, voltErr := rt.Field(p, "hash", "[]byte", false, func(voltR *Blob) []byte { return voltR.Hash })
+		voltV, voltOK, voltErr := rt.Field(p, "hash", "[]byte", false, func(voltR *Blob) rt.Bytes { return voltR.Hash })
 		if voltErr != nil || !voltOK {
 			return c, voltErr
 		}
 		return BlobChangeset{c}.HashSet(voltV).Changeset, nil
 	case 1:
-		voltV, voltOK, voltErr := rt.Field(p, "tag", "[]byte", false, func(voltR *Blob) []byte { return voltR.Tag })
+		voltV, voltOK, voltErr := rt.Field(p, "tag", "[]byte", false, func(voltR *Blob) rt.Bytes { return voltR.Tag })
 		if voltErr != nil || !voltOK {
 			return c, voltErr
 		}

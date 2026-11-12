@@ -116,14 +116,14 @@ func AttachmentNamed(name string) rt.Query[Attachment] {
 }
 
 type Slim struct {
-	ID    int             `db:"id" json:"id"`
-	Body  []byte          `db:"body" json:"body"`
-	Thumb rt.Null[[]byte] `db:"thumb" json:"thumb"`
+	ID    int               `db:"id" json:"id"`
+	Body  rt.Bytes          `db:"body" json:"body"`
+	Thumb rt.Null[rt.Bytes] `db:"thumb" json:"thumb"`
 }
 
 func voltSlimScan(r rt.Row) (Slim, error) {
 	var voltV Slim
-	voltErr := r.Scan(&voltV.ID, (*rt.Bytes)(&voltV.Body), &voltV.Thumb)
+	voltErr := r.Scan(&voltV.ID, &voltV.Body, &voltV.Thumb)
 	return voltV, voltErr
 }
 
@@ -134,15 +134,15 @@ func AttachmentSlim(name string) rt.Query[Slim] {
 }
 
 type AttachmentHeavyRow struct {
-	ID     int             `db:"id" json:"id"`
-	Body   []byte          `db:"body" json:"body"`
-	Thumb  rt.Null[[]byte] `db:"thumb" json:"thumb"`
-	Digest []byte          `db:"digest" json:"digest"`
+	ID     int               `db:"id" json:"id"`
+	Body   rt.Bytes          `db:"body" json:"body"`
+	Thumb  rt.Null[rt.Bytes] `db:"thumb" json:"thumb"`
+	Digest rt.Bytes          `db:"digest" json:"digest"`
 }
 
 func voltAttachmentHeavyRowScan(r rt.Row) (AttachmentHeavyRow, error) {
 	var voltV AttachmentHeavyRow
-	voltErr := r.Scan(&voltV.ID, (*rt.Bytes)(&voltV.Body), &voltV.Thumb, (*rt.Bytes)(&voltV.Digest))
+	voltErr := r.Scan(&voltV.ID, &voltV.Body, &voltV.Thumb, &voltV.Digest)
 	return voltV, voltErr
 }
 

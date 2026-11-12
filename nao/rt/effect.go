@@ -304,7 +304,7 @@ type Transaction struct {
 }
 
 // Tx is the Transaction of steps.
-func Tx(steps ...AnyEffect) Transaction { return Transaction{Steps: steps} }
+func Tx(steps ...AnyEffect) Transaction { return Transaction{Steps: slices.Clone(steps)} }
 
 func (t Transaction) perform(ctx context.Context, x Executor) ([]any, error) {
 	if slices.Contains(t.Steps, nil) {
@@ -338,7 +338,7 @@ type Parallel struct {
 }
 
 // All is the Parallel of steps.
-func All(steps ...AnyEffect) Parallel { return Parallel{Steps: steps} }
+func All(steps ...AnyEffect) Parallel { return Parallel{Steps: slices.Clone(steps)} }
 
 func (p Parallel) perform(ctx context.Context, x Executor) ([]any, error) {
 	if slices.Contains(p.Steps, nil) {

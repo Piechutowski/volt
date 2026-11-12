@@ -281,11 +281,11 @@ func AttachmentDelete(id int) rt.Exec {
 
 const voltBlobGetSQL = `SELECT "hash", "tag", "size" FROM "blobs" WHERE "hash" = ?`
 
-func BlobGet(hash []byte) rt.Lookup[Blob] {
-	return rt.Lookup[Blob]{SQL: voltBlobGetSQL, Args: []any{rt.Bytes(hash)}, Scan: voltBlobScan}
+func BlobGet(hash rt.Bytes) rt.Lookup[Blob] {
+	return rt.Lookup[Blob]{SQL: voltBlobGetSQL, Args: []any{hash}, Scan: voltBlobScan}
 }
 
-func BlobGetMany(hashs [][]byte) rt.Query[Blob] {
+func BlobGetMany(hashs []rt.Bytes) rt.Query[Blob] {
 	if len(hashs) == 0 {
 		return rt.Query[Blob]{}
 	}
@@ -295,8 +295,8 @@ func BlobGetMany(hashs [][]byte) rt.Query[Blob] {
 
 const voltBlobGetByTagSQL = `SELECT "hash", "tag", "size" FROM "blobs" WHERE "tag" = ?`
 
-func BlobGetByTag(tag []byte) rt.Lookup[Blob] {
-	return rt.Lookup[Blob]{SQL: voltBlobGetByTagSQL, Args: []any{rt.Bytes(tag)}, Scan: voltBlobScan}
+func BlobGetByTag(tag rt.Bytes) rt.Lookup[Blob] {
+	return rt.Lookup[Blob]{SQL: voltBlobGetByTagSQL, Args: []any{tag}, Scan: voltBlobScan}
 }
 
 const voltBlobListSQL = `SELECT "hash", "tag", "size" FROM "blobs"`
@@ -317,8 +317,8 @@ func BlobUpdate(c BlobChangeset) rt.Write[Blob] { return rt.Update(c.Validate().
 
 const voltBlobDeleteSQL = `DELETE FROM "blobs" WHERE "hash" = ?`
 
-func BlobDelete(hash []byte) rt.Exec {
-	return rt.Exec{SQL: voltBlobDeleteSQL, Args: []any{rt.Bytes(hash)}, Model: "Blob", One: true}
+func BlobDelete(hash rt.Bytes) rt.Exec {
+	return rt.Exec{SQL: voltBlobDeleteSQL, Args: []any{hash}, Model: "Blob", One: true}
 }
 
 const voltDailyHitGetSQL = `SELECT "day", "hits", "site", "label", "token" FROM "daily_hits" WHERE "day" = ? AND "site" = ?`

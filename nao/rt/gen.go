@@ -91,7 +91,7 @@ func PredNotNull(col string) GenPred {
 // table qualified by as and the column of the outer table it equals.
 // A zero p tests the key alone.
 func PredExists(table, as string, on [][2]string, p GenPred) GenPred {
-	x := GenPred{kind: predExists, col: table, col2: as, pairs: on}
+	x := GenPred{kind: predExists, col: table, col2: as, pairs: append([][2]string(nil), on...)}
 	if p.kind != predEmpty {
 		x.kids = []GenPred{p}
 	}
@@ -106,7 +106,7 @@ func PredOptional(guards []any, p GenPred) GenPred {
 	if len(guards) == 0 || p.kind == predEmpty {
 		return p
 	}
-	return GenPred{kind: predOptional, vals: guards, kids: []GenPred{p}}
+	return GenPred{kind: predOptional, vals: append([]any(nil), guards...), kids: []GenPred{p}}
 }
 
 // PredVanish is p with every term of it that reads an absent optional

@@ -11,6 +11,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -212,7 +213,7 @@ func Raw[M any](sql string, args ...any) Pred[M] {
 	if sql == "" {
 		return Pred[M]{}
 	}
-	return Pred[M]{kind: predRaw, raw: sql, vals: args}
+	return Pred[M]{kind: predRaw, raw: sql, vals: slices.Clone(args)}
 }
 
 func predJoin[M any](kind predKind, ps []Pred[M]) Pred[M] {
@@ -394,7 +395,7 @@ func (o orderOpt[M]) optApply(s *querySpec[M]) { s.orders = append(s.orders, o.t
 
 // OrderBy sorts the result by the given terms, in order. Repeated
 // OrderBy options append.
-func OrderBy[M any](terms ...Order[M]) Opt[M] { return orderOpt[M]{terms: terms} }
+func OrderBy[M any](terms ...Order[M]) Opt[M] { return orderOpt[M]{terms: slices.Clone(terms)} }
 
 type limitOpt[M any] struct{ n any }
 
@@ -447,7 +448,7 @@ func (o afterOpt[M]) optApply(s *querySpec[M]) { s.after, s.afterSet = o.key, tr
 // one more predicate of the WHERE clause (spec §predicates) and
 // requires an OrderBy and one key value per term. NULLs in keyset
 // columns are not paginated over; keep keyset columns NOT NULL.
-func After[M any](key ...any) Opt[M] { return afterOpt[M]{key: key} }
+func After[M any](key ...any) Opt[M] { return afterOpt[M]{key: slices.Clone(key)} }
 
 type groupOpt[M any] struct{ cols []string }
 
@@ -456,7 +457,7 @@ func (o groupOpt[M]) optApply(s *querySpec[M]) { s.groups = append(s.groups, o.c
 // GroupBy groups the rows by the named items, a column or an alias
 // (spec §selects-over-groups); the generator's selects use it, the
 // dynamic layer has no grouping.
-func GroupBy[M any](cols ...string) Opt[M] { return groupOpt[M]{cols: cols} }
+func GroupBy[M any](cols ...string) Opt[M] { return groupOpt[M]{cols: slices.Clone(cols)} }
 
 type distinctOpt[M any] struct{}
 

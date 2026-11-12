@@ -67,7 +67,7 @@ type Detail = struct {
 func (e *Invalid) Details() []Detail {
 	out := make([]Detail, len(e.Fields))
 	for i, f := range e.Fields {
-		out[i] = Detail{Check: f.Check, Columns: f.Columns, Message: f.Message}
+		out[i] = Detail{Check: f.Check, Columns: slices.Clone(f.Columns), Message: f.Message}
 	}
 	return out
 }
@@ -197,7 +197,7 @@ func (p *Params[M]) UnmarshalJSON(b []byte) error {
 
 // MarshalJSON writes the object of the marked columns by wire name, each
 // value as encoding/json renders it: an rt.Null as the value or null,
-// []byte as base64 and nil as "" (spec §columns), time.Time as RFC 3339.
+// Bytes as base64 (spec §columns), time.Time as RFC 3339.
 func (p Params[M]) MarshalJSON() ([]byte, error) {
 	fields := p.fields
 	if p.marks != nil {
@@ -215,7 +215,7 @@ func (p Params[M]) MarshalJSON() ([]byte, error) {
 func marksJSON(marks []Mark) (map[string]json.RawMessage, error) {
 	out := make(map[string]json.RawMessage, len(marks))
 	for _, m := range marks {
-		v, err := json.Marshal(bytesWrap(m.Value))
+		v, err := json.Marshal(m.Value)
 		if err != nil {
 			return nil, err
 		}
@@ -324,14 +324,19 @@ func UnknownFields[M any](p Params[M], wires ...string) []FieldError {
 	return out
 }
 
-// FieldErrorsAppend appends to a changeset's errors without sharing the
-// backing array with the changeset it was copied from, so a changeset
-// value stays immutable to its holder (spec §changesets).
+// FieldErrorsAppend appends copies of more, columns included, to errs
+// without sharing errs' backing array, so a changeset shares no field
+// error with its holder (spec §changesets).
 func FieldErrorsAppend(errs []FieldError, more ...FieldError) []FieldError {
 	if len(more) == 0 {
 		return errs
 	}
-	return append(slices.Clip(errs), more...)
+	out := slices.Clip(errs)
+	for _, e := range more {
+		e.Columns = slices.Clone(e.Columns)
+		out = append(out, e)
+	}
+	return out
 }
 
 // Blank reports whether v is the empty value of its storage type, read

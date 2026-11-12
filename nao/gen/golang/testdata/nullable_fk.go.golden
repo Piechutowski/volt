@@ -87,8 +87,8 @@ type Post struct {
 	EditorID   rt.Null[int]       `db:"editor_id" json:"editor_id"`
 	ReviewedAt rt.Null[time.Time] `db:"reviewed_at" json:"reviewed_at"`
 	// rt.Null[string] expresses NULL; no pointer needed
-	Meta rt.Null[string] `db:"meta" json:"meta"`
-	Raw  rt.Null[[]byte] `db:"raw" json:"raw"`
+	Meta rt.Null[string]   `db:"meta" json:"meta"`
+	Raw  rt.Null[rt.Bytes] `db:"raw" json:"raw"`
 }
 
 type PostColumn = rt.ColumnOf[Post]
@@ -101,7 +101,7 @@ var (
 	PostEditorID   = rt.NullColumn[Post, int]{Column: rt.Column[Post, int]{Name: "editor_id"}}
 	PostReviewedAt = rt.NullColumn[Post, time.Time]{Column: rt.Column[Post, time.Time]{Name: "reviewed_at"}}
 	PostMeta       = rt.NullColumn[Post, string]{Column: rt.Column[Post, string]{Name: "meta"}}
-	PostRaw        = rt.NullColumn[Post, []byte]{Column: rt.Column[Post, []byte]{Name: "raw"}}
+	PostRaw        = rt.NullColumn[Post, rt.Bytes]{Column: rt.Column[Post, rt.Bytes]{Name: "raw"}}
 )
 
 var voltPostDesc = &rt.Desc[Post]{
@@ -150,7 +150,7 @@ func (c PostChangeset) MetaSet(v rt.Null[string]) PostChangeset {
 	return PostChangeset{rt.Set(c.Changeset, 4, func(voltR *Post) { voltR.Meta = v })}
 }
 
-func (c PostChangeset) RawSet(v rt.Null[[]byte]) PostChangeset {
+func (c PostChangeset) RawSet(v rt.Null[rt.Bytes]) PostChangeset {
 	return PostChangeset{rt.Set(c.Changeset, 5, func(voltR *Post) { voltR.Raw = v })}
 }
 
@@ -228,7 +228,7 @@ func voltPostCast(c rt.Changeset[Post], p rt.Params[Post], i int) (rt.Changeset[
 		}
 		return PostChangeset{c}.MetaSet(voltV).Changeset, nil
 	case 5:
-		voltV, voltOK, voltErr := rt.Field(p, "raw", "[]byte", true, func(voltR *Post) rt.Null[[]byte] { return voltR.Raw })
+		voltV, voltOK, voltErr := rt.Field(p, "raw", "[]byte", true, func(voltR *Post) rt.Null[rt.Bytes] { return voltR.Raw })
 		if voltErr != nil || !voltOK {
 			return c, voltErr
 		}

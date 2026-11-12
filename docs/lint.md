@@ -310,12 +310,15 @@ The rules of this group read the hand-written Go files of a routes
 package, not its `.volt` files: with the standard library's parser and
 no type information, they hold a handler to what makes it a pure
 function (spec §requests-and-responses, §values-and-effects). A
-*handler file* is one that declares a method taking a `volt.Request`
-first and returning a `volt.Response`. Generated files are never read.
-Not caught, by the spec's own account: reflection, `unsafe`, cgo, a
-package imported under another name, a call through a function value,
-and a write a function the runner calls makes through a method or a
-function it calls.
+*handler package* is one a file of which declares a method taking a
+`volt.Request` first and returning a `volt.Response`, or a scope-load
+function (spec §scope-loads); every hand-written file of it is held
+pure, a helper the handler calls as much as the handler, since a rule
+that read the handler's file alone would be passed by moving the
+effect one file over. Generated files are never read. Not caught, by
+the spec's own account: reflection, `unsafe`, cgo, a package imported
+with a dot, a call through a function value, and a write a function
+the runner calls makes through a method or a function it calls.
 
 ### handlerreceiver
 
@@ -337,39 +340,78 @@ seen.
 
 ### handlerimports
 
-**What it does.** Reports a file that declares a handler or a
-scope-load function (spec §scope-loads), which is pure like a handler,
-and imports a package that touches the world: the runner `nao/run`,
-`database/sql`, `net`, `os`, `os/exec`, `math/rand`, `math/rand/v2` or
-`crypto/rand`.
+**What it does.** Reports a file of a handler package that imports a
+package that touches the world: the runner `nao/run`, `database/sql`,
+`net`, `net/rpc`, `net/smtp`, `os`, `os/exec`, `os/signal`, `os/user`,
+`io/ioutil`, `syscall`, `log/syslog`, `math/rand`, `math/rand/v2` or
+`crypto/rand`. A path is matched whole: `net/url` and `net/netip`
+parse values and stay allowed.
 
 **Why.** A handler describes its effects as values and the shim
 performs them; a handler that could open a socket or read a file is
-no longer a function of its inputs. `net/http` stays allowed: a handler
-names its status constants and cookie types, and a request made
-through it is among what the spec lists as not caught.
+no longer a function of its inputs. `net/http` and `io/fs` stay
+allowed: a handler names the status constants and cookie types of the
+one and hands `volt.File` an `fs.FS` of the other; what of `net/http`
+reaches the network is `handlercalls`'s.
 
 **Examples.** [testdata/handlerimports.go](../lang/vet/testdata/handlerimports.go):
 `database/sql`, `os` and `nao/run` warn at their import lines;
-`net/http` and the runtime do not. [testdata/scopeload.go](../lang/vet/testdata/scopeload.go):
+`syscall` too, `net/http`, `net/url` and the runtime do not.
+[`TestGoRulesReadThePackage`](../lang/vet/handlers_test.go): a
+helper file of a handler package that imports `os` warns, and the same
+file in a package without a handler does not. [testdata/scopeload.go](../lang/vet/testdata/scopeload.go):
 a file that declares a scope load and no handler, `os` warning there.
 
 ### handlerclock
 
 **What it does.** Reports `time.Now`, `time.Since` and `time.Until` in a
-file that declares a handler or a scope-load function.
+file of a handler package, called or not, under whatever name the file
+imports `time`.
 
 **Why.** The shim captures the time once and the handler reads
 `r.Now()`, so two calls with the same request see the same clock and a
 test fixes it.
 
 **Examples.** [testdata/handlerclock.go](../lang/vet/testdata/handlerclock.go):
-arithmetic on `r.Now()` passes; `time.Now()` and `time.Since` warn, and
+arithmetic on `r.Now()` passes; `time.Now()`, `time.Since` and
+`clock.Now` taken as a value, `time` imported as `clock`, warn, and
 so does `time.Since` inside the `next` of an `rt.Then`, which the
 runner calls and which is pure like the handler (spec
 §values-and-effects). In [testdata/scopeload.go](../lang/vet/testdata/scopeload.go)
 `time.Now` inside the `next` of the effect a scope load performs warns,
 in a file that declares no handler.
+
+### handlercalls
+
+**What it does.** Reports, in a file of a handler package, what of the
+three packages a handler may import reaches beyond a log line or a
+value: `log.Fatal`, `log.Fatalf` and `log.Fatalln`, which exit;
+`log.Panic`, `log.Panicf` and `log.Panicln`, which panic;
+`log.SetOutput`, `log.SetFlags`, `log.SetPrefix`, `slog.SetDefault` and
+`slog.SetLogLoggerLevel`, which change the loggers the whole program
+shares; `http.Handle`, `http.HandleFunc` and `http.DefaultServeMux`,
+the shared mux; and `http.Get`, `http.Head`, `http.Post`,
+`http.PostForm`, `http.DefaultClient`, `http.DefaultTransport`,
+`http.ListenAndServe`, `http.ListenAndServeTLS`, `http.Serve` and
+`http.ServeTLS`, which reach the network. Each is reported called or
+not, under whatever name the file imports its package.
+
+**Why.** A log line is output for the programmer, not part of what the
+handler computes: the response is the same whether it was written or
+not, so `log.Printf` and `slog.Info` stay allowed, as Roc allows `dbg` in
+a pure function. What changes the outcome does not: an exit ends the
+server mid-request with its deferred functions unrun, a panic is
+control flow behind a log line where `volt.Fail` is a value, a shared
+logger or mux is package state of another package, and a request is an
+effect the shim does not perform.
+
+**Examples.** [testdata/handlercalls.go](../lang/vet/testdata/handlercalls.go):
+`log.Printf`, `slog.Info` and `http.StatusOK` pass; `log.Fatal`,
+`log.Panicf`, `log.SetOutput`, `slog.SetDefault`, `http.Get` and
+`http.DefaultClient` taken as a value warn.
+
+**Limitations.** A call through a logger value, `log.Default().SetOutput`
+or a `*slog.Logger` a handler holds, is a method and not seen.
 
 ### packagestate
 

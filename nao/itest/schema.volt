@@ -116,8 +116,8 @@ table site_flags {
 }
 
 // Bytes (spec §columns, §nullability): a []byte column without
-// null is bytes and nil writes empty bytes, one with null is
-// rt.Null[[]byte], and required is the one refusal of empty bytes.
+// null is rt.Bytes, whose empty value writes empty bytes, one with null
+// is rt.Null[rt.Bytes], and required is the one refusal of empty bytes.
 
 table attachments {
   id     int    [pk]
@@ -130,12 +130,12 @@ table attachments {
 select named for attachments where name = :name
 
 // A projected row type and a struct derivative scan a []byte as the
-// model does: empty bytes read back non-nil (spec §nullability).
+// model does (spec §nullability).
 
 select slim (id, body, thumb) for attachments where name = :name
 select heavy (* \ name) for attachments where name = :name
 
-// A []byte key binds as every plain []byte does, on every key path.
+// A []byte key binds as every rt.Bytes does, on every key path.
 
 table blobs {
   hash []byte [pk]

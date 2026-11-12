@@ -849,19 +849,21 @@ column setting  = "pk"
    unless its type says so, and it holds for every type alike: a column
    that carries `null` is `rt.Null[T]`, `[]byte` among them, and a
    built-in type binds NULL only as an invalid `rt.Null`
-   (§nullability). A `[]byte` field is therefore bytes and never NULL:
-   nil and a non-nil empty slice are one value, empty bytes, which
-   every bind of a `[]byte` writes as `X''`, in a changeset write, a
-   key, the dynamic layer and a valid `rt.Null[[]byte]` alike, and
-   which every read hands back as a non-nil empty slice whatever the
-   driver returns (§nullability). The zero value of a `[]byte` column
-   without `null` thus satisfies NOT NULL, as every other built-in
-   type's does, and `required` is the one refusal of empty bytes, as it
-   is of `""` for `string`. A declared type (§types) stored as `[]byte`
-   is not a plain `[]byte`: its own `driver.Valuer` decides what it
-   binds, and a value of any declared type whose `driver.Valuer`
-   returns nil binds as NULL. A key column, one carrying `pk`, MUST
-   NOT carry `null`.
+   (§nullability). A `[]byte` column is generated as `rt.Bytes`, bytes
+   held in a Go string, which no one can change once made, so a row, a
+   changeset and an effect share it freely; `rt.Bytes(b)` copies a
+   slice in and `Bytes()` copies one out (§nullability). It is bytes and
+   never NULL, with one empty value, which every bind writes as `X''`,
+   in a changeset write, a key, the dynamic layer and a valid
+   `rt.Null[rt.Bytes]` alike, whatever the driver returns on a read
+   (§nullability). The zero value of a `[]byte` column without `null`
+   thus satisfies NOT NULL, as every other built-in type's does, and
+   `required` is the one refusal of empty bytes, as it is of `""` for
+   `string`. A declared type (§types) stored as `[]byte` is not
+   `rt.Bytes`: it is a slice its own code may change, and its own
+   `driver.Valuer` decides what it binds, and a value of any declared
+   type whose `driver.Valuer` returns nil binds as NULL. A key column,
+   one carrying `pk`, MUST NOT carry `null`.
 3. **`pk`** marks the column a member of the table's primary key, and
    is the one spelling of a primary key: an index takes no `pk`
    (§indexes). The primary key is the columns that carry `pk`, in
@@ -934,14 +936,15 @@ column setting  = "pk"
    list is the only thing that follows the type.
 8. **`required`** declares that a value must be present in the
    zero-value sense: a zero value that is set, or decoded into a row
-   and passed to `From` (§changesets), satisfies a NOT NULL column, nil
-   for `[]byte` among them since it binds as empty bytes (rule 2),
-   unless a declared type's `driver.Valuer` binds it as NULL, so
+   and passed to `From` (§changesets), satisfies a NOT NULL column, the
+   empty `rt.Bytes` of a `[]byte` among them since it binds as empty
+   bytes (rule 2), unless a declared type's `driver.Valuer` binds it
+   as NULL, so
    `required` is the word for "and not that either". It is the one
    built-in rule of `Validate` (§changesets), which the schema switches
    on per column, the field error with check `required`: it refuses
    `""` for `string`, `0` for `int` and `float64`, a zero length for
-   `[]byte` (nil or empty, and no other value), and for a declared type
+   `[]byte` (the empty value and no other), and for a declared type
    the empty value of its storage type. It is an error on a `null`
    column, which has no empty value to refuse since NULL is absence, on
    a `default:` column, on the database-assigned key (rule 4), and on
@@ -1343,11 +1346,11 @@ storage type = column type ;
    `var _ driver.Valuer = *new(pkg.Name)`), so a type that does not
    fails to compile at the assertion, naming the type. Storage
    `time.Time` and `[]byte` is never kinded: a struct does not convert
-   by kind, and a type stored as `[]byte` is never a plain `[]byte`
+   by kind, and a type stored as `[]byte` is never `rt.Bytes`
    (§columns): its `driver.Valuer` and
    `sql.Scanner` are the authority on what it binds and reads, nil and
-   NULL included, and nothing generated code or the runtime does to a
-   plain `[]byte` touches it. The declaration is read by its spelling, as a
+   NULL included, and nothing generated code or the runtime does to
+   `rt.Bytes` or a plain `[]byte` touches it. The declaration is read by its spelling, as a
    validator's signature is (§validators), and the Go compiler remains
    the authority on what it denotes. A column of a declared type that
    carries `null` is `rt.Null[pkg.Name]`.
@@ -2367,19 +2370,24 @@ func (r Response) Rescue(on func(error) Response) Response
    empty list.
 6. **What keeps a handler pure** is the generated interface, which
    fixes every parameter, and the vet rules of `lint.md`:
-   a controller is an empty struct (`handlerreceiver`), a file that
-   declares a handler or a scope-load function (§scope-loads) imports
-   neither the runner nor `database/sql`,
-   `net`, `os`, `os/exec` nor a random source (`handlerimports`), it
-   reads no clock but `r.Now()` (`handlerclock`), a routes package holds
+   a controller is an empty struct (`handlerreceiver`); every
+   hand-written file of a package that declares a handler or a
+   scope-load function (§scope-loads), a helper the handler calls as
+   much as the handler, imports neither the runner nor `database/sql`,
+   `net`, `os`, `os/exec`, `syscall` nor a random source
+   (`handlerimports`), reads no clock but `r.Now()` (`handlerclock`), and
+   calls nothing of `log`, `log/slog` or `net/http` that exits, panics,
+   changes a logger or mux the program shares or reaches the network,
+   while a plain log line, which changes no response, stays allowed
+   (`handlercalls`); a routes package holds
    no package state and starts no goroutine (`packagestate`,
    `goroutine`), a function the runner calls, the `next` of an
    `rt.Then` and the `f` of an `rt.Map` or an `rt.ParallelMap`, writes
    no variable it captures (`capturedwrite`), and every `Stream` is
    reported (`streamcount`). Not caught: reflection, `unsafe`, cgo, a
-   package imported under another name, a call through a function
-   value, and a write such a function makes through a method or a
-   function it calls.
+   package imported with a dot, a call through a function value or a
+   method, a logger among them, and a write such a function makes
+   through a method or a function it calls.
 
 ### Request bodies
 
@@ -2821,11 +2829,9 @@ for a format suffix.
 3. **GOB is the Go-native arm**: a client that imports the generated
    models package decodes rows into the same types the server
    encoded, with no schema on the wire. JSON is what browsers, curl and
-   every other language see. GOB carries no empty slice, so empty bytes
-   arrive as nil, which is the same value, empty bytes, in either kind
-   of `[]byte` column, and a NULL arrives as an invalid `rt.Null`;
-   re-rendered as JSON, such a nil plain `[]byte` is `null`, not `""`
-   (§nullability).
+   every other language see. A `[]byte` column arrives as the
+   `rt.Bytes` it left, empty bytes as empty bytes, and a NULL as an
+   invalid `rt.Null` (§nullability).
 4. The runtime exposes the same rules to hand-written handlers as
    `volt.Render`, `volt.RenderStatus`, `volt.Created`, `volt.Reject`
    and `volt.Decode` over the request value's body
@@ -3722,8 +3728,8 @@ pred tagged  { exists tags (tag = :tag?) }
      empty list is the constant `1 = 0` (`1 = 1` negated); a list
      parameter is `"col" IN (SELECT value FROM json_each(?))`, bound
      as one JSON array (`rt.JSONList`); the dynamic layer's `InList`
-     over a list any item of which binds as bytes, a plain `[]byte`
-     or a value whose driver value is `[]byte`, is membership in
+     over a list any item of which binds as bytes, `rt.Bytes`, a plain
+     `[]byte` or a value whose driver value is `[]byte`, is membership in
      values instead, each item bound as an `In` item is, since JSON
      carries no blob (rule 5);
    - a pattern is `"col" LIKE ?`, `"col" NOT LIKE ?`; a null test
@@ -4255,8 +4261,11 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
 1. **Value semantics.** A changeset is a struct passed and returned
    by value; every method returns a new changeset and leaves its
    receiver as it was, so two goroutines may hold copies of one
-   changeset with no coordination. No method of a changeset touches
-   the database.
+   changeset with no coordination. Nothing a changeset takes or hands
+   out is shared with it: the field errors of `Errors`, `Err` and
+   `WithFindings` are copies, down to their columns, as are the
+   details of a refusal (rule 10). No method of a
+   changeset touches the database.
 2. **Data and changes.** `UserNew()` starts from the zero row with the schema's literal
    defaults in place (a number, string or boolean `default:` of a
    built-in column or of a kinded declared type, §default-values,
@@ -4322,13 +4331,12 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
 5. **`Params`.** `rt.Params[M]` is a write body as the wire carries
    it, in either format (§formats): as JSON, an object of the changed
    columns keyed by their wire names (the `json` tag, §struct-tags),
-   each value as `encoding/json` renders it and `null` for NULL, but a
-   nil `[]byte` as `""`, since nil is empty bytes (§columns), and a
-   marked column always among them whatever else its tag says; as
-   GOB, the row and the list of marked columns, typed by the shared
-   model. `c.Params()` builds one from the marks of `c`, each an
-   `rt.Mark` of wire name and value; `volt.Decode` reads one from a
-   request; `Cast` consumes one. A body keeps its arm through a GOB
+   each value as `encoding/json` renders it, `null` for NULL and
+   `rt.Bytes` as base64 (§columns), and a marked column always among
+   them whatever else its tag says; as GOB, the row and the list of
+   marked columns, typed by the shared model. `c.Params()` builds one
+   from the marks of `c`, each an `rt.Mark` of wire name and value;
+   `volt.Decode` reads one from a request; `Cast` consumes one. A body keeps its arm through a GOB
    re-encoding: one read from JSON carries its JSON object, so `Cast`
    reads it the same on either side, and one built from marks carries
    their JSON too. A JSON body that is not an object is a malformed
@@ -5126,13 +5134,13 @@ signatures name.
 ### Go types
 
 A column type is a Go type (§columns), so the mapping is the identity
-for the built-ins; the checker has already refused anything outside
-the set.
+for the built-ins but `[]byte`, whose Go type is the one that cannot
+change; the checker has already refused anything outside the set.
 
 | Declared | Go |
 |---|---|
 | `bool`, `int`, `float64`, `string`, `time.Time` | the same |
-| `[]byte` | `[]byte`, bytes and never NULL: nil is empty bytes (§nullability) |
+| `[]byte` | `rt.Bytes`, bytes held in a string, which no one can change, and never NULL (§nullability) |
 | declared `Type pkg.Name` (§types) | `pkg.Name`, imported as `import pkg "path"` |
 | declared `Type Name` (§types) | `Name`, the data package's own type, named unqualified |
 
@@ -5222,37 +5230,40 @@ datetime(opened_at)` for whole seconds, its children's keys alike).
 
 A column that carries `null` (§columns) is nullable and generated as
 `rt.Null[T]`, a value plus a validity bit, never a pointer, for every
-type, `[]byte` included (`rt.Null[[]byte]`). Every other column is NOT
-NULL and generated as `T`. A valid `rt.Null[time.Time]` binds as the stored form of a `time.Time`
-and reads as a NOT NULL one does, NULL aside (§go-types). A plain
-`[]byte` is therefore bytes and
-never NULL (§columns), and `rt.Bytes` is the one place that says
-so: generated code binds a `[]byte` field as `rt.Bytes(v.Body)`, whose
-`Value` writes nil as empty bytes, in a changeset write and on every
-key path (`Get`, `GetBy*`, `Update`, `Delete`), and scans it through
-`(*rt.Bytes)(&v.Body)`, which reads empty bytes as a non-nil empty
-slice even when the driver hands back nil, and NULL as an error; the
-dynamic layer binds every plain `[]byte` value through it, an
-operator argument, an `In` or `InList` item (§predicates), a
-`Set`, an `After` key and a `Raw` argument alike. `rt.Null[[]byte]`
-follows the same rule when valid: a nil `V` binds as empty bytes, a
-read is never nil, and JSON renders a valid nil `V` as `""` and NULL
-as `null`, reading `""` back as valid empty bytes and `null` as NULL.
-A plain `[]byte` field renders in JSON as `encoding/json` renders it,
-so nil renders as `null`: a row read from the database holds non-nil
-bytes and renders empty bytes as `""`, while a zero row, a
-changeset's `Row()` or a row the generated client decoded from GOB
-(§formats) holds nil and renders `null`, which `Cast` refuses
-on a column without `null` (§changesets). GOB does not carry an
-empty slice, so empty bytes in a GOB write body (§formats) arrive as
-nil, which is empty bytes again: stored as empty bytes in either kind
-of column, while NULL arrives as an invalid `rt.Null` and is stored as
-NULL. A declared type stored as `[]byte` binds and reads through its
-own methods (§types). A nullable
-column's handle, declared in `volt_models.go` with the rest
-(§changesets, §generated-query-surface), is an `rt.NullColumn`:
-comparisons and `Set` take plain `T`, NULL is explicit (`IsNull`,
-`SetNull`), so `Set(nil)` on a `[]byte` column assigns empty bytes.
+type, `[]byte` included (`rt.Null[rt.Bytes]`). Every other column is
+NOT NULL and generated as `T`. A valid `rt.Null[time.Time]` binds as
+the stored form of a `time.Time` and reads as a NOT NULL one does, NULL
+aside (§go-types).
+
+A `[]byte` column is `rt.Bytes`, a Go type whose underlying type is
+`string`, so its bytes cannot change once made: a row, a changeset, a
+predicate and an effect hold them without copying, and nothing a
+caller does to a slice it made them from or was handed reaches them.
+`rt.Bytes(b)` copies a slice in, `Bytes()` copies one out, and
+`string(b)` reads the bytes as text without a copy. It is bytes and
+never NULL (§columns), with one empty value and no nil: `Value` binds
+it as bytes, empty bytes for the empty value, in a changeset write, on
+every key path (`Get`, `GetBy*`, `Update`, `Delete`) and in the dynamic
+layer, an operator argument, an `In` or `InList` item (§predicates) and
+a `Set` alike; `Scan` reads bytes of its own, the empty value when the
+driver hands back a nil slice, and NULL as an error. A plain `[]byte`
+the dynamic layer binds, an `After` key or a `Raw` argument, binds as
+the `rt.Bytes` of it, nil as empty bytes. `rt.Null[rt.Bytes]` follows
+the same rules when valid and binds NULL when not. JSON renders
+`rt.Bytes` as base64, as `encoding/json` renders a `[]byte`, the empty
+value as `""` in a row read from the database, a zero row and a
+changeset's `Row()` alike, and NULL as `null`, reading `""` back as
+the empty value and `null` as NULL, which `Cast` refuses on a column
+without `null` (§changesets). GOB carries `rt.Bytes` as a string: what
+left arrives, the empty value included, stored as empty bytes in
+either kind of column, while NULL arrives as an invalid `rt.Null` and
+is stored as NULL. A declared type stored as `[]byte` binds and reads
+through its own methods (§types) and is a slice its own code may
+change. A nullable column's handle, declared in `volt_models.go` with
+the rest (§changesets, §generated-query-surface), is an
+`rt.NullColumn`: comparisons and `Set` take plain `T`, NULL is explicit
+(`IsNull`, `SetNull`), so `Set("")` on a `[]byte` column assigns empty
+bytes.
 
 ### Names
 

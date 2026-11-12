@@ -99,15 +99,21 @@ hand-written code never holds one.
    handler cannot take a handle as a parameter, and vet requires
    controller types to be empty structs, so it cannot smuggle one in a
    receiver.
-2. **Import boundaries.** `nao/rt` holds values and rendering and imports
-   no `database/sql`. `nao/run` holds `DB`, `Open`, `Run`, the statement
-   cache and migration execution, and is imported only by `main` and
-   generated route files. A hand-written file of a routes package imports
-   none of `nao/run`, `database/sql`, `net`, `net/http`, `os`, `os/exec`,
-   `math/rand`, `crypto/rand`. The layers test enforces all of it.
+2. **Import boundaries.** `nao/rt` holds values and rendering; it imports
+   `database/sql` and `database/sql/driver` for their conversion rules
+   and interfaces alone and performs no statement. `nao/run` holds `DB`,
+   `Open`, `Run`, the statement cache and migration execution, and is
+   imported only by `main` and generated route files. The layers test
+   enforces both. A hand-written file of a routes package imports none
+   of `nao/run`, `database/sql`, `net`, `os`, `os/exec`, `syscall`,
+   `math/rand`, `crypto/rand` and the like, and calls nothing of
+   `net/http`, `log` or `log/slog` that reaches the network, exits,
+   panics or changes what the program shares; vet enforces it
+   (`handlerimports`, `handlercalls`).
 3. **The clock and randomness come from the request.** The shim captures
    the time once; handlers read `r.Now()`. Tokens are made by the runtime.
-   Vet forbids `time.Now`, `time.Since` and `rand` in routes packages.
+   Vet forbids `time.Now`, `time.Since`, `time.Until` and `rand` in routes
+   packages.
 4. **No package state, no goroutines in routes packages.** Vet flags a
    package-level `var` that is not a constant table, an assignment or `++`
    whose target resolves to a package-level object, an `init` function,

@@ -168,20 +168,6 @@ func (f *Field) WireName() string {
 	return f.ColName
 }
 
-// PlainBytes reports whether the field is a non-nullable []byte column
-// (spec §columns).
-func (f *Field) PlainBytes() bool { return f.GoType == "[]byte" }
-
-// BindOf is the Go expression a statement binds for the field's value
-// expr: through rt.Bytes for plain bytes, so nil binds empty bytes (spec
-// §columns).
-func (f *Field) BindOf(expr string) string {
-	if f.PlainBytes() {
-		return "rt.Bytes(" + expr + ")"
-	}
-	return expr
-}
-
 // Field is the plan of the named column, nil when the table has none
 // (spec §mapping-to-go).
 func (t *Table) Field(colName string) *Field {
@@ -430,7 +416,7 @@ func (t *Table) TableSQL() string { return rt.Ident(t.SQLName) }
 func (t *Table) keyPreds() []rt.GenPred {
 	preds := make([]rt.GenPred, len(t.PK))
 	for i, f := range t.PK {
-		preds[i] = rt.Column[rt.Gen, any]{Name: f.ColName}.Eq(f.BindOf(f.Arg))
+		preds[i] = rt.Column[rt.Gen, any]{Name: f.ColName}.Eq(f.Arg)
 	}
 	return preds
 }
@@ -467,7 +453,7 @@ func (t *Table) GetSQL() (string, []string, error) {
 // GetBySQL renders the statement GetBy reads f by, with its binds (spec
 // §generated-query-surface).
 func (t *Table) GetBySQL(f *Field) (string, []string, error) {
-	by := rt.Column[rt.Gen, any]{Name: f.ColName}.Eq(f.BindOf(f.Arg))
+	by := rt.Column[rt.Gen, any]{Name: f.ColName}.Eq(f.Arg)
 	return genRender(rt.SelectRender(t.TableSQL(), t.ColumnList(), []rt.Opt[rt.Gen]{by}))
 }
 

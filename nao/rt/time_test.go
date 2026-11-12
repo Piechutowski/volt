@@ -73,7 +73,7 @@ func TestArgsBoundCanonical(t *testing.T) {
 	at := time.Date(2026, 3, 1, 13, 0, 0, 0, time.FixedZone("plus2", 2*3600))
 	const text = "2026-03-01 11:00:00"
 	var nilStamp *stamp
-	args := []any{1, at, "x", Some(at), stamp(at), nilStamp, Bytes(nil), Null[time.Time]{}}
+	args := []any{1, at, "x", Some(at), stamp(at), nilStamp, Bytes(""), Null[time.Time]{}}
 	bound, err := ArgsBound(args)
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +87,7 @@ func TestArgsBoundCanonical(t *testing.T) {
 	if _, ok := args[1].(time.Time); !ok {
 		t.Error("ArgsBound changed its input")
 	}
-	plain := []any{1, "2026-03-01 11:00:00", Bytes{1}}
+	plain := []any{1, "2026-03-01 11:00:00", Bytes("\x01")}
 	if got, err := ArgsBound(plain); err != nil || &got[0] != &plain[0] {
 		t.Error("ArgsBound copied arguments it did not change")
 	}

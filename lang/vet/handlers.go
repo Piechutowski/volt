@@ -31,9 +31,10 @@ type GoRule interface {
 }
 
 // GoFile is one parsed hand-written Go file with what the Go rules
-// read: whether it declares a handler or a scope-load function, which
-// the rules hold pure alike, the package-level variables and type
-// declarations of the whole package, and a way to place a node.
+// read: whether its package declares a handler or a scope-load
+// function, which holds every file of the package pure alike, the
+// package-level variables and type declarations of the whole package,
+// and a way to place a node.
 type GoFile struct {
 	Name     string
 	File     *goast.File
@@ -92,6 +93,7 @@ func RunGo(dir string, srcs []GoSource, bodies []Body, analyzers ...Analyzer) []
 	fset := gotoken.NewFileSet()
 	files := make([]*GoFile, 0, len(srcs))
 	vars, types := map[string]bool{}, map[string]*goast.TypeSpec{}
+	handlers := false
 	for _, src := range srcs {
 		name := path.Join(dir, src.Name)
 		f, err := goparser.ParseFile(fset, name, src.Text, goparser.ParseComments|goparser.SkipObjectResolution)
@@ -116,11 +118,12 @@ func RunGo(dir string, srcs []GoSource, bodies []Body, analyzers ...Analyzer) []
 				}
 			}
 		}
-		files = append(files, &GoFile{Name: name, File: f, Handlers: declaresHandler(f), fset: fset})
+		handlers = handlers || declaresHandler(f)
+		files = append(files, &GoFile{Name: name, File: f, fset: fset})
 	}
 	var out []diag.Diagnostic
 	for _, f := range files {
-		f.Vars, f.Types, f.Bodies = vars, types, bodies
+		f.Vars, f.Types, f.Bodies, f.Handlers = vars, types, bodies, handlers
 		for _, r := range rules {
 			out = append(out, r.Go(f)...)
 		}
@@ -219,14 +222,15 @@ func (r *handlerReceiverRule) Go(f *GoFile) []diag.Diagnostic {
 }
 
 var worldImports = []string{
-	"github.com/Piechutowski/volt/nao/run", "database/sql", "net", "os", "os/exec", "math/rand", "math/rand/v2", "crypto/rand",
+	"github.com/Piechutowski/volt/nao/run", "database/sql", "net", "net/rpc", "net/smtp", "os", "os/exec", "os/signal", "os/user",
+	"io/ioutil", "syscall", "log/syslog", "math/rand", "math/rand/v2", "crypto/rand",
 }
 
 type handlerImportsRule struct{ meta }
 
 var handlerImports = &handlerImportsRule{meta{
 	name: "handlerimports",
-	doc:  "reports a file that declares a handler or a scope load and imports a package that touches the world: the runner, database/sql, net, os, os/exec or a random source",
+	doc:  "reports a file of a package that declares a handler or a scope load and imports a package that touches the world: the runner, database/sql, net, os, os/exec, a random source or the like",
 }}
 
 func (r *handlerImportsRule) Go(f *GoFile) []diag.Diagnostic {
@@ -238,10 +242,51 @@ func (r *handlerImportsRule) Go(f *GoFile) []diag.Diagnostic {
 		p := strings.Trim(imp.Path.Value, `"`)
 		for _, w := range worldImports {
 			if p == w {
-				out = append(out, r.warnf(f.Pos(imp), "a file that declares a handler or a scope load imports %s; a handler describes its effects and the shim performs them (§requests-and-responses, §scope-loads)", p))
+				out = append(out, r.warnf(f.Pos(imp), "a file of a package that declares a handler or a scope load imports %s; a handler describes its effects and the shim performs them (§requests-and-responses, §scope-loads)", p))
 			}
 		}
 	}
+	return out
+}
+
+type worldRef struct {
+	node    goast.Node
+	spelled string
+	why     string
+}
+
+func importedAs(f *goast.File, p string) map[string]bool {
+	names := map[string]bool{}
+	for _, imp := range f.Imports {
+		switch {
+		case strings.Trim(imp.Path.Value, `"`) != p:
+		case imp.Name == nil:
+			names[path.Base(p)] = true
+		case imp.Name.Name != "_" && imp.Name.Name != ".":
+			names[imp.Name.Name] = true
+		}
+	}
+	return names
+}
+
+func worldRefs(f *goast.File, p string, names map[string]string) []worldRef {
+	locals := importedAs(f, p)
+	if len(locals) == 0 {
+		return nil
+	}
+	var out []worldRef
+	goast.Inspect(f, func(n goast.Node) bool {
+		sel, ok := n.(*goast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		if x, ok := sel.X.(*goast.Ident); ok && locals[x.Name] {
+			if why, ok := names[sel.Sel.Name]; ok {
+				out = append(out, worldRef{node: sel, spelled: path.Base(p) + "." + sel.Sel.Name, why: why})
+			}
+		}
+		return true
+	})
 	return out
 }
 
@@ -249,25 +294,64 @@ type handlerClockRule struct{ meta }
 
 var handlerClock = &handlerClockRule{meta{
 	name: "handlerclock",
-	doc:  "reports time.Now, time.Since and time.Until in a file that declares a handler or a scope load, which reads the clock from the request instead",
+	doc:  "reports time.Now, time.Since and time.Until, called or not, in a file of a package that declares a handler or a scope load, which reads the clock from the request instead",
 }}
+
+var clockNames = map[string]string{"Now": "", "Since": "", "Until": ""}
 
 func (r *handlerClockRule) Go(f *GoFile) []diag.Diagnostic {
 	if !f.Handlers {
 		return nil
 	}
 	var out []diag.Diagnostic
-	goast.Inspect(f.File, func(n goast.Node) bool {
-		call, ok := n.(*goast.CallExpr)
-		if !ok {
-			return true
+	for _, ref := range worldRefs(f.File, "time", clockNames) {
+		out = append(out, r.warnf(f.Pos(ref.node), "%s reads the clock; a handler reads r.Now(), the time the shim captured (§requests-and-responses)", ref.spelled))
+	}
+	return out
+}
+
+type handlerCallsRule struct{ meta }
+
+var handlerCalls = &handlerCallsRule{meta{
+	name: "handlercalls",
+	doc:  "reports, in a file of a package that declares a handler or a scope load, what of log, log/slog and net/http reaches beyond a log line or a value: exiting, panicking, the shared loggers and mux, and a request or a server",
+}}
+
+const (
+	whyExits   = "exits the program, deferred functions unrun"
+	whyPanics  = "panics behind a log line; a handler returns volt.Fail instead"
+	whyShared  = "changes what every part of the program shares"
+	whyRequest = "reaches the network; a handler describes its effects and the shim performs them"
+)
+
+var callsNames = []struct {
+	path  string
+	names map[string]string
+}{
+	{"log", map[string]string{
+		"Fatal": whyExits, "Fatalf": whyExits, "Fatalln": whyExits,
+		"Panic": whyPanics, "Panicf": whyPanics, "Panicln": whyPanics,
+		"SetOutput": whyShared, "SetFlags": whyShared, "SetPrefix": whyShared,
+	}},
+	{"log/slog", map[string]string{"SetDefault": whyShared, "SetLogLoggerLevel": whyShared}},
+	{"net/http", map[string]string{
+		"Handle": whyShared, "HandleFunc": whyShared, "DefaultServeMux": whyShared,
+		"Get": whyRequest, "Head": whyRequest, "Post": whyRequest, "PostForm": whyRequest,
+		"DefaultClient": whyRequest, "DefaultTransport": whyRequest,
+		"ListenAndServe": whyRequest, "ListenAndServeTLS": whyRequest, "Serve": whyRequest, "ServeTLS": whyRequest,
+	}},
+}
+
+func (r *handlerCallsRule) Go(f *GoFile) []diag.Diagnostic {
+	if !f.Handlers {
+		return nil
+	}
+	var out []diag.Diagnostic
+	for _, c := range callsNames {
+		for _, ref := range worldRefs(f.File, c.path, c.names) {
+			out = append(out, r.warnf(f.Pos(ref.node), "%s %s (§requests-and-responses)", ref.spelled, ref.why))
 		}
-		switch spelled(call.Fun) {
-		case "time.Now", "time.Since", "time.Until":
-			out = append(out, r.warnf(f.Pos(call), "%s reads the clock; a handler reads r.Now(), the time the shim captured (§requests-and-responses)", spelled(call.Fun)))
-		}
-		return true
-	})
+	}
 	return out
 }
 

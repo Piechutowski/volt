@@ -44,9 +44,9 @@ func (r *nilBlobRows) Next(dest []driver.Value) error {
 func init() { sql.Register("rt_nilblob", nilBlobDriver{}) }
 
 func TestBytesValue(t *testing.T) {
-	v, err := Bytes(nil).Value()
+	v, err := Bytes("").Value()
 	if b, ok := v.([]byte); err != nil || !ok || b == nil || len(b) != 0 {
-		t.Errorf("Bytes(nil).Value() = %#v, %v; want non-nil empty bytes", v, err)
+		t.Errorf(`Bytes("").Value() = %#v, %v; want non-nil empty bytes`, v, err)
 	}
 	v, err = Bytes("hi").Value()
 	if b, ok := v.([]byte); err != nil || !ok || string(b) != "hi" {
@@ -54,35 +54,49 @@ func TestBytesValue(t *testing.T) {
 	}
 }
 
-func TestBytesScanTypedNil(t *testing.T) {
-	var b []byte
-	if err := (*Bytes)(&b).Scan([]byte(nil)); err != nil || b == nil || len(b) != 0 {
-		t.Errorf("Scan of a typed nil []byte = %#v, %v; want non-nil empty bytes", b, err)
+func TestBytesCopies(t *testing.T) {
+	in := []byte("hi")
+	b := Bytes(in)
+	in[0] = 'X'
+	out := b.Bytes()
+	out[1] = 'Y'
+	if b != "hi" {
+		t.Errorf("Bytes shares a slice it was made from or handed out: %q", b)
+	}
+	if Bytes("").Bytes() == nil {
+		t.Error("Bytes() of empty bytes is nil; want non-nil empty bytes")
+	}
+}
+
+func TestBytesScan(t *testing.T) {
+	var b Bytes
+	if err := b.Scan([]byte(nil)); err != nil || b != "" {
+		t.Errorf("Scan of a typed nil []byte = %q, %v; want empty bytes", b, err)
 	}
 	src := []byte("abc")
-	if err := (*Bytes)(&b).Scan(src); err != nil || string(b) != "abc" {
+	if err := b.Scan(src); err != nil || b != "abc" {
 		t.Errorf("Scan(abc) = %q, %v", b, err)
 	}
 	src[0] = 'X'
-	if string(b) != "abc" {
+	if b != "abc" {
 		t.Errorf("Scan shares the driver's buffer: %q", b)
 	}
-	if err := (*Bytes)(&b).Scan("text"); err != nil || string(b) != "text" {
+	if err := b.Scan("text"); err != nil || b != "text" {
 		t.Errorf("Scan(text) = %q, %v", b, err)
 	}
-	if err := (*Bytes)(&b).Scan(nil); err == nil {
-		t.Errorf("Scan(NULL) = %q, want an error: a plain []byte is never NULL", b)
+	if err := b.Scan(nil); err == nil {
+		t.Errorf("Scan(NULL) = %q, want an error: plain bytes are never NULL", b)
 	}
 
-	var n Null[[]byte]
-	if err := n.Scan([]byte(nil)); err != nil || !n.Valid || n.V == nil || len(n.V) != 0 {
-		t.Errorf("Null[[]byte].Scan of a typed nil = %#v, %v; want valid non-nil empty bytes", n, err)
+	var n Null[Bytes]
+	if err := n.Scan([]byte(nil)); err != nil || !n.Valid || n.V != "" {
+		t.Errorf("Null[Bytes].Scan of a typed nil = %#v, %v; want valid empty bytes", n, err)
 	}
-	if err := n.Scan(nil); err != nil || n.Valid || n.V != nil {
-		t.Errorf("Null[[]byte].Scan(NULL) = %#v, %v; want NULL", n, err)
+	if err := n.Scan(nil); err != nil || n.Valid || n.V != "" {
+		t.Errorf("Null[Bytes].Scan(NULL) = %#v, %v; want NULL", n, err)
 	}
-	if err := n.Scan([]byte("hi")); err != nil || !n.Valid || string(n.V) != "hi" {
-		t.Errorf("Null[[]byte].Scan(hi) = %#v, %v", n, err)
+	if err := n.Scan([]byte("hi")); err != nil || !n.Valid || n.V != "hi" {
+		t.Errorf("Null[Bytes].Scan(hi) = %#v, %v", n, err)
 	}
 }
 
@@ -93,17 +107,13 @@ func TestBytesScanThroughDatabaseSQL(t *testing.T) {
 	}
 	defer db.Close()
 
-	var plain []byte
-	if err := db.QueryRow("q").Scan(&plain); err != nil || plain != nil {
-		t.Fatalf("plain scan = %#v, %v; the driver's typed nil reaches *[]byte as nil", plain, err)
+	var b Bytes
+	if err := db.QueryRow("q").Scan(&b); err != nil || b != "" {
+		t.Errorf("Bytes scan = %q, %v; want empty bytes", b, err)
 	}
-	var b []byte
-	if err := db.QueryRow("q").Scan((*Bytes)(&b)); err != nil || b == nil || len(b) != 0 {
-		t.Errorf("Bytes scan = %#v, %v; want non-nil empty bytes", b, err)
-	}
-	var n Null[[]byte]
-	if err := db.QueryRow("q").Scan(&n); err != nil || !n.Valid || n.V == nil || len(n.V) != 0 {
-		t.Errorf("Null[[]byte] scan = %#v, %v; want valid non-nil empty bytes", n, err)
+	var n Null[Bytes]
+	if err := db.QueryRow("q").Scan(&n); err != nil || !n.Valid || n.V != "" {
+		t.Errorf("Null[Bytes] scan = %#v, %v; want valid empty bytes", n, err)
 	}
 }
 
@@ -117,15 +127,11 @@ func (p pngBlob) Value() (driver.Value, error) {
 }
 
 func TestNullBytesValue(t *testing.T) {
-	v, err := Some([]byte(nil)).Value()
+	v, err := Some(Bytes("")).Value()
 	if b, ok := v.([]byte); err != nil || !ok || b == nil || len(b) != 0 {
-		t.Errorf("Some(nil []byte).Value() = %#v, %v; want non-nil empty bytes", v, err)
+		t.Errorf(`Some(Bytes("")).Value() = %#v, %v; want non-nil empty bytes`, v, err)
 	}
-	v, err = Some([]byte{}).Value()
-	if b, ok := v.([]byte); err != nil || !ok || b == nil || len(b) != 0 {
-		t.Errorf("Some([]byte{}).Value() = %#v, %v; want non-nil empty bytes", v, err)
-	}
-	v, err = Null[[]byte]{}.Value()
+	v, err = Null[Bytes]{}.Value()
 	if err != nil || v != nil {
 		t.Errorf("NULL Value() = %#v, %v; want nil", v, err)
 	}
@@ -135,34 +141,40 @@ func TestNullBytesValue(t *testing.T) {
 	}
 }
 
-func TestNullBytesJSON(t *testing.T) {
+func TestBytesJSON(t *testing.T) {
 	cases := []struct {
-		n    Null[[]byte]
+		v    any
 		want string
 	}{
-		{Some([]byte(nil)), `""`},
-		{Some([]byte{}), `""`},
-		{Some([]byte("hi")), `"aGk="`},
-		{Null[[]byte]{}, `null`},
+		{Bytes(""), `""`},
+		{Bytes("hi"), `"aGk="`},
+		{Some(Bytes("")), `""`},
+		{Some(Bytes("hi")), `"aGk="`},
+		{Null[Bytes]{}, `null`},
 	}
 	for _, c := range cases {
-		got, err := json.Marshal(c.n)
+		got, err := json.Marshal(c.v)
 		if err != nil || string(got) != c.want {
-			t.Errorf("Marshal(%#v) = %s, %v; want %s", c.n, got, err, c.want)
+			t.Errorf("Marshal(%#v) = %s, %v; want %s", c.v, got, err, c.want)
 		}
 	}
 
-	var n Null[[]byte]
-	if err := json.Unmarshal([]byte(`""`), &n); err != nil || !n.Valid || n.V == nil || len(n.V) != 0 {
+	var b Bytes
+	if err := json.Unmarshal([]byte(`"aGk="`), &b); err != nil || b != "hi" {
+		t.Errorf(`Unmarshal("aGk=") = %q, %v; want hi`, b, err)
+	}
+	if err := json.Unmarshal([]byte(`null`), &b); err != nil || b != "hi" {
+		t.Errorf("Unmarshal(null) = %q, %v; want the bytes left as they were", b, err)
+	}
+	if err := json.Unmarshal([]byte(`"not base64"`), &b); err == nil {
+		t.Errorf("Unmarshal of text that is not base64 = %q; want an error", b)
+	}
+	var n Null[Bytes]
+	if err := json.Unmarshal([]byte(`""`), &n); err != nil || !n.Valid || n.V != "" {
 		t.Errorf(`Unmarshal("") = %#v, %v; want valid empty bytes`, n, err)
 	}
 	if err := json.Unmarshal([]byte(`null`), &n); err != nil || n.Valid {
 		t.Errorf("Unmarshal(null) = %#v, %v; want NULL", n, err)
-	}
-
-	got, err := json.Marshal(Bytes(nil))
-	if err != nil || string(got) != `""` {
-		t.Errorf("Marshal(Bytes(nil)) = %s, %v; want \"\"", got, err)
 	}
 }
 
@@ -174,8 +186,8 @@ func bytesIs(v any, want string) bool {
 }
 
 func TestDynamicLayerBindsBytes(t *testing.T) {
-	data := Column[blobRow, []byte]{Name: "data"}
-	thumb := NullColumn[blobRow, []byte]{Column[blobRow, []byte]{Name: "thumb"}}
+	data := Column[blobRow, Bytes]{Name: "data"}
+	thumb := NullColumn[blobRow, Bytes]{Column[blobRow, Bytes]{Name: "thumb"}}
 	png := Column[blobRow, pngBlob]{Name: "png"}
 
 	emptyBytes := func(t *testing.T, what string, a any) {
@@ -187,7 +199,7 @@ func TestDynamicLayerBindsBytes(t *testing.T) {
 	}
 
 	_, args, err := SelectRender(`"blobs"`, `"data"`, []Opt[blobRow]{
-		data.Eq(nil), data.In(nil, []byte("x")), Raw[blobRow]("data = ?", []byte(nil)),
+		data.Eq(""), data.In("", "x"), Raw[blobRow]("data = ?", []byte(nil)),
 		OrderBy(data.Asc()), After[blobRow]([]byte(nil)),
 	})
 	if err != nil {
@@ -196,17 +208,17 @@ func TestDynamicLayerBindsBytes(t *testing.T) {
 	if len(args) != 5 {
 		t.Fatalf("args = %#v", args)
 	}
-	emptyBytes(t, "Eq(nil)", args[0])
-	emptyBytes(t, "In(nil, ...)", args[1])
+	emptyBytes(t, `Eq("")`, args[0])
+	emptyBytes(t, `In("", ...)`, args[1])
 	emptyBytes(t, "Raw arg nil", args[3])
 	emptyBytes(t, "After(nil)", args[4])
 
-	_, args, err = UpdateRender(`"blobs"`, []Assign[blobRow]{data.Set(nil), thumb.Set(nil), thumb.SetNull()}, []Pred[blobRow]{Raw[blobRow]("1 = 1")})
+	_, args, err = UpdateRender(`"blobs"`, []Assign[blobRow]{data.Set(""), thumb.Set(""), thumb.SetNull()}, []Pred[blobRow]{Raw[blobRow]("1 = 1")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	emptyBytes(t, "Set(nil)", args[0])
-	emptyBytes(t, "NullColumn Set(nil)", args[1])
+	emptyBytes(t, `Set("")`, args[0])
+	emptyBytes(t, `NullColumn Set("")`, args[1])
 	if args[2] != nil {
 		t.Errorf("SetNull binds %#v, want NULL", args[2])
 	}
@@ -220,7 +232,7 @@ func TestDynamicLayerBindsBytes(t *testing.T) {
 	}
 
 	query, args, err := CountRender(`"blobs"`, []Pred[blobRow]{
-		data.InList([][]byte{nil}), data.InList([][]byte{{}, []byte("x")}),
+		data.InList([]Bytes{""}), data.InList([]Bytes{"", "x"}),
 		png.InList([]pngBlob{nil, pngBlob("hi")}), data.InList(nil),
 	})
 	if err != nil {
@@ -232,8 +244,8 @@ func TestDynamicLayerBindsBytes(t *testing.T) {
 	if len(args) != 6 {
 		t.Fatalf("args = %#v", args)
 	}
-	emptyBytes(t, "InList([nil])", args[0])
-	emptyBytes(t, "InList([{}, x])", args[1])
+	emptyBytes(t, `InList([""])`, args[0])
+	emptyBytes(t, `InList(["", x])`, args[1])
 	if v, err := driver.DefaultParameterConverter.ConvertValue(args[2]); err != nil || !bytesIs(v, "x") {
 		t.Errorf("InList item x binds %#v, %v", v, err)
 	}
@@ -248,13 +260,13 @@ func TestDynamicLayerBindsBytes(t *testing.T) {
 	}
 }
 
-func TestParamsJSONRendersNilBytesEmpty(t *testing.T) {
+func TestParamsJSONRendersEmptyBytes(t *testing.T) {
 	type blob struct {
-		Data  []byte       `json:"data"`
-		Thumb Null[[]byte] `json:"thumb"`
-		Icon  Null[[]byte] `json:"icon"`
+		Data  Bytes       `json:"data"`
+		Thumb Null[Bytes] `json:"thumb"`
+		Icon  Null[Bytes] `json:"icon"`
 	}
-	p := ParamsOf(blob{}, Mark{Wire: "data", Value: []byte(nil)}, Mark{Wire: "thumb", Value: Some([]byte(nil))}, Mark{Wire: "icon", Value: Null[[]byte]{}})
+	p := ParamsOf(blob{}, Mark{Wire: "data", Value: Bytes("")}, Mark{Wire: "thumb", Value: Some(Bytes(""))}, Mark{Wire: "icon", Value: Null[Bytes]{}})
 	got, err := json.Marshal(p)
 	if want := `{"data":"","icon":null,"thumb":""}`; err != nil || string(got) != want {
 		t.Errorf("MarshalJSON = %s, %v; want %s", got, err, want)

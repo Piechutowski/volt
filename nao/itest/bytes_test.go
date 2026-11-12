@@ -1,10 +1,10 @@
-// Bytes on real SQLite (spec §columns, §nullability): a []byte
-// column without null is bytes and nil writes empty bytes on every bind
-// path, one with null is rt.Null[[]byte] and NULL is only Valid false,
-// reads never hand back nil for empty bytes, and JSON and GOB carry both
-// kinds. The read tests run on mattn/go-sqlite3 and on the same driver
-// behind a shim that reads empty bytes as a nil []byte, as
-// modernc.org/sqlite does.
+// Bytes on real SQLite (spec §columns, §nullability): a []byte column
+// without null is rt.Bytes, whose empty value writes empty bytes on
+// every bind path, one with null is rt.Null[rt.Bytes] and NULL is only
+// Valid false, a row and a changeset share no bytes with their holder,
+// and JSON and GOB carry both kinds. The read tests run on
+// mattn/go-sqlite3 and on the same driver behind a shim that reads empty
+// bytes as a nil []byte, as modernc.org/sqlite does.
 package itest
 
 import (
@@ -118,10 +118,10 @@ func stored(t *testing.T, db run.DB, table, col, where string, args ...any) (str
 	return typ, int(n.Int64)
 }
 
-func emptyBytes(t *testing.T, what string, b []byte) {
+func emptyBytes(t *testing.T, what string, b rt.Bytes) {
 	t.Helper()
-	if b == nil || len(b) != 0 {
-		t.Errorf("%s = %#v; want non-nil empty bytes", what, b)
+	if b != "" {
+		t.Errorf("%s = %q; want empty bytes", what, b)
 	}
 }
 
@@ -132,15 +132,15 @@ func emptyBlob(t *testing.T, db run.DB, table, col, where string, args ...any) {
 	}
 }
 
-func TestBytesNotNullNilWritesEmptyBytes(t *testing.T) {
+func TestBytesNotNullEmptyWritesEmptyBytes(t *testing.T) {
 	for _, drv := range bytesDrivers {
 		t.Run(drv, func(t *testing.T) {
 			ctx := context.Background()
 			db := bytesDB(t, drv)
 
-			a, err := run.Run(ctx, db, AttachmentCreate(AttachmentNew().NameSet("a").BodySet(nil).DigestSet([]byte("d"))))
+			a, err := run.Run(ctx, db, AttachmentCreate(AttachmentNew().NameSet("a").BodySet("").DigestSet("d")))
 			if err != nil {
-				t.Fatalf("Create with a nil NOT NULL []byte: %v", err)
+				t.Fatalf("Create with empty NOT NULL bytes: %v", err)
 			}
 			emptyBlob(t, db, "attachments", "body", "id = ?", a.ID)
 			emptyBytes(t, "Create's returned body", a.Body)
@@ -170,7 +170,7 @@ func TestBytesNotNullNilWritesEmptyBytes(t *testing.T) {
 			}
 			emptyBytes(t, "projected select body", slim[0].Body)
 			heavy, err := run.Run(ctx, db, AttachmentHeavy("a"))
-			if err != nil || len(heavy) != 1 || string(heavy[0].Digest) != "d" {
+			if err != nil || len(heavy) != 1 || heavy[0].Digest != "d" {
 				t.Fatalf("AttachmentHeavy = %v, %v", heavy, err)
 			}
 			emptyBytes(t, "derived select body", heavy[0].Body)
@@ -186,26 +186,52 @@ func TestBytesNotNullNilWritesEmptyBytes(t *testing.T) {
 			}
 			emptyBytes(t, "Update of the row read", again.Body)
 
-			upd, err := run.Run(ctx, db, AttachmentUpdate(a.Changeset().BodySet([]byte("x"))))
-			if err != nil || string(upd.Body) != "x" {
+			upd, err := run.Run(ctx, db, AttachmentUpdate(a.Changeset().BodySet("x")))
+			if err != nil || upd.Body != "x" {
 				t.Fatalf("Update body x = %+v, %v", upd, err)
 			}
-			upd, err = run.Run(ctx, db, AttachmentUpdate(upd.Changeset().BodySet(nil)))
+			upd, err = run.Run(ctx, db, AttachmentUpdate(upd.Changeset().BodySet("")))
 			if err != nil {
-				t.Fatalf("Update with a nil NOT NULL []byte: %v", err)
+				t.Fatalf("Update with empty NOT NULL bytes: %v", err)
 			}
 			emptyBlob(t, db, "attachments", "body", "id = ?", a.ID)
 			emptyBytes(t, "Update's returned body", upd.Body)
 
-			from, err := run.Run(ctx, db, AttachmentCreate(AttachmentNew().From(Attachment{Name: "b", Digest: []byte("d")})))
+			from, err := run.Run(ctx, db, AttachmentCreate(AttachmentNew().From(Attachment{Name: "b", Digest: "d"})))
 			if err != nil {
-				t.Fatalf("From a row whose body is nil: %v", err)
+				t.Fatalf("From a row whose body is the zero value: %v", err)
 			}
 			emptyBlob(t, db, "attachments", "body", "id = ?", from.ID)
 
-			_, err = run.Run(ctx, db, AttachmentCreate(AttachmentNew().NameSet("c").DigestSet([]byte("d"))))
+			_, err = run.Run(ctx, db, AttachmentCreate(AttachmentNew().NameSet("c").DigestSet("d")))
 			invalidOf(t, err, "not_null", "body")
 		})
+	}
+}
+
+func TestBytesShareNothing(t *testing.T) {
+	ctx := context.Background()
+	db := bytesDB(t, "sqlite3")
+
+	buf := []byte("hello")
+	cs := AttachmentNew().NameSet("shared").BodySet(rt.Bytes(buf)).DigestSet("d")
+	buf[0] = 'J'
+	row := cs.Row()
+	out := row.Body.Bytes()
+	out[0] = 'M'
+	if cs.Row().Body != "hello" {
+		t.Errorf("the changeset's body changed with the caller's slices: %q", cs.Row().Body)
+	}
+	a, err := run.Run(ctx, db, AttachmentCreate(cs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Body != "hello" {
+		t.Errorf("stored body = %q; want hello", a.Body)
+	}
+	a.Body.Bytes()[0] = 'X'
+	if got, err := run.Run(ctx, db, AttachmentGet(a.ID)); err != nil || got.Body != "hello" || a.Body != "hello" {
+		t.Errorf("a row's bytes changed through a copy it handed out: %q, %q, %v", a.Body, got.Body, err)
 	}
 }
 
@@ -214,20 +240,19 @@ func TestBytesNullableRoundTrip(t *testing.T) {
 		t.Run(drv, func(t *testing.T) {
 			ctx := context.Background()
 			db := bytesDB(t, drv)
-			base := AttachmentNew().BodySet([]byte("b")).DigestSet([]byte("d"))
+			base := AttachmentNew().BodySet("b").DigestSet("d")
 
 			cases := []struct {
 				name  string
 				cs    AttachmentChangeset
 				typ   string
 				valid bool
-				data  string
+				data  rt.Bytes
 			}{
 				{"unset", base.NameSet("unset"), "null", false, ""},
-				{"null", base.NameSet("null").ThumbSet(rt.Null[[]byte]{}), "null", false, ""},
-				{"valid nil", base.NameSet("valid nil").ThumbSet(rt.Some([]byte(nil))), "blob", true, ""},
-				{"valid empty", base.NameSet("valid empty").ThumbSet(rt.Some([]byte{})), "blob", true, ""},
-				{"data", base.NameSet("data").ThumbSet(rt.Some([]byte("png"))), "blob", true, "png"},
+				{"null", base.NameSet("null").ThumbSet(rt.Null[rt.Bytes]{}), "null", false, ""},
+				{"valid empty", base.NameSet("valid empty").ThumbSet(rt.Some[rt.Bytes]("")), "blob", true, ""},
+				{"data", base.NameSet("data").ThumbSet(rt.Some[rt.Bytes]("png")), "blob", true, "png"},
 			}
 			for _, c := range cases {
 				a, err := run.Run(ctx, db, AttachmentCreate(c.cs))
@@ -241,11 +266,8 @@ func TestBytesNullableRoundTrip(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if got.Thumb.Valid != c.valid || string(got.Thumb.V) != c.data {
+				if got.Thumb.Valid != c.valid || got.Thumb.V != c.data {
 					t.Errorf("%s: read back %#v", c.name, got.Thumb)
-				}
-				if c.valid && got.Thumb.V == nil {
-					t.Errorf("%s: a valid thumb read back as nil; want non-nil bytes", c.name)
 				}
 				slim, err := run.Run(ctx, db, AttachmentSlim(c.name))
 				if err != nil || len(slim) != 1 {
@@ -257,9 +279,9 @@ func TestBytesNullableRoundTrip(t *testing.T) {
 				}
 				for _, sel := range []struct {
 					what  string
-					thumb rt.Null[[]byte]
+					thumb rt.Null[rt.Bytes]
 				}{{"projected", slim[0].Thumb}, {"derived", heavy[0].Thumb}} {
-					if sel.thumb.Valid != c.valid || string(sel.thumb.V) != c.data || (c.valid && sel.thumb.V == nil) {
+					if sel.thumb.Valid != c.valid || sel.thumb.V != c.data {
 						t.Errorf("%s: %s select thumb = %#v", c.name, sel.what, sel.thumb)
 					}
 				}
@@ -269,9 +291,9 @@ func TestBytesNullableRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			n, err := run.Run(ctx, db, AttachmentUpdateWhere(AttachmentSet(AttachmentThumb.Set(nil)), AttachmentID.Eq(a.ID)))
+			n, err := run.Run(ctx, db, AttachmentUpdateWhere(AttachmentSet(AttachmentThumb.Set("")), AttachmentID.Eq(a.ID)))
 			if err != nil || n != 1 {
-				t.Fatalf("UpdateWhere thumb Set(nil) = %d, %v", n, err)
+				t.Fatalf(`UpdateWhere thumb Set("") = %d, %v`, n, err)
 			}
 			emptyBlob(t, db, "attachments", "thumb", "id = ?", a.ID)
 			n, err = run.Run(ctx, db, AttachmentUpdateWhere(AttachmentSet(AttachmentThumb.SetNull()), AttachmentID.Eq(a.ID)))
@@ -293,45 +315,41 @@ func TestBytesKeyPaths(t *testing.T) {
 	ctx := context.Background()
 	db := bytesDB(t, "sqlite3")
 
-	if _, err := run.Run(ctx, db, BlobCreate(BlobNew().HashSet(nil).TagSet(nil))); err != nil {
-		t.Fatalf("Create with nil []byte key and unique column: %v", err)
+	if _, err := run.Run(ctx, db, BlobCreate(BlobNew().HashSet("").TagSet(""))); err != nil {
+		t.Fatalf("Create with an empty bytes key and unique column: %v", err)
 	}
-	if _, err := run.Run(ctx, db, BlobCreate(BlobNew().HashSet([]byte("h")).TagSet([]byte("t")).SizeSet(1))); err != nil {
+	if _, err := run.Run(ctx, db, BlobCreate(BlobNew().HashSet("h").TagSet("t").SizeSet(1))); err != nil {
 		t.Fatal(err)
 	}
 	emptyBlob(t, db, "blobs", "hash", "size = 0")
 	emptyBlob(t, db, "blobs", "tag", "size = 0")
 
-	for _, key := range [][]byte{nil, {}} {
-		if b, err := run.Run(ctx, db, BlobGet(key)); err != nil || b.Size != 0 {
-			t.Errorf("Get(%#v) = %+v, %v; want the row keyed by empty bytes", key, b, err)
-		}
-		if b, err := run.Run(ctx, db, BlobGetByTag(key)); err != nil || b.Size != 0 {
-			t.Errorf("GetByTag(%#v) = %+v, %v; want the row tagged by empty bytes", key, b, err)
-		}
+	if b, err := run.Run(ctx, db, BlobGet("")); err != nil || b.Size != 0 {
+		t.Errorf(`Get("") = %+v, %v; want the row keyed by empty bytes`, b, err)
 	}
-	many, err := run.Run(ctx, db, BlobGetMany([][]byte{nil, []byte("h")}))
+	if b, err := run.Run(ctx, db, BlobGetByTag("")); err != nil || b.Size != 0 {
+		t.Errorf(`GetByTag("") = %+v, %v; want the row tagged by empty bytes`, b, err)
+	}
+	many, err := run.Run(ctx, db, BlobGetMany([]rt.Bytes{"", "h"}))
 	if err != nil || len(many) != 2 {
-		t.Errorf("GetMany(nil, h) = %+v, %v; want both rows", many, err)
+		t.Errorf(`GetMany("", h) = %+v, %v; want both rows`, many, err)
 	}
 
 	if b, err := run.Run(ctx, db, BlobUpdate(Blob{}.Changeset().SizeSet(7))); err != nil || b.Size != 7 {
-		t.Errorf("Update keyed by a nil hash = %+v, %v; want the row keyed by empty bytes", b, err)
+		t.Errorf("Update keyed by the zero hash = %+v, %v; want the row keyed by empty bytes", b, err)
 	}
 
-	rows, err := run.Run(ctx, db, BlobQuery(BlobHash.Eq(nil)))
+	rows, err := run.Run(ctx, db, BlobQuery(BlobHash.Eq("")))
 	if err != nil || len(rows) != 1 || rows[0].Size != 7 {
-		t.Errorf("Query Eq(nil) = %+v, %v", rows, err)
+		t.Errorf(`Query Eq("") = %+v, %v`, rows, err)
 	}
-	if n, err := run.Run(ctx, db, BlobCount(BlobTag.In(nil, []byte("t")))); err != nil || n != 2 {
-		t.Errorf("Count In(nil, t) = %d, %v; want 2", n, err)
+	if n, err := run.Run(ctx, db, BlobCount(BlobTag.In("", "t"))); err != nil || n != 2 {
+		t.Errorf(`Count In("", t) = %d, %v; want 2`, n, err)
 	}
-	for _, list := range [][][]byte{{nil, []byte("t")}, {{}, []byte("t")}} {
-		if n, err := run.Run(ctx, db, BlobCount(BlobTag.InList(list))); err != nil || n != 2 {
-			t.Errorf("Count InList(%#v) = %d, %v; want 2, as In matches", list, n, err)
-		}
+	if n, err := run.Run(ctx, db, BlobCount(BlobTag.InList([]rt.Bytes{"", "t"}))); err != nil || n != 2 {
+		t.Errorf(`Count InList("", t) = %d, %v; want 2, as In matches`, n, err)
 	}
-	if n, err := run.Run(ctx, db, BlobCount(BlobTag.InList([][]byte{[]byte("t")}))); err != nil || n != 1 {
+	if n, err := run.Run(ctx, db, BlobCount(BlobTag.InList([]rt.Bytes{"t"}))); err != nil || n != 1 {
 		t.Errorf("Count InList(t) = %d, %v; want 1", n, err)
 	}
 	hash := rt.Column[Blob, hashKey]{Name: "hash"}
@@ -342,17 +360,17 @@ func TestBytesKeyPaths(t *testing.T) {
 		t.Errorf("Count Raw with a nil []byte arg = %d, %v; want 1", n, err)
 	}
 	after, err := run.Run(ctx, db, BlobQuery(BlobOrderBy(BlobHash.Asc()), BlobAfter([]byte(nil))))
-	if err != nil || len(after) != 1 || string(after[0].Hash) != "h" {
+	if err != nil || len(after) != 1 || after[0].Hash != "h" {
 		t.Errorf("Query After(nil) = %+v, %v; want the one row after empty bytes", after, err)
 	}
-	if _, err := run.Run(ctx, db, BlobDelete(nil)); err != nil {
-		t.Errorf("Delete(nil) = %v; want the row keyed by empty bytes deleted", err)
+	if _, err := run.Run(ctx, db, BlobDelete("")); err != nil {
+		t.Errorf(`Delete("") = %v; want the row keyed by empty bytes deleted`, err)
 	}
 	if n, err := run.Run(ctx, db, BlobCount()); err != nil || n != 1 {
-		t.Errorf("Count after Delete(nil) = %d, %v; want 1", n, err)
+		t.Errorf(`Count after Delete("") = %d, %v; want 1`, n, err)
 	}
-	if n, err := run.Run(ctx, db, BlobUpdateWhere(BlobSet(BlobTag.Set(nil)), BlobHash.Eq([]byte("h")))); err != nil || n != 1 {
-		t.Errorf("UpdateWhere tag Set(nil) = %d, %v; want one row set to empty bytes", n, err)
+	if n, err := run.Run(ctx, db, BlobUpdateWhere(BlobSet(BlobTag.Set("")), BlobHash.Eq("h"))); err != nil || n != 1 {
+		t.Errorf(`UpdateWhere tag Set("") = %d, %v; want one row set to empty bytes`, n, err)
 	}
 	emptyBlob(t, db, "blobs", "tag", "hash = ?", []byte("h"))
 }
@@ -363,11 +381,11 @@ func TestBytesJSON(t *testing.T) {
 			ctx := context.Background()
 			db := bytesDB(t, drv)
 
-			empty, err := run.Run(ctx, db, AttachmentCreate(AttachmentNew().NameSet("empty").BodySet(nil).ThumbSet(rt.Some([]byte(nil))).DigestSet([]byte("d"))))
+			empty, err := run.Run(ctx, db, AttachmentCreate(AttachmentNew().NameSet("empty").BodySet("").ThumbSet(rt.Some[rt.Bytes]("")).DigestSet("d")))
 			if err != nil {
 				t.Fatal(err)
 			}
-			nul, err := run.Run(ctx, db, AttachmentCreate(AttachmentNew().NameSet("nul").BodySet([]byte("hi")).DigestSet([]byte("d"))))
+			nul, err := run.Run(ctx, db, AttachmentCreate(AttachmentNew().NameSet("nul").BodySet("hi").DigestSet("d")))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -383,8 +401,11 @@ func TestBytesJSON(t *testing.T) {
 			if string(doc) != want {
 				t.Errorf("rows as JSON:\n got %s\nwant %s", doc, want)
 			}
+			if zero, err := json.Marshal(Attachment{}); err != nil || string(zero) != `{"id":0,"name":"","body":"","thumb":null,"digest":""}` {
+				t.Errorf("a zero row renders its bytes as a read row does: %s, %v", zero, err)
+			}
 
-			cs := AttachmentNew().NameSet("wire").BodySet(nil).ThumbSet(rt.Some([]byte(nil))).DigestSet([]byte("d"))
+			cs := AttachmentNew().NameSet("wire").BodySet("").ThumbSet(rt.Some[rt.Bytes]("")).DigestSet("d")
 			body, err := json.Marshal(cs.Params())
 			if err != nil {
 				t.Fatal(err)
@@ -434,14 +455,15 @@ func TestBytesGob(t *testing.T) {
 		name      string
 		cs        AttachmentChangeset
 		thumbType string
+		thumb     rt.Bytes
 	}{
-		{"empty", AttachmentNew().BodySet([]byte{}).ThumbSet(rt.Some([]byte{})), "blob"},
-		{"nil", AttachmentNew().BodySet(nil).ThumbSet(rt.Some([]byte(nil))), "blob"},
-		{"null", AttachmentNew().BodySet([]byte{}).ThumbSet(rt.Null[[]byte]{}), "null"},
+		{"empty", AttachmentNew().BodySet("").ThumbSet(rt.Some[rt.Bytes]("")), "blob", ""},
+		{"null", AttachmentNew().BodySet("").ThumbSet(rt.Null[rt.Bytes]{}), "null", ""},
+		{"data", AttachmentNew().BodySet("").ThumbSet(rt.Some[rt.Bytes]("png")), "blob", "png"},
 	}
 	for _, c := range cases {
 		var buf bytes.Buffer
-		if err := gob.NewEncoder(&buf).Encode(c.cs.NameSet(c.name).DigestSet([]byte("d")).Params()); err != nil {
+		if err := gob.NewEncoder(&buf).Encode(c.cs.NameSet(c.name).DigestSet("d").Params()); err != nil {
 			t.Fatal(err)
 		}
 		var p AttachmentParams
@@ -449,16 +471,16 @@ func TestBytesGob(t *testing.T) {
 			t.Fatal(err)
 		}
 		cast := AttachmentNew().Cast(p, AttachmentName, AttachmentBody, AttachmentThumb, AttachmentDigest)
-		if row := cast.Row(); row.Body != nil || row.Thumb.V != nil {
-			t.Fatalf("%s: GOB was expected to carry empty bytes as nil, got %#v", c.name, row)
+		if row := cast.Row(); row.Body != "" || row.Thumb.V != c.thumb || row.Digest != "d" {
+			t.Fatalf("%s: GOB carried %#v", c.name, row)
 		}
 		a, err := run.Run(ctx, db, AttachmentCreate(cast))
 		if err != nil {
 			t.Fatalf("%s: Create from the GOB body: %v", c.name, err)
 		}
 		emptyBlob(t, db, "attachments", "body", "id = ?", a.ID)
-		if typ, n := stored(t, db, "attachments", "thumb", "id = ?", a.ID); typ != c.thumbType || n != 0 {
-			t.Errorf("%s: thumb stored as %s length %d; want %s", c.name, typ, n, c.thumbType)
+		if typ, n := stored(t, db, "attachments", "thumb", "id = ?", a.ID); typ != c.thumbType || n != len(c.thumb) {
+			t.Errorf("%s: thumb stored as %s length %d; want %s length %d", c.name, typ, n, c.thumbType, len(c.thumb))
 		}
 	}
 }
@@ -466,20 +488,18 @@ func TestBytesGob(t *testing.T) {
 func TestBytesRequiredRefusesEmptyOnly(t *testing.T) {
 	ctx := context.Background()
 	db := bytesDB(t, "sqlite3")
-	base := AttachmentNew().NameSet("r").BodySet(nil)
+	base := AttachmentNew().NameSet("r").BodySet("")
 
-	for _, digest := range [][]byte{nil, {}} {
-		cs := base.DigestSet(digest).Validate()
-		errs := cs.Errors()
-		if len(errs) != 1 || errs[0].Check != "required" || strings.Join(errs[0].Columns, ",") != "digest" {
-			t.Errorf("digest %#v: errors %+v; want one required on digest", digest, errs)
-		}
-		_, err := run.Run(ctx, db, AttachmentCreate(base.DigestSet(digest)))
-		invalidOf(t, err, "required", "digest")
+	cs := base.DigestSet("").Validate()
+	errs := cs.Errors()
+	if len(errs) != 1 || errs[0].Check != "required" || strings.Join(errs[0].Columns, ",") != "digest" {
+		t.Errorf("empty digest: errors %+v; want one required on digest", errs)
 	}
-	for _, digest := range [][]byte{{0}, []byte("d")} {
+	_, err := run.Run(ctx, db, AttachmentCreate(base.DigestSet("")))
+	invalidOf(t, err, "required", "digest")
+	for _, digest := range []rt.Bytes{"\x00", "d"} {
 		if errs := base.DigestSet(digest).Validate().Errors(); len(errs) != 0 {
-			t.Errorf("digest %#v: errors %+v; want none, a nil body included", digest, errs)
+			t.Errorf("digest %q: errors %+v; want none, an empty body included", digest, errs)
 		}
 	}
 	if n, err := run.Run(ctx, db, AttachmentCount()); err != nil || n != 0 {

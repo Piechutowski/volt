@@ -178,7 +178,7 @@ func (c Changeset[M]) errorAdd(check, msg string, cols ...string) Changeset[M] {
 // (spec §changesets); the generated Validate calls it, and no fixed
 // method ends in Set, so no setter collides with one.
 func (c Changeset[M]) WithFindings(errs []FieldError) Changeset[M] {
-	c.valid = slices.Clone(errs)
+	c.valid = FieldErrorsAppend(nil, errs...)
 	return c
 }
 

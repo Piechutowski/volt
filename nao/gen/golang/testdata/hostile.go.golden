@@ -95,7 +95,7 @@ type CoreUser struct {
 	Type rt.Null[string] `db:"type" json:"type"`
 	Func rt.Null[int]    `db:"func" json:"func"`
 	// Named like the runtime package GetByRt binds through
-	Rt []byte `db:"rt" json:"rt"`
+	Rt rt.Bytes `db:"rt" json:"rt"`
 }
 
 type CoreUserColumn = rt.ColumnOf[CoreUser]
@@ -113,7 +113,7 @@ var (
 	CoreUserKind           = rt.Column[CoreUser, CoreAuditKind]{Name: "kind"}
 	CoreUserType           = rt.NullColumn[CoreUser, string]{Column: rt.Column[CoreUser, string]{Name: "type"}}
 	CoreUserFunc           = rt.NullColumn[CoreUser, int]{Column: rt.Column[CoreUser, int]{Name: "func"}}
-	CoreUserRt             = rt.Column[CoreUser, []byte]{Name: "rt"}
+	CoreUserRt             = rt.Column[CoreUser, rt.Bytes]{Name: "rt"}
 )
 
 var voltCoreUserDesc = &rt.Desc[CoreUser]{
@@ -191,7 +191,7 @@ func (c CoreUserChangeset) FuncSet(v rt.Null[int]) CoreUserChangeset {
 	return CoreUserChangeset{rt.Set(c.Changeset, 9, func(voltR *CoreUser) { voltR.Func = v })}
 }
 
-func (c CoreUserChangeset) RtSet(v []byte) CoreUserChangeset {
+func (c CoreUserChangeset) RtSet(v rt.Bytes) CoreUserChangeset {
 	return CoreUserChangeset{rt.Set(c.Changeset, 10, func(voltR *CoreUser) { voltR.Rt = v })}
 }
 
@@ -205,12 +205,12 @@ func (c CoreUserChangeset) ErrorAdd(col CoreUserColumn, msg string) CoreUserChan
 
 func voltCoreUserScan(r rt.Row) (CoreUser, error) {
 	var voltV CoreUser
-	voltErr := r.Scan(&voltV.ID, &voltV.APIKey, &voltV.HomepageURL, &voltV.HTTPStatus, &voltV.FullName, &voltV.PrecisionValue, &voltV.Balance, (*string)(&voltV.Kind), &voltV.Type, &voltV.Func, (*rt.Bytes)(&voltV.Rt))
+	voltErr := r.Scan(&voltV.ID, &voltV.APIKey, &voltV.HomepageURL, &voltV.HTTPStatus, &voltV.FullName, &voltV.PrecisionValue, &voltV.Balance, (*string)(&voltV.Kind), &voltV.Type, &voltV.Func, &voltV.Rt)
 	return voltV, rt.Refused("CoreUser", voltErr)
 }
 
 func voltCoreUserValues(voltR CoreUser) []any {
-	return []any{voltR.ID, voltR.APIKey, voltR.HomepageURL, voltR.HTTPStatus, voltR.FullName, voltR.PrecisionValue, voltR.Balance, voltR.Kind, voltR.Type, voltR.Func, rt.Bytes(voltR.Rt)}
+	return []any{voltR.ID, voltR.APIKey, voltR.HomepageURL, voltR.HTTPStatus, voltR.FullName, voltR.PrecisionValue, voltR.Balance, voltR.Kind, voltR.Type, voltR.Func, voltR.Rt}
 }
 
 func voltCoreUserApply(voltData, voltVals CoreUser, voltSet []bool) CoreUser {
@@ -314,7 +314,7 @@ func voltCoreUserCast(c rt.Changeset[CoreUser], p rt.Params[CoreUser], i int) (r
 		}
 		return CoreUserChangeset{c}.FuncSet(voltV).Changeset, nil
 	case 10:
-		voltV, voltOK, voltErr := rt.Field(p, "rt", "[]byte", false, func(voltR *CoreUser) []byte { return voltR.Rt })
+		voltV, voltOK, voltErr := rt.Field(p, "rt", "[]byte", false, func(voltR *CoreUser) rt.Bytes { return voltR.Rt })
 		if voltErr != nil || !voltOK {
 			return c, voltErr
 		}
@@ -436,8 +436,8 @@ func voltX2faCodeCast(c rt.Changeset[X2faCode], p rt.Params[X2faCode], i int) (r
 
 type Digest struct {
 	// Named like the runtime package Get and Delete bind through
-	Rt   []byte `db:"rt" json:"rt"`
-	Size int    `db:"size" json:"size"`
+	Rt   rt.Bytes `db:"rt" json:"rt"`
+	Size int      `db:"size" json:"size"`
 }
 
 type DigestColumn = rt.ColumnOf[Digest]
@@ -445,7 +445,7 @@ type DigestColumn = rt.ColumnOf[Digest]
 type DigestParams = rt.Params[Digest]
 
 var (
-	DigestRt   = rt.Column[Digest, []byte]{Name: "rt"}
+	DigestRt   = rt.Column[Digest, rt.Bytes]{Name: "rt"}
 	DigestSize = rt.Column[Digest, int]{Name: "size"}
 )
 
@@ -473,7 +473,7 @@ func (r Digest) Changeset() DigestChangeset {
 
 func (c DigestChangeset) From(r Digest) DigestChangeset { return DigestChangeset{c.Changeset.From(r)} }
 
-func (c DigestChangeset) RtSet(v []byte) DigestChangeset {
+func (c DigestChangeset) RtSet(v rt.Bytes) DigestChangeset {
 	return DigestChangeset{rt.Set(c.Changeset, 0, func(voltR *Digest) { voltR.Rt = v })}
 }
 
@@ -491,11 +491,11 @@ func (c DigestChangeset) ErrorAdd(col DigestColumn, msg string) DigestChangeset 
 
 func voltDigestScan(r rt.Row) (Digest, error) {
 	var voltV Digest
-	voltErr := r.Scan((*rt.Bytes)(&voltV.Rt), &voltV.Size)
+	voltErr := r.Scan(&voltV.Rt, &voltV.Size)
 	return voltV, rt.Refused("Digest", voltErr)
 }
 
-func voltDigestValues(voltR Digest) []any { return []any{rt.Bytes(voltR.Rt), voltR.Size} }
+func voltDigestValues(voltR Digest) []any { return []any{voltR.Rt, voltR.Size} }
 
 func voltDigestApply(voltData, voltVals Digest, voltSet []bool) Digest {
 	voltR := voltData
@@ -511,7 +511,7 @@ func voltDigestApply(voltData, voltVals Digest, voltSet []bool) Digest {
 func voltDigestCast(c rt.Changeset[Digest], p rt.Params[Digest], i int) (rt.Changeset[Digest], error) {
 	switch i {
 	case 0:
-		voltV, voltOK, voltErr := rt.Field(p, "rt", "[]byte", false, func(voltR *Digest) []byte { return voltR.Rt })
+		voltV, voltOK, voltErr := rt.Field(p, "rt", "[]byte", false, func(voltR *Digest) rt.Bytes { return voltR.Rt })
 		if voltErr != nil || !voltOK {
 			return c, voltErr
 		}

@@ -7,6 +7,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -164,13 +165,13 @@ type tagged struct {
 	Hits   int          `json:"hits,omitempty"`
 	Secret string       `json:"-"`
 	Note   Null[string] `json:"note"`
-	Raw    []byte       `json:"raw"`
+	Raw    Bytes        `json:"raw"`
 	At     time.Time    `json:"at"`
 }
 
 func TestParamsMarks(t *testing.T) {
 	when := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
-	p := ParamsOf(tagged{}, Mark{"hits", 0}, Mark{"secret", ""}, Mark{"note", Null[string]{}}, Mark{"raw", []byte{1, 2}}, Mark{"at", when})
+	p := ParamsOf(tagged{}, Mark{"hits", 0}, Mark{"secret", ""}, Mark{"note", Null[string]{}}, Mark{"raw", Bytes("\x01\x02")}, Mark{"at", when})
 	out, err := json.Marshal(p)
 	if err != nil || string(out) != `{"at":"2024-01-15T10:30:00Z","hits":0,"note":null,"raw":"AQI=","secret":""}` {
 		t.Errorf("MarshalJSON renders each mark's value under its wire name, omitempty and - notwithstanding: %s, %v", out, err)
@@ -204,9 +205,9 @@ func TestParamsGob(t *testing.T) {
 	type stamped struct {
 		ID int
 		At time.Time
-		Bs []byte
+		Bs Bytes
 	}
-	out := gobTrip(t, ParamsOf(stamped{ID: 1, At: when, Bs: []byte{1, 2}}, Mark{"at", when}, Mark{"bs", []byte{1, 2}}))
+	out := gobTrip(t, ParamsOf(stamped{ID: 1, At: when, Bs: "\x01\x02"}, Mark{"at", when}, Mark{"bs", Bytes("\x01\x02")}))
 	if !out.Has("at") || out.Has("id") {
 		t.Errorf("marks lost: %v", out.Keys())
 	}
@@ -255,12 +256,12 @@ func paramsOfJSON(t *testing.T, doc string) Params[post] {
 }
 
 func TestBlank(t *testing.T) {
-	for _, v := range []any{nil, 0, int64(0), 0.0, "", []byte{}, time.Time{}, cents(0), Null[int]{}, Some(0), Some("")} {
+	for _, v := range []any{nil, 0, int64(0), 0.0, "", []byte{}, Bytes(""), time.Time{}, cents(0), Null[int]{}, Some(0), Some("")} {
 		if !Blank(v) {
 			t.Errorf("%#v should be blank", v)
 		}
 	}
-	for _, v := range []any{1, int64(2), 0.5, "x", []byte{0}, time.Now(), cents(3), Some(5), Some("x"), true, false} {
+	for _, v := range []any{1, int64(2), 0.5, "x", []byte{0}, Bytes("\x00"), time.Now(), cents(3), Some(5), Some("x"), true, false} {
 		if Blank(v) {
 			t.Errorf("%#v should not be blank", v)
 		}
@@ -297,5 +298,34 @@ func TestFieldErrorsAppendDoesNotAlias(t *testing.T) {
 	two := FieldErrorsAppend(base, FieldError{Check: "c"})
 	if one[1].Check != "b" || two[1].Check != "c" || len(base) != 1 {
 		t.Errorf("appends from one changeset must not overwrite each other: %v %v %v", base, one, two)
+	}
+}
+
+func TestChangesetSharesNoFieldError(t *testing.T) {
+	title := Column[entry, string]{Name: "title"}
+	findings := []FieldError{{Check: "custom", Columns: []string{"body"}, Message: "too long"}}
+	c := NewChangeset(entryDesc).ErrorAdd(title, "too short").WithFindings(findings)
+	want := fmt.Sprint(c.Errors())
+
+	findings[0].Columns[0] = "taken"
+	c.Errors()[0].Columns[0] = "taken"
+	var inv *Invalid
+	if !errors.As(c.Err(), &inv) {
+		t.Fatal("an invalid changeset's Err is an *Invalid")
+	}
+	inv.Fields[1].Columns[0] = "taken"
+	if got := fmt.Sprint(c.Errors()); got != want {
+		t.Errorf("the changeset's errors changed with what it handed out:\n got %s\nwant %s", got, want)
+	}
+	errors.As(c.Err(), &inv)
+	inv.Details()[0].Columns[0] = "taken"
+	if got := fmt.Sprint(inv.Fields); got != want {
+		t.Errorf("the refusal's fields changed with its details:\n got %s\nwant %s", got, want)
+	}
+
+	rows := &InvalidRows{Model: "Post", Rows: []RowInvalid{{Index: 0, Fields: c.Errors()}}}
+	rows.Details()[0].Columns[0] = "taken"
+	if got := fmt.Sprint(rows.Rows[0].Fields); got != want {
+		t.Errorf("a batch refusal's fields changed with its details:\n got %s\nwant %s", got, want)
 	}
 }

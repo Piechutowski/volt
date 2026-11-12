@@ -56,8 +56,8 @@ func CoreUserGetMany(ids []int) rt.Query[CoreUser] {
 
 const voltCoreUserGetByRtSQL = `SELECT "id", "api_key", "homepage_url", "http_status", "full_name", "precision_value", "balance", "kind", "type", "func", "rt" FROM "core_users" WHERE "rt" = ?`
 
-func CoreUserGetByRt(rt_ []byte) rt.Lookup[CoreUser] {
-	return rt.Lookup[CoreUser]{SQL: voltCoreUserGetByRtSQL, Args: []any{rt.Bytes(rt_)}, Scan: voltCoreUserScan}
+func CoreUserGetByRt(rt_ rt.Bytes) rt.Lookup[CoreUser] {
+	return rt.Lookup[CoreUser]{SQL: voltCoreUserGetByRtSQL, Args: []any{rt_}, Scan: voltCoreUserScan}
 }
 
 const voltCoreUserListSQL = `SELECT "id", "api_key", "homepage_url", "http_status", "full_name", "precision_value", "balance", "kind", "type", "func", "rt" FROM "core_users"`
@@ -116,11 +116,11 @@ func X2faCodeDelete(code string, userID int) rt.Exec {
 
 const voltDigestGetSQL = `SELECT "rt", "size" FROM "digests" WHERE "rt" = ?`
 
-func DigestGet(rt_ []byte) rt.Lookup[Digest] {
-	return rt.Lookup[Digest]{SQL: voltDigestGetSQL, Args: []any{rt.Bytes(rt_)}, Scan: voltDigestScan}
+func DigestGet(rt_ rt.Bytes) rt.Lookup[Digest] {
+	return rt.Lookup[Digest]{SQL: voltDigestGetSQL, Args: []any{rt_}, Scan: voltDigestScan}
 }
 
-func DigestGetMany(rt_s [][]byte) rt.Query[Digest] {
+func DigestGetMany(rt_s []rt.Bytes) rt.Query[Digest] {
 	if len(rt_s) == 0 {
 		return rt.Query[Digest]{}
 	}
@@ -148,6 +148,6 @@ func DigestUpdate(c DigestChangeset) rt.Write[Digest] { return rt.Update(c.Valid
 
 const voltDigestDeleteSQL = `DELETE FROM "digests" WHERE "rt" = ?`
 
-func DigestDelete(rt_ []byte) rt.Exec {
-	return rt.Exec{SQL: voltDigestDeleteSQL, Args: []any{rt.Bytes(rt_)}, Model: "Digest", One: true}
+func DigestDelete(rt_ rt.Bytes) rt.Exec {
+	return rt.Exec{SQL: voltDigestDeleteSQL, Args: []any{rt_}, Model: "Digest", One: true}
 }

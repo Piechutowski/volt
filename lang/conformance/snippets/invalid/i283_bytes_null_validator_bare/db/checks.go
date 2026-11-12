@@ -1,3 +1,5 @@
 package db
 
-func ThumbSmall(t []byte) error { return nil }
+import "github.com/Piechutowski/volt/nao/rt"
+
+func ThumbSmall(t rt.Bytes) error { return nil }

@@ -37,8 +37,6 @@ func Queries(pl *naming.Plan, opts Options) ([]byte, error) {
 
 func scanTarget(f *naming.Field) string {
 	switch {
-	case f.PlainBytes():
-		return "(*rt.Bytes)(&voltV." + f.GoField + ")"
 	case f.Kinded && !f.Nullable:
 		return "(*" + f.Storage + ")(&voltV." + f.GoField + ")"
 	case f.GoType == "time.Time":

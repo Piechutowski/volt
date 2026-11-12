@@ -165,7 +165,7 @@ func (e *InvalidRows) Details() []Detail {
 	var out []Detail
 	for _, r := range e.Rows {
 		for _, f := range r.Fields {
-			out = append(out, Detail{Row: &r.Index, Check: f.Check, Columns: f.Columns, Message: f.Message})
+			out = append(out, Detail{Row: &r.Index, Check: f.Check, Columns: slices.Clone(f.Columns), Message: f.Message})
 		}
 	}
 	return out

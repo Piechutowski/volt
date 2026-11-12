@@ -95,7 +95,7 @@ var builtins = map[string]ColumnType{
 	"int":       {Go: "int", Storage: "int"},
 	"float64":   {Go: "float64", Storage: "float64"},
 	"string":    {Go: "string", Storage: "string"},
-	"[]byte":    {Go: "[]byte", Storage: "[]byte"},
+	"[]byte":    {Go: "rt.Bytes", Storage: "[]byte"},
 	"time.Time": {Go: "time.Time", Storage: "time.Time", Import: "time"},
 }
 

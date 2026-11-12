@@ -80,3 +80,20 @@ func TestGoAnalyzers(t *testing.T) {
 		})
 	}
 }
+
+func TestGoRulesReadThePackage(t *testing.T) {
+	handler := vet.GoSource{Name: "home.go", Text: "package app\n\nimport \"github.com/Piechutowski/volt\"\n\ntype Home struct{}\n\nfunc (Home) Index(r volt.Request) volt.Response { return volt.Render(stamp()) }\n"}
+	helper := vet.GoSource{Name: "stamp.go", Text: "package app\n\nimport (\n\t\"os\"\n\t\"time\"\n)\n\nfunc stamp() string { return os.Getenv(\"HOST\") + time.Now().String() }\n"}
+	analyzers := []vet.Analyzer{vet.ByName("handlerimports"), vet.ByName("handlerclock")}
+	var got []string
+	for _, w := range vet.RunGo("app", []vet.GoSource{handler, helper}, nil, analyzers...) {
+		got = append(got, fmt.Sprintf("%s:%d %s", w.Pos.Filename(), w.Pos.Line(), w.Code))
+	}
+	want := []string{"app/stamp.go:4 vet/handlerimports", "app/stamp.go:8 vet/handlerclock"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("a helper of a handler's package is held pure as the handler is:\n got %v\nwant %v", got, want)
+	}
+	if ws := vet.RunGo("app", []vet.GoSource{helper}, nil, analyzers...); len(ws) != 0 {
+		t.Errorf("a package that declares no handler is not held pure: %v", ws)
+	}
+}

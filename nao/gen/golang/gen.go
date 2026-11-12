@@ -170,7 +170,7 @@ func (g *generator) changesetEmit(t *naming.Table) {
 
 	vals := make([]string, len(t.Fields))
 	for i, f := range t.Fields {
-		vals[i] = f.BindOf("voltR." + f.GoField)
+		vals[i] = "voltR." + f.GoField
 	}
 	funcLine(b, fmt.Sprintf("func %s(voltR %s) []any", n.Values, m), "return []any{"+strings.Join(vals, ", ")+"}")
 

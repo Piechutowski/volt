@@ -368,3 +368,44 @@ func TestIdentQuote(t *testing.T) {
 		t.Errorf("quoting failed: %q", query)
 	}
 }
+
+func TestConstructorsCopyTheirSlices(t *testing.T) {
+	render := func(opts []Opt[m]) string {
+		sql, args, err := SelectRender[m](`"t"`, "*", opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fmt.Sprint(sql, args)
+	}
+	args := []any{1}
+	terms := []Order[m]{Column[m, int]{Name: "a"}.Asc()}
+	key := []any{10}
+	cols := []string{"a"}
+	opts := []Opt[m]{Raw[m]("a = ?", args...), OrderBy(terms...), After[m](key...), GroupBy[m](cols...)}
+	want := render(opts)
+	args[0], terms[0], key[0], cols[0] = 2, Column[m, int]{Name: "b"}.Desc(), 99, "b"
+	if got := render(opts); got != want {
+		t.Errorf("options changed with the caller's slices:\n got %s\nwant %s", got, want)
+	}
+
+	guards := []any{"p"}
+	on := [][2]string{{"a", "b"}}
+	gen := []GenPred{PredOptional(guards, PredNull("a")), PredExists("t", "x", on, GenPred{})}
+	where := func() string {
+		sql, args, _ := WhereRender(gen)
+		return fmt.Sprint(sql, args)
+	}
+	wantGen := where()
+	guards[0], on[0] = "q", [2]string{"c", "d"}
+	if got := where(); got != wantGen {
+		t.Errorf("generator trees changed with the caller's slices:\n got %s\nwant %s", got, wantGen)
+	}
+
+	steps := []AnyEffect{Pure(1)}
+	tx, all := Tx(steps...), All(steps...)
+	wantTx, wantAll := Describe(tx), Describe(all)
+	steps[0] = Pure(2)
+	if Describe(tx) != wantTx || Describe(all) != wantAll {
+		t.Errorf("effects changed with the caller's slice: %s, %s", Describe(tx), Describe(all))
+	}
+}

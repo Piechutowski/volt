@@ -407,7 +407,7 @@ db/i281_migration_ref_action_quoted.volt:22:47: error: spec/migrations: "delete"
 db/i281_migration_ref_action_quoted.volt:22:59: error: spec/migrations: "update" requires a value (§migrations)
 
 ## i283_bytes_null_validator_bare
-db/schema.volt:11:16: error: spec/validators: column "thumb" ([]byte, Go rt.Null[[]byte]) but parameter 1 of ThumbSmall is []byte — change the column type or the function: expected func ThumbSmall(rt.Null[[]byte]) error (§validators)
+db/schema.volt:12:16: error: spec/validators: column "thumb" ([]byte, Go rt.Null[rt.Bytes]) but parameter 1 of ThumbSmall is rt.Bytes — change the column type or the function: expected func ThumbSmall(rt.Null[rt.Bytes]) error (§validators)
 
 ## i289_case_clause_word.volt
 db/i289_case_clause_word.volt:5:25: error: syntax: write from, not FROM: keywords are case-sensitive (§keywords)
@@ -1130,6 +1130,9 @@ app/i541_shared_action_two_docs.volt:9:2: error: spec/scopes-and-routes: Posts.I
 
 ## i542_select_name_createmany.volt
 db/i542_select_name_createmany.volt:10:8: error: spec/selects-over-groups: select name "CreateMany" collides with the generated CRUD surface (§selects-over-groups)
+
+## i543_bytes_validator_slice
+db/schema.volt:12:15: error: spec/validators: column "body" ([]byte, Go rt.Bytes) but parameter 1 of BodySmall is []byte — change the column type or the function: expected func BodySmall(rt.Bytes) error (§validators)
 
 ## i54_group_type_disagree.volt
 db/i54_group_type_disagree.volt:19:29: error: spec/selects-over-groups: column "org" disagrees on type across "mixed": int in ks_seats; string in ms_revenue — the predicate cannot be checked for every member (§selects-over-groups)

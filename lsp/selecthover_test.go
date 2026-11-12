@@ -229,7 +229,7 @@ func TestSelectHoverBytesFieldTypes(t *testing.T) {
 		t.Fatal("no hover for the named select")
 	}
 	md := h.Contents.Value
-	for _, want := range []string{"\tBody []byte\n", "\tThumb rt.Null[[]byte]\n"} {
+	for _, want := range []string{"\tBody rt.Bytes\n", "\tThumb rt.Null[rt.Bytes]\n"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}

@@ -110,7 +110,7 @@ var registry = []Analyzer{
 	redundantIndex, emptyBody, shadowedColumn,
 	missingPK, refTypeMismatch, refTargetNotUnique, selfRef, refCycle, caseCollision,
 	modelName, dynName,
-	handlerReceiver, handlerImports, handlerClock, packageState, goroutine, capturedWrite, streamCount, loadSpelledLong,
+	handlerReceiver, handlerImports, handlerClock, handlerCalls, packageState, goroutine, capturedWrite, streamCount, loadSpelledLong,
 	packageDoc,
 }
 

@@ -3,12 +3,14 @@ dup/schema.volt:8:1: error: spec/namespaces-and-uniqueness: duplicate table name
 vet:
 data/kinds.go:1:1: warning: vet/packagedoc: a package doc comment in a Go file: the .volt files are the package's source, so write it above a package clause there, from where volt gen carries it into the generated code (§doc-comments)
 data/schema.volt:4:15: warning: vet/redundantindex: unique on "id" is redundant; the column is the primary key, which is unique and indexed already
-app/handlers.go:5:2: warning: vet/handlerimports: a file that declares a handler or a scope load imports os; a handler describes its effects and the shim performs them (§requests-and-responses, §scope-loads)
+app/env.go:5:2: warning: vet/handlerimports: a file of a package that declares a handler or a scope load imports os; a handler describes its effects and the shim performs them (§requests-and-responses, §scope-loads)
+app/handlers.go:5:2: warning: vet/handlerimports: a file of a package that declares a handler or a scope load imports os; a handler describes its effects and the shim performs them (§requests-and-responses, §scope-loads)
 dup/schema.volt:6:3: warning: vet/casecollision: column names total and Total differ only in case
 data/more.volt:9:1: warning: vet/reftype: relationship joins comments.author_id (string) to users.id (int); the types differ
 data/schema.volt:9:3: warning: vet/dynname: table users (constructor UserNew) and table users column "new" (handle UserNew) both generate the Go name UserNew; rename one (e.g. with [model: "..."])
 app/routes.volt:10:1: warning: vet/pipeline: pipeline "dead" is declared and never piped through by any scope
 data/more.volt:10:1: warning: vet/reftarget: referenced column(s) posts.(title) are not unique (not the primary key, a unique column or the key of a unique index without where:), so the database cannot enforce this foreign key
+app/env.go:10:3: warning: vet/handlercalls: log.Fatal exits the program, deferred functions unrun (§requests-and-responses)
 dup/schema.volt:11:1: warning: vet/casecollision: table names t and T differ only in case
 data/schema.volt:11:5: warning: vet/redundantindex: unique index on "email" is redundant; the column carries unique, which holds over the whole table
 app/handlers.go:12:5: warning: vet/packagestate: package-level var hits is state; a routes package holds constant tables alone (§requests-and-responses)
