@@ -250,7 +250,7 @@ func TestMigrationSQLGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	golden := filepath.Join("testdata", "migrations", "sql.golden")
-	if *updateLSP {
+	if *update {
 		if err := os.WriteFile(golden, []byte(out), 0o644); err != nil {
 			t.Fatal(err)
 		}

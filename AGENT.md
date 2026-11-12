@@ -18,7 +18,7 @@ one silently.
 
 ## Docs
 
-Six files in `docs/` and the README, nothing else carries prose:
+Seven files in `docs/` and the README, nothing else carries prose:
 
 - `spec.md` — the language and the generated code, normative for the
   implementation as it stands. Spec and code must agree; the language
@@ -26,14 +26,20 @@ Six files in `docs/` and the README, nothing else carries prose:
   conformance snippet in `lang/conformance/snippets/` tagged with the
   section it proves, the EBNF is executed against the parser, and
   every diagnostic cites the section it enforces as `spec/<anchor>`.
+- `style.md`: how Volt's code is written, TigerStyle translated to Go
+  joined with the functional rules, normative for every line of the
+  repository and every line `volt gen` writes. The rules marked gate
+  are checked by `cmd/volt/style_test.go`, whose ledger lists the debt
+  older than the style and only shrinks; its examples are executable.
 - `lint.md` — every vet rule with executable examples; a test fails
   the build if it drifts.
 - `editor.md` — grammar, Zed extension, language server, and the
   verification checklist in its section 8.
 - `runner.md`: how `nao/run` meets SQLite: the two pools, which
   connection an effect runs on, prepared statements, the bulk insert,
-  what was measured and the questions still open; the rules themselves
-  stay normative in `spec.md`.
+  what was measured, the questions still open, and the note on batching
+  writes, which is not built; the rules themselves stay normative in
+  `spec.md`.
 - `roadmap.md` — what is built and what is not; a status changes in
   the commit that lands it.
 - `plan.md` — the one forward-looking document: the decisions made
@@ -105,7 +111,9 @@ gofmt -l . | grep -v zed-extension        # must be empty
 
 Golden refresh is `go test ./gen/router -update` and `go test
 ./nao/gen/... -update`; read the diff, goldens
-exist to surface unintended output changes. Grammar changes also need
+exist to surface unintended output changes. The style ledger is lowered
+with `go test ./cmd/volt -run TestStyleLedger -update`, which never
+raises it; debt the code adds is fixed, not recorded. Grammar changes also need
 `tree-sitter generate`, `tree-sitter test`, the checklist in
 `editor.md` section 8 and `go run ./scripts/sync-grammar`. Anything
 interactive in the language server gets a scripted stdio session; one
@@ -113,22 +121,27 @@ is a golden (`cmd/volt/lsp_session_test.go`).
 
 ## Conventions
 
+- Code follows `docs/style.md`: TigerStyle in Go and the functional
+  rules, for hand-written and generated code alike. A rule marked gate
+  is checked by the style gate; the others are held in review.
 - Names are subject-first, verb-last: `UserGet`, `UserChangeset`,
   `OrderStateKnown`; internals too. Carve-outs: Go-mandated
   interface methods, `New*`/`is*`/`has*`, stdlib-parallel APIs, cursor
-  primitives, LSP handlers named after protocol methods.
-- The only comments are doc comments on exported identifiers, one or
-  two sentences citing the spec section (`§columns`), and directives.
-  Nothing else is commented; a generated file carries the header and
-  the doc comments of its schema (spec §doc-comments-in-generated-code)
-  and nothing else.
+  primitives, LSP handlers named after protocol methods. Qualifiers and
+  units go last (`delayMsMax`, `style.md` N1).
+- Comments are the maintainer's: for now an agent writes none, doc
+  comments included (`style.md` C1). The comments there are doc
+  comments on exported identifiers, one or two sentences citing the
+  spec section (`§columns`), and directives. Nothing else is commented;
+  a generated file carries the header and the doc comments of its
+  schema (spec §doc-comments-in-generated-code) and nothing else.
 - Generated files start with the `Code generated … DO NOT EDIT.`
   marker; the CLI refuses to overwrite a file without it. Generated
   data files import the standard library, `nao/rt` and the packages of
   declared types only; route files add the root `volt` package, the
   runner `nao/run` and the data packages they route.
 - SQLite is the only database. Values and effects at the edge (spec
-  §values-and-effects, `docs/plan.md` part 0).
+  §values-and-effects, `docs/style.md` section 2).
 - A memoized computation is a pure function of explicit inputs, keyed
   on those inputs themselves; `cmd/volt`'s purity gate and
   immutability walk enforce it, and a new memo is added to the gate's

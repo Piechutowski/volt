@@ -41,6 +41,16 @@ reason about and to test. Go does not enforce either, so Volt does: the
 generator produces values, `volt vet` keeps handlers pure, and every
 effect is performed by generated code you can read.
 
+## How the code is written
+
+Volt's own code and the code it generates are held to
+[`docs/style.md`](docs/style.md): TigerStyle, TigerBeetle's engineering
+style, translated to Go and joined with the functional rules. The style
+puts safety first: a limit on everything, assertions, no recursion,
+every error handled. A gate in the test suite checks the mechanical
+rules, and its ledger lists the debt older than the style, which only
+shrinks; `docs/plan.md` orders the work that pays it off.
+
 ## Layout
 
 | Directory | What it is |
@@ -53,4 +63,4 @@ effect is performed by generated code you can read.
 | `lsp/` | the language server, with its own LSP protocol layer `lsp/protocol` on the standard library |
 | `grammar/`, `zed-extension/` | the editor stack |
 | `itest/` | the fixture application served over `httptest`, drift-checked against the generator |
-| `docs/` | `spec.md`, `lint.md`, `editor.md`, `roadmap.md`, `plan.md` |
+| `docs/` | `spec.md`, `style.md`, `lint.md`, `editor.md`, `runner.md`, `roadmap.md`, `plan.md` |

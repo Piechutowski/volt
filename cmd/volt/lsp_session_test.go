@@ -17,7 +17,7 @@ import (
 	"github.com/Piechutowski/volt/lsp"
 )
 
-var updateLSP = flag.Bool("update", false, "rewrite the language server session golden")
+var update = flag.Bool("update", false, "rewrite the goldens and lower the style ledger")
 
 func TestLSPServe(t *testing.T) {
 	if os.Getenv("VOLT_LSP_SERVE") != "1" {
@@ -245,7 +245,7 @@ migration 0001__posts {
 
 	golden := filepath.Join("testdata", "lsp_session.golden")
 	got := s.script.String()
-	if *updateLSP {
+	if *update {
 		if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil {
 			t.Fatal(err)
 		}

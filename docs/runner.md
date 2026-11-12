@@ -4,7 +4,8 @@
 > **This project is an alpha version, and everything may change in the future.**
 
 How `nao/run` meets SQLite: its connections, its prepared statements,
-how it picks a connection for an effect, and how it inserts many rows.
+how it picks a connection for an effect, how it inserts many rows, and
+why it does not batch writes.
 The rules are normative in `spec.md` (§generated-query-surface, the
 runner, and §changesets, `Create`, `CreateMany` and `Update`); this file says why they are what they are and
 what was measured on the way. Every number here comes from one 4-core
@@ -263,3 +264,56 @@ Kept in `plan.md` step 21 until they are measured and settled:
 4. **Cancellable contexts.** With a context that can be cancelled, mattn
    starts a goroutine per statement and per row to watch it; the numbers
    here used `context.Background()`, so request traffic pays more.
+
+## 7. Batching writes, not built
+
+Not built, by the maintainer's decision: requests are served one by
+one, each write in its own transaction (`style.md` S10). This note
+records how batching would work, for the day the question is reopened.
+
+**How it would work.** Every effect that can write already waits in Go
+for the writer's one connection (section 1). A batching writer would
+turn that wait into a queue: one goroutine owns the writer and takes up
+to N waiting writes from a bounded channel, or whatever arrived within
+a short window such as a millisecond. It runs them in one
+`BEGIN IMMEDIATE`, each request's writes inside its own `SAVEPOINT`, so
+a request whose write fails, a constraint violation say, is rolled back
+to its savepoint alone while the others go on. It commits once and then
+answers each waiting handler with its own result. All of it is the
+standard library: `net/http`, channels, `time`, `context` and
+`database/sql`.
+
+**What it would gain.** One commit per batch instead of one per
+request, so the gain is as large as a commit's fixed cost, and today
+that cost is small. mattn builds SQLite with
+`SQLITE_DEFAULT_WAL_SYNCHRONOUS=1`, so in WAL mode a commit does not
+wait for the disk: the WAL is synced at checkpoints, and a power loss
+can lose the last commits but cannot corrupt the file. Section 1
+measured 400 one-row write transactions in 12 ms, about 30 µs each, on
+that setting. Under `synchronous = FULL` every commit waits for an fsync
+of the WAL, which costs from tens of microseconds to tens of
+milliseconds depending on the disk, and there batching pays off by a
+large factor. Reads gain nothing: under WAL they already run in
+parallel on the readers.
+
+**What it would cost.**
+
+- **Latency.** A write waits up to the window before it starts.
+- **Shared failure.** An error that ends the transaction (a full disk,
+  an I/O error) or a failed `COMMIT` fails every request of the batch.
+- **Head-of-line blocking.** One long transaction holds the whole
+  batch, so each request's work needs a bound (`style.md` S2).
+- **Cancellation.** A request whose context ends while it is queued
+  leaves the queue before it runs; once its savepoint is open it can
+  only be rolled back to it.
+- **Semantics to keep.** `Then(write, read)` reads after its batch
+  commits; the requests of a batch run in arrival order, which is the
+  order the single writer imposes today; `rt.Batch` and `CreateMany`
+  already batch the rows of one request (section 4).
+- **Backpressure.** The queue has a bound, and a full queue answers 503
+  instead of growing.
+
+**What to measure first.** The commit cost on the production disk under
+`NORMAL` and under `FULL`; throughput and p99 latency at 1, 4, 16 and 64
+concurrent writers, with and without batching; and the window that keeps
+p99 inside the request budget.
