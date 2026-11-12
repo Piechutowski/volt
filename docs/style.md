@@ -36,7 +36,7 @@ when they pull apart, the earlier one wins.
   spike from a large copy, no algorithm of exponential cost slips
   through. The debt older than this file is inventoried and only
   shrinks: the ledger of section 8 holds the debt to the gated rules,
-  and `plan.md` steps 22 to 34 carry the debt to the rest.
+  and `plan.md` steps 22 to 35 carry the debt to the rest.
 - **Design first.** Safety and performance are won before the code
   exists: the spec section, the sketch of the four resources (P1), the
   limits (S2) and the assertions (S5) come first. A day of design is
@@ -84,7 +84,8 @@ not only for the generated code and the runtime.
   the test function and the helpers it calls to read and write; what
   they read is handed to pure functions. Everything else computes
   values, descriptions of effects included. Review;
-  `cmd/volt/layers_test.go` holds the imports of the layers.
+  `cmd/volt/layers_test.go` holds the imports of the layers. The
+  effects outside these places today are `plan.md` step 35.
 - **F4. Mutable state is inventoried.** The connection pool, the
   statement cache, the event broker's log and the logger are the whole
   list. Their own methods may mutate them: the methods of `nao/run`'s
@@ -97,7 +98,8 @@ not only for the generated code and the runtime.
   and the generators are functions from values to values, and so is the
   formatter when `volt fmt` lands. The purity gate
   (`cmd/volt/purity_test.go`) proves it for the memoized computations;
-  `plan.md` step 33 extends it to every phase.
+  `plan.md` step 33 extends it to every phase. The fold runs on SQLite
+  files today, which `plan.md` step 35 settles.
 
 Go idioms, one per need, so the code stays uniform:
 
