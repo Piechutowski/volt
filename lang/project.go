@@ -53,6 +53,7 @@ type Package struct {
 	// Imports maps qualifier -> imported package path, resolved by Check.
 	Imports     map[string]string
 	importSpecs []*ast.ImportSpec
+	importQuals []string
 
 	// Volt-layer results, populated by Check.
 	Pipelines map[string]*ast.Pipeline

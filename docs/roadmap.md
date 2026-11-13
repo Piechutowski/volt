@@ -12,6 +12,7 @@ that lands it.
 | Area | Phoenix / Rails | Volt | Step |
 |---|---|---|---|
 | Routing: scopes, pipelines, resources, reverse URLs | yes | built | |
+| Package names apart from their directories, as in Go | n/a (Mix apps / Rails engines name their own modules) | built (the clause names the package, imports qualify by it; the directory's Go files must agree) | |
 | Route-level data loading | plugs / before_action | built | |
 | Handlers as pure functions | no | built | |
 | Strong parameters | yes | built (`Cast` allow lists) | |

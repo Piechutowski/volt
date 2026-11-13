@@ -464,10 +464,13 @@ func TestErrors(t *testing.T) {
 			"go.mod":     modFile,
 			"app/r.volt": "scope / {\n\tget /x X.Y\n}\n",
 		}, "must begin with a package clause"},
-		{"package/dir mismatch", map[string]string{
-			"go.mod":     modFile,
-			"app/r.volt": "package routes\n",
-		}, "must match its directory name"},
+		{"package name unlike its directory", map[string]string{
+			"go.mod":          modFile,
+			"lib__api/r.volt": "package api\n",
+			"lib__api/a.go":   "package api\n",
+			"app/r.volt":      "package routes\n",
+			"app/a.go":        "package app\n",
+		}, `package name "routes" disagrees with package app, which the directory's Go file a.go declares`},
 		{"file name disagreement", map[string]string{
 			"go.mod":     modFile,
 			"app/a.volt": "package app\n",

@@ -56,15 +56,6 @@ func (x *ImportSpec) PathString() string {
 	return s
 }
 
-// Qualifier returns the name the import is referenced by: the alias when
-// present, else the last path segment (spec §imports).
-func (x *ImportSpec) Qualifier() string {
-	if x.Alias != nil {
-		return x.Alias.Name()
-	}
-	return x.Path[len(x.Path)-1].Name()
-}
-
 // GoRef is a reference to Go code or an imported symbol: one identifier,
 // or qualifier.identifier (volt.RequestID, app.Session, db.User).
 type GoRef struct {

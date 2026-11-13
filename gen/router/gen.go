@@ -228,10 +228,14 @@ func (g *generator) clientOmitted() bool {
 }
 
 func dataImport(q *lang.QueryRef) string {
-	if q.Qualifier == q.PkgName {
-		return q.Import
+	return importSpell(q.Qualifier, q.PkgName, q.Import)
+}
+
+func importSpell(qual, pkgName, path string) string {
+	if qual == pkgName && qual == path[strings.LastIndex(path, "/")+1:] {
+		return path
 	}
-	return q.Qualifier + " " + fmt.Sprintf("%q", q.Import)
+	return qual + " " + fmt.Sprintf("%q", path)
 }
 
 func (g *generator) controllerNames() []string {
@@ -952,10 +956,7 @@ func clientQualifier(q *lang.QueryRef) string {
 }
 
 func clientImport(q *lang.QueryRef) string {
-	if qual := clientQualifier(q); qual != q.PkgName {
-		return qual + " " + fmt.Sprintf("%q", q.Import)
-	}
-	return q.Import
+	return importSpell(clientQualifier(q), q.PkgName, q.Import)
 }
 
 // clientType spells the type name of the data package of q in the
@@ -1262,11 +1263,7 @@ func (g *generator) scopeLoadImports(have []string) []string {
 				continue
 			}
 			seen[sl.Import] = true
-			if sl.Qualifier == sl.PkgName {
-				out = append(out, sl.Import)
-			} else {
-				out = append(out, sl.Qualifier+" "+fmt.Sprintf("%q", sl.Import))
-			}
+			out = append(out, importSpell(sl.Qualifier, sl.PkgName, sl.Import))
 		}
 	}
 	sort.Strings(out)

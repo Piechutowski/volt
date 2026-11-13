@@ -27,7 +27,11 @@ func Check(pr *Project) []diag.Diagnostic {
 func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 	c := &checker{pr: pr, diags: append([]diag.Diagnostic{}, pr.Diags...)}
 
-	for _, path := range c.paths() {
+	paths := c.paths()
+	if s != nil {
+		c.gofuncs = s.goFuncsFor(pr, paths)
+	}
+	for _, path := range paths {
 		c.fileRules(pr.Packages[path])
 	}
 	for _, path := range c.paths() {
@@ -35,12 +39,10 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 	}
 	c.cyclesCheck()
 
-	paths := c.paths()
 	pkgDiags := make(map[string][]diag.Diagnostic, len(paths))
 	fresh := paths
 	var keys map[string]pkgKey
 	if s != nil {
-		c.gofuncs = s.goFuncsFor(pr, paths)
 		keys = s.packageKeys(pr, paths, c.gofuncs)
 		fresh = make([]string, 0, len(paths))
 		for _, path := range paths {
@@ -175,10 +177,7 @@ func (c *checker) errorf(pos token.Position, section, format string, args ...any
 }
 
 func (c *checker) fileRules(pkg *Package) {
-	base := pkg.Path
-	if i := strings.LastIndex(base, "/"); i >= 0 {
-		base = base[i+1:]
-	}
+	gopkg := c.goFuncs(pkg).gopkg
 	badSeg := ""
 	if pkg.Path != "." {
 		for _, seg := range strings.Split(pkg.Path, "/") {
@@ -221,8 +220,8 @@ func (c *checker) fileRules(pkg *Package) {
 			c.errorf(clause.Pos(), "imports", "package directory %q has the segment %q, which is not an identifier of ASCII letters, digits and underscores: a package's directory path is its Go import path (§imports)", pkg.Path, badSeg)
 			badSeg = ""
 		}
-		if pkg.Path != "." && name != base && goIdentOK(base) {
-			c.errorf(clause.Pos(), "projects-and-packages", "package name %q must match its directory name %q (§projects-and-packages)", name, base)
+		if gopkg.Name != "" && name != gopkg.Name {
+			c.errorf(clause.Pos(), "projects-and-packages", "package name %q disagrees with package %s, which the directory's Go file %s declares (§projects-and-packages)", name, gopkg.Name, gopkg.File)
 		}
 	}
 }
@@ -250,26 +249,31 @@ func (c *checker) importsResolve(pkg *Package) {
 			for _, spec := range imp.Specs {
 				pkg.importSpecs = append(pkg.importSpecs, spec)
 				path := spec.PathString()
+				qual := c.importQualifier(spec)
+				pkg.importQuals = append(pkg.importQuals, qual)
 				if prev, dup := byPath[path]; dup {
-					if prev.Qualifier() != spec.Qualifier() {
-						c.errorf(spec.Pos(), "imports", "package %q imported twice with different qualifiers %q and %q (§imports)", path, prev.Qualifier(), spec.Qualifier())
+					if prevQual := c.importQualifier(prev); prevQual != qual {
+						c.errorf(spec.Pos(), "imports", "package %q imported twice with different qualifiers %q and %q (§imports)", path, prevQual, qual)
 					}
 					continue
 				}
 				byPath[path] = spec
 
-				qual := spec.Qualifier()
+				target, exists := c.pr.Packages[path]
+				declared := ""
+				if spec.Alias == nil && exists && qual != spec.Path[len(spec.Path)-1].Name() {
+					declared = fmt.Sprintf(", which package %s declares,", path)
+				}
 				if spec.Alias != nil && !goIdentOK(qual) {
 					c.errorf(spec.Alias.Pos(), "imports", "import alias %q is not an identifier of ASCII letters, digits and underscores (§imports)", qual)
 				}
 				if what := generatedImportNames[qual]; what != "" {
-					c.errorf(spec.Pos(), "imports", "import qualifier %q is the name the generated route files and client import %s under (§imports); alias the import: %s %s", qual, what, qual+"db", path)
+					c.errorf(spec.Pos(), "imports", "import qualifier %q%s is the name the generated route files and client import %s under (§imports); alias the import: %s %s", qual, declared, what, qual+"db", path)
 				}
 				if prev, taken := pkg.Imports[qual]; taken && prev != path {
-					c.errorf(spec.Pos(), "imports", "import qualifier %q already used for package %q (§imports); alias one of them", qual, prev)
+					c.errorf(spec.Pos(), "imports", "import qualifier %q%s already used for package %q (§imports); alias one of them", qual, declared, prev)
 					continue
 				}
-				target, exists := c.pr.Packages[path]
 				switch {
 				case path == pkg.Path:
 					c.errorf(spec.Pos(), "imports", "a package cannot import itself (§imports)")
@@ -277,6 +281,9 @@ func (c *checker) importsResolve(pkg *Package) {
 					c.errorf(spec.Pos(), "imports", "unknown package %q: no directory of .volt files at that path under the project root (§imports)", path)
 				case target == pkg:
 				default:
+					if target.Name == "main" {
+						c.errorf(spec.Pos(), "imports", "package %q declares main, a program, which Go cannot import (§imports)", path)
+					}
 					pkg.Imports[qual] = path
 				}
 			}
@@ -411,8 +418,9 @@ func (c *checker) routing(pkg *Package) {
 	}
 	c.typesRouterCheck(pkg)
 
-	for _, spec := range pkg.importSpecs {
-		if _, resolved := pkg.Imports[spec.Qualifier()]; resolved && !c.usedQual[spec.Qualifier()] && generatedImportNames[spec.Qualifier()] == "" {
+	for i, spec := range pkg.importSpecs {
+		qual := pkg.importQuals[i]
+		if _, resolved := pkg.Imports[qual]; resolved && !c.usedQual[qual] && generatedImportNames[qual] == "" {
 			c.errorf(spec.Pos(), "imports", "package %q imported and not used (§imports)", spec.PathString())
 		}
 	}
@@ -1219,4 +1227,14 @@ func (o routeOracle) goType(name string) (string, bool) {
 		return "", false
 	}
 	return gt.Underlying, true
+}
+
+func (c *checker) importQualifier(spec *ast.ImportSpec) string {
+	if spec.Alias != nil {
+		return spec.Alias.Name()
+	}
+	if target := c.pr.Packages[spec.PathString()]; target != nil && target.Name != "" {
+		return target.Name
+	}
+	return spec.Path[len(spec.Path)-1].Name()
 }

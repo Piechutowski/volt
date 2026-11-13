@@ -712,3 +712,122 @@ func TestParamNamedQCompiles(t *testing.T) {
 func TestPackagesNamedLikeImportsCompile(t *testing.T) {
 	snippetCompiles(t, "v121_packages_named_like_imports")
 }
+
+func shopFixture(t *testing.T) *lang.Project {
+	t.Helper()
+	pr, err := lang.Load(disk.Source{}, filepath.Join("testdata", "shop"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags := lang.Check(pr); diag.HasErrors(diags) {
+		t.Fatalf("shop fixture has errors: %v", diags)
+	}
+	return pr
+}
+
+// TestShopGolden pins the route files of a package whose name is not its
+// directory's: lib__api declares api and imports lib__api/lib__db, which
+// declares db, and lib__stats, which declares db too, under the alias
+// stats (spec §projects-and-packages, §imports).
+func TestShopGolden(t *testing.T) {
+	pr := shopFixture(t)
+	if got := pr.Packages["lib__api"].Name; got != "api" {
+		t.Fatalf("lib__api declares %q, want api", got)
+	}
+	files, err := Generate(pr.Packages["lib__api"], Options{Source: "package lib__api"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range Files {
+		base := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(name), "volt_"), ".go")
+		golden := filepath.Join("testdata", "shop_api_"+base+".go.golden")
+		if *update {
+			if err := os.WriteFile(golden, files[name], 0o644); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		want, err := os.ReadFile(golden)
+		if err != nil {
+			t.Fatalf("%v (run 'go test ./gen/router -update' to create)", err)
+		}
+		if !bytes.Equal(files[name], want) {
+			t.Errorf("%s differs from %s (re-run with -update after reviewing)\n--- generated ---\n%s", name, golden, files[name])
+		}
+		if formatted, _ := format.Source(files[name]); !bytes.Equal(files[name], formatted) {
+			t.Errorf("%s is not gofmt-canonical", name)
+		}
+	}
+}
+
+// TestShopCompiles generates the shop fixture's packages into a module
+// beside its hand-written Go, app__api's program importing lib__api as
+// api among it, and builds and vets it (spec §projects-and-packages).
+func TestShopCompiles(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, err := filepath.Abs(filepath.Join("testdata", "shop"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	err = filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") {
+			return err
+		}
+		rel, _ := filepath.Rel(src, p)
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		dst := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(dst, b, 0o644)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gomod := "module shop\n\ngo 1.27\n\n" +
+		"require github.com/Piechutowski/volt v0.0.0\n\n" +
+		"replace github.com/Piechutowski/volt => " + repoRoot + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for path, pkg := range shopFixture(t).Packages {
+		files := map[string][]byte{}
+		if pkg.HasSchema() {
+			data, err := model.Generate(pkg, model.Options{Source: "package " + path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			files = data
+		}
+		if pkg.HasRouting() {
+			routes, err := Generate(pkg, Options{Source: "package " + path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for name, code := range routes {
+				files[name] = code
+			}
+		}
+		for name, code := range files {
+			full := filepath.Join(dir, filepath.FromSlash(path), name)
+			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(full, code, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	cmd := exec.Command("go", "vet", "./...")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("the shop fixture does not compile:\n%s", out)
+	}
+}

@@ -163,7 +163,7 @@ type QueryRef struct {
 	Qualifier string // the import qualifier as written, e.g. "db"; the package's own name when Local
 	Package   string // root-relative package path
 	Import    string // Go import path of the package
-	PkgName   string // the package's Go name (its directory name)
+	PkgName   string // the name the package declares, which need not be its directory's
 	Local     bool   // the query is this package's own (§query-routes): no import, the call is unqualified
 	Method    string // generated method name, e.g. "UserGet"
 	Params    []QueryParam

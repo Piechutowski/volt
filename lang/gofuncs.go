@@ -104,9 +104,23 @@ func goSourceOf(name string, b []byte) GoSource {
 // reported in broken ("file: line:col message"). The result is a
 // function of the sources and of the process's build context.
 func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, gotypes map[string]GoType, broken []string) {
-	funcs = map[string]GoFunc{}
-	gotypes = map[string]GoType{}
-	broken = goFilesParse(dir, srcs, func(fset *gotoken.FileSet, path string, f *goast.File) {
+	sc := goScanBuild(dir, srcs)
+	return sc.funcs, sc.types, sc.broken
+}
+
+type goPackage struct {
+	Name string
+	File string
+}
+
+func goScanBuild(dir string, srcs []GoSource) *goScan {
+	funcs := map[string]GoFunc{}
+	gotypes := map[string]GoType{}
+	var gopkg goPackage
+	broken := goFilesParse(dir, srcs, func(fset *gotoken.FileSet, path string, f *goast.File) {
+		if gopkg.Name == "" && f.Name != nil && f.Name.Name != "documentation" {
+			gopkg = goPackage{Name: f.Name.Name, File: filepath.Base(path)}
+		}
 		for _, d := range f.Decls {
 			if gd, ok := d.(*goast.GenDecl); ok && gd.Tok == gotoken.TYPE {
 				for _, spec := range gd.Specs {
@@ -130,7 +144,9 @@ func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, gotypes ma
 			funcs[fn.Name.Name] = goFuncOf(fset, path, fn)
 		}
 	})
-	return funcs, gotypes, broken
+	sc := &goScan{}
+	sc.once.Do(func() { sc.funcs, sc.types, sc.broken, sc.gopkg = funcs, gotypes, broken, gopkg })
+	return sc
 }
 
 // GoMethodsOf scans a package directory's sources as GoFuncsOf does and
@@ -268,17 +284,12 @@ type goScan struct {
 	funcs  map[string]GoFunc
 	types  map[string]GoType
 	broken []string
+	gopkg  goPackage
 }
 
 type goFuncsCache struct {
 	mu sync.Mutex
 	by map[string]*goScan
-}
-
-func goScanOf(funcs map[string]GoFunc, gotypes map[string]GoType, broken []string) *goScan {
-	sc := &goScan{}
-	sc.once.Do(func() { sc.funcs, sc.types, sc.broken = funcs, gotypes, broken })
-	return sc
 }
 
 func (c *checker) goFuncs(pkg *Package) *goScan {
@@ -295,7 +306,10 @@ func (c *checker) goFuncs(pkg *Package) *goScan {
 		c.gofuncs.by[pkg.Dir] = sc
 	}
 	c.gofuncs.mu.Unlock()
-	sc.once.Do(func() { sc.funcs, sc.types, sc.broken = GoFuncsScan(c.pr.src, pkg.Dir) })
+	sc.once.Do(func() {
+		b := goScanBuild(pkg.Dir, GoSourcesRead(c.pr.src, pkg.Dir))
+		sc.funcs, sc.types, sc.broken, sc.gopkg = b.funcs, b.types, b.broken, b.gopkg
+	})
 	return sc
 }
 

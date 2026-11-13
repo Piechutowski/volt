@@ -511,9 +511,6 @@ app/routes.volt:10:2: error: spec/query-routes: db.PostUpdate is routed with pat
 ## i329_query_verb_delete
 app/routes.volt:10:2: error: spec/query-routes: db.PostDelete is routed with delete, not get: the generated method a query route binds fixes its verb (§query-routes)
 
-## i32_pkg_dir_mismatch
-app/r.volt:2:1: error: spec/projects-and-packages: package name "routes" must match its directory name "app" (§projects-and-packages)
-
 ## i330_query_verb_head
 app/routes.volt:10:2: error: spec/query-routes: db.PostGet is routed with get, not head: the generated method a query route binds fixes its verb, and ServeMux answers HEAD on a get route (§query-routes)
 
@@ -1130,6 +1127,18 @@ app/i541_shared_action_two_docs.volt:9:2: error: spec/scopes-and-routes: Posts.I
 
 ## i542_select_name_createmany.volt
 db/i542_select_name_createmany.volt:10:8: error: spec/selects-over-groups: select name "CreateMany" collides with the generated CRUD surface (§selects-over-groups)
+
+## i543_package_disagrees_with_go_files
+app/r.volt:3:1: error: spec/projects-and-packages: package name "routes" disagrees with package app, which the directory's Go file auth.go declares (§projects-and-packages)
+
+## i544_declared_names_collide
+app/routes.volt:7:2: error: spec/imports: import qualifier "db", which package lib__metrics declares, already used for package "lib__blog" (§imports); alias one of them
+
+## i545_import_main
+app/routes.volt:6:2: error: spec/imports: package "tool" declares main, a program, which Go cannot import (§imports)
+
+## i546_declared_name_reserved
+app/routes.volt:6:2: error: spec/imports: import qualifier "rt", which package lib__runtime declares, is the name the generated route files and client import the data runtime nao/rt under (§imports); alias the import: rtdb lib__runtime
 
 ## i54_group_type_disagree.volt
 db/i54_group_type_disagree.volt:19:29: error: spec/selects-over-groups: column "org" disagrees on type across "mixed": int in ks_seats; string in ms_revenue — the predicate cannot be checked for every member (§selects-over-groups)

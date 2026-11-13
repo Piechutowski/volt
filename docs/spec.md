@@ -1970,10 +1970,16 @@ package clause = "package", name, newline ;
    reverse-URL helpers and client methods of the routes, each per Part I
    §namespaces-and-uniqueness extended with §pipelines, §predicates and
    §route-names-and-reverse-urls).
-4. In every directory other than the project root, the package name
-   MUST equal the directory's base name, and the directory path is a
-   package path (§imports). The root directory's package may
-   take any name.
+4. **A package's name is its clause's, not its directory's**, as in
+   Go: a directory `lib__api` may hold `package api`, and the root
+   directory's package takes any name likewise. The directory path is
+   the package path (§imports); the name is what an importer qualifies
+   by unless it writes an alias. When the directory holds Go files
+   (rule 9), the package name MUST equal the name their package
+   clause declares, since the generated files compile beside them
+   under the `.volt` clause's name; the error names the Go file. A
+   Go file declaring `documentation` is go/build's exception and is
+   ignored here as there.
 5. **Layout invariance.** Splitting or merging the `.volt` files of a
    package, or reordering declarations, MUST NOT change the meaning of
    the package. Implementations MUST process a package as the
@@ -2025,6 +2031,20 @@ table users {
 }
 ```
 
+```volt fragment
+// lib__api/routes.volt, beside auth.go's `package api`; importers
+// qualify it api, and lib__api/lib__db declares db.
+package api
+
+import (
+	lib__api/lib__db
+)
+
+scope /api {
+	get /customers db.CustomerList
+}
+```
+
 ## Imports
 
 ```ebnf
@@ -2048,7 +2068,10 @@ package path = name, { slash, name } ;
    package's Go import path: a package in a directory `żółw` is an
    error, although its name, like any name, may be Unicode.
 3. The imported package is referenced through its **qualifier**: the
-   alias when given, else the last path segment. All cross-package
+   alias when given, else the name the imported package declares
+   (§projects-and-packages), which need not be the last path segment:
+   the entry `lib__api/lib__db` of a package declaring `db` is
+   qualified `db`, as a Go import of that directory is. All cross-package
    references are qualifier-prefixed (`db.User`); nothing is ever
    imported into the local scope. A `migration` is not an importable
    element: it belongs to the package whose tables it migrates, and
@@ -2068,16 +2091,23 @@ package path = name, { slash, name } ;
    NOT import itself; **every import MUST be used**: an import whose
    qualifier is never referenced is an error. An import MAY take the
    package's own name as its qualifier, since that name qualifies
-   nothing else (rule 4).
+   nothing else (rule 4). Two paths whose packages declare one name
+   share a qualifier unless one is aliased, and the error says which
+   package declares it. A package declaring `main` is a program, which
+   Go cannot import: importing one is an error.
 6. **The generated files' own names.** A qualifier MUST NOT be
    `context`, `http`, `rt`, `run`, `time` or `volt`: the route files
    and the client import the standard library's `context`, `net/http`
    and `time`, the data runtime `nao/rt`, the runner `nao/run` and the
    root `volt` package under those names (§data-and-network-layers),
-   and they import a data package under its qualifier, so a project
-   package under one of those names would give a generated file two
-   imports of one name. The error names an alias to write: the entry
-   `rtdb rt` imports a package `rt` under `rtdb`. A package that
+   and they import a data package under its qualifier, naming the
+   import whenever the qualifier is not the path's last element (`db
+   "shop/lib__api/lib__db"`), so a package imported under one of those
+   names, its declared name or an alias, would give a generated file
+   two imports of one name. The error names an alias to write: the
+   entry `rtdb rt` imports a package `rt` under `rtdb`, and an
+   unaliased `lib__runtime` whose package declares `rt` is written
+   `rtdb lib__runtime`. A package that
    routes its own tables imports nothing, and its client names it as
    §generated-client says.
 7. **Import cycles are errors.** The package import graph MUST be

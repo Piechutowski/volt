@@ -62,14 +62,14 @@ func TestVoltSampleParses(t *testing.T) {
 	if len(imp.Specs) != 2 {
 		t.Fatalf("imports = %d, want 2", len(imp.Specs))
 	}
-	if q := imp.Specs[0].Qualifier(); q != "db" {
-		t.Errorf("spec[0] qualifier = %q, want db", q)
+	if imp.Specs[0].Alias != nil || imp.Specs[0].PathString() != "db" {
+		t.Errorf("spec[0] = %+v, want the unaliased path db", imp.Specs[0])
 	}
 	if p := imp.Specs[1].PathString(); p != "shared/dicts" {
 		t.Errorf("spec[1] path = %q, want shared/dicts", p)
 	}
-	if q := imp.Specs[1].Qualifier(); q != "d2" {
-		t.Errorf("spec[1] qualifier = %q, want alias d2", q)
+	if a := imp.Specs[1].Alias; a == nil || a.Name() != "d2" {
+		t.Errorf("spec[1] alias = %v, want d2", a)
 	}
 
 	pl := f.Decls[2].(*ast.Pipeline)

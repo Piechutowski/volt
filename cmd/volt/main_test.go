@@ -346,3 +346,109 @@ func TestGenVerifyTypeChecks(t *testing.T) {
 		t.Fatalf("gen --verify beside a broken file: %v, want the type error at broken.go", err)
 	}
 }
+
+// TestPackageNamesUnlikeDirectories runs check, vet, migration check and
+// gen over a project whose packages' names are not their directories'
+// and builds what gen writes (spec §projects-and-packages, §imports).
+func TestPackageNamesUnlikeDirectories(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(t.TempDir(), "shop")
+	files := map[string]string{
+		"go.mod": "module shop\n\ngo 1.27\n\nrequire github.com/Piechutowski/volt v0.0.0\n\nreplace github.com/Piechutowski/volt => " + repoRoot + "\n",
+		"lib__api/routes.volt": `package api
+
+import (
+	lib__api/lib__db
+)
+
+pipeline guarded {
+	use BearerAuth
+}
+
+scope /api [pipe: guarded] {
+	get  /customers          db.CustomerList
+	get  /customers/:id(int) db.CustomerGet
+	post /customers          db.CustomerCreate
+}
+`,
+		"lib__api/auth.go": `package api
+
+import (
+	"net/http"
+
+	"github.com/Piechutowski/volt/nao/run"
+)
+
+func BearerAuth(next http.Handler) http.Handler { return next }
+
+func Open(conn run.DB) http.Handler { return NewRouter(Controllers{DB: conn}) }
+`,
+		"lib__api/lib__db/schema.volt": `package db
+
+table customers {
+  id    int    [pk]
+  email string [unique]
+}
+`,
+		"lib__api/lib__db/0001__customers.volt": `package db
+
+migration 0001__customers {
+  create table customers {
+    id    int    [pk]
+    email string [unique]
+  }
+}
+`,
+		"app__api/main.go": `package main
+
+import (
+	"net/http"
+
+	"github.com/Piechutowski/volt/nao/run"
+	"shop/lib__api"
+)
+
+func main() {
+	conn, err := run.Open("sqlite3", "shop.db")
+	if err != nil {
+		panic(err)
+	}
+	http.ListenAndServe(":8080", api.Open(conn))
+}
+`,
+	}
+	for name, src := range files {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, args := range [][]string{
+		{"check", root + "/..."},
+		{"vet", root + "/..."},
+		{"migration", "check", filepath.Join(root, "lib__api", "lib__db")},
+		{"gen", root + "/..."},
+	} {
+		if out, err := voltRun(t, args...); err != nil {
+			t.Fatalf("volt %v: %v\n%s", args, err, out)
+		}
+	}
+	router, err := os.ReadFile(filepath.Join(root, "lib__api", "volt_router.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(router), "package api\n") || !strings.Contains(string(router), `db "shop/lib__api/lib__db"`) {
+		t.Errorf("volt_router.go does not declare api or name its import of lib__db as db:\n%s", router)
+	}
+	cmd := exec.Command("go", "build", "-buildvcs=false", "./...")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("the generated project does not build:\n%s", out)
+	}
+}
