@@ -1305,6 +1305,2140 @@ and the roadmap its line.
 
 ---
 
+## Step 38. The stress suite for backends
+
+A design, under review; nothing here is built. It is a catalogue of
+load cases that push a running Volt backend to its limits on the four
+resources of `style.md` P1, network, disk, memory and CPU, each by
+bandwidth and latency. Every case models something that happens to a
+real application, measures one thing with a name, and asserts an
+invariant, so that a fast wrong answer fails. The request bench of
+step 37 is the instrument; this step is what it is pointed at. The
+sketches below were written before anything was run: none of their
+numbers is a measurement.
+
+### What exists today
+
+Nothing drives a running backend. No test has more than one client,
+and nothing measures the network, memory over time, or the disk
+beyond ten thousand inserted rows.
+
+- `internal/perfsweep`, run by `scripts/perf.go` and
+  `lang/profile_sweep_test.go`, times the tooling: load, check, vet
+  and generate over growing table counts, and the language server's
+  keystroke. Its subject is not a backend.
+- `internal/corpus` writes projects of any size, and `volt stress`
+  writes one to a directory. They carry no rows and are never served.
+  The corpus leaves out indexes, joins, aggregates, `with`, loads and
+  bodies (step 34, V7). Three cases below use it for the sizes of the
+  program itself: columns, routes and tables.
+- `nao/itest/bench_test.go` has two benchmarks of the data layer on
+  one goroutine: ten thousand creates in one transaction, and
+  `CreateMany` of ten thousand.
+- `nao/run`'s tests prove the two pools, the statement cache under
+  eviction and the migration ledger for correctness, each with a
+  handful of goroutines.
+- `runner.md` holds the only numbers: lookups by connection count,
+  one-row writes, readers behind a committing writer, statements
+  reused in a transaction, the bulk insert, and other data layers. All
+  were taken by hand on one 4-core container, below HTTP, mostly with
+  `context.Background()`. The sketches below start from them.
+- Step 21 lists four open questions of the runner, step 23 the limits
+  that are missing with three measured hazards, and step 34 the
+  failure injection. Cases below measure three of step 21's four
+  questions (`PostReadCores`, `SampleImport`, `PostSearch`), the one
+  on quoted identifiers being no matter of load, and guard step 23's
+  limits once they land.
+
+**The request bench of step 37,** designed and not built, comes
+nearest: a load generator, a recorder that gives every instant of a
+request to a stage, a fixture in the two domains, a noise floor, and
+sixteen scenarios. Two of them are the harness's own floor, and each
+of the other fourteen is the steady arm of a case here:
+
+| Step 37's scenario | The case here |
+|---|---|
+| floor-null, floor-volt | none: the floor every case is read against |
+| hot-row | `SeatClaimHot`, steady |
+| uniform-writes | `SeatClaimSpread`, steady |
+| read-mostly | `PostMixSweep` at 99/1 |
+| multi-statement | `AuditWrite` |
+| n-plus-one | `PostFeed` |
+| bulk-vs-single | `SampleAppend` and `SampleAppendBulk` |
+| ramp | `ConnectionChurn`, and the herd |
+| slow-clients | `ClientSlow`, its slow readers |
+| checkpoint-stall | `WALReaderPinned`, its one pinned reader |
+| large-bodies | `UploadParallel` |
+| larger-than-cache | `SampleReadCold`, its cached arm |
+| wide-rows | `ReportCreateWide` |
+| overload | `SampleAppendOverload` and `PostReadOverload` |
+| sustained | `ProcessSoak`, for five minutes |
+
+Where a scenario is an arm of a case, the suite runs the scenario and
+adds the other arms; nothing is measured twice. What the bench does
+not have, and this step adds: the arrivals other than a steady rate
+and one ramp; clients that vanish, cancel, send slowly, sit idle or
+send large headers; what is done to a server while it runs, a
+restart, a second writer on the file, a backup, a migration, a job;
+the two cells its matrix leaves empty, the latency of a real link and
+the cold read, which the relay and the eviction below fill in Go; the
+standing probes; and the forty-six cases no scenario touches.
+
+### Questions for the maintainer
+
+1. **One claim or two.** `SeatClaimHot` is step 37's hot-row on
+   another table: the seats of a discussion here, the units of an
+   organization's quota there. The fixture should carry one. The
+   seats are the story this step was given, the quota is already in
+   step 37; either serves, and the other step's name follows the
+   choice.
+2. **A process that can die.** Step 37 runs client and server in one
+   process, for the one clock, and this step follows it. Two arms
+   need a process that is killed: the kill of `ServerRestart` and the
+   crash of `CommitSync`. They wait for the child process of step
+   34's V4, which AGENT.md's rule on what a test may run has to admit
+   first. `MigrationLive` runs the `volt` the suite built, which the
+   rule allows today.
+3. **The word.** `volt stress` writes a corpus project to time the
+   tooling; this suite loads a backend. One name, two meanings
+   (`style.md` N8). Proposed: the command becomes `volt corpus`, after
+   the package it wraps, and "stress" means this suite.
+4. **Stand-ins for what is not built.** Sessions are a table, jobs a
+   table polled over HTTP, the password hash is `crypto/pbkdf2`, and
+   serving is a hand-written `main` with every `http.Server` option
+   explicit. What the suite measures on them becomes the baseline for
+   steps 13 to 16; their designs are not decided here.
+5. **The smoke tier's clock.** Step 37's smoke test runs each scenario
+   for 300 ms. The smoke runs here are sized in requests, not in time,
+   so that the tier reads no clock and asserts the same thing on a
+   slow machine; its budget is fifteen seconds on four cores.
+
+### Method
+
+**The instrument is step 37's.** A case is a scenario of the bench,
+run by name and tier through `cmd/volt/bench`. The suite takes from
+it, unchanged: the one process with a real listener on 127.0.0.1; the
+load generator, open loop by default with latency from the scheduled
+send, and a closed loop to find capacity; the warm-up and the window;
+the seeds; the recorder and the stages; the measures of a run; the
+five runs and the noise floor; the results file, the report and the
+compare. "Twice capacity" and "ten times capacity" below mean the
+capacity that closed loop finds, as in its overload scenario.
+
+A sketch below names the stage expected to dominate in step 37's
+stages: the wait for the writer is `writer wait`, the wait for a
+reader `read pool wait`, a transaction's fixed cost `begin` and
+`commit`, SQLite `statement exec` and `row scan`, and net/http the
+client's stages and `routing and middleware`. A case fails on an
+invariant. It is degraded on its own signal, or on the bench's
+`SURPRISE`: a stage that dominates against the sketch, or a total
+outside twice the sketched range, each judged past the noise floor.
+No time is asserted.
+
+**What this step adds to the instrument:**
+
+- **Arrivals.** The bench's schedule, a function of the seed, gains
+  shapes: a ramp, a step, a periodic burst, a herd released when the
+  server opens, and clients that send again on an error or a timeout.
+- **Clients.** A client that closes its connection at a seeded point
+  of a request, one that cancels, one that writes or reads a few
+  bytes at a time on sockets with small buffers, connections that sit
+  idle, event streams, and requests with oversized headers.
+- **Actions.** At a scheduled time the suite does something to the
+  server: stops it and starts it again, opens a second `run.DB` on
+  its file, holds a read transaction, runs a backup, runs
+  `volt migration up` with the `volt` it built, or starts a job loop
+  in `main`.
+- **The ledger.** The client records every request and its answer. A
+  request whose connection ended before its answer is unknown, and an
+  invariant brackets it: the rows stored lie between the acknowledged
+  and the acknowledged plus the unknown.
+- **Standing invariants,** beside the bench's checks of every body,
+  `integrity_check` and `foreign_key_check`: a response's
+  `Content-Length` is right and its status is one the case allows, a
+  500 never among them; every row read equals what the seeder or an
+  acknowledged write stored, by a checksum column derived from the
+  key and the version; a read that starts after a write was
+  acknowledged sees it; at the end every counter equals its count
+  (V7); and once the load stops, goroutines, descriptors and reader
+  connections are back at their baseline (V10).
+- **Standing probes,** beside every case of the full and soak tiers:
+  a health check a second with a one-second deadline, one route that
+  touches no database and one that reads a row, as a load balancer
+  would; and a canary read and a canary write, ten a second each,
+  which are the victims whose latency the cases report. The story
+  "health checks during overload" is this probe: its misses are a
+  column of every report, and `AuthorLogin` and `PostReadOverload`
+  name it in their signal.
+- **Arms.** An arm is one setting of the one thing a case varies; the
+  bench calls it a variant. A case's chart has one bar or one line
+  per arm.
+
+Heap, goroutines and descriptors are the process's, the client's
+included; the floor scenarios give the client's part, and a slope or
+a return to baseline does not depend on it.
+
+The sketches use step 37's assumptions where it has one, and five
+more:
+
+| Name | What | Value | From |
+|---|---|---|---|
+| `requestHTTP` | CPU of one keep-alive request with a small body and no effect | 40 µs | step 37, which counts client and server together; its floor scenarios measure both |
+| `lookup` | a point read on a reader | 5 µs | step 37; `runner.md` 1 and 5 |
+| `write` | one row written and committed; `runner.md` does not say whether as a bare statement or a transaction of one, and the floor measures both | 30 µs | step 37; `runner.md` 1 |
+| `rowTx` | one statement inside a transaction, its row read back | 10 µs | step 37; `runner.md` 3 |
+| `rowBulk` | one row of a `CreateMany` | 4 µs | step 37; `runner.md` 4 |
+| `rowList` | one row listed; about double under a request's context, which costs a goroutine per row | 1.2 µs | step 37; `runner.md` 5 and 6 |
+| `txFixed` | what a write transaction adds to its statements: `BEGIN IMMEDIATE` with the busy timeout's three statements around it, 15 µs, and `COMMIT`, 10 | 25 µs | step 37 |
+| `fsync` | one fsync in the database's directory | 1 ms | step 37's guess; measured first |
+| `jsonDecode`, `jsonEncode` | encoding/json | 80 and 250 MB/s | step 37 |
+| `rowScan` | one row walked and not returned: an aggregate, an offset, a filter | 0.15 µs | estimate |
+| `prepare` | compiling one statement | 6 µs | `runner.md` 3 |
+| `frame` | one page in the WAL; SQLite checkpoints on the commit that brings the WAL to 1,000 frames, about 4 MB | 4,120 B | mattn's build |
+| `deviceRead` | one 4 KB read the OS has not cached | 100 µs | measured first |
+| `connectionIdle` | memory of one idle keep-alive connection | 15 KB | estimate |
+| R | the readers: `GOMAXPROCS` | 4 | `runner.md` 1 |
+
+What the cases need that is usually another tool, in Go or out of
+reach:
+
+| Need | Usual tool | In Go | Verdict |
+|---|---|---|---|
+| Delay, a bandwidth cap, stalls and resets on the network | `tc`, a fault proxy | a TCP relay between client and server: a token bucket, a delay queue, a paused direction, a reset through `SetLinger(0)` | designed; no packet loss and no reordering |
+| Slow clients | a slow HTTP tool | the client writes and reads a few bytes at a time on sockets with small buffers | designed |
+| Many source ports | several machines | the client dials from several loopback addresses | designed, Linux |
+| A slow disk | cgroup I/O limits, a delay device | nothing: mattn exposes no VFS. The suite takes the directory as a flag, measures its `fsync` and `deviceRead` first, and `synchronous = FULL` puts the disk into every commit | out of reach; the disk is given, not shaped |
+| A cold cache | `drop_caches` as root | `posix_fadvise` with `DONTNEED` on the database file after a sync, a raw system call | designed, Linux only (S14: one more build constraint, justified here) |
+| A database larger than memory | a memory cgroup | nothing bounds the OS cache from Go without privileges. Stand-ins: the cold start, continuous eviction, which is pessimistic since it evicts interior pages too, and a file really larger than memory in the soak tier | partly out of reach |
+| A memory limit | a memory cgroup | `debug.SetMemoryLimit`, the Go heap only | partial |
+| Fewer cores | `taskset`, a CPU quota | `GOMAXPROCS` | partial: no quota throttling, and the client shares the cores |
+| A descriptor limit | `ulimit` | `syscall.Setrlimit` | designed |
+| A restart | a shell | in the process: the listener, the streams and the database are closed and opened again | designed |
+| A kill | a shell | a child process | needs question 2 |
+| A second writer on the file | another process | a second `run.DB` on the same file, which contends for SQLite's write lock as a second process does; and the `volt` the suite built, for `volt migration up` | designed |
+| A full disk | a small mount | `PRAGMA max_page_count` (V4): the database fills, the file system does not | partial |
+| TLS | | `crypto/tls` with a certificate made at start | designed |
+| Power loss | | | out of reach |
+
+### The fixture
+
+Step 37's, under `itest/bench`, in the two neutral domains, with
+what the cases need added to it:
+
+| Package | Added | For |
+|---|---|---|
+| blog | on `posts`: a unique `slug`, a `version`, a `view_count`, a `comment_count`, a body of about 1 KB; `post_tags` | the read stories, the counter, the edit conflict |
+| blog | `discussions`, `seats`, unless the quota stands for them (question 1) | the limited claim: `seat_count_max`, `seat_count_taken`, one seat per author |
+| blog | `sessions`, `audits`, `deliveries`, `jobs`, `uploads` | the write stories: a random token key, an append-only log, a unique idempotency key, a queue with a partial index on its ready rows, a blob column |
+| metrics | `accounts`, `series`, `rollups` beside its samples | tenants, dashboards and the rollup job |
+| corpus | `itest/bench/wide`, as it is | `ReportCreateWide` |
+| corpus, at run time | a thousand tables | `SchemaOpenLarge` applies the DDL the generator returns for them; `RouteMatchMany` registers their seven thousand patterns on a `ServeMux` in a loop, as the generated `register` does. Neither commits generated Go |
+
+A seeder fills them: a pure function from a seed and a size to rows,
+written through `CreateMany`, as the bench seeds its own. Sizes: the
+smoke tier a few thousand rows; the full tier a million posts, ten
+million comments and thirty million samples, ten series of a year
+each at a sample every ten seconds, a few gigabytes in all; the soak
+tier what its case says.
+
+### The axes
+
+Every case states its value on each, in this order.
+
+1. **Key:** `one` row; `zipf`, a few hot rows; `uniform`; `monotonic`,
+   appended at the right edge of the tree; `random`, a page split
+   anywhere; `moving`, a hot set that shifts.
+2. **Mix:** `read`; `write`; `read-write`, a read and then a write of
+   the same row; `99/1`, `90/10`, `50/50`, `1/99`; and for a write its
+   verb: insert, update, delete, upsert.
+3. **Arrival:** `steady`; `ramp`; `spike`, a step; `burst`, periodic;
+   `herd`, everyone at once after a restart; `retry`, clients that
+   send again on an error; `over2` and `over10`, sustained at twice
+   and ten times capacity.
+4. **Size:** `tiny` rows; `wide` rows; `blob`; `body`, a large
+   request; `response`, a large one; `rows`, many in one transaction;
+   `keys`, thousands in one `in`.
+5. **Scale:** `cached`, the file fits in memory and has been read;
+   `big`, ten times what the OS can cache; `cold`; `fragmented`, after
+   many deletes; `indexed`, many indexes. Two caches are meant. Each
+   connection has SQLite's own, 2 MB, 500 pages, in mattn's build, and
+   a reader drops it whenever the writer has committed (`runner.md`
+   2); so even `cached` data is mostly fetched from the OS, a system
+   call a page, and `big` and `cold` are about the OS cache.
+6. **Query:** `point`; `range`; `join`; `fan-out`, the N+1;
+   `aggregate` over a large range; `count` of a large table; `sort`
+   without an index; `offset`; `keyset`; `none` for a write that reads
+   nothing.
+7. **Transaction:** `single` statement; `several`; `long-write`;
+   `long-read` during writes; `upgrade`, a read that decides a write;
+   `rollback`, a high rate of refusals. In Volt an upgrade is
+   `rt.Atomic` over an `rt.Then`, which begins immediately and so
+   never fails to upgrade; the same `Then` without the `Atomic` reads
+   on a reader and writes later, which is the race.
+8. **Client:** `keep-alive`; `churn`, a connection a request; `idle`,
+   many held open; `slow-read`; `slow-send`; `vanish`, gone in the
+   middle; `headers`, oversized; `cancel`. Over HTTP/1.1, which a
+   server without TLS speaks, a client cancels by closing its
+   connection, so `cancel` and `vanish` reach the server the same way.
+9. **Environment:** `steady`; `restart`; `checkpoint` running;
+   `backup` running; `migration` running; `jobs` competing.
+
+The step spike and the herd are not cases. The three same-row cases
+and their three controls each run under three arrivals: steady at
+half capacity; a step from a tenth of capacity to one and a half
+times it for ten seconds, and back; and a herd, the server started
+with every client waiting. Each reports its peak queue and the time
+p99 takes to return.
+
+### The catalogue
+
+Sixty-two cases: thirty-eight seeded from the stories, twenty-four
+added by the attack below. Tiers are S for smoke, F for full and K
+for soak.
+
+| Case | From | Cell | Tiers | Measures |
+|---|---|---|---|---|
+| `PostReadHot` | viral post | CPU bandwidth | F | requests a second for one row: the read path's ceiling |
+| `PostReadSpread` | control: uniform reads | CPU bandwidth | F | the same over a million rows |
+| `SeatClaimHot` | limited claim | CPU latency | S F | the wait for the writer when everyone wants one row |
+| `SeatClaimSpread` | control: uniform writes | CPU latency | F | the same claim over ten thousand rows |
+| `PostViewHot` | view counter | disk bandwidth | S F | what turning a read into a write costs |
+| `PostViewSpread` | control: uniform mixed | disk bandwidth | F | the same increment spread |
+| `SampleAppend` | metrics ingestion, single | disk bandwidth | F K | WAL bytes and writer time per row, one row a request |
+| `SampleAppendBulk` | metrics ingestion, bulk | disk bandwidth | S F | the same per row, a thousand rows a request |
+| `AuditWrite` | audit log | CPU bandwidth | S F | a transaction's fixed cost against its second statement |
+| `SessionTouch` | session touch | CPU latency | F | what a blind write on every read costs, and what coalescing returns |
+| `DeliveryReceive` | webhook receiver | CPU bandwidth | S F | a refused write against an accepted one |
+| `DeliveryKeyOrder` | attack on `DeliveryReceive` | disk latency | F K | insert cost by key order as the index outgrows memory |
+| `JobClaim` | job queue | CPU latency | S F K | writer time per job and per empty poll |
+| `SampleImport` | bulk import | CPU latency | S F | a victim's write latency by rows per chunk |
+| `SampleAggregate` | dashboard | CPU latency | F | a short read's wait behind long reads |
+| `PostFeed` | feed | CPU bandwidth | S F | a page's cost by statements per page |
+| `PostSearch` | search and autocomplete | CPU latency | S F | the time from a cancel to a free reader |
+| `PostCrawl` | crawler | CPU bandwidth | S F | a page's cost by depth |
+| `PostExport` | export | memory bandwidth | S F | heap bytes per exported row, and how long the snapshot is held |
+| `RollupRecompute` | cache stampede | CPU latency | F | recomputations per expiry |
+| `PostCreateRace` | unique slug | CPU latency | S F | winners per contested value |
+| `PostUpdateConflict` | edit conflict | CPU latency | S F | stored rows no validator accepts, and silent overwrites |
+| `CommentListRace` | delete during read | CPU latency | S F | torn reads per thousand, by spelling |
+| `AuthorLogin` | login storm | CPU latency | F | a small request's wait for a processor |
+| `ReportDecodeNested` | large JSON bodies | CPU bandwidth | S F | CPU and heap per megabyte of JSON |
+| `ReportCreateWide` | heavy validation | CPU bandwidth | F | a write's cost per column, by stage |
+| `RouteMatchMany` | thousands of routes | CPU bandwidth | F | match time by route count |
+| `StreamIdle` | many idle connections | memory bandwidth | F K | resident bytes per idle connection |
+| `UploadParallel` | large uploads and downloads | memory bandwidth | S F | heap bytes per megabyte in flight |
+| `ProcessSoak` | a slow leak | memory bandwidth | K | the slope of every resource over hours |
+| `HeapPressureTail` | large heap | memory latency | F | the tail of small reads under allocation pressure |
+| `ClientSlow` | slow clients | network latency | F | fast clients' latency and memory pinned, per slow client |
+| `ConnectionChurn` | connection churn | network latency | F | the cost of a connection |
+| `ClientVanish` | clients that vanish | network latency | S F | work done after the client left, and atomicity |
+| `WALReaderPinned` | long reader blocks the checkpoint | disk latency | F K | WAL bytes while a snapshot is held, and the stall after |
+| `SampleReadCold` | database larger than memory | disk latency | F K | device reads per lookup |
+| `BackupLive` | backup during traffic | disk bandwidth | F | whether a backup finishes, and whether it is one commit |
+| `MigrationLive` | index creation during traffic | disk bandwidth | F | write stall and refusals while a migration holds the lock |
+| `AccountWriteImbalance` | tenant imbalance | CPU latency | F | a light client's share of the writer |
+| `PostMixSweep` | attack on `PostReadHot` | memory latency | F | read cost by write share |
+| `PostReadCores` | attack on `PostReadHot` | CPU bandwidth | F | speedup per core |
+| `PostReadTrending` | attack on `PostReadSpread` | disk latency | F | the latency peak when the hot set moves |
+| `SampleAppendOverload` | attack on `SeatClaimHot` | CPU latency | F | goodput and queue growth past the writer's capacity |
+| `CommitSync` | attack on `SeatClaimSpread` | disk latency | F | what an fsync costs a commit and a checkpoint |
+| `PostWriteIndexed` | attack on `PostViewHot` | disk bandwidth | F | writer time and frames per insert, by index count |
+| `SampleRetention` | attack on `SampleAppend` | disk bandwidth | F K | cost per deleted row, and the file's size after |
+| `DatabaseFull` | attack on `SampleAppend` | disk capacity | S F | clean refusal and recovery at capacity |
+| `SampleRollup` | attack on `SampleAppendBulk` | CPU latency | S F | write stall per second of read inside a write transaction |
+| `ClientRetryStorm` | attack on `AuditWrite` | network latency | F | time to recover after a stall when clients retry |
+| `CommentScanFragmented` | attack on `JobClaim` | disk latency | F | pages read per live row |
+| `CommentDeleteCascade` | attack on `SampleImport` | disk bandwidth | F | WAL bytes and stall per cascaded row |
+| `PostSortUnindexed` | attack on `SampleAggregate` | disk bandwidth | F | temporary bytes per sorted row |
+| `PostGetMany` | attack on `PostFeed` | CPU bandwidth | S F | cost per key, by spelling |
+| `PostFilterShapes` | attack on `PostSearch` | CPU bandwidth | S F | statement cache hits by distinct shapes |
+| `PostReadOverload` | attack on `PostCrawl` | CPU latency | F | goodput past the cores' capacity |
+| `PostReadFormats` | attack on `PostExport` | network bandwidth | S F | bytes on the wire and CPU per row, by format |
+| `ServerRestart` | attack on `RollupRecompute` | network latency | F | requests failed across a restart, and the time back |
+| `ServerOverlap` | attack on `PostCreateRace` | disk latency | F | write latency while two processes share the file |
+| `RequestHeaderLarge` | attack on `ReportDecodeNested` | memory bandwidth | S | bytes allocated per refused header byte |
+| `SchemaOpenLarge` | attack on `ReportCreateWide` | memory bandwidth | F | time to first row and bytes per connection, by schema size |
+| `EventFanout` | attack on `StreamIdle` | network bandwidth | S F K | deliveries a second, and what a stalled subscriber leaves |
+| `LogSinkStall` | attack on `ProcessSoak` | disk latency | F | request stall per second of sink stall |
+
+### The coverage matrix
+
+Each case sits in the one cell it stresses most.
+
+| | Bandwidth | Latency |
+|---|---|---|
+| Network | `EventFanout`, `PostReadFormats` | `ClientSlow`, `ConnectionChurn`, `ClientVanish`, `ClientRetryStorm`, `ServerRestart` |
+| Disk | `PostViewHot`, `PostViewSpread`, `SampleAppend`, `SampleAppendBulk`, `BackupLive`, `MigrationLive`, `PostWriteIndexed`, `PostSortUnindexed`, `CommentDeleteCascade`, `SampleRetention` | `DeliveryKeyOrder`, `WALReaderPinned`, `SampleReadCold`, `PostReadTrending`, `CommentScanFragmented`, `CommitSync`, `LogSinkStall`, `ServerOverlap` |
+| Memory | `PostExport`, `StreamIdle`, `UploadParallel`, `ProcessSoak`, `SchemaOpenLarge`, `RequestHeaderLarge` | `HeapPressureTail`, `PostMixSweep` |
+| CPU | `PostReadHot`, `PostReadSpread`, `AuditWrite`, `DeliveryReceive`, `PostFeed`, `PostCrawl`, `ReportDecodeNested`, `ReportCreateWide`, `RouteMatchMany`, `PostReadCores`, `PostFilterShapes`, `PostGetMany` | `SeatClaimHot`, `SeatClaimSpread`, `SessionTouch`, `JobClaim`, `SampleImport`, `SampleAggregate`, `PostSearch`, `RollupRecompute`, `AuthorLogin`, `AccountWriteImbalance`, `SampleRollup`, `SampleAppendOverload`, `PostReadOverload`, and the three races |
+
+The gaps:
+
+- **Network bandwidth** holds two cases. On loopback a byte costs
+  the kernel's copy, several gigabytes a second a core, so bandwidth
+  exists only where the relay caps it; `PostExport` runs a capped arm
+  besides.
+- **Memory latency** holds two. Processor cache misses and NUMA
+  cannot be told from CPU time by this harness, and page faults and
+  swap need memory pressure, which is out of reach.
+- **Disk bandwidth for reads** appears only in the cold and big arms;
+  everything else reads from the OS cache.
+- **Disk capacity** is neither bandwidth nor latency: `DatabaseFull`
+  stands outside the matrix.
+- **The three races** (`PostCreateRace`, `PostUpdateConflict`,
+  `CommentListRace`) assert correctness and measure no resource; they
+  ride on the writer's queue.
+- **The single writer** is counted as CPU latency: with
+  `synchronous = NORMAL` a commit does not wait for the disk, so the
+  queue for the writer is a queue for one thread's time. `CommitSync`
+  shows it turning into disk latency under `FULL`.
+
+### Pairwise coverage
+
+The nine axes make thirty-six pairs. A pair is covered where a case
+exercises two values whose interaction matters; the last column names
+what was left out.
+
+| Pair | Covered by | Skipped, and why |
+|---|---|---|
+| Key, Mix | the six same-row cases and controls; `SampleAppend` (monotonic insert); `DeliveryKeyOrder` (random insert); `PostReadTrending` (zipf and moving reads) | zipf and moving writes: in SQLite the hot page is the cheap end and the spread the dear one, so they fall between `SeatClaimHot` and `SeatClaimSpread` |
+| Key, Arrival | spike and herd on the six; `DeliveryReceive` (random, burst); `RollupRecompute` (one, burst) | retry and overload by key: a queued request waits the same whatever its key |
+| Key, Size | `SampleAppendBulk`, `SampleImport` (monotonic, rows); `UploadParallel` (one hot blob); `ReportCreateWide` (uniform, wide) | the distribution of the keys inside one `in` list |
+| Key, Scale | `SampleReadCold` (uniform, big and cold); `PostReadTrending` (moving, big); `DeliveryKeyOrder` (random, big); `PostWriteIndexed` (random, indexed); `JobClaim` (monotonic, fragmented); `CommentScanFragmented` (uniform, fragmented) | none |
+| Key, Query | the read pair (point); `SampleAggregate` (a monotonic range); `PostCrawl` (offset and keyset in key order) | skew under an aggregate, a join or a sort: they read ranges, and which key is popular does not reach them |
+| Key, Transaction | `SeatClaimHot` and its control (upgrade); `PostCreateRace` (one, rollback); `DeliveryReceive` (random, rollback); `CommentDeleteCascade` (one parent, long-write) | key distribution under a long write: it blocks every key alike |
+| Key, Client | `UploadParallel` (one hot blob, slow-send) | the rest: a connection costs the same whatever key is asked through it |
+| Key, Environment | the herd on `PostReadHot` (one, restart); `CommitSync` (one and uniform, checkpoint); `SampleRetention` (monotonic, jobs) | key distribution under a backup or a migration: both work on the whole file |
+| Mix, Arrival | `SampleAppendOverload` (write, overload); `PostReadOverload` (read, overload); `ClientRetryStorm` (90/10, retry); the six (spike, herd) | the mixes between, under bursts: a burst lands on the readers or on the writer, and each is covered at its extreme |
+| Mix, Size | `SampleAppendBulk` (insert, rows); `UploadParallel` (insert, blob); `PostExport` (read, response); `PostGetMany` (read, keys); `ReportCreateWide` (insert and update, wide); `ReportDecodeNested` (insert, body) | deletes of blobs, whose page accounting is `CommentDeleteCascade`'s; upserts of many rows |
+| Mix, Scale | `PostWriteIndexed` (insert, indexed); `DeliveryKeyOrder` (insert, big); `SampleReadCold` (read, big and cold); `CommentDeleteCascade` then `CommentScanFragmented` (delete, fragmented) | updates and upserts on cold data: one device read before the write, as `DeliveryKeyOrder` shows for inserts |
+| Mix, Query | `PostMixSweep` (every mix, point and range); `PostViewHot` (read-write, point); `SampleRollup` (upsert after an aggregate); `WALReaderPinned` (1/99 beside an aggregate) | fan-out under write mixes |
+| Mix, Transaction | `AuditWrite` (several); `SeatClaimHot` (update, upgrade); `SampleImport` (insert, long-write); `CommentDeleteCascade` (delete, long-write); `DeliveryReceive` (insert, rollback); `SampleRollup` (upsert); `WALReaderPinned` (read, long-read) | none |
+| Mix, Client | `ClientVanish` (writes, vanish); `PostSearch` (reads, cancel); `ClientSlow` (both, slow) | writes under churn: a connection costs the same whatever it carries |
+| Mix, Environment | `CommitSync` (write, checkpoint); `MigrationLive`; `BackupLive`; `ServerRestart` (90/10); `SampleRollup`, `SampleRetention` (jobs); `ServerOverlap` | none |
+| Arrival, Size | `HeapPressureTail` (large responses at once); `UploadParallel` (a burst of blobs); `SampleAppendOverload` (overload with bodies queued) | ramps by size |
+| Arrival, Scale | `SampleReadCold` (herd on a cold start); `PostReadTrending` (a shift is a spike onto cold keys); `ServerRestart` (cold arm) | retries on fragmented data |
+| Arrival, Query | `RollupRecompute`, `SampleAggregate` (bursts of aggregates); `PostSearch` (bursts of scans); `PostReadOverload` (point) | a herd of joins: it would repeat `SampleAggregate`'s queue for a reader |
+| Arrival, Transaction | `SeatClaimHot` (spike and herd on an upgrade); `SampleAppendOverload` (overload, single); `ClientRetryStorm` (retry, several); `DeliveryReceive` (burst, rollback) | none |
+| Arrival, Client | `ClientRetryStorm` (retry with vanish); `ServerRestart` (a herd of reconnects); `StreamIdle` (every idle connection waking at once); `PostSearch` (bursts of cancels) | overload with slow clients: they add memory, not load |
+| Arrival, Environment | `ServerRestart` (herd, restart); `SampleAppendOverload` (overload, checkpoint); `ClientRetryStorm` (retry while a second writer holds the lock) | a spike during a migration: it lengthens the queue `MigrationLive` already measures |
+| Size, Scale | `PostExport` (response, cold arm); `PostSortUnindexed` (rows with bodies, temporary files); `DeliveryKeyOrder` (tiny, big) | wide rows on big or fragmented data: a wide row is one row's CPU |
+| Size, Query | `PostGetMany` (keys, point); `PostExport` (response, range); `PostSortUnindexed` (a sort that carries 1 KB bodies); `UploadParallel` (blob, point) | blobs under an aggregate |
+| Size, Transaction | `SampleImport` (rows, long-write, a refusal at the last row); `UploadParallel` (blob, single); `SampleAppendBulk` (rows, an invalid batch) | large bodies in several statements |
+| Size, Client | `ClientSlow` (body with slow-send, response with slow-read); `ClientVanish` (gone in the middle of a body); `RequestHeaderLarge` | blobs under churn |
+| Size, Environment | `SampleImport` (a checkpoint a chunk); `UploadParallel` (blob, checkpoint); `ServerRestart` (an export in flight at the stop) | large bodies during a backup |
+| Scale, Query | `SampleReadCold` (big, point); `SampleAggregate` (big arm); `CommentScanFragmented` (fragmented, range); `PostCrawl` (cold arm, count and offset); `PostSortUnindexed` | joins on fragmented data |
+| Scale, Transaction | `WALReaderPinned` (long-read); `PostWriteIndexed` (indexed, single); `CommentDeleteCascade` (one long write makes the fragmentation) | rollbacks on cold data |
+| Scale, Client | none | all of it: a client meets bytes already materialized, so the data's scale ends at the reader |
+| Scale, Environment | `BackupLive`, `MigrationLive` (their time grows with the file); `ServerRestart` (cold arm); `SampleRetention` (jobs make free pages); `CommitSync` (a checkpoint of random pages) | none |
+| Query, Transaction | `SeatClaimHot` (point, upgrade); `JobClaim` (range, upgrade); `SampleRollup` (an aggregate inside a write); `CommentListRace` (parent and children in one read transaction or two); `WALReaderPinned` (aggregate, long-read) | none |
+| Query, Client | `PostSearch` (scan, cancel); `ClientVanish` (a long read, vanish) | fan-out with slow clients |
+| Query, Environment | `MigrationLive` (reads during a migration); the herd on `PostReadHot`; `WALReaderPinned` (aggregate, checkpoint) | counts during a backup |
+| Transaction, Client | `ClientVanish` (several, vanish); `SeatClaimHot` (a herd half of which gives up while queued); `SampleImport` (a chunk resent after its client left) | none |
+| Transaction, Environment | `WALReaderPinned` (long-read, checkpoint); `BackupLive` beside an import (long-write, backup); `ServerRestart` (a kill in the middle of several statements); `ServerOverlap` (upgrade, two processes) | rollbacks during a migration |
+| Client, Environment | `ServerRestart` (idle streams and slow clients at the stop, churn at the start); `StreamIdle` | vanishing clients during a checkpoint or a backup |
+
+### The attack
+
+Each seeded case was asked which production incident it would not
+have caught.
+
+| Case | The incident it misses | Added |
+|---|---|---|
+| `PostReadHot` | reads that slow down because a writer commits beside them; the same load on sixteen cores | `PostMixSweep`, `PostReadCores` |
+| `PostReadSpread` | the popular rows changing, the new ones cold | `PostReadTrending` |
+| `SeatClaimHot` | the claims arriving faster than the writer for minutes, not seconds | `SampleAppendOverload` |
+| `SeatClaimSpread` | the same commits on a slow disk, or with `synchronous = FULL` | `CommitSync` |
+| `PostViewHot` | an index on the counter, added to sort by views | `PostWriteIndexed` |
+| `PostViewSpread` | nothing new: `SessionTouch` is its blind twin | |
+| `SampleAppend` | the table that never stops growing: retention, and the full disk | `SampleRetention`, `DatabaseFull` |
+| `SampleAppendBulk` | the hourly job that reads what was appended | `SampleRollup` |
+| `AuditWrite` | the retry that writes the audit row twice | `ClientRetryStorm` |
+| `SessionTouch` | nothing new | |
+| `DeliveryReceive` | random keys once the index no longer fits in memory | `DeliveryKeyOrder` |
+| `JobClaim` | reads over a table that deletes have hollowed | `CommentScanFragmented` |
+| `SampleImport` | the mass delete, which scatters where an import appends | `CommentDeleteCascade` |
+| `SampleAggregate` | the sort no index serves, spilling to temporary files | `PostSortUnindexed` |
+| `PostFeed` | the page that loads five thousand rows by their keys | `PostGetMany` |
+| `PostSearch` | the search form whose optional filters multiply the statement texts | `PostFilterShapes` |
+| `PostCrawl` | ten crawlers at once: more reads than the cores have | `PostReadOverload` |
+| `PostExport` | the desktop client asking for the same rows in GOB over a real link | `PostReadFormats` |
+| `RollupRecompute` | the stampede after a restart instead of an expiry | `ServerRestart` |
+| `PostCreateRace` | two processes on the file during a deploy, both writing | `ServerOverlap` |
+| `PostUpdateConflict` | nothing new: step 36 holds the defect | |
+| `CommentListRace` | the cascade's own cost, which is `CommentDeleteCascade` | |
+| `AuthorLogin` | nothing new: the standing health probe sees it | |
+| `ReportDecodeNested` | the megabyte in the headers instead of the body | `RequestHeaderLarge` |
+| `ReportCreateWide` | a thousand such tables, read by every connection at open | `SchemaOpenLarge` |
+| `RouteMatchMany` | the same | |
+| `StreamIdle` | streams that receive, and subscribers that stop reading | `EventFanout` |
+| `UploadParallel` | the disk filling, which is `DatabaseFull` | |
+| `ProcessSoak` | the day the log's sink stops reading | `LogSinkStall` |
+| `HeapPressureTail` | nothing new | |
+| `ClientSlow` | nothing new | |
+| `ConnectionChurn` | every client reconnecting at once, which is `ServerRestart` | |
+| `ClientVanish` | clients that come back and retry, which is `ClientRetryStorm` | |
+| `WALReaderPinned` | nothing new | |
+| `SampleReadCold` | the moving hot set, which is `PostReadTrending` | |
+| `BackupLive` | nothing new | |
+| `MigrationLive` | every connection reading the new schema again, which `SchemaOpenLarge` measures | |
+| `AccountWriteImbalance` | overload from everyone, which is `SampleAppendOverload` | |
+
+### Pruning
+
+Where two cases would draw the same chart, one stays.
+
+- **Likes** would draw `SeatClaimHot`'s chart, an `Atomic` of an
+  insert and a counter on one hot row; its invariant, the counter
+  equals the rows, is asserted there. Dropped.
+- **The unique email** runs the code of `PostCreateRace`. Dropped.
+- **The count of a large table** is an arm of `PostCrawl`, where it
+  is paid on every page.
+- **The N+1** is an arm of `PostFeed`: both measure statements per
+  page.
+- **Heavy validation** and **wide rows** are one bar, the cost per
+  column; both are `ReportCreateWide`.
+- **Zipf reads** are the arm of `PostReadTrending` whose hot set
+  never moves.
+- **Health checks during overload** are the standing probe, not a
+  case.
+- **Tenant imbalance by a bulk import** is `SampleImport`.
+  `AccountWriteImbalance` keeps the other mechanism, the share of the
+  queue.
+- **The retention job's effect on a victim** is `SampleImport`'s
+  curve with deletes for inserts. `SampleRetention` keeps what is its
+  own: the cost of a deleted row and the size of the file.
+- **A backup by `VACUUM INTO`** grows the WAL exactly as
+  `WALReaderPinned` does. `BackupLive` keeps completion and
+  consistency, and does not chart the WAL again.
+- **`SessionTouch`** with a touch on every request should coincide
+  with `PostViewSpread`. It stays for its coalescing arm.
+- **Kept though predicted equal:** each same-row case and its
+  control. `PostReadHot` should equal `PostReadSpread`, and
+  `SeatClaimHot` should beat `SeatClaimSpread`; the equality and the
+  inversion are the claims under test, since they are what makes
+  SQLite's one writer unlike a database with row locks.
+
+### The cases
+
+Each case gives its story, its value on the nine axes in their order,
+the cell it stresses, the sketch, the invariant it adds to the
+standing ones, the signal, and the decision its result informs. "The
+standing ones" alone means the case adds none.
+
+**Same row, and the controls.** Each runs steady, under the spike and
+under the herd.
+
+#### PostReadHot
+
+A post goes viral and every request reads that one row by its slug.
+
+- **Axes:** one; read; steady, spike, herd; tiny; cached; point;
+  single; keep-alive; steady.
+- **Stresses:** CPU, bandwidth.
+- **Sketch:** `requestHTTP` 40 µs, `lookup` 5 and the encoding of a
+  1 KB row about 3: 48 µs, so net/http is over 80% of the request and
+  SQLite about 10%, some 20,000 requests a second for each core the
+  server has. One row costs what a million do: SQLite has no row
+  locks and readers share nothing per row, so the ratio to
+  `PostReadSpread` is 1.0 within a tenth. In the herd, N identical
+  lookups are N statements; nothing joins them.
+- **Invariant:** the standing ones; the body is the seeded post.
+- **Signal:** failed on a wrong body. Degraded when SQLite's share
+  passes a quarter of the CPU, or the ratio to the control leaves 0.9
+  to 1.1.
+- **Informs:** whether the runner performs identical reads in flight
+  once. Effects are values that `rt.Same` compares, so it could, and
+  a viral row would cost one statement however many ask.
+
+#### PostReadSpread
+
+The control: the same reads spread evenly over a million posts.
+
+- **Axes:** uniform; read; steady, spike, herd; tiny; cached; point;
+  single; keep-alive; steady.
+- **Stresses:** CPU, bandwidth.
+- **Sketch:** as `PostReadHot`. Every page comes from the OS cache at
+  a system call each, since a reader's own 500 pages cannot hold a
+  million posts.
+- **Invariant:** the standing ones.
+- **Signal:** degraded when it differs from `PostReadHot` by more
+  than a tenth.
+- **Informs:** the baseline every read case is compared with.
+
+#### SeatClaimHot
+
+A discussion opens 500 seats, everyone claims one at the same moment,
+and it must never be oversold.
+
+- **Axes:** one; read-write, an update and an insert; steady, spike,
+  herd; tiny; cached; point; upgrade, rollback for the losers;
+  keep-alive, with a herd half of which gives up after 100 ms;
+  steady.
+- **Stresses:** CPU, latency: the queue for the one writer.
+- **Sketch:** the claim is the spec's own shape, an `rt.Atomic` over
+  the `rt.Then` of `DiscussionGet` whose `next` fails with a 409 when
+  the discussion is full and otherwise returns the `rt.Tx` of the
+  discussion's update and the seat's insert. On the writer: `txFixed`
+  25 µs, `lookup` 5, two `rowTx` 20, about 50 µs, so 20,000 claims a
+  second at any number of cores, half of it the transaction's fixed
+  cost. A herd of 10,000 is answered in 0.5 s; the mean wait is
+  0.25 s, five thousand times the service, and the wait is the whole
+  story. A loser still takes 30 µs of the writer to be told no.
+  `database/sql` hands the connection to a random waiter, so p99 of
+  the wait sits near the maximum.
+- **Invariant:** exactly the first 500 claims committed hold seats;
+  `seat_count_taken` equals the count of `seats` and never passes
+  500; no author sits twice; every other answer is a 409. Step 37's
+  negative control, the same claim without the `Atomic`, must fail
+  it.
+- **Signal:** failed on a 501st seat, a counter that is not its
+  count, or a 5xx. Degraded when `txFixed` passes 70% of the writer's
+  time.
+- **Informs:** step 23's removal of the busy timeout's read-back;
+  preparing `BEGIN` and `COMMIT` on the writer's connection; whether
+  a full discussion is refused from a reader before it reaches the
+  writer; the order of the writer's queue (`runner.md` 7).
+
+#### SeatClaimSpread
+
+The control: the same claims spread over ten thousand discussions.
+
+- **Axes:** uniform; read-write, an update and an insert; steady,
+  spike, herd; tiny; cached; point; upgrade; keep-alive; steady.
+- **Stresses:** CPU, latency.
+- **Sketch:** the same 50 µs of the writer. The difference is the
+  checkpoint: three frames a claim either way, so one checkpoint
+  every 330 claims, but the hot discussion rewrites a handful of
+  pages while the spread dirties about a thousand different ones,
+  which the checkpoint writes to random places. The spread should be
+  10 to 30% slower: in SQLite the hot row is the cheap end.
+- **Invariant:** as `SeatClaimHot`, for every discussion.
+- **Signal:** degraded when the hot row is slower than the spread by
+  more than a tenth, which would contradict the model.
+- **Informs:** that same-row contention in Volt is a queue and never
+  a lock; the checkpoint's size.
+
+#### PostViewHot
+
+Every read of the viral post also increments its view count; likes
+and counter caches are the same shape.
+
+- **Axes:** one; read-write, an update; steady, spike, herd; tiny;
+  cached; point; single; keep-alive; steady, checkpoint.
+- **Stresses:** disk, bandwidth.
+- **Sketch:** one hand-written `rt.Write` that sets `view_count =
+  view_count + 1` and returns the row, since an `rt.Assign` is a
+  column and a value and the generated layer cannot say it. `write`
+  30 µs on the writer: 33,000 views a second at any core count,
+  against 20,000 a core for `PostReadHot`, so 0.4 of it on four
+  server cores and 0.1 on sixteen. One frame per view, two when an
+  index holds the counter: 4 KB of WAL for eight bytes changed, five
+  hundred times; 135 MB/s of WAL, and a checkpoint every 30 ms.
+- **Invariant:** the counts returned are each of start + 1 to start +
+  N exactly once, and the final count is the start plus the answers.
+- **Signal:** failed on a repeated or a missing count. Degraded when
+  a view writes more than two frames.
+- **Informs:** whether the dynamic layer gains an arithmetic assign;
+  the checkpoint's threshold; counters added up at the runner's own
+  pace (S10).
+
+#### PostViewSpread
+
+The control: the same increment spread over a million posts.
+
+- **Axes:** uniform; read-write, an update; steady, spike, herd;
+  tiny; cached; point; single; keep-alive; steady, checkpoint.
+- **Stresses:** disk, bandwidth.
+- **Sketch:** the same 30 µs and one frame a view; every commit
+  dirties another page, so the checkpoint copies a thousand pages
+  where the hot row's copies one. Equal to `PostViewHot` or up to 30%
+  slower.
+- **Invariant:** as `PostViewHot`, for every post.
+- **Signal:** degraded as `SeatClaimSpread`.
+- **Informs:** the checkpoint's cost by distinct pages.
+
+**Write heavy.**
+
+#### SampleAppend
+
+A metrics agent posts one sample a request, forever, its keys rising.
+
+- **Axes:** monotonic; write, insert; steady; tiny; cached, growing
+  in the soak; none; single; keep-alive; steady, checkpoint.
+- **Stresses:** disk, bandwidth.
+- **Sketch:** `write` 30 µs: 33,000 rows a second, bound by the
+  writer once two cores serve HTTP. Two frames a row, the table's
+  leaf at the right edge and the leaf of the index on series and
+  time: 8 KB of WAL for a 50-byte row, 160 times, 270 MB/s. A
+  checkpoint every 500 rows, 66 a second, each paid by the request
+  whose commit crosses the threshold: two `fsync` and the copy, so
+  one request in 500 is tens of times the median.
+- **Invariant:** the rows stored are the acknowledged ones, each
+  once.
+- **Signal:** failed on a lost or a doubled sample. Degraded when
+  checkpoints pass 30% of the writer's time, or a row writes more
+  than three frames.
+- **Informs:** checkpointing at the runner's own pace instead of on a
+  request's commit (S10); `wal_autocheckpoint` as an explicit option
+  (S12).
+
+#### SampleAppendBulk
+
+The agent batches a thousand samples into each request.
+
+- **Axes:** monotonic; write, insert; steady; rows, a thousand a
+  request; cached; none; long-write of 4 ms, rollback for a refused
+  batch; keep-alive; steady.
+- **Stresses:** disk, bandwidth.
+- **Sketch:** the writer spends a thousand `rowBulk`, 4 ms, a
+  request: 250,000 rows a second, eight times `SampleAppend`.
+  Decoding 60 KB, under a millisecond, and casting and validating,
+  about one more, run off the writer. About 30 pages per thousand
+  rows: 120 bytes of WAL a row, 2.5 times its size instead of 160.
+- **Invariant:** the rows stored equal the sum of the counts
+  answered; a batch with one invalid row stores nothing and its 422
+  names the row.
+- **Signal:** failed on a partial batch. Degraded under four times
+  `SampleAppend`'s rows a second.
+- **Informs:** the statement size of the bulk insert (step 21,
+  question 2); it is P3 measured.
+
+#### AuditWrite
+
+Every update of a post also writes an audit row, in the same
+transaction.
+
+- **Axes:** uniform; write, an update and an insert; steady; tiny;
+  cached; none; several; keep-alive; steady.
+- **Stresses:** CPU, bandwidth. Arms: the update alone; the update in
+  an `rt.Tx`; the update and the audit row in an `rt.Tx`.
+- **Sketch:** 30, 35 and 45 µs of the writer: `write`, then `txFixed`
+  and one `rowTx`, then a second. The transaction's fixed part costs
+  two and a half times what the audit row does.
+- **Invariant:** audit rows equal updates applied; never one without
+  the other.
+- **Signal:** failed on an update without its audit row. Degraded
+  when the middle arm passes twice the first.
+- **Informs:** step 23, where the read-back goes; whether `BEGIN
+  IMMEDIATE` and `COMMIT` stay compiled on the writer's connection,
+  which the design `runner.md` 3 dropped would have allowed.
+
+#### SessionTouch
+
+Every request, reads included, stamps the caller's session row with
+the time.
+
+- **Axes:** random, the token is the key; read-write, a read and an
+  update of another row; steady; tiny; cached; point; single;
+  keep-alive; steady.
+- **Stresses:** CPU, latency. Arms: no touch; a touch every request;
+  a touch at most once a minute for each session.
+- **Sketch:** with a touch every request the whole site, reads
+  included, is capped at one `write` each: 33,000 requests a second
+  at any core count, the chart of `PostViewSpread`. Coalesced, the
+  writes fall sixty times for a session that asks once a second, and
+  the site is back within 5% of no touch at all.
+- **Invariant:** `touched_at` never moves back and is never ahead of
+  the request's clock; coalesced, it is at most a minute stale.
+- **Signal:** degraded when the coalesced arm is more than a tenth
+  from the arm without a touch.
+- **Informs:** step 13: the cookie session writes nothing, and this
+  is the price of giving that up; whether the runtime offers a write
+  coalesced at its own pace (S10).
+
+#### DeliveryReceive
+
+A provider delivers webhooks in bursts and sends three in ten twice;
+the idempotency key decides.
+
+- **Axes:** random; write, insert; burst; tiny; cached; none; single,
+  rollback; keep-alive; steady.
+- **Stresses:** CPU, bandwidth.
+- **Sketch:** an accepted delivery is a `write`, 30 µs. A refused one
+  fails at the unique index, writes no frame, and pays for mapping
+  the error and encoding the problem: about 12 µs, 0.4 of an
+  acceptance. At 30% duplicates the writer takes 40,000 deliveries a
+  second, and a burst of B drains in B times 25 µs.
+- **Invariant:** one 201 for each key and a 409 that names the key's
+  column for every repeat; one row a key; never a 500.
+- **Signal:** failed on two rows for a key or a 5xx. Degraded when a
+  refusal costs more than an acceptance.
+- **Informs:** step 26, where refusals are classified by their
+  message text (`nao/rt/changeset.go`); whether a repeat answers
+  with the stored row.
+
+#### DeliveryKeyOrder
+
+The provider's keys are random; a time-ordered key would append.
+
+- **Axes:** random against monotonic; write, insert; steady; tiny;
+  cached, then big; none; single; keep-alive; steady.
+- **Stresses:** disk, latency. Arms: random keys and time-ordered
+  keys, as the table grows from one million rows to a hundred.
+- **Sketch:** while the index fits in memory both cost a `write`;
+  random keys only make the checkpoint copy a thousand pages instead
+  of twenty, at most 1.3 times. Once the index outgrows the OS cache,
+  each random insert first reads a leaf from the device: 30 µs and a
+  `deviceRead`, 130 µs, four times, and far worse on a slower disk.
+  Ordered keys stay at 30.
+- **Invariant:** as `DeliveryReceive`.
+- **Signal:** degraded when random costs over 1.5 times ordered
+  while cached.
+- **Informs:** a vet rule for a unique key of random text on a table
+  that grows; the writer's `cache_size`, whose 500 pages are spent
+  after one such transaction.
+
+#### JobClaim
+
+Handlers enqueue jobs in a table; sixty-four workers poll it, claim a
+job, work, and delete it, racing for the same rows.
+
+- **Axes:** monotonic, enqueued at the right edge and claimed at the
+  left; 50/50, insert, update and delete; steady, burst; tiny;
+  cached, fragmented in the soak; range, the next ready row through a
+  partial index; upgrade; keep-alive; steady.
+- **Stresses:** CPU, latency.
+- **Sketch:** on the writer an enqueue is 30 µs, a claim, an
+  `Atomic` of a select and an update, 40, a delete 30: 100 µs a job,
+  10,000 jobs a second however many workers. A poll that finds
+  nothing is still a write transaction, 30 µs; sixty-four idle
+  workers polling every 10 ms take 19% of the writer for nothing.
+- **Invariant:** every job is claimed at most once and deleted
+  exactly once, and none is lost: enqueued, distinct claimed and
+  deleted are equal, and the table ends empty. In the soak the file
+  stops growing.
+- **Signal:** failed on a job claimed twice. Degraded when empty
+  polls pass a tenth of the writer, or a poll slows as jobs pass.
+- **Informs:** step 15: polling on a reader and claiming on the
+  writer, the interval and the batch (S10).
+
+#### SampleImport
+
+A customer uploads a file of a million samples while everyone else
+keeps working.
+
+- **Axes:** monotonic; write, insert; steady, with one heavy client;
+  rows and body, up to the 40,000 rows a 4 MiB body holds; cached;
+  none; long-write, rollback; keep-alive; steady, checkpoint.
+- **Stresses:** CPU, latency. Arms: chunks of 1,000, 8,000 and
+  40,000 rows.
+- **Sketch:** a chunk holds the writer for its rows times `rowBulk`:
+  4, 32 and 160 ms. The canary write's p99 is one chunk, up to five
+  thousand times its 30 µs. The import runs at 250,000 rows a second
+  from the smallest chunk up, so the smallest costs the import
+  nothing. A refusal at the last row wastes the whole chunk.
+- **Invariant:** every chunk lands exactly once, also when its
+  client timed out and sent it again: the chunk's key is a row
+  written in the same transaction, so the repeat is a 409. The rows
+  stored are the file's.
+- **Signal:** failed on a chunk stored twice or in part. Degraded
+  when the canary's p99 passes one and a half chunks.
+- **Informs:** step 23's bound on the changesets of a `CreateMany`;
+  step 21, question 2.
+
+**Read heavy.**
+
+#### SampleAggregate
+
+A dashboard of six panels sums a time range per panel: the last hour,
+or the last year.
+
+- **Axes:** monotonic, a time range; read; steady, burst, eight
+  dashboards opening at once; tiny; cached, with a big arm;
+  aggregate, range; long-read; keep-alive; steady.
+- **Stresses:** CPU, latency: the queue for a reader. Arms: an hour,
+  360 rows at a sample every ten seconds; a year, three million.
+- **Sketch:** an hour is 360 `rowScan`, 50 µs; a year is 0.45 s of
+  one reader. Forty-eight year panels on four readers
+  hold every reader for 5.4 s, and a point read arriving then waits
+  in `database/sql`'s queue, which knows no priority: the canary
+  read's p99 goes from 50 µs to seconds. On the big arm the scan runs
+  at the device's bandwidth.
+- **Invariant:** each sum equals the closed form of the seeded series
+  over its range.
+- **Signal:** failed on a wrong sum. Degraded when the canary read's
+  p99 passes ten times its unloaded value while panels run.
+- **Informs:** more readers than cores, or a lane for long reads; a
+  default for `timeout:` (step 23); a covering index in the fixture's
+  guidance.
+
+#### PostFeed
+
+The front page lists twenty posts with their authors, their tags and
+their comment counts.
+
+- **Axes:** uniform, over pages; read; steady; tiny; cached; join,
+  fan-out; single; keep-alive; steady.
+- **Stresses:** CPU, bandwidth. Arms: a join and a `with`, three
+  statements on one snapshot; four route loads in a row; a fan-out of
+  sixty-one lookups in an `rt.All`.
+- **Sketch:** three statements about 100 µs, encoding 20 KB about
+  80, `requestHTTP` 40: 220 µs a page. The fan-out is sixty-one
+  statements at about 8 µs, half a millisecond of database time, five
+  times, and one request holds every reader while it runs.
+- **Invariant:** the three arms answer the same page (V9); each
+  comment count equals its count.
+- **Signal:** failed when the arms disagree. Degraded when the first
+  arm's database time passes 150 µs.
+- **Informs:** whether a route's loads run in one read transaction;
+  step 23's bound on the steps of an `rt.All`.
+
+#### PostSearch
+
+A reader types in the search box; each keystroke sends a query and
+abandons the one before.
+
+- **Axes:** uniform; read; burst; tiny; cached; range, the whole
+  table through a `like`; single; cancel; steady.
+- **Stresses:** CPU, latency.
+- **Sketch:** a `like` on the title walks a million rows, 0.2 s,
+  unless the index serves it, which is checked first; if it does, the
+  pattern becomes an infix, which no index serves. At ten keystrokes
+  a second each query runs 100 ms and is cancelled, so one typist
+  keeps one reader busy and four saturate four. A cancelled read
+  should free its reader within a millisecond. Under a request's
+  context mattn starts a goroutine for each statement and each row,
+  about 1 µs each.
+- **Invariant:** a cancelled request never yields a 200; a request
+  nobody cancelled never fails; afterwards no goroutine is left.
+- **Signal:** failed on an error in a request nobody cancelled.
+  Degraded when a reader stays busy 10 ms after its cancel.
+- **Informs:** step 21, question 4; how a prefix `like` is rendered,
+  and whether vet reports one no index can serve.
+
+#### PostCrawl
+
+A crawler walks the list of posts to its last page, and the page
+shows "page 3 of 20,000".
+
+- **Axes:** monotonic, in key order; read; steady; tiny; cached, with
+  a cold arm; offset, keyset, count; single; keep-alive; steady.
+- **Stresses:** CPU, bandwidth. Arms: offset with a count; offset;
+  keyset through `After`.
+- **Sketch:** page k by offset walks 50 k rows: at the last page a
+  million `rowScan`, 150 ms, against 80 µs for the keyset at any
+  depth, about two thousand times. The whole crawl is 25 minutes of a
+  reader by offset and two seconds by keyset. The count walks the
+  smallest index of the table on every page, tens of milliseconds.
+- **Invariant:** by keyset, every post that existed throughout
+  appears exactly once and in order, under concurrent inserts and
+  deletes. By offset, each page is sorted and from one snapshot; the
+  rows it repeats or skips across pages are counted and reported.
+- **Signal:** failed on a keyset page that repeats or misses a row.
+  Degraded when a keyset page costs more with depth.
+- **Informs:** step 23's limit on the rows of a `List`; whether a
+  query route offers an offset at all; a count kept in a counter.
+
+#### PostExport
+
+An editor exports the list of every post, without the bodies: one
+response of a million rows.
+
+- **Axes:** uniform, every row; read; steady; response, 250 MB;
+  cached, with a cold arm; range, the whole table; long-read;
+  keep-alive, with a slow-read arm and an arm capped at 1 Gbit;
+  steady.
+- **Stresses:** memory, bandwidth.
+- **Sketch:** nothing streams today: an `rt.Query` yields a slice
+  and `renderEncode` fills a buffer. The scan is a million `rowList`,
+  1.2 s and about double under the request's context, with the
+  snapshot held throughout. The rows are about 200 MB, the encoding
+  250 MB in a buffer that doubles as it grows, so some 700 MB of heap
+  at the peak for one export and twice that resident at the
+  collector's default. At 1 Gbit the body drains in two seconds; a
+  reader at 1 MB/s pins it for four minutes.
+- **Invariant:** the body is valid, its length is right, and its rows
+  are one snapshot: every post up to one commit and none after.
+- **Signal:** failed on a torn or a short export. Degraded when the
+  peak heap passes 1 KB a row.
+- **Informs:** a read effect that streams rows to the writer, against
+  one that materializes; step 23's limit on rows; step 21, question
+  4.
+
+#### RollupRecompute
+
+A cached dashboard total expires at the top of the hour, and every
+open dashboard recomputes it at once.
+
+- **Axes:** one, the rollup row; read-write, an upsert; burst, spike,
+  herd; tiny; cached; aggregate; single, the read on a reader and the
+  write after it; keep-alive; steady.
+- **Stresses:** CPU, latency.
+- **Sketch:** Volt has no cache, and a pure handler cannot hold one,
+  so the cache is a `rollups` row with the time it was computed. The
+  recompute is `SampleAggregate`'s year, 0.45 s. Every request that
+  arrives within that time finds the row stale and recomputes: two
+  hundred of them hold four readers for 22 s, then write the same
+  value two hundred times. Recomputations per expiry are the arrival
+  rate times 0.45 s, where one would do.
+- **Invariant:** the total served is the true total of some snapshot
+  no older than the lifetime plus one recompute; the stored row is
+  never torn.
+- **Signal:** degraded when an expiry is recomputed more than once,
+  which is expected today, and reported as a count.
+- **Informs:** identical reads in flight performed once by the
+  runner; a recompute loop at its own pace (S10, step 15).
+
+**Races.**
+
+#### PostCreateRace
+
+Sixty-four clients create a post with the same slug at the same
+instant.
+
+- **Axes:** one, a value; write, insert; spike; tiny; cached; none;
+  single, rollback; keep-alive; steady.
+- **Stresses:** correctness, on the writer's queue.
+- **Sketch:** the one writer runs them one after another: one
+  `write`, then sixty-three refusals of about 12 µs.
+- **Invariant:** for each slug exactly one 201, sixty-three 409s that
+  name `slug`, and one row; the same when the creations arrive as
+  overlapping `CreateMany` batches, each all or nothing.
+- **Signal:** failed on two winners, on none, or on a 5xx.
+- **Informs:** nothing while it holds; it guards the mapping of a
+  refusal onto a 409 (`ProblemOf`).
+
+#### PostUpdateConflict
+
+Two editors open the same post at the same version and both save.
+
+- **Axes:** one; read-write, update; spike, in pairs; tiny; cached;
+  point; upgrade, a read and a write as two effects; keep-alive;
+  steady.
+- **Stresses:** correctness. Arms: the generated update route; a
+  hand-written route whose `UpdateWhere` names the version.
+- **Sketch:** the generated route performs `Get` on a reader and
+  `Update` on the writer, about 50 µs apart. A racing pair both read
+  version v and both succeed: the last write stands, and nothing says
+  so. A validator over two columns passes for each on a row that is
+  never stored (step 36). The hand-written route answers one 200 and
+  one 409.
+- **Invariant:** the stored row satisfies every validator; for the
+  hand-written route the final version is the start plus the 200s.
+- **Signal:** failed on a stored row a validator refuses, which is
+  expected today and is step 36's defect; the silent overwrites are
+  counted and reported.
+- **Informs:** step 36's fix, the read and the write in one write
+  transaction; whether the language grows a version setting.
+
+#### CommentListRace
+
+A post is deleted while readers list its comments.
+
+- **Axes:** uniform; 99/1, delete; steady; tiny; cached; join, a
+  parent with its children; single against several reads; keep-alive;
+  steady.
+- **Stresses:** correctness. Arms: a `with`; two route loads; a
+  `Then` chain in the handler.
+- **Sketch:** a `with` reads parent and children in one read
+  transaction: no torn read. Two loads read two snapshots about 50 µs
+  apart, so a delete that commits between them leaves a post with no
+  comments beside a `comment_count` of fifty.
+- **Invariant:** every answer is a 404 or the post with all of its
+  comments, as many as its `comment_count`.
+- **Signal:** failed on a torn `with`. For the other arms the torn
+  reads are counted and reported.
+- **Informs:** one snapshot for all the loads of a request.
+
+**CPU.**
+
+#### AuthorLogin
+
+At nine o'clock a thousand authors log in within ten seconds.
+
+- **Axes:** uniform; read, and a hash; burst, spike; tiny; cached;
+  point; single; keep-alive; steady.
+- **Stresses:** CPU, latency: the wait for a processor.
+- **Sketch:** the stand-in hash is PBKDF2 with SHA-256 at 600,000
+  rounds, about 150 ms of one core. Four cores verify 27 logins a
+  second and 100 arrive: 3.7 times capacity for ten seconds. Go runs
+  every hash at once in 10 ms slices, so all of them finish late and
+  together, the last after some 37 s, and a 50 µs read that arrives
+  meanwhile waits behind the runnable goroutines for a slice: up to
+  seconds. The health probe misses its deadline.
+- **Invariant:** the right password is a 200 and a wrong one a 401,
+  never the reverse; the hash runs for every attempt, counted.
+- **Signal:** failed on a wrong verdict. Degraded when the canary
+  read's p99 passes ten times its unloaded value, or a health check
+  is missed; both are expected today.
+- **Informs:** step 14: the hash as an effect the runner performs on
+  a bounded pool with a bounded queue, instead of CPU spent inside a
+  pure handler, which nothing can bound; its parameters.
+
+#### ReportDecodeNested
+
+A client posts a 4 MiB report of nested JSON and gets a large nested
+one back.
+
+- **Axes:** uniform; write, insert; steady; body, response; cached;
+  none; single; keep-alive; steady.
+- **Stresses:** CPU, bandwidth. Arms: a valid body into a struct; a
+  body nested 10,001 deep; 4 MiB of keys the model does not have.
+- **Sketch:** decoding 4 MiB at `jsonDecode` is 50 ms of a core, so
+  20 requests a second a core, with SQLite under 1%. The decoded
+  value is two to five times the body: a hundred at once are 2 GB.
+  The unknown keys are measured already (step 23): 471,363 field
+  errors and a 422 of 51.7 MB, thirteen times the request.
+- **Invariant:** what is stored is what was sent, by checksum; the
+  deep body is a 400, an oversized one a 413, the unknown keys a 422,
+  never a 5xx; a response is at most a fixed multiple of its request,
+  and the bytes allocated for a request stay inside a budget.
+- **Signal:** failed on a 5xx, or on a response past the multiple,
+  which is expected until step 23 lands.
+- **Informs:** step 23's limits on what decoding builds.
+
+#### ReportCreateWide
+
+A report row has 150 columns and a rule on each.
+
+- **Axes:** uniform; write, insert and update; steady; wide; cached;
+  point; single; keep-alive; steady.
+- **Stresses:** CPU, bandwidth. On a corpus project. Arms: a valid
+  create; a create with every column invalid; an update of one
+  column.
+- **Sketch:** a create decodes 150 fields, 20 µs, casts them, 15,
+  validates, 5, inserts with 150 arguments, 40, reads 150 columns
+  back, 25, and encodes them, 20, under `requestHTTP` 40: 165 µs, of
+  which casting and validating are an eighth and the read-back with
+  the two encodings over a third. The update of one column still
+  reads 150
+  back. The invalid create builds 150 details, 30 KB, and costs about
+  what a success does without its insert.
+- **Invariant:** the stored row is the one sent; the invalid create
+  names all 150 columns and stores nothing.
+- **Signal:** degraded when validation passes 30% of the request.
+- **Informs:** whether an update returns the whole row; preallocation
+  per request (S3).
+
+#### RouteMatchMany
+
+An application grows to seven thousand routes.
+
+- **Axes:** uniform, over the routes; read; steady, herd at the
+  start; tiny; cached; point; single; keep-alive; restart.
+- **Stresses:** CPU, bandwidth. On a corpus project of a thousand
+  tables of one column.
+- **Sketch:** `ServeMux` matches through a tree, so a match stays
+  under a microsecond from ten routes to ten thousand. Registration
+  at start checks each pattern for conflicts and is the part that may
+  grow faster than the routes; it is measured, not guessed. The
+  binary grows by about a kilobyte or two a route.
+- **Invariant:** every route answers with its own table's row; the
+  first, the middle and the last registered cost the same within a
+  fifth.
+- **Signal:** degraded when a match costs more with more routes.
+- **Informs:** step 28, where registration splits by scope; a limit
+  on routes (S2).
+
+**Memory.**
+
+#### StreamIdle
+
+Ten thousand browsers keep a connection open, half of them idle
+keep-alive and half an event stream.
+
+- **Axes:** uniform; read; steady, then a spike as all wake; tiny;
+  cached; point; single; idle; steady.
+- **Stresses:** memory, bandwidth.
+- **Sketch:** `connectionIdle` is 15 KB: a goroutine, two 4 KB
+  buffers and the connection. A stream adds a channel of 320 events,
+  about 28 KB, and a ticker: 45 KB. Five thousand of each are 300 MB;
+  fifty thousand of each, in the soak, 3 GB. Idle CPU is the
+  heartbeat, 330 writes a second. When all wake within 100 ms, ten
+  thousand lookups cross four readers in about 13 ms.
+- **Invariant:** every connection still serves a request after the
+  hold; after the close, descriptors and heap are back at baseline;
+  at the descriptor limit the open connections keep working and new
+  ones succeed again once some close.
+- **Signal:** failed on a leak. Degraded past twice the sketch a
+  connection.
+- **Informs:** step 16's idle timeout and connection limit; step
+  23's bound on subscribers and on each one's buffer.
+
+#### UploadParallel
+
+Two hundred clients upload 3 MiB images into a blob column at once,
+and others download them.
+
+- **Axes:** uniform, with an arm where all download one blob; 50/50,
+  insert; burst; blob, body; cached; point; single; keep-alive,
+  slow-send; checkpoint.
+- **Stresses:** memory, bandwidth.
+- **Sketch:** an upload is copied about five times: the body as
+  read, 4 MiB of base64 in JSON; the decoded blob, 3; SQLite's copy,
+  3; the row read back, 3; the encoded response, 4. That is 14 MiB of
+  Go heap for an upload in flight, 2.8 GB for two hundred before the
+  collector's headroom. On the writer one blob is 750 frames and
+  3 ms: 330 uploads a second would be 1 GB/s of WAL and a checkpoint
+  an upload, so the disk's bandwidth is the ceiling.
+- **Invariant:** every download's SHA-256 is its upload's; an upload
+  past the limit is a 413 after at most one byte more than the limit
+  was read.
+- **Signal:** failed on a blob that differs, which the slice kept by
+  a setter (step 36) could cause. Degraded past 6 bytes of heap for a
+  byte in flight.
+- **Informs:** P5; whether a `Create` returns its blob columns; GOB
+  for binary bodies; the position that file uploads are not planned.
+
+#### ProcessSoak
+
+The application runs an ordinary mixed day for hours, and nothing may
+creep.
+
+- **Axes:** zipf; 90/10, every verb; steady with bursts; every size
+  in turn; cached; every shape in turn; every shape in turn; every
+  behaviour in turn, stalled streams among them; checkpoint, jobs.
+- **Stresses:** memory, bandwidth, over time.
+- **Sketch:** flat by design, since the inventory of mutable state
+  is four things. The suspects: a stream blocked in `Write` on a
+  client that stopped reading, which has no deadline (`events.go`);
+  the statement cache's closing goroutines under eviction; the WAL
+  under readers that always overlap.
+- **Invariant:** over the run the last quarter's mean is at most 1.1
+  times the first quarter's for live heap, goroutines, descriptors,
+  WAL bytes, file bytes at constant live rows, temporary files and
+  subscribers; cached statements stay within 256 a pool and reader
+  connections within `GOMAXPROCS`; at the end everything is back at
+  baseline.
+- **Signal:** failed on any slope.
+- **Informs:** step 23's limits; V10.
+
+#### HeapPressureTail
+
+Sixteen lists of a hundred thousand rows are in flight while everyone
+else does small reads.
+
+- **Axes:** uniform; read; steady; response, 25 MB each; cached;
+  range, point; long-read; keep-alive; steady.
+- **Stresses:** memory, latency. Arms: the default; a memory limit
+  of 1 GB through `debug.SetMemoryLimit`, a small container.
+- **Sketch:** a Volt backend keeps no long-lived heap, since
+  handlers are pure and controllers are empty structs, so the
+  collector's question is the allocation rate and not the live heap.
+  The lists allocate about 1 GB/s, the collector takes a quarter of
+  the CPU, and small reads lose processors and pay assists: p99 about
+  ten times, the median 1.3. Under the limit the collector may take
+  half the CPU.
+- **Invariant:** the standing ones.
+- **Signal:** degraded when the canary read's p99 passes twenty
+  times its unloaded value, or the collector 40% of the CPU.
+- **Informs:** the collector's settings a `main` states (S12); a
+  streaming read; step 23's limit on rows.
+
+**Network.**
+
+#### ClientSlow
+
+Five thousand phones on a bad network send bodies a few bytes at a
+time and read responses as slowly.
+
+- **Axes:** uniform; 90/10; steady; body, response; cached; point;
+  single; slow-send, slow-read; steady.
+- **Stresses:** network, latency. Arms: a server with no timeouts;
+  one with every timeout stated.
+- **Sketch:** net/http has no slots to pin: a slow client holds a
+  goroutine and its buffers, never a reader or the writer, because
+  the shim reads the whole body before any effect and encodes the
+  whole response before its first byte. Fast clients should move
+  under 5%. The price is memory: a slow sender of a 4 MiB body pins
+  what has arrived, up to 4 MiB, so five thousand of them are 20 GB
+  at worst, and a slow reader pins the encoded response.
+- **Invariant:** every fast request succeeds; a slow client gets the
+  whole right response or a 408 or a 503, never a short 200.
+- **Signal:** failed on a short 200. Degraded when the fast p99
+  moves a tenth, or a slow client pins more than its body and 64 KB.
+- **Informs:** step 16: the read, header and write timeouts stated
+  (S12); the body limit as the admission to memory.
+
+#### ConnectionChurn
+
+A load balancer without keep-alive opens a connection for every
+request.
+
+- **Axes:** uniform; read; steady; tiny; cached; point; single;
+  churn; steady.
+- **Stresses:** network, latency. Arms: keep-alive; a connection a
+  request; the same over TLS.
+- **Sketch:** a connection costs an accept, a goroutine, its buffers
+  and a close, about 40 µs, which doubles the 48 µs request: half the
+  throughput. A TLS handshake is about half a millisecond of server
+  CPU: a tenth of the throughput.
+- **Invariant:** no connect fails under the listener's backlog;
+  descriptors and goroutines return to baseline.
+- **Signal:** degraded when a plain connection costs more than three
+  requests.
+- **Informs:** step 16's keep-alive and TLS settings.
+
+#### ClientVanish
+
+Clients drop the connection at a random point of a request: in the
+body, queued for the writer, inside a transaction, in the response.
+
+- **Axes:** uniform; 50/50, the update with its audit row; steady;
+  tiny, body; cached; point; several; vanish; steady.
+- **Stresses:** network, latency.
+- **Sketch:** gone while queued: the wait for the writer ends with
+  the context and SQLite does nothing. Gone inside a transaction: it
+  rolls back between two statements. Gone during a single write that
+  waits under SQLite's busy handler: nothing interrupts it (spec, the
+  runner). Gone after the commit: the work is done and the client
+  never learns. Less than one statement should run for a request
+  after its client left.
+- **Invariant:** no transaction is half applied: audit rows equal
+  updates; the server logs a 499, not a 500; other clients see no
+  error; the readers end idle.
+- **Signal:** failed on a half-applied transaction. Degraded when
+  more than one statement runs after a client left.
+- **Informs:** step 21, question 4; what serving HTTP/2, where a
+  cancel does not close the connection, would change.
+
+**Disk.**
+
+#### WALReaderPinned
+
+An export or a year-long aggregate holds its snapshot while ingestion
+never stops, and the WAL cannot be checkpointed past it.
+
+- **Axes:** monotonic; 1/99, inserts beside one long read; steady;
+  rows; cached; aggregate; long-read; keep-alive; checkpoint.
+- **Stresses:** disk, latency. Arms: one reader pinned for 60 s;
+  readers that always overlap, four reads of 100 ms back to back and
+  staggered, in the soak.
+- **Sketch:** the WAL grows at the write rate while the snapshot is
+  held: single appends write 270 MB/s, 16 GB in the minute; bulk
+  appends 30 MB/s, 1.8 GB. At the release one commit pays the
+  checkpoint with the writer held: the distinct pages, some 50,000
+  or 200 MB written to their places, and two `fsync`, 0.2 to 2 s on
+  an SSD. The file then keeps its size, since mattn's build sets no
+  `journal_size_limit`. Under overlapping readers the checkpoint
+  keeps copying, but the WAL starts over only when no reader is in
+  it, so the file may grow for as long as the load lasts.
+- **Invariant:** the WAL is at most the hold times the write rate
+  plus three checkpoints, and is back under two checkpoints within
+  ten seconds of the release; no write fails.
+- **Signal:** failed when the WAL does not come back, which is
+  expected today, or grows with no long reader. Degraded when the
+  stall passes a second.
+- **Informs:** a checkpoint at the runner's own pace that restarts
+  or truncates the WAL past a bound; `journal_size_limit` stated; a
+  greatest age for a reader's snapshot; a default deadline for reads.
+
+#### SampleReadCold
+
+The samples table is far larger than memory, and dashboards ask for
+random old points.
+
+- **Axes:** uniform; read; steady, herd on a cold start; tiny; big,
+  cold; point; single; keep-alive; restart.
+- **Stresses:** disk, latency. Arms: cached; cold once; evicted
+  continuously; really larger than memory, in the soak.
+- **Sketch:** a hundred million samples are 5 GB and their index
+  2.5. A lookup by series and time walks the index and then the
+  table; the interior pages stay cached and the two leaves miss: two
+  `deviceRead`, 200 µs against 5, forty times, and four readers serve
+  20,000 a second. On a disk of 8 ms a read it is 60 a second a
+  reader. The readers' own caches are 500 pages and are dropped at
+  every commit, so the OS cache is the only one that counts.
+- **Invariant:** each lookup answers the seeded value.
+- **Signal:** degraded when a lookup reads the device more than
+  three times, which means interior pages are missing too.
+- **Informs:** the readers' `cache_size` and `mmap_size`, which
+  `runner.md` 2 measured on cached data only; a table with a
+  composite key as `WITHOUT ROWID`, one leaf instead of two.
+
+#### BackupLive
+
+The nightly backup runs while traffic continues.
+
+- **Axes:** uniform; 90/10; steady, with an import running in one
+  arm; tiny; cached, 5 GB; range, the whole file; long-read;
+  keep-alive; backup.
+- **Stresses:** disk, bandwidth. Arms: `VACUUM INTO` on a connection
+  of its own; mattn's online backup in steps from a second
+  connection.
+- **Sketch:** `VACUUM INTO` copies at about 300 MB/s, 5 GB in 17 s,
+  on one snapshot. The stepped backup starts over whenever another
+  connection commits, so at any steady write rate it may never
+  finish.
+- **Invariant:** the copy opens, passes `integrity_check` and
+  `foreign_key_check`, and is the source at one commit: every write
+  acknowledged up to its newest row is in it, and its counters equal
+  its counts.
+- **Signal:** failed on a copy that is not one commit. Degraded when
+  the stepped backup has not finished in ten times the copy's time.
+- **Informs:** a `volt backup` command, which the roadmap lacks, and
+  the mechanism under it.
+
+#### MigrationLive
+
+`volt migration up` adds an index to a table of fifty million rows
+while the site serves.
+
+- **Axes:** uniform; 90/10; steady; rows, the whole table in one
+  transaction; cached; point; long-write; keep-alive; migration.
+- **Stresses:** disk, bandwidth. The migration runs in a second
+  process, the `volt` the suite built.
+- **Sketch:** the index takes about a microsecond a row, 50 s with
+  the write lock held and a gigabyte or more of WAL. Reads go on. A
+  single write waits five seconds under SQLite's busy handler and
+  fails; a transaction waits five seconds in the runner's loop and
+  fails. So for 50 s every write hangs five seconds and answers 500,
+  at a thousand writes a second five thousand requests hang at any
+  moment, and a route's deadline does not reach the single ones.
+  Afterwards every cached statement compiles again.
+- **Invariant:** no acknowledged write is lost; no read fails;
+  `volt migration status` is clean after; and during it a write is
+  served or refused with a 503, never a 500.
+- **Signal:** failed on a 500, which is expected today. Degraded
+  when the canary read's p99 doubles.
+- **Informs:** a busy database answered 503 with `Retry-After`;
+  whether the tool refuses a long migration on a database in use;
+  the busy timeout as a constant (step 23).
+
+#### AccountWriteImbalance
+
+One account writes through sixty-four connections, sixty-three others
+through one each.
+
+- **Axes:** zipf, one heavy account; write, insert; over2; tiny;
+  cached; none; single; keep-alive; steady.
+- **Stresses:** CPU, latency.
+- **Sketch:** the writer's connection goes to a random waiter
+  (`runner.md` 7), so the heavy account, with 64 of 127 places, gets
+  half the writer. A light account's write waits about 127 services,
+  3.8 ms against 30 µs alone, and p99 under a random hand-off is some
+  4.6 times the mean, 17 ms. A queue fair between accounts would give
+  64 services, 1.9 ms.
+- **Invariant:** every account's acknowledged rows are stored.
+- **Signal:** degraded when a light account's p99 passes six times
+  its mean wait.
+- **Informs:** the order and the fairness of the writer's queue
+  (`runner.md` 7); step 16's rate limit.
+
+**Added by the attack.** `DeliveryKeyOrder` stands with the write
+stories above.
+
+#### PostMixSweep
+
+The same site at different hours: all reads at night, half writes
+during an import.
+
+- **Axes:** uniform; read, 99/1, 90/10, 50/50, 1/99, write; steady;
+  tiny; cached; point, with a range arm on the feed page; single;
+  keep-alive; steady.
+- **Stresses:** memory, latency: a reader refilling its cache.
+- **Sketch:** a reader drops its page cache whenever the writer has
+  committed, and lookups measured 1.4 times slower at a commit a
+  millisecond and twice at commits back to back (`runner.md` 2). A
+  lookup is a tenth of a request, so point reads lose under a tenth
+  end to end; the feed page, mostly database time, up to half its
+  speed. The writer caps the whole at a total rate times write share
+  of 33,000 a second.
+- **Invariant:** the standing ones, the read after an acknowledged
+  write above all.
+- **Signal:** degraded when a read at 50/50 costs over 2.5 times a
+  read alone.
+- **Informs:** the readers' cache settings, and `mmap_size` for
+  reads that touch many pages.
+
+#### PostReadCores
+
+The same reads on a larger machine.
+
+- **Axes:** uniform; read; steady; tiny; cached; point; single;
+  keep-alive; steady.
+- **Stresses:** CPU, bandwidth. Arms: `GOMAXPROCS` of 1, 2, 4, 8, 16
+  and on to the machine's cores.
+- **Sketch:** linear to four, measured (`runner.md` 1). Past that,
+  every read takes the statement cache's mutex twice, the pool's
+  once, the statement's list of connections once, and SQLite's
+  memory statistics mutex (step 21, question 1). The curve is
+  expected to bend between eight and sixteen.
+- **Invariant:** the standing ones.
+- **Signal:** degraded when doubling the cores gives under 1.5 times
+  the reads before sixteen.
+- **Informs:** step 21, question 1: a cap on the readers; a
+  statement cache per reader.
+
+#### PostReadTrending
+
+The popular posts change every few minutes, and the new favourites
+are cold.
+
+- **Axes:** zipf, moving; read; steady; tiny; big, or evicted;
+  point; single; keep-alive; steady.
+- **Stresses:** disk, latency. Arms: a hot set that never moves; one
+  that moves every minute.
+- **Sketch:** a fixed hot set stays cached at any size and equals
+  `PostReadHot`. At a shift, ten thousand newly hot posts are two
+  leaves each at a `deviceRead` across four readers: half a second
+  during which p99 is the device's latency, then back.
+- **Invariant:** the standing ones.
+- **Signal:** degraded when the recovery after a shift passes twice
+  the sketch.
+- **Informs:** as `SampleReadCold`; identical reads performed once
+  for the first readers of a newly hot row.
+
+#### SampleAppendOverload
+
+Ingestion arrives at twice, then ten times, what the writer can take,
+for minutes.
+
+- **Axes:** monotonic; write, insert; ramp, over2, over10; tiny,
+  with an arm of 10 KB bodies; cached; none; single; keep-alive;
+  checkpoint.
+- **Stresses:** CPU, latency.
+- **Sketch:** past 33,000 a second the queue for the writer grows by
+  the excess, 33,000 requests a second at twice capacity. Nothing
+  bounds it, and 99 of 101 routes run without a deadline (step 23),
+  so latency grows without limit and each queued request holds its
+  goroutine and its body: a hundred thousand queued with 10 KB bodies
+  are over a gigabyte. With a client's deadline the random hand-off
+  keeps goodput near capacity while most requests fail; in arrival
+  order every request would wait past the deadline. With step 37's
+  variant, `timeout: 1` on the route, a write that waits a second is
+  a 504 and the achieved rate holds at capacity. The readers stay
+  idle, so the canary read does not move.
+- **Invariant:** every acknowledged sample is stored, once.
+- **Signal:** degraded when goodput at ten times capacity falls
+  under half of capacity, when the heap grows through the run, or
+  when the canary read moves.
+- **Informs:** a bound on the writer's queue with a 503 past it,
+  which `runner.md` 7 names for batching and which is needed without
+  it; a default deadline; the queue's order.
+
+#### CommitSync
+
+The operator sets `synchronous = FULL` for durability, or moves the
+file to a slower disk.
+
+- **Axes:** one and uniform, as arms; write, update; steady; tiny;
+  cached; none; single; keep-alive; checkpoint.
+- **Stresses:** disk, latency. Arms: `NORMAL` and `FULL`; a
+  checkpoint at 1,000 and at 10,000 frames.
+- **Sketch:** under `NORMAL` a commit does not wait for the disk and
+  one commit in a thousand frames pays the checkpoint, two `fsync`
+  and the copy: p99.9 of 3 to 15 ms against a median of 30 µs. Under
+  `FULL` every commit waits: 30 µs and an `fsync`, so with a 1 ms
+  `fsync` 33,000 writes a second become 970, thirty-four times fewer.
+- **Invariant:** every acknowledged write is present after the
+  database is closed and opened again, and after the process is
+  killed, an arm that waits for question 2.
+- **Signal:** degraded when a commit under `FULL` passes two
+  `fsync`.
+- **Informs:** `runner.md` 7, where batching pays under `FULL`;
+  `synchronous` stated among the pragmas (step 23); the checkpoint's
+  threshold.
+
+#### PostWriteIndexed
+
+An index is added for each admin screen until `posts` has eight.
+
+- **Axes:** uniform, random in the indexes; write, insert and
+  update; steady; tiny; indexed, with a big arm; none; single;
+  keep-alive; steady.
+- **Stresses:** disk, bandwidth. Arms: no index, two, four, eight.
+- **Sketch:** each index adds a tree insert, about 2 µs cached, and
+  a dirty page: an insert goes from 30 µs to 45 at eight indexes,
+  and from one frame to nine, 36 KB of WAL a row. Past the cache each
+  index leaf is a `deviceRead`: eight of them, 0.8 ms, thirty times.
+- **Invariant:** every index agrees with its table: a query through
+  each finds every row.
+- **Signal:** degraded when an index costs over twice its sketch.
+- **Informs:** vet's `redundantindex`; the writer's `cache_size`.
+
+#### SampleRetention
+
+A nightly job deletes the samples older than thirty days.
+
+- **Axes:** monotonic, at the left edge; write, delete; burst; rows;
+  cached, then fragmented; range; long-write; keep-alive; jobs.
+- **Stresses:** disk, bandwidth. Arms: one statement; batches of a
+  thousand at an interval.
+- **Sketch:** a range delete frees whole leaves in order, about a
+  microsecond a row and a frame a freed page, far below an insert.
+  One statement over ten million rows holds the writer about ten
+  seconds, a batch one millisecond; the canary's curve is
+  `SampleImport`'s and is not drawn again. The file does not shrink:
+  the freed pages wait on the free list for the next appends.
+- **Invariant:** exactly the rows older than the cut are gone; the
+  file is never larger than its peak.
+- **Signal:** degraded when the file grows from one cycle to the
+  next.
+- **Informs:** step 15's bound on a batch; `auto_vacuum` stated.
+
+#### DatabaseFull
+
+The disk fills.
+
+- **Axes:** monotonic; write, insert; steady; tiny; cached; none;
+  single, several; keep-alive; steady.
+- **Stresses:** disk capacity, outside the matrix.
+- **Sketch:** `PRAGMA max_page_count` stands for the full disk (V4).
+  Past it every insert fails and SQLite rolls its transaction back;
+  reads go on.
+- **Invariant:** while full, reads succeed and every write is
+  refused with one status the spec names, with no transaction half
+  applied; once deletes free pages, writes succeed again with no
+  restart; `integrity_check` passes.
+- **Signal:** failed on a half-applied write, or on a process that
+  needs a restart.
+- **Informs:** how a full database maps onto a response, which the
+  spec does not say today.
+
+#### SampleRollup
+
+A nightly job sums each series' year of samples into its rollup row.
+
+- **Axes:** monotonic; write, upsert, after an aggregate; burst, the
+  top of the hour; tiny; cached; aggregate; long-read inside a
+  write, against a read and then a write; keep-alive; jobs.
+- **Stresses:** CPU, latency. Arms: an `rt.Atomic` over the read and
+  the upsert; the read alone and then the upsert.
+- **Sketch:** inside a writing transaction the reads run on the
+  writer (`runner.md` 2), so the `Atomic` holds the write lock for
+  the whole aggregate, 0.45 s a series, and every write waits: the
+  canary write's p99 is the aggregate's time. The second arm holds
+  the writer for the upsert alone, 30 µs, and its rollup may be one
+  commit behind.
+- **Invariant:** each rollup equals the sum of its series at some
+  commit; a second run of the job changes nothing.
+- **Signal:** degraded when the canary write's p99 passes 10 ms in
+  the second arm.
+- **Informs:** step 15's shape for a job; a vet rule for a long read
+  inside an `Atomic`; an upsert in the generated surface.
+
+#### ClientRetryStorm
+
+A write stall of five seconds makes every client time out and send
+again, three times; the stall ends, and the site must come back.
+
+- **Axes:** uniform; 90/10; retry; tiny; cached; point; several, the
+  update with its audit row; vanish, a client that timed out closes;
+  migration, a second writer holding the write lock for the five
+  seconds.
+- **Stresses:** network, latency.
+- **Sketch:** the offered load triples during the stall. A client
+  that timed out closes, its queued write leaves the queue when its
+  context ends, and so the backlog at the release is the live
+  requests alone: recovery within about a second. A write whose first
+  attempt committed after its client gave up is applied again by the
+  retry, unless a key makes it idempotent.
+- **Invariant:** with an idempotency key each logical write is
+  applied once; audit rows equal updates.
+- **Signal:** failed on a write applied twice. Degraded when p99 is
+  not back within five seconds of the stall's end.
+- **Informs:** idempotency keys for writes, as a convention or in
+  the runtime; `Retry-After`.
+
+#### CommentScanFragmented
+
+After months of deletions nine comments in ten are gone and the pages
+are mostly empty.
+
+- **Axes:** uniform; read; steady; tiny; fragmented, with a cold
+  arm; range; single; keep-alive; steady.
+- **Stresses:** disk, latency. Arms: a fresh table; the same after
+  90% of its rows were deleted at random; the same after a `VACUUM`.
+- **Sketch:** a thousand live rows that filled 25 pages now lie on
+  250: cached, 0.4 ms more of page fetches; cold, 250 `deviceRead`,
+  25 ms against 2.5, ten times. The file keeps its full size, since
+  `auto_vacuum` is off.
+- **Invariant:** the listing is complete and in order.
+- **Signal:** degraded when a live row costs over twelve times the
+  pages of the fresh table.
+- **Informs:** `auto_vacuum = INCREMENTAL` stated at creation; a
+  maintenance command.
+
+#### CommentDeleteCascade
+
+A moderator deletes a post with a hundred thousand comments, and the
+foreign key deletes them.
+
+- **Axes:** one, a parent whose children are scattered; write,
+  delete; steady; rows; cached; none; long-write; keep-alive;
+  checkpoint.
+- **Stresses:** disk, bandwidth.
+- **Sketch:** the post's comments lie scattered among ten million,
+  rarely two to a leaf, so a hundred thousand deletes dirty some
+  eighty thousand pages: 330 MB of WAL to remove 10 MB of rows, over
+  thirty times. It is one statement, which nothing can batch: half a
+  second to a second of the writer. The checkpoint after it writes
+  those eighty thousand pages to random places.
+- **Invariant:** no comment of the post remains and none of another
+  post is gone; the post and its comments go in one transaction.
+- **Signal:** degraded when the canary write's p99 passes two
+  seconds.
+- **Informs:** guidance on `delete: cascade` over large child
+  tables; deletion as a job at its own pace (step 15); the writer's
+  `cache_size`.
+
+#### PostSortUnindexed
+
+"Most liked posts" sorts a million rows on a column no index covers.
+
+- **Axes:** uniform; read; steady; tiny, with an arm that carries
+  the 1 KB body; cached; sort; long-read; keep-alive; steady.
+- **Stresses:** disk, bandwidth. Arms: with a limit of twenty; with
+  no limit; with no limit and the body selected.
+- **Sketch:** with a limit SQLite keeps twenty rows through one
+  scan: 0.2 s of CPU and no file. With none the sorter spills past
+  its memory: 100 MB of temporary files written and read back. With
+  the body selected the sorter carries every whole row: a gigabyte of
+  temporary files for one request.
+- **Invariant:** the order is right; no temporary file remains.
+- **Signal:** failed on a temporary file left behind. Degraded when
+  the temporary bytes pass 1.5 times the rows' width.
+- **Informs:** `temp_store` and the temporary directory stated
+  (S12); a vet rule for an order no index serves; step 23's limit on
+  rows.
+
+#### PostGetMany
+
+A page loads the five thousand posts a reader bookmarked, by their
+keys.
+
+- **Axes:** uniform; read; steady; keys, from one to 32,767; cached;
+  point, many at once; single; keep-alive; steady.
+- **Stresses:** CPU, bandwidth. Arms: `GetMany`, a placeholder a
+  key; a select with `in :ids`, one JSON array.
+- **Sketch:** the text of `GetMany` changes with the count, so every
+  new count misses the statement cache and compiles a text that
+  grows with it, about 0.3 ms at five thousand keys, and binds five
+  thousand arguments. The select has one text and parses 30 KB of
+  JSON. The select should be two to three times cheaper when the
+  counts vary.
+- **Invariant:** both spellings answer the same rows (V9); 32,767
+  keys are refused as the client's error and not a 500.
+- **Signal:** failed when the spellings disagree, or on the 500,
+  which is expected today (step 23).
+- **Informs:** rendering `GetMany` as `InList` does; step 23's limit
+  on keys.
+
+#### PostFilterShapes
+
+A search form with ten optional filters goes live, and every
+combination of them is another statement text.
+
+- **Axes:** uniform; read; steady; tiny; cached; range; single;
+  keep-alive; steady.
+- **Stresses:** CPU, bandwidth. Arms: 16, 256 and 1,024 distinct
+  shapes, drawn evenly and by a Zipf law.
+- **Sketch:** a pool's cache holds 256 texts. At 1,024 shapes drawn
+  evenly three reads in four miss: a `prepare` or more, and an
+  eviction whose close runs on a goroutine of its own. The database
+  time of a point query about doubles.
+- **Invariant:** each answer equals the filter applied in Go to the
+  seeded rows, and a cached statement agrees with a fresh one (V9);
+  no pool's cache passes 256; the closing goroutines drain.
+- **Signal:** failed on a disagreement or a cache past its bound.
+- **Informs:** the cache's size as a named limit (step 23); a cache
+  for each reader's connection.
+
+#### PostReadOverload
+
+Crawlers and a traffic peak ask for ten times the reads the cores can
+serve.
+
+- **Axes:** uniform; read; ramp, over2, over10; tiny; cached; point;
+  single; keep-alive; steady.
+- **Stresses:** CPU, latency.
+- **Sketch:** unlike the writer's overload this one takes every
+  core, so everything slows together, writes and health checks
+  included, since each needs CPU to be parsed and answered.
+  Goroutines pile up in net/http, which has no limit, and the wait is
+  for a processor. Goodput holds near capacity while clients wait,
+  and falls once their deadlines pass before the work is done.
+- **Invariant:** the standing ones.
+- **Signal:** degraded when goodput at ten times capacity falls
+  under half of capacity, or a health check is missed.
+- **Informs:** step 16: a limit on requests in flight with a 503
+  past it; the rate limit.
+
+#### PostReadFormats
+
+The desktop client asks for GOB and the browser for JSON, over a
+1 Gbit link.
+
+- **Axes:** uniform; read; steady; tiny and response, one row and a
+  thousand; cached; point, range; single; keep-alive; steady.
+- **Stresses:** network, bandwidth. Arms: JSON and GOB, each on
+  loopback and through the relay capped at 1 Gbit.
+- **Sketch:** for one row JSON is about 2 µs and 300 bytes. GOB,
+  with a new encoder for each response, sends the type's description
+  every time and makes the client compile a decoder every time:
+  perhaps five times the CPU and twice the bytes. For a thousand rows
+  GOB is perhaps half the CPU and 0.6 of the bytes, with the
+  crossover at some tens of rows. At 1 Gbit a list of 250 KB passes
+  470 times a second, far under what the CPU could encode: the
+  uncompressed bytes are the limit.
+- **Invariant:** both formats decode to equal values for every
+  column type; a column tagged `json:"-"` is in neither.
+- **Signal:** failed when the formats differ, which is expected for
+  the tagged column (step 36).
+- **Informs:** the generated client's default format; whether the
+  shim compresses.
+
+#### ServerRestart
+
+A deploy stops the server under load and starts it again.
+
+- **Axes:** zipf; 90/10; herd, retry; tiny, with one export in
+  flight; cached, with a cold arm; point; several; keep-alive, idle
+  streams and slow clients among them; restart.
+- **Stresses:** network, latency. Arms: a graceful stop; a kill,
+  which waits for question 2.
+- **Sketch:** no listener is handed over, so connects are refused
+  for the drain and the start, 50 to 200 ms: at 5,000 requests a
+  second up to a thousand, all retried. `http.Server.Shutdown` waits
+  for connections to fall idle and an event stream never does, so
+  the stop lasts to its deadline unless the broker ends its streams
+  first. At the start every client reconnects at once, and connects
+  past the listener's backlog wait a second for their retransmission.
+  Closing the database checkpoints the WAL and takes as long as the
+  WAL is large; after a kill the next open recovers it instead, about
+  a second a gigabyte.
+- **Invariant:** every write acknowledged before the stop is present
+  after it, in both arms; `integrity_check` passes; a response cut
+  short is never counted a success.
+- **Signal:** failed on a lost acknowledged write. Degraded when the
+  stop passes five seconds, or the refused connects pass twice the
+  rate times the start's time.
+- **Informs:** step 16: the order of a shutdown (stop accepting, end
+  the streams, drain, close the database), readiness, and a listener
+  taken from the service manager.
+
+#### ServerOverlap
+
+A blue-green deploy runs the old process and the new one on the same
+file for a minute.
+
+- **Axes:** uniform; 50/50; steady; tiny; cached; point; single,
+  upgrade; keep-alive; restart.
+- **Stresses:** disk, latency: the file's lock between two
+  processes.
+- **Sketch:** in the suite, two servers in the one process, each
+  with a `run.DB` of its own on the file. Each has a writer of its
+  own, so SQLite's write lock is contended for the first time. A
+  transaction that finds it held sleeps by the runner's schedule,
+  whose first step is a millisecond (`busyDelays`): a contended write
+  goes from 30 µs to a millisecond or more, thirty times. A single
+  statement waits in SQLite's own handler, which no deadline reaches.
+- **Invariant:** no write is lost or doubled between the two;
+  counters equal their counts; no request outlives its route's
+  timeout by more than 100 ms.
+- **Signal:** failed on the timeout for single writes, which the
+  spec admits today. Degraded when the pair writes under a quarter
+  of what one process does.
+- **Informs:** the busy schedule (step 23); whether two processes on
+  one file are supported, or refused at `run.Open`.
+
+#### RequestHeaderLarge
+
+A client sends a megabyte of cookie, or a hundred thousand header
+lines.
+
+- **Axes:** uniform; read; steady; tiny, the headers being the large
+  part; cached; point; single; headers; steady.
+- **Stresses:** memory, bandwidth.
+- **Sketch:** net/http refuses a header past its limit, 1 MiB by
+  default, with a 431 before the shim runs, and allocates no more
+  than the limit to find out.
+- **Invariant:** a 431 and never a 5xx; an `X-Request-ID` echoed no
+  longer than a bound; at most the limit and 64 KB allocated for a
+  refused request.
+- **Signal:** failed on an echo of any length, which is expected
+  today (step 36).
+- **Informs:** `MaxHeaderBytes` stated (S12, step 16).
+
+#### SchemaOpenLarge
+
+An application of a thousand tables restarts, and every connection
+reads the whole schema before its first row.
+
+- **Axes:** uniform; read; herd; wide; cached; point; single;
+  keep-alive; restart, migration.
+- **Stresses:** memory, bandwidth. On a corpus project of a thousand
+  tables of 150 columns.
+- **Sketch:** the schema is about 4.5 MB of SQL, and each of the
+  `GOMAXPROCS` readers and the writer parses it at its first
+  statement: perhaps 0.1 to 0.2 s and 20 MB a connection, so the
+  first read on each reader waits that long, and sixteen cores hold
+  340 MB of parsed schema. A migration makes every connection parse
+  it again.
+- **Invariant:** the first response on each connection is right.
+- **Signal:** degraded when the first row takes over half a second.
+- **Informs:** warming the readers at `run.Open`; a limit on the
+  schema's size (S2).
+
+#### EventFanout
+
+A popular post gets a comment a second, and each is pushed to ten
+thousand open event streams.
+
+- **Axes:** one, a topic; write, a publish; ramp; tiny; cached;
+  none; single; idle, with one stream in a hundred stalled; steady,
+  restart as all reconnect.
+- **Stresses:** network, bandwidth.
+- **Sketch:** `Publish` walks every subscriber under one mutex, ten
+  thousand at about 60 ns: 0.6 ms an event. Delivery is the cost: ten
+  thousand writes and flushes an event, about 30 ms of CPU, so one
+  core delivers some 300,000 events a second, thirty publishes a
+  second to ten thousand streams. A stalled client's channel fills
+  after 320 events and it is dropped, but its goroutine stays blocked
+  in `Write`, which has no deadline. When all reconnect, each is
+  replayed up to 256 events at once.
+- **Invariant:** every healthy subscriber receives every event once
+  and in order; a dropped one sees its stream end; a gap appears only
+  across a reconnect and shows in the IDs; afterwards no goroutine is
+  left.
+- **Signal:** failed on an event missing or doubled on a healthy
+  stream, or on a goroutine a stalled one left, which is expected
+  today (step 23).
+- **Informs:** step 23's bound on subscribers, its write deadline
+  and the broker's own pace (S10); the shape of `volt.Publish`.
+
+#### LogSinkStall
+
+The pipe that carries the log stops being read.
+
+- **Axes:** uniform; 90/10; steady; tiny; cached; point; single;
+  keep-alive; steady.
+- **Stresses:** disk, latency: the sink's.
+- **Sketch:** `volt.Logger` writes a line a request through one
+  handler under a mutex, so when the sink blocks every request blocks
+  behind it: the site stalls for as long as the sink does.
+- **Invariant:** when the sink resumes, no request was lost and none
+  was answered twice.
+- **Signal:** the stall is the finding, reported as request stall
+  per second of sink stall; expected to be one.
+- **Informs:** step 16's logging: a bounded buffer that drops and
+  counts.
+
+### Tiers
+
+**Smoke: seconds, on every commit.** Inside `go test ./...`, in one
+process, on a few thousand rows; each case under a second and the
+tier under fifteen on four cores. It asserts only what holds under
+every interleaving, the invariants and counted things: statements a
+request, rows, frames within a loose bound. It reads no clock.
+
+| Case | The smoke run |
+|---|---|
+| `SeatClaimHot` | 2,000 claimants for 500 seats |
+| `PostViewHot` | 2,000 views, every count once |
+| `SampleAppendBulk` | 50 batches, one in ten invalid |
+| `AuditWrite` | 1,000 updates from 16 clients, every pair whole |
+| `DeliveryReceive` | 2,000 deliveries, three in ten repeated |
+| `JobClaim` | 1,000 jobs, 16 workers |
+| `SampleImport` | 20 chunks, each sent twice |
+| `PostFeed` | the three arms agree on 50 pages |
+| `PostSearch` | 200 queries, half of them cancelled |
+| `PostCrawl` | a keyset crawl of 5,000 rows under inserts and deletes |
+| `PostExport` | 20,000 rows under appends: one snapshot |
+| `PostCreateRace` | 64 clients on each of 50 slugs |
+| `PostUpdateConflict` | 200 racing pairs |
+| `CommentListRace` | 200 deletes under listing, the `with` arm |
+| `ReportDecodeNested` | the three bodies: statuses and the allocation budget |
+| `UploadParallel` | 32 uploads of 64 KB, by hash |
+| `ClientVanish` | 500 requests cut at seeded points |
+| `PostReadFormats` | every column type through both formats |
+| `PostFilterShapes` | 1,024 shapes: the bound and the agreement |
+| `PostGetMany` | counts from 1 to 5,000, and the limit |
+| `SampleRollup` | both arms, run twice |
+| `DatabaseFull` | a limit of a few hundred pages |
+| `EventFanout` | 100 subscribers, 1,000 events, one stalled |
+| `RequestHeaderLarge` | the sizes around the limit |
+
+**Full: minutes.** Sixty cases, all but `ProcessSoak` and
+`RequestHeaderLarge`, each arm run once for the bench's window with
+the standing probes: about forty minutes for the tier on the
+reference machine, a case alone under a minute once its rows are
+seeded. One run is enough for the invariants and the surprises. The
+bench's five runs and its noise floor are for comparing two commits,
+on the cases named for it. Run by hand and before a release.
+
+**Soak: an hour or more a case.**
+
+| Case | The soak run |
+|---|---|
+| `ProcessSoak` | the mixed day for hours: every slope |
+| `WALReaderPinned` | readers that always overlap for an hour: the WAL's size |
+| `SampleAppend` | appends until the file is several times memory: frames a row and file bytes a row stay constant |
+| `DeliveryKeyOrder` | to a hundred million keys: the cliff where the index leaves memory |
+| `JobClaim` | ten million jobs through the queue: the file stops growing, the poll does not slow |
+| `SampleRetention` | a day of appends and nightly deletes, many times over: the file's size |
+| `SampleReadCold` | a file really larger than memory |
+| `StreamIdle` | a hundred thousand connections held for an hour |
+| `EventFanout` | one stream in a hundred stalled for an hour |
+
+**A case that fails today.** Several invariants are expected to fail
+on the code as it stands; each is named in its case. Such a case is a
+defect found (V1): its assertion lands in the commit that fixes the
+defect, and until then the full tier reports its count. No assertion
+is weakened to make a tier pass.
+
+### The ten expected to hurt most
+
+Ranked by how sure the reading of the code makes the prediction, and
+by what it costs in production.
+
+1. **`WALReaderPinned`.** Under load the readers are always busy, so
+   there may never be a moment without a reader in the WAL, and the
+   WAL starts over only then. Nothing sets `journal_size_limit`, and
+   the only checkpoint is SQLite's automatic one, on a request's
+   commit. A disk that fills over hours, and a stall of seconds when
+   the checkpoint finally runs.
+2. **`SampleAppendOverload`.** The writer's queue has no bound, 99
+   of 101 routes have no deadline, and the hand-off is random. Past
+   capacity, memory grows with the queue and the tail is several
+   times the mean. No answer says "busy".
+3. **`PostExport`.** A million rows are about 700 MB of heap for one
+   request, with a snapshot held for seconds, and a `List` route has
+   no limit at all (step 23): one request can end the process.
+4. **`ClientSlow`.** The shim reads a whole body into memory before
+   anything else, and a `main` that states no timeouts lets a slow
+   sender hold up to 4 MiB for as long as it likes. Five thousand
+   connections are 20 GB.
+5. **`MigrationLive`.** A migration from the tool on a database in
+   use makes every write hang five seconds and answer 500 for as
+   long as it runs, and a route's deadline does not reach a single
+   write that waits under SQLite's handler.
+6. **`AuthorLogin`.** CPU spent inside a pure handler is bounded by
+   nothing. Three or four times the cores' capacity for ten seconds
+   makes every request wait seconds for a processor, and the health
+   check fails with them, so a load balancer removes a server that is
+   working.
+7. **`SampleAggregate`.** A few long reads take every reader, and
+   short reads wait behind them with no priority and no deadline: the
+   front page stalls because someone opened a dashboard.
+8. **`EventFanout`.** A stalled subscriber leaves a goroutine
+   blocked in a `Write` without a deadline, `Publish` walks every
+   subscriber under one mutex, and `Shutdown` waits for streams that
+   never end.
+9. **`ServerOverlap`.** Two processes on the file, as during a
+   blue-green deploy, meet the runner's busy schedule, whose first
+   wait is a millisecond: writes thirty times slower for the length
+   of the overlap, and single writes that outlive their deadline.
+10. **`CommentDeleteCascade`.** One request, one statement that
+    cannot be batched: a stall of up to a second for every writer,
+    over thirty times its size in WAL, and a checkpoint of tens of
+    thousands of random pages after it.
+
+Close behind: `UploadParallel`, five copies of every blob;
+`SessionTouch`, a whole site capped at the writer's rate;
+`RollupRecompute`; and `ReportDecodeNested`, whose thirteenfold 422
+step 23 has measured.
+
+### What the cases keep pointing at
+
+The same few decisions stand behind most of the catalogue:
+
+- **The writer's queue:** a bound with a 503 past it, an order, and
+  fairness (`SeatClaimHot`, `AccountWriteImbalance`,
+  `SampleAppendOverload`, `SampleImport`).
+- **The transaction's fixed cost,** two and a half statements' worth
+  (`AuditWrite`, `SeatClaimHot`, `JobClaim`).
+- **The checkpoint at the runner's own pace,** and a bound on the
+  WAL (`SampleAppend`, `WALReaderPinned`, `CommitSync`,
+  `BackupLive`).
+- **Long reads beside short ones:** a lane, more readers than cores,
+  a default deadline (`SampleAggregate`, `PostCrawl`, `PostSearch`,
+  `RollupRecompute`).
+- **Identical reads in flight performed once,** which effects as
+  values make possible (`PostReadHot`, `RollupRecompute`,
+  `PostReadTrending`).
+- **One snapshot for a request's loads, and an update that reads and
+  writes in one transaction** (`CommentListRace`, `PostFeed`,
+  `PostUpdateConflict`).
+- **Rows and bytes:** limits, and a read that streams (`PostExport`,
+  `HeapPressureTail`, `UploadParallel`, `ReportDecodeNested`).
+- **CPU work as an effect on a bounded pool** (`AuthorLogin`).
+- **A busy database as a 503,** and the busy schedule
+  (`MigrationLive`, `ServerOverlap`, `ClientRetryStorm`).
+- **Every server and SQLite option stated** (S12): timeouts, header
+  and body limits, `synchronous`, `cache_size`, `journal_size_limit`,
+  `auto_vacuum`, `temp_store` (`ClientSlow`, `ConnectionChurn`,
+  `StreamIdle`, `ServerRestart`, `CommentScanFragmented`,
+  `PostSortUnindexed`).
+
+### Considered and rejected
+
+- Likes on a post: `SeatClaimHot`'s chart.
+- A race on a unique email: `PostCreateRace`'s code.
+- Zipf-distributed writes: between `SeatClaimHot` and
+  `SeatClaimSpread`, and nearer the cheap end.
+- A synthetic heap ballast: nothing in a Volt program can hold one.
+- Deadlocks and lock ordering: SQLite has one write lock and no row
+  locks.
+- Replicas and their lag: one file, one process.
+- A pool exhausted by leaked transactions: a handler holds no
+  connection, and the runner ends every transaction it begins.
+- A foreign key without an index on its child column: a full scan
+  for every cascade and every `with`, but visible in the schema; it
+  belongs to a vet rule.
+- A `Then` chain past the shim's 64 continuations: a unit test of
+  that bound.
+- HTTP/2 multiplexing and stream resets: the fixture's `main` serves
+  HTTP/1.1; it returns with step 16.
+- WebSockets, templates, mail, file storage: not planned or not
+  built.
+- Serving large static files: that measures `http.ServeFileFS`.
+- A group with millions of keys: `PostSortUnindexed`'s chart.
+- An in-memory database: `run.Open` refuses one.
+- Malformed HTTP: the fuzzing of V3.
+- A failure at every driver call: V4; `DatabaseFull` keeps only the
+  part under load.
+- Clock jumps: a handler reads `r.Now()` and starts no timer.
+- Slow calls to other services from a handler: no effect kind makes
+  one.
+- A comparison with another database: not planned.
+
+### What one machine cannot model
+
+- **The network.** Loopback has no loss, no reordering, no
+  retransmission timers beyond the listener's backlog, no congestion,
+  no NAT table and no load balancer. The relay adds delay and a
+  bandwidth cap, which is not the same as a lossy link.
+- **The client's own cost.** Client and server share one process,
+  its cores, its heap and the OS cache. Capacity is understated, and
+  every number is a proportion, as `runner.md` says of its own.
+- **The disk.** One device, whichever the directory is on: no
+  network block storage with its rare long stalls, no neighbour, no
+  device that slows after minutes of sustained writes unless the soak
+  finds it, and no throttle. No power loss, so what
+  `synchronous = NORMAL` may lose is never observed; a killed process
+  loses nothing the OS already holds.
+- **Memory pressure.** No kernel reclaim, no swap, no out-of-memory
+  kill: `debug.SetMemoryLimit` bounds the Go heap only, and the OS
+  cache cannot be made small.
+- **CPU limits.** No container quota with its throttled periods, no
+  stolen time, no thermal throttling under control; on a laptop the
+  same run differs from minute to minute, so the report states the
+  machine and the bench spreads its runs across the scenarios.
+- **More than one machine.** No load balancer that ejects a server,
+  so the cascade that `AuthorLogin`'s missed health checks would
+  start is predicted, not shown.
+- **Time.** An hour is not a month: a leak under a megabyte an hour,
+  statistics that drift, a certificate that expires.
+- **People.** The mixes, the Zipf exponent, the bursts and the retry
+  policies are guesses about users, each a parameter with its seed.
+- **Other builds.** Every number holds for this mattn and its
+  SQLite, 3.53.2 today, with the options it was compiled with.
+
+### How it lands
+
+After the review, and after step 37: the fixture's additions, the
+seeder and the smoke tier; then the arrivals, the clients, the
+actions and the probes in the bench; then the full tier, a cell of
+the matrix at a time, each case's sketch recorded before its first
+run; then the soak. The catalogue then lives in the bench as data,
+one value a case with its sketch, the measurements join step 37's
+section of `runner.md`, and this section goes.
+
+---
+
 ## Verification bar
 
 Before claiming any step done:
@@ -1340,6 +3474,7 @@ read the diff. Style ledger: `go test ./cmd/volt -run TestStyleLedger
 | 35 | | spec first |
 | 36 | | first |
 | 37 | 20 | after the maintainer's review of its design |
+| 38 | 37 | after the maintainer's review of its design |
 
 The blog fixture under `itest/blog` is the application every step
 rebuilds. Measured at each step on it and reported when the step
