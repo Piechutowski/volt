@@ -853,6 +853,458 @@ The tools and the tests:
 
 ---
 
+## Step 37. The request bench
+
+A tool that measures where the time of a request goes in a Volt
+backend, from the moment a client means to send it to the last byte of
+its response, reliably enough that the numbers can drive a redesign. It
+finds bottlenecks and fixes none: nothing in the runtime, the runner or
+the generators gets faster in this step, and the hooks it adds change
+no behavior.
+
+### What exists, and why this is a new tool
+
+`internal/perfsweep`, run by `scripts/perf.go`, measures the tooling:
+Load, Check, Vet and Generate over `internal/corpus` projects of
+growing table counts, the best wall time of a few runs, the bytes and
+allocations of one run, CPU profiles through `go tool pprof`, and the
+language server's keystroke through `go test ./lsp -bench`. It never
+starts a server, opens a database or sends a request, and it reports a
+best time, not a distribution. `nao/itest/bench_test.go` holds `go
+test` benchmarks of the runner alone (a bulk insert, statements in a
+transaction). `runner.md` records one-off measurements of the runner.
+No code path stamps the clock inside a request: `DB.WithLogger` logs
+each statement's duration at debug level, but without the request's
+context, so no line can be tied to a request.
+
+The bench shares nothing with the sweep but the description of the
+machine, so it extends nothing and replaces nothing: the sweep stays as
+it is. The machine description moves to `internal/machine`, read from
+files alone (`/proc`, `/etc/os-release`, `.git`), which lands step 20
+for both tools, since the bench may run no other program.
+
+### Where it lives
+
+- `internal/bench`, standard library only: the load generator, the
+  per-request recorder, the attribution, the histograms, the statistics
+  across runs, the results file, the text report and the compare. It
+  also holds the driver wrapper, which wraps any `driver.Driver` it is
+  handed.
+- `cmd/volt/bench`, a `main` in the tool's module, which links mattn:
+  `go run ./cmd/volt/bench run --out <dir>` and `go run ./cmd/volt/bench
+  compare <a.json> <b.json>`. It registers mattn's driver twice, plain
+  as `sqlite3` and wrapped as `sqlite3-traced`, and opens the database
+  through `run.Open` on a file in a temporary directory.
+- `itest/bench/db` and `itest/bench/app`, the fixture: a blog and
+  metrics schema and the routes and controllers the scenarios call,
+  generated and committed like `itest/blog`, with the same drift test.
+  `itest/bench/wide` is a project `internal/corpus` writes (one data
+  package, two tables of 150 columns, its default resource routes),
+  generated and committed the same way, for the wide rows scenario; the
+  drift test regenerates it from `corpus.Files`.
+- A smoke test runs every scenario and variant once for 300 ms and
+  asserts its invariants and the attribution bound, so the verification
+  bar holds the tool without running the bench.
+
+The client runs in the same process as the server, over a real TCP
+listener on 127.0.0.1, so every stamp, client and server, reads one
+monotonic clock and a request's stamps line up without correction. The
+price is that client and server share the cores; the floor scenarios
+measure what the client costs, and every per-request cost is reported
+raw and above that floor.
+
+### The hooks in the runtime
+
+Stage attribution needs stamps where only the runtime can take them.
+The hooks change no behavior and cost one `ctx.Value` lookup per request
+in the shim and one per statement in the runner when no recorder is
+present.
+
+- A package `nao/trace`, standard library only, holds the recorder: a
+  `trace.Spans` with a fixed array of spans (a stage, a begin, an end
+  and an inner duration) filled through an atomic index, so the steps of
+  an `rt.All` record from their goroutines without a lock, and a count
+  of spans that did not fit, which fails the run. `trace.SpansWith(ctx,
+  spans)` and `trace.SpansOf(ctx)` carry it in a context. The callee is
+  a concrete type, so the hook is a closed call (S15). The recorder is
+  mutable state, so it joins the inventory of `style.md` F4 and of the
+  spec. The root package imports `nao/trace` beside `nao/rt`, which
+  changes the import rule of spec §data-and-network-layers in the same
+  commit.
+- The shim stamps the body read, each call of the handler and of a
+  continuation, each perform, the encode and the response write.
+  `Request` carries the recorder in an unexported field, so `Decode`
+  stamps the decode inside the handler.
+- The runner stamps each statement outside a transaction and each
+  transaction: for a statement it puts a statement token in the context
+  it hands database/sql, and stamps the end; for a transaction, the wait
+  for its connection, the `BEGIN` or `BEGIN IMMEDIATE` with the busy
+  timeout pragmas around it, each statement, and the `COMMIT` or
+  `ROLLBACK`. The rows of a query are stamped from their first `Next`
+  to their `Close`.
+- The driver wrapper, in the bench only, finds the token in the context
+  of each call. database/sql hands a pooled connection to a caller
+  through `ResetSession(ctx)` with that caller's context, before any
+  statement runs on it (`database/sql` in Go 1.27, `resetSession`), and
+  opens a new one through `Connect(ctx)`; the wrapper stamps either as
+  the moment the connection was granted, or its first call when neither
+  came. It adds the time of `Prepare` and of each `Next` to the token,
+  so a statement splits into the wait for its pool, its prepare, its
+  execution in SQLite and the scan of its rows in Go. A test pins the
+  `ResetSession` behavior, so a Go release that changes it fails the
+  bar instead of skewing the waits.
+- `run.DB.Stats` returns both pools' `sql.DBStats`, for the consistency
+  checks below.
+
+### Stages
+
+Every request has a root span, from its scheduled send to the last byte
+of its body, and spans nested inside it. Each stage is a span with a
+fixed depth. Attribution sweeps the request's timeline: at each instant
+the deepest spans then open share it equally, so nesting gives a span's
+time to its children, the parallel steps of an `rt.All` share the wall
+clock instead of counting it twice, and the stages sum to the total by
+construction. A span's inner duration (the SQLite part of a statement
+or of its rows) splits its share in the same ratio. The time a
+container span holds outside its children is a stage of its own, named
+for the code it is, so a hole in the stamps shows as a large row there,
+not as a silent addition to a neighbor.
+
+| Stage | Depth | From, to |
+|---|---|---|
+| send lag | 1 | the scheduled send, the call of `Transport.RoundTrip` |
+| connect | 1 | `GetConn`, `GotConn` (the dial included when one was needed) |
+| request write | 1 | `GotConn`, `WroteRequest` |
+| transit | 1 | `WroteRequest`, `GotFirstResponseByte`, outside the server's spans: loopback, net/http reading the request and flushing the response |
+| body read | 1 | the first byte, the body's end |
+| routing and middleware | 2 | the outer wrapper's entry and exit, outside the shim: ServeMux, the pipeline's plugs |
+| limiter wait | 3 | not built (step 16); the row prints `not built` |
+| shim | 3 | the shim's entry and exit, outside its children |
+| server body read | 4 | `bodyRead` |
+| handler | 4 | each call of the handler, a continuation or an error handler, outside decode |
+| decode | 5 | `Decode` |
+| effect interpretation | 4 | each perform, outside the runner's spans: `nao/rt` and the statement cache |
+| read pool wait | 6 | the token, the grant of a reader |
+| writer wait | 6 | the token, the grant of the writer |
+| begin | 6 | `BEGIN` or `BEGIN IMMEDIATE` with its pragmas and busy retries |
+| prepare | 6 | the driver's `Prepare` |
+| statement exec | 6 | the driver's `Exec`, `Query` and every `Next` |
+| row scan | 6 | the rows' span outside `Next`: database/sql and the generated `Scan` |
+| commit | 6 | `COMMIT` |
+| rollback | 6 | `ROLLBACK` |
+| encode | 4 | `renderEncoded` |
+| response write | 4 | `Response.write` |
+| unattributed | 0 | the instants no span covers: the client's own code between stamps, and every stamp that went missing |
+
+A write outside a transaction commits inside its statement, so its
+commit is part of `statement exec`; the `commit` row holds the commits
+of transactions alone. A run fails when the unattributed time passes
+1% of the total, when a span did not fit, or when a consistency check
+fails: the writer waits summed over the requests against the growth of
+the writer pool's `WaitDuration`, the same for the readers, within 10%;
+and the server spans of a request inside its client `transit` span.
+Time the Go runtime takes from a request, a collection or a scheduler
+delay, is charged to the stage it interrupted; the report prints the
+run's GC CPU fraction and pause total beside the stages.
+
+### Measures
+
+Per stage and request class (a scenario mixing reads and writes reports
+each route on its own): the share of the total time, and p50, p99,
+p99.9 and max over the requests where the stage occurred, with that
+count. Histograms are log-linear, 128 sub-buckets per power of two from
+100 ns to 100 s, so a percentile is within 0.8%; the maximum is exact.
+
+Per run: the offered and the achieved throughput; completed requests by
+status, transport errors and requests the client never sent; the peak
+RSS (`/proc/self/status`, sampled every 10 ms), the peak Go heap and
+the peak goroutine count (sampled the same); allocations and CPU time
+per request (`runtime/metrics` and `/proc/self/stat` over the measured
+window), raw and above the null floor; the peak size of the WAL file
+and the peak count of frames in the WAL, read from the `-shm` index
+header (both copies compared, a torn read retried); the database file's
+size at the end.
+
+### Load
+
+- **Open loop**, the default. One dispatcher computes the schedule,
+  `start + i/rate`, and hands each request to a pool of client workers
+  at its time; latency is measured from the scheduled time, so a
+  server that stalls is charged for every request it held up and a late
+  dispatcher shows as `send lag`. The pool is bounded (4,096 in flight
+  by default); a request with no free worker waits in the dispatcher's
+  bounded queue, and when that is full it is never sent and counted, and
+  a run with any is labeled saturated.
+- **Closed loop**, labeled so in every line of the report: C workers,
+  each sending its next request when the last one ends, latency from the
+  actual send. It hides queueing, and it calibrates the overload
+  scenario.
+- **Warm-up**: 2 s at the scenario's rate, discarded with every counter
+  and peak reset after it; then a measured window of 10 s.
+- **Seeds**: one `math/rand/v2` PCG seed per scenario, in the results;
+  every request's target and body, and every seeded row, is a function
+  of the seed and the request's index.
+- **Data**: every scenario's sizes are constants of the scenario. A
+  database is seeded once per scenario, checkpointed, and copied for
+  each run, so each run starts from the same file.
+- **Runs**: every scenario and variant runs N = 5 times, in a
+  round-robin order across the scenarios so a slow minute of the
+  machine spreads over all of them. The report prints each metric's
+  median and its spread, (max - min) / median, across the runs.
+
+### Reliability
+
+- **Noise floor.** Three reference configurations (floor-volt,
+  read-mostly, uniform writes at NORMAL) run 2N times interleaved. For
+  every metric and stage, the 126 ways to split the ten runs into two
+  halves of five give 126 differences of medians; the 95th percentile of
+  their size is the noise floor of that metric. The report prints it.
+- **Differences.** A compare reports a difference only when the change
+  of medians is larger than the noise floor of the metric and the two
+  sides' ranges of run values do not overlap; anything else prints `no
+  difference`.
+- **Cost of the instrumentation.** The same reference configurations,
+  and N+1 sequential (the most spans), run N times with the recorder,
+  the wrapper and `httptrace` off, stamping only the scheduled send and
+  the body's end: the total's p50 and p99, the closed loop throughput,
+  the CPU and the allocations per request, on against off, with the
+  noise floor verdict. The cost of the hooks being present but off, one
+  `ctx.Value` per request and per statement, is measured by a
+  microbenchmark and reported beside it.
+- **Correctness.** Every scenario asserts its invariants after the run
+  and checks every response body as it arrives; every run ends with
+  `PRAGMA integrity_check` and `foreign_key_check`. A run that breaks
+  one fails, however fast it was. The hot row scenario has a negative
+  control that must fail.
+
+### Output
+
+- `results.json`: the format's version, the machine, the commit, the
+  flags, and per scenario, variant and run the configuration, the seed,
+  every histogram's buckets (so the compare merges runs and recomputes
+  percentiles), the run measures, the invariants and the sketch.
+- `report.txt`: plain text. Per scenario and variant, one line per
+  stage: its name, share, a bar of `#` scaled to the share, p50, p99,
+  p99.9 and max; then the run measures, the spread, the sketch's
+  expected dominant stages, and a `SURPRISE` line for every stage that
+  dominates against the sketch and every total outside twice the
+  sketched range.
+- `compare` prints two results side by side per scenario, variant and
+  stage, with the delta and its verdict.
+
+### The matrix
+
+| Resource | Bandwidth | Latency |
+|---|---|---|
+| Network | large bodies, slow clients | floor, ramp, connection per request |
+| Disk | bulk ingestion, large request bodies, sustained | `synchronous = FULL`, checkpoint stall |
+| Memory | larger than the page cache (scans), large responses, rollup scans | larger than the page cache (point reads), reads behind commits |
+| CPU | overload, wide rows, N+1 | hot row, floor-volt |
+
+Two cells cannot be measured here. Network latency of a real link:
+loopback has a round trip of tens of microseconds, and shaping it needs
+a tool outside Go. Disk latency of reads: every database fits in the
+machine's 16 GB, so reads miss SQLite's cache but hit the operating
+system's; a cold read needs a file larger than memory or eviction of
+the system cache, which the tool does not do.
+
+### Variants
+
+Every write scenario runs under `synchronous = NORMAL`, mattn's default
+and so today's, and `synchronous = FULL`, which the runner supports today
+through `_synchronous=FULL` in the DSN; the FULL rate is lower, since a
+commit then waits for an fsync. Named slots, printed as `not built`
+with the step that would build them: `group-commit` (`runner.md`
+section 7), `limiter` (step 16), `begin-without-pragmas` (step 23
+removes the busy timeout read-back around `BEGIN IMMEDIATE`),
+`readers-capped` (step 21, question 1) and `chunk-1000` for the bulk
+insert (step 21, question 2).
+
+### The sketch
+
+Assumed before measuring, from `runner.md` where it has a number: a
+loopback request through net/http costs about 40 µs of CPU, client and
+server together, so the harness tops out near 40,000 requests a second
+on four cores; the shim, the router and a small JSON encode about 4 µs;
+a point read on a reader about 5 µs; a one-row write transaction about
+30 µs (`runner.md` section 1); `BEGIN IMMEDIATE` with its three pragma
+statements about 15 µs; a commit under NORMAL about 10 µs; an fsync on
+this machine unknown, guessed at 1 ms; a scanned row about 1.2 µs
+(`runner.md` section 5); a row of `CreateMany` about 3.7 µs (section 4);
+encoding/json about 250 MB/s encoding and 80 MB/s decoding structs.
+Writes serialize on one connection, so a writing route's capacity is one
+over its transaction's time, whatever the cores.
+
+### Scenarios
+
+Rates are open loop unless the scenario says otherwise. Each scenario
+lists what it models, what it measures, its load, the sketch (the stage
+expected to dominate and why) and the invariant.
+
+1. **floor-null.** A handler that writes two bytes, outside Volt.
+   Measures the harness: client, net/http, loopback. 5,000/s. Sketch:
+   `transit` and `request write` dominate, p50 near 50 µs. Invariant:
+   every body is the two bytes.
+2. **floor-volt.** `GET /` rendering a small value, no effect. Measures
+   the shim, the router and the encode above floor-null. 5,000/s.
+   Sketch: the same as floor-null plus 4 µs, with `shim`, `encode` and
+   `routing and middleware` under 10% together. Invariant: every body
+   decodes to the value.
+3. **hot-row.** An organization's monthly ingest quota: every client
+   claims a unit of the same quota row at once, and the quota must never
+   be oversold. `POST /orgs/1/claims` runs `rt.Atomic` of the quota's
+   read and its update, 409 when nothing is left; the quota is sized to
+   run out halfway through the window, so claims and refusals report as
+   two classes. Measures serialization on the writer. 15,000/s; FULL at
+   500/s. Sketch: a transaction of about 45 µs (begin 15, read 5,
+   update 10, commit 10, interpretation 5) gives about 22,000 a second,
+   so at 15,000 the writer is two-thirds busy: `writer wait` dominates
+   at p99 and p99.9, `transit` at p50. Under FULL the fsync dominates
+   `commit` and the capacity falls to about 1,000. Invariant: claims at
+   most the initial quota, remaining = initial - claims, remaining never
+   below zero, claims + refusals = completed, no 5xx. Negative control,
+   once: the same claim without `rt.Atomic` (read on a reader, write on
+   the writer) must fail the invariant.
+4. **uniform-writes.** The same claim spread over 10,000 quotas chosen
+   uniformly, the control for hot-row. Same rates. Sketch: SQLite locks
+   the database, not a row, so it matches hot-row within the noise
+   floor; distinct pages per commit could make it a few percent slower
+   and its checkpoints larger. Invariant: the sum of remaining = the
+   sum of initial - claims, none below zero.
+5. **read-mostly.** A blog's post pages: 99% `GET /posts/:id`, 1%
+   `POST /posts/:id/comments`. 100,000 posts of 500 bytes. 20,000/s.
+   Sketch: reads are `transit` and `request write` first (about 70%),
+   then `statement exec` (about 10%) and `encode`; the 200 commits a
+   second reset the readers' caches (`runner.md` section 2), a few
+   percent on `statement exec` against a read-only run. Writes: `writer
+   wait` near zero, `statement exec` first. Invariant: every post body
+   is its seeded title and text; comments in the database = initial +
+   201s.
+6. **multi-statement.** Publishing a post: read the author, insert the
+   post, insert three tags, update the author's post count, in one
+   transaction. 7,000/s; FULL at 500/s. Sketch: about 70 µs a
+   transaction, capacity about 14,000; `statement exec` dominates (six
+   statements, about 45 µs), `writer wait` at p99. Under FULL, `commit`.
+   Invariant: per author, the count = the posts in the database, every
+   post has its three tags, none is half written.
+7. **n-plus-one.** A front page of 50 posts with their authors' names,
+   in four forms: 50 `UserGet` in sequence inside one effect, 50 in an
+   `rt.All`, `UserGetMany` of the ids, and a `with` nested load.
+   2,000/s. Sketch: sequential, 51 statements of 5 µs plus interpretation,
+   about 300 µs, `statement exec` and `effect interpretation` dominate;
+   parallel, 51 goroutines over 4 readers, `read pool wait` dominates
+   and the wall time falls about threefold; batched and nested, two
+   statements and 50 scanned rows, `encode` and `row scan` dominate,
+   about 80 µs. Invariant: the four forms answer byte-identical bodies
+   for the same page, every name is its author's seeded name.
+8. **bulk-vs-single.** Metrics ingestion, 10,000 samples a second: one
+   `POST /samples` per sample (`Create`), against `POST /samples/bulk`
+   with 1,000 samples (`CreateMany`) ten times a second. FULL at a tenth
+   of the rate. Sketch: single costs about 70 µs per sample (`transit`
+   40, the write 30) and `writer wait` grows at p99; bulk about 6 µs per
+   sample: `statement exec` (3.7 ms a request) first, then `decode` (60
+   KB of JSON, about 1 ms) and validation in `handler`. Invariant:
+   samples in the database = samples accepted, each present by its key.
+9. **ramp.** A notification sends a thousand clients to the blog at
+   once: from an idle server, 1,000 new connections within 10 ms, then
+   10,000/s over them for 5 s; the first second and the rest report
+   apart. Variant: a new connection per request. Sketch: `connect`
+   dominates the first second, since net/http accepts on one goroutine
+   and the readers open lazily, then the run looks like read-mostly; per
+   connection, `connect` dominates every request at about 30 µs more.
+   Invariant: every request answered 200 with its post, no connection
+   reset.
+10. **slow-clients.** Mobile clients on a slow link exporting a 256 KB
+    listing at 64 KB/s, 100 of them in closed loop with a 16 KB receive
+    buffer, while 2,000/s fast clients read posts. Sketch: for the slow,
+    `body read` and `response write` take about 4 s; Volt encodes the
+    whole body before writing and holds no connection to the database
+    while it writes, so the fast clients match read-mostly within the
+    noise floor, and memory grows by the bodies held, about 25 MB.
+    Invariant: every export arrives whole, its length and checksum
+    matching the seeded listing.
+11. **checkpoint-stall.** A metrics dashboard: 3,000 sample inserts a
+    second while `GET /rollup` aggregates two million samples every two
+    seconds; variant: the bench holds a read transaction open for 5 s
+    through `run.OpenReadOnly`, as a backup would. Sketch: a reader's
+    snapshot pins the WAL, so the WAL grows by a frame or two a commit,
+    about 20 MB a second, and once the reader ends the next commit past
+    the autocheckpoint copies the backlog and syncs twice: a stall of
+    100 ms or more in that write's `statement exec`, so p99.9 and max of
+    the inserts rise while p50 does not; the WAL file's peak grows to the
+    backlog and stays. The rollup itself is `statement exec`, 200 to 400
+    ms. Invariant: every insert present; successive rollup counts never
+    fall and never exceed the inserts acknowledged before they began.
+12. **large-bodies.** A post of 1 MB written (`POST /posts`, 100/s) and
+    read (`GET /posts/:id`, 200/s); a 5 MB body, one in a hundred, must
+    be refused with 413 (`MaxBodyBytes` is 4 MiB). Sketch: writes go to
+    `statement exec`, 256 overflow pages a post, about 100 MB/s of WAL,
+    then `server body read` and `decode`; reads go to `encode` (escaping
+    1 MB, about 3 ms) and then `statement exec`, `response write` and
+    `body read`. Invariant: what is read back equals what was written,
+    every oversized body answered 413.
+13. **larger-than-cache.** A samples table of 4 million rows, about 300
+    MB, 150 times a reader's 2 MB page cache, smaller than the system's
+    cache: random `GET /samples/:id` at 10,000/s, and a range of 1,000
+    samples at 500/s. Sketch: the interior pages stay cached, the leaves
+    miss to the system's cache, so `statement exec` grows from 5 to
+    about 10 µs and `transit` still dominates point reads; the ranges
+    are `row scan` and `encode`. Invariant: every sample equals its
+    seeded value.
+14. **wide-rows.** The corpus project's 150-column metrics tables
+    through their default resource routes: reads at 5,000/s and creates
+    at 2,000/s. Sketch: per column costs dominate, about 50 ns each in
+    `statement exec` and `row scan` and as much in `encode`, so about
+    25 µs a read, near `transit`; creates add `decode` and the cast and
+    validation in `handler`. Invariant: every row read back equals the
+    row created.
+15. **overload.** The uniform-writes claim and the read-mostly read, at
+    0.5, 1, 1.5, 2 and 3 times the capacity a closed loop calibration
+    finds, 10 s each; variant: the route with `timeout: 1`. Sketch:
+    nothing sheds load, since there is no limiter: past capacity the
+    writes queue in database/sql's waiters and the goroutines grow with
+    the backlog, so latency grows through the window to seconds, and the
+    client's in-flight bound is reached and counted. With `timeout: 1`,
+    a write that waits a second fails with 504, so the achieved rate
+    stays at capacity, latency is capped near 1 s and the 504s are the
+    shed. Reads past capacity slow every request alike, all four cores
+    busy. Invariant: claims persisted = claims answered 201, no 5xx but
+    504.
+16. **sustained.** The read-mostly mix with the ingestion of scenario 8
+    and the comments, at half their rates, for 5 minutes, N = 3, reported
+    in windows of 10 s. Sketch: flat: the WAL stays near 1,000 frames
+    under the autocheckpoint, the caches are bounded, the heap and the
+    goroutines level after warm-up, and only the database file grows,
+    linearly. Invariant: the counts of scenario 5 and 8, and the
+    goroutines at the end equal those at the start.
+
+The first full run is about 75 minutes on this machine. Its results,
+the bar chart of every scenario, the sketch against the measurement
+with every surprise, the noise floor, the cost of the instrumentation,
+a ranked list of what dominates and what the bench cannot see go into a
+new `runner.md` section in the commit that lands the bench; the spec
+gains the hooks (§values-and-effects for the inventory,
+§data-and-network-layers for the import, the runner's paragraph for the
+statement token), `style.md` F4 the recorder, `AGENT.md` the command,
+and the roadmap its line.
+
+### Decisions the maintainer makes before it is built
+
+1. The hooks live in the runtime, in a new `nao/trace` imported by the
+   root package and `nao/run`; the alternative, `rt.Spans` inside
+   `nao/rt`, keeps the import rule but puts a recorder among the values.
+2. `Request` carries the recorder so that `Decode` is a stage; without
+   it, decode is counted in `handler`.
+3. The recorder joins the inventoried mutable state.
+4. The wait for a pool is measured through `ResetSession` in a driver
+   wrapper, a property of database/sql that a test pins, rather than by
+   restructuring how the runner takes its connections.
+5. The wide rows fixture is committed generated code from the corpus,
+   about two tables of 150 columns.
+6. Step 20 lands with this step, through `internal/machine`.
+
+---
+
 ## Verification bar
 
 Before claiming any step done:
@@ -887,6 +1339,7 @@ read the diff. Style ledger: `go test ./cmd/volt -run TestStyleLedger
 | 34 | 22, 23 | |
 | 35 | | spec first |
 | 36 | | first |
+| 37 | 20 | after the maintainer's review of its design |
 
 The blog fixture under `itest/blog` is the application every step
 rebuilds. Measured at each step on it and reported when the step
