@@ -1,0 +1,6 @@
+// spec/identifiers, spec/unicode-general-categories, a combining mark is no letter, so a name written with one is an error
+// want: a combining mark, cannot stand in a name
+table places {
+  id int [pk]
+  café string
+}

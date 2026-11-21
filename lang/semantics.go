@@ -1,0 +1,1244 @@
+package lang
+
+import (
+	"fmt"
+	"maps"
+	"slices"
+	"sort"
+	"strings"
+
+	"github.com/Piechutowski/volt/internal/par"
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/lang/vet"
+	"github.com/Piechutowski/volt/nao/naming"
+)
+
+// Check runs project-level semantic analysis (spec/projects-and-packages–spec/settings-whitelists) over a
+// loaded project: file and package rules, import resolution, the schema
+// layer per package, and routing expansion. It populates each package's
+// Imports, Pipelines, Routes and Controllers, and returns all
+// diagnostics including the ones collected at load time.
+func Check(pr *Project) []diag.Diagnostic {
+	return checkWith(pr, nil)
+}
+
+func checkWith(pr *Project, s *Session) []diag.Diagnostic {
+	c := &checker{pr: pr, diags: append([]diag.Diagnostic{}, pr.Diags...)}
+
+	paths := c.paths()
+	if s != nil {
+		c.gofuncs = s.goFuncsFor(pr, paths)
+	}
+	for _, path := range paths {
+		c.fileRules(pr.Packages[path])
+	}
+	for _, path := range c.paths() {
+		c.importsResolve(pr.Packages[path])
+	}
+	c.cyclesCheck()
+
+	pkgDiags := make(map[string][]diag.Diagnostic, len(paths))
+	fresh := paths
+	var keys map[string]pkgKey
+	if s != nil {
+		keys = s.packageKeys(pr, paths, c.gofuncs)
+		fresh = make([]string, 0, len(paths))
+		for _, path := range paths {
+			if ds, ok := s.restore(path, keys[path], pr.Packages[path]); ok {
+				pkgDiags[path] = ds
+			} else {
+				fresh = append(fresh, path)
+			}
+		}
+	}
+	for _, path := range fresh {
+		pr.Packages[path].resultsReset()
+	}
+	phase := func(fn func(*checker, *Package)) {
+		for i, ds := range c.perPackage(fresh, fn) {
+			pkgDiags[fresh[i]] = append(pkgDiags[fresh[i]], ds...)
+		}
+	}
+	if s != nil {
+		c.memos = s.declMemos(fresh)
+	}
+	phase(func(cc *checker, pkg *Package) {
+		schemaMemo, planMemo := declMemoParts(cc.memo)
+		var sc *goScan
+		var goTypes check.GoTypes
+		if bareTypesDeclared(pkg.merged) {
+			sc = cc.goFuncs(pkg)
+			goTypes = sc.goTypes()
+		}
+		info, schemaDiags := check.FileGo(pkg.merged, schemaMemo, goTypes)
+		cc.diags = append(cc.diags, schemaDiags...)
+		pkg.schema = info
+		pkg.plan = naming.PlanBuildMemo(pkg.merged, info, planMemo)
+		if sc != nil {
+			cc.typesGoCheck(pkg, info, sc)
+		}
+	})
+	for _, path := range paths {
+		c.schemas[path] = pr.Packages[path].schema
+	}
+	phase((*checker).dataQueries)
+	phase((*checker).tableValidators)
+	phase((*checker).routing)
+	if s != nil {
+		for _, path := range fresh {
+			s.store(path, keys[path], pr.Packages[path], pkgDiags[path])
+		}
+		s.declStats(c.memos)
+	}
+	for _, path := range paths {
+		c.diags = append(c.diags, pkgDiags[path]...)
+	}
+
+	diag.Sort(c.diags)
+	return c.diags
+}
+
+type checker struct {
+	pr      *Project
+	diags   []diag.Diagnostic
+	schemas map[string]*check.Info
+
+	pkg       *Package
+	usedQual  map[string]bool
+	conflicts *routeIndex
+
+	gofuncs *goFuncsCache
+	goTypes map[string]GoType // the routes package's Go types, scanned before its routes lower (spec/request-bodies)
+
+	memos map[string]*declMemo
+	memo  *declMemo
+}
+
+type declMemo struct {
+	schema  check.Memo
+	plan    naming.PlanMemo
+	checks  checksMemo
+	selects selectsMemo
+	routes  routesMemo
+	vet     vet.Memo
+}
+
+type checksMemo struct {
+	prev, next   map[*check.TableInfo]*checksEntry
+	Hits, Misses int
+}
+
+type checksEntry struct {
+	model       any
+	funcs       *goScan
+	pkgName     string
+	ownImported bool
+	specs       []naming.ValidatorSpec
+	diags       []diag.Diagnostic
+}
+
+func (e *checksEntry) holds(model any, funcs *goScan, pkgName string, ownImported bool) bool {
+	return e.model == model && e.funcs == funcs && e.pkgName == pkgName && e.ownImported == ownImported
+}
+
+func (c *checker) perPackage(paths []string, phase func(*checker, *Package)) [][]diag.Diagnostic {
+	if c.gofuncs == nil {
+		c.gofuncs = &goFuncsCache{}
+	}
+	out := make([][]diag.Diagnostic, len(paths))
+	par.For(len(paths), func(i int) {
+		cc := &checker{pr: c.pr, schemas: c.schemas, gofuncs: c.gofuncs, memo: c.memos[paths[i]]}
+		phase(cc, c.pr.Packages[paths[i]])
+		out[i] = cc.diags
+	})
+	return out
+}
+
+func (c *checker) paths() []string {
+	if c.schemas == nil {
+		c.schemas = map[string]*check.Info{}
+	}
+	out := make([]string, 0, len(c.pr.Packages))
+	for p := range c.pr.Packages {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (c *checker) errorf(pos token.Position, section, format string, args ...any) {
+	c.diags = append(c.diags, diag.Errorf(pos, "spec/"+section, format, args...))
+}
+
+func (c *checker) fileRules(pkg *Package) {
+	gopkg := c.goFuncs(pkg).gopkg
+	badSeg := ""
+	if pkg.Path != "." {
+		for _, seg := range strings.Split(pkg.Path, "/") {
+			if !goIdentOK(seg) {
+				badSeg = seg
+				break
+			}
+		}
+	}
+	for _, f := range pkg.Files {
+		var clause *ast.PackageClause
+		for i, d := range f.Decls {
+			switch d := d.(type) {
+			case *ast.PackageClause:
+				if i != 0 {
+					c.errorf(d.Pos(), "projects-and-packages", "the package clause must be the first declaration in the file (spec/projects-and-packages)")
+				}
+				if clause != nil {
+					c.errorf(d.Pos(), "projects-and-packages", "duplicate package clause (spec/projects-and-packages)")
+					continue
+				}
+				clause = d
+			}
+		}
+		if clause == nil {
+			c.errorf(f.Pos(), "projects-and-packages", "every .volt file must begin with a package clause (spec/projects-and-packages)")
+			continue
+		}
+		name := clause.Name.Name()
+		if name == "volt" {
+			c.errorf(clause.Pos(), "projects-and-packages", "package name %q is reserved for the runtime (spec/projects-and-packages); generated code could not tell your package from it", name)
+			continue
+		}
+		if pkg.Name == "" {
+			pkg.Name = name
+		} else if pkg.Name != name {
+			c.errorf(clause.Pos(), "projects-and-packages", "package name %q disagrees with %q declared elsewhere in the directory (spec/projects-and-packages)", name, pkg.Name)
+		}
+		if badSeg != "" {
+			c.errorf(clause.Pos(), "imports", "package directory %q has the segment %q, which is not an identifier of ASCII letters, digits and underscores: a package's directory path is its Go import path (spec/imports)", pkg.Path, badSeg)
+			badSeg = ""
+		}
+		if gopkg.Name != "" && name != gopkg.Name {
+			c.errorf(clause.Pos(), "projects-and-packages", "package name %q disagrees with package %s, which the directory's Go file %s declares (spec/projects-and-packages)", name, gopkg.Name, gopkg.File)
+		}
+	}
+}
+
+// generatedImportNames are the names the route files and the client import
+// the standard library and the runtime under, each with what it names
+// there; no import qualifier takes one (spec/imports).
+var generatedImportNames = map[string]string{
+	"context": "the standard library's context",
+	"http":    "net/http",
+	"rt":      "the data runtime nao/rt",
+	"run":     "the runner nao/run",
+	"time":    "the standard library's time",
+	"volt":    "the root volt package",
+}
+
+func declMemoParts(memo *declMemo) (*check.Memo, *naming.PlanMemo) {
+	if memo == nil {
+		return nil, nil
+	}
+	return &memo.schema, &memo.plan
+}
+
+func (c *checker) importsResolve(pkg *Package) {
+	byPath := map[string]*ast.ImportSpec{}
+	specs := slices.Clone(pkg.importSpecs)
+	quals := slices.Clone(pkg.importQuals)
+	for _, f := range pkg.Files {
+		for _, d := range f.Decls {
+			imp, ok := d.(*ast.ImportDecl)
+			if !ok {
+				continue
+			}
+			for _, spec := range imp.Specs {
+				specs = append(specs, spec)
+				path := spec.PathString()
+				qual := c.importQualifier(spec)
+				quals = append(quals, qual)
+				if prev, dup := byPath[path]; dup {
+					if prevQual := c.importQualifier(prev); prevQual != qual {
+						c.errorf(spec.Pos(), "imports", "package %q imported twice with different qualifiers %q and %q (spec/imports)", path, prevQual, qual)
+					}
+					continue
+				}
+				byPath[path] = spec
+
+				target, exists := c.pr.Packages[path]
+				declared := ""
+				if spec.Alias == nil && exists && qual != spec.Path[len(spec.Path)-1].Name() {
+					declared = fmt.Sprintf(", which package %s declares,", path)
+				}
+				if spec.Alias != nil && !goIdentOK(qual) {
+					c.errorf(spec.Alias.Pos(), "imports", "import alias %q is not an identifier of ASCII letters, digits and underscores (spec/imports)", qual)
+				}
+				if what := generatedImportNames[qual]; what != "" {
+					c.errorf(spec.Pos(), "imports", "import qualifier %q%s is the name the generated route files and client import %s under (spec/imports); alias the import: %s %s", qual, declared, what, qual+"db", path)
+				}
+				if prev, taken := pkg.Imports[qual]; taken && prev != path {
+					c.errorf(spec.Pos(), "imports", "import qualifier %q%s already used for package %q (spec/imports); alias one of them", qual, declared, prev)
+					continue
+				}
+				switch {
+				case path == pkg.Path:
+					c.errorf(spec.Pos(), "imports", "a package cannot import itself (spec/imports)")
+				case !exists:
+					c.errorf(spec.Pos(), "imports", "unknown package %q: no directory of .volt files at that path under the project root (spec/imports)", path)
+				case target == pkg:
+				default:
+					if target.Name == "main" {
+						c.errorf(spec.Pos(), "imports", "package %q declares main, a program, which Go cannot import (spec/imports)", path)
+					}
+					pkg.Imports[qual] = path
+				}
+			}
+		}
+	}
+	pkg.importSpecs, pkg.importQuals = specs, quals
+}
+
+func (c *checker) cyclesCheck() {
+	const (
+		white = 0
+		grey  = 1
+		black = 2
+	)
+	color := map[string]int{}
+	var stack []string
+	var visit func(path string)
+	visit = func(path string) {
+		color[path] = grey
+		stack = append(stack, path)
+		pkg := c.pr.Packages[path]
+		targets := make([]string, 0, len(pkg.Imports))
+		for _, t := range pkg.Imports {
+			targets = append(targets, t)
+		}
+		sort.Strings(targets)
+		for _, target := range targets {
+			switch color[target] {
+			case white:
+				visit(target)
+			case grey:
+				pos := pkg.merged.Pos()
+				for _, s := range pkg.importSpecs {
+					if s.PathString() == target {
+						pos = s.Pos()
+					}
+				}
+				c.errorf(pos, "imports",
+					"import cycle: %s (spec/imports)", cycleString(stack, target))
+			}
+		}
+		color[path] = black
+		stack = stack[:len(stack)-1]
+	}
+	for _, path := range c.paths() {
+		if color[path] == white {
+			visit(path)
+		}
+	}
+}
+
+func cycleString(stack []string, target string) string {
+	start := 0
+	for i, p := range stack {
+		if p == target {
+			start = i
+		}
+	}
+	return strings.Join(append(append([]string{}, stack[start:]...), target), " -> ")
+}
+
+type inherited struct {
+	prefix     []*ast.Segment
+	pipes      []string
+	errHandler string
+	namePrefix string
+	loads      []ScopeLoad
+}
+
+func (c *checker) routing(pkg *Package) {
+	c.pkg = pkg
+	c.usedQual = map[string]bool{}
+	c.conflicts = &routeIndex{root: &routeNode{}}
+	pkg.Pipelines = map[string]*ast.Pipeline{}
+	pkg.Controllers = map[string]*ControllerInfo{}
+
+	for _, d := range pkg.merged.Decls {
+		if pl, ok := d.(*ast.Pipeline); ok {
+			if !goIdentOK(pl.Name.Name()) {
+				c.errorf(pl.Name.Pos(), "pipelines", "pipeline name %q must be a plain identifier (spec/pipelines)", pl.Name.Name())
+				continue
+			}
+			if _, dup := pkg.Pipelines[pl.Name.Name()]; dup {
+				c.errorf(pl.Pos(), "pipelines", "duplicate pipeline name %q (spec/pipelines)", pl.Name.Name())
+				continue
+			}
+			pkg.Pipelines[pl.Name.Name()] = pl
+			for _, plug := range pl.Plugs {
+				c.plugCheck(plug)
+			}
+		}
+	}
+
+	facts := routeFacts{pkgName: pkg.Name, pkgPath: pkg.Path, module: c.pr.Module, imports: pkg.Imports}
+	var memo *routesMemo
+	if c.memo != nil {
+		memo = &c.memo.routes
+		memo.Hits, memo.Misses = 0, 0
+		memo.next = map[ast.Node]*routesEntry{}
+	}
+	seenShape := map[string]*RouteInfo{}
+	seenHelper := map[string]*RouteInfo{}
+	for _, d := range pkg.merged.Decls {
+		if sc, ok := d.(*ast.Scope); ok {
+			if c.goTypes == nil {
+				c.goTypes = c.goFuncs(pkg).types
+			}
+			c.scopeWalk(sc, inherited{}, facts, memo, seenShape, seenHelper)
+		}
+	}
+	if memo != nil {
+		memo.prev, memo.next = memo.next, nil
+	}
+
+	held := map[string]string{}
+	for _, r := range pkg.Routes {
+		switch {
+		case r.Query != nil:
+			held["DB"] = "the database the query routes run on"
+		case r.Events:
+			held["Events"] = "the event routes (spec/event-routes)"
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(pkg.Controllers)) {
+		if what, taken := held[name]; taken {
+			first := pkg.Controllers[name].Actions[0].Routes[0]
+			c.errorf(first.Pos, "scopes-and-routes", "controller %q takes the name of the Controllers field holding %s (spec/handler-references); rename the controller", name, what)
+		}
+	}
+	c.typesRouterCheck(pkg)
+
+	for i, spec := range pkg.importSpecs {
+		qual := pkg.importQuals[i]
+		if _, resolved := pkg.Imports[qual]; resolved && !c.usedQual[qual] && generatedImportNames[qual] == "" {
+			c.errorf(spec.Pos(), "imports", "package %q imported and not used (spec/imports)", spec.PathString())
+		}
+	}
+}
+
+func (c *checker) localFuncRef(v ast.Node) (string, bool) {
+	switch v := v.(type) {
+	case *ast.Ident:
+		if goIdentOK(v.Name()) && !goKeywords[v.Name()] {
+			return v.Name(), true
+		}
+	case *ast.QualIdent:
+		if _, kind := qualifierResolve(v.Qual.Name(), c.pkg.Name, c.pkg.Imports); kind == qualSelf {
+			c.diags = append(c.diags, selfQualified(v.Pos(), v.Qual.Name(), v.Name.Name()))
+			return v.Name.Name(), false
+		}
+	}
+	return "", false
+}
+
+func (c *checker) plugCheck(p *ast.Plug) {
+	for _, part := range p.Ref.Parts {
+		if !goIdentOK(part.Name()) || goKeywords[part.Name()] {
+			c.errorf(p.Pos(), "pipelines", "plug reference %q must be plain, non-keyword Go identifiers (spec/pipelines)", p.Ref.String())
+			return
+		}
+	}
+	q := p.Ref.Qualifier()
+	kind := qualUnknown
+	if q != "" {
+		_, kind = qualifierResolve(q, c.pkg.Name, c.pkg.Imports)
+	}
+	switch {
+	case q != "" && kind == qualRuntime:
+	case q != "" && kind == qualSelf:
+		c.diags = append(c.diags, selfQualified(p.Ref.Pos(), q, p.Ref.Base()))
+	case q == "":
+		name := p.Ref.Base()
+		const want = "func %s(next http.Handler) http.Handler"
+		sc := c.goFuncs(c.pkg)
+		gf, found := sc.funcs[name]
+		if !found {
+			c.errorf(p.Ref.Pos(), "pipelines", "no function %s in package %s's Go files — declare "+want+" beside the routes (spec/pipelines)%s", name, c.pkg.Name, name, sc.brokenHint())
+			return
+		}
+		if gf.Generic {
+			c.errorf(p.Ref.Pos(), "pipelines", "%s is generic (%s); a plug cannot instantiate it — wrap it in a plain "+want+" (spec/pipelines)", name, gf.Sig, name)
+			return
+		}
+		if gf.Variadic || len(gf.Params) != 1 || gf.Params[0].Type != "http.Handler" ||
+			len(gf.Results) != 1 || gf.Results[0] != "http.Handler" {
+			c.errorf(p.Ref.Pos(), "pipelines", "%s is not middleware: found %s, a plug is "+want+" (spec/pipelines)", name, gf.Sig, name)
+		}
+	default:
+		if kind == qualImport {
+			c.usedQual[q] = true
+			c.errorf(p.Pos(), "pipelines", "cross-package plug %q is not supported in v0 (spec/pipelines); wrap it in a function of this package", p.Ref.String())
+		} else {
+			c.errorf(p.Pos(), "pipelines", "unknown plug qualifier %q (spec/pipelines): expected volt.X or a function of package %q", q, c.pkg.Name)
+		}
+	}
+}
+
+func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo *routesMemo, seenShape, seenHelper map[string]*RouteInfo) {
+	checked := append([]*ast.Segment{}, inh.prefix...)
+	for _, seg := range sc.Path.Segments {
+		if seg.Kind == ast.SegWild {
+			c.errorf(seg.Pos(), "scopes-and-routes", "a scope prefix cannot contain a wildcard (spec/route-paths)")
+			continue
+		}
+		checked = append(checked, seg)
+	}
+	c.diags = append(c.diags, stringTypedErrors(sc.Path.Segments)...)
+	_, prefixDiags, _ := paramsOf(checked, len(inh.prefix))
+	c.diags = append(c.diags, prefixDiags...)
+	next := inherited{
+		prefix:     append(append([]*ast.Segment{}, inh.prefix...), sc.Path.Segments...),
+		pipes:      append([]string{}, inh.pipes...),
+		errHandler: inh.errHandler,
+		namePrefix: inh.namePrefix,
+		loads:      append([]ScopeLoad{}, inh.loads...),
+	}
+	for _, item := range sc.Items {
+		if ld, ok := item.(*ast.ScopeLoad); ok {
+			if sl, ok := c.scopeLoad(ld, next.loads); ok {
+				next.loads = append(next.loads, sl)
+			}
+		}
+	}
+	if sc.Settings != nil {
+		repeated, dupDiags := settingsRepeated(sc.Settings, "pipe", "name", "error_handler")
+		c.diags = append(c.diags, dupDiags...)
+		for _, s := range sc.Settings.Settings {
+			if repeated[s] {
+				continue
+			}
+			switch s.Name {
+			case "pipe":
+				id, ok := s.Value.(*ast.Ident)
+				if !ok {
+					c.errorf(s.Pos(), "scopes-and-routes", "pipe: takes a pipeline (spec/scopes)")
+					continue
+				}
+				if _, exists := c.pkg.Pipelines[id.Name()]; !exists {
+					c.errorf(s.Pos(), "scopes-and-routes", "unknown pipeline %q (spec/scopes)", id.Name())
+					continue
+				}
+				next.pipes = append(next.pipes, id.Name())
+			case "name":
+				id, ok := s.Value.(*ast.Ident)
+				if !ok {
+					c.errorf(s.Pos(), "scopes-and-routes", "name: is an identifier (spec/scopes)")
+					continue
+				}
+				n, err := naming.GoName(id.Name())
+				if err != nil {
+					c.errorf(s.Pos(), "scopes-and-routes", "scope name %q: %v (spec/scopes)", id.Name(), err)
+					continue
+				}
+				next.namePrefix += n
+			case "error_handler":
+				name, ok := c.localFuncRef(s.Value)
+				if ok {
+					const want = "func %s(r volt.Request, err error) volt.Response"
+					sc := c.goFuncs(c.pkg)
+					if gf, found := sc.funcs[name]; !found {
+						c.errorf(s.Pos(), "scopes-and-routes", "no function %s in package %s's Go files — declare "+want+" beside the routes (spec/scopes)%s", name, c.pkg.Name, name, sc.brokenHint())
+					} else if gf.Generic || gf.Variadic || len(gf.Params) != 2 || gf.Params[0].Type != "volt.Request" ||
+						gf.Params[1].Type != "error" || len(gf.Results) != 1 || gf.Results[0] != "volt.Response" {
+						c.errorf(s.Pos(), "scopes-and-routes", "%s is not an error handler: found %s, expected "+want+" (spec/scopes)", name, gf.Sig, name)
+					}
+				}
+				if !ok {
+					if name != "" {
+						continue
+					}
+					c.errorf(s.Pos(), "scopes-and-routes", "error_handler: takes a function of this package, written by its bare name (spec/scopes)")
+					continue
+				}
+				next.errHandler = name
+			default:
+				c.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a scope (spec/settings-whitelists); valid: pipe, name, error_handler", s.Name)
+			}
+		}
+	}
+	for _, item := range sc.Items {
+		switch item := item.(type) {
+		case *ast.Scope:
+			c.scopeWalk(item, next, facts, memo, seenShape, seenHelper)
+			continue
+		case *ast.ScopeLoad:
+			continue
+		}
+		for _, r := range c.itemLowerMemo(item, next, facts, memo) {
+			c.routeAdd(*r, seenShape, seenHelper)
+		}
+	}
+}
+
+// scopeLoad checks one scope load (spec/scope-loads): a usable name
+// and a function of the package shaped func(volt.Request) volt.Load[T],
+// whose T names this package or an import of it.
+func (c *checker) scopeLoad(ld *ast.ScopeLoad, above []ScopeLoad) (ScopeLoad, bool) {
+	name := ld.Name.Name()
+	if !loadNameOK(name) {
+		c.errorf(ld.Name.Pos(), "scope-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier and no Go keyword, that is not reserved, not err or ok, not a name the route files import a package under (context, http, rt, run, time, volt), not a predeclared Go identifier (string, int, len, nil and the rest), and not shaped like a generated local (spec/scope-loads, spec/route-paths)", name)
+		return ScopeLoad{}, false
+	}
+	if loadNameQualifier(name, c.pkg.Name, c.pkg.Imports) {
+		c.errorf(ld.Name.Pos(), "scope-loads", "load %q takes the name of a package the generated code refers to (spec/scope-loads, spec/imports)", name)
+		return ScopeLoad{}, false
+	}
+	if scopeLoadNamed(above, name) {
+		c.errorf(ld.Name.Pos(), "scope-loads", "load %q is already loaded by this scope or one above it (spec/scope-loads)", name)
+		return ScopeLoad{}, false
+	}
+	if len(ld.Ref.Parts) != 1 {
+		if _, kind := qualifierResolve(ld.Ref.Parts[0].Name(), c.pkg.Name, c.pkg.Imports); kind == qualSelf {
+			c.diags = append(c.diags, selfQualified(ld.Ref.Pos(), ld.Ref.Parts[0].Name(), ld.Ref.Parts[1].Name()))
+		} else {
+			c.errorf(ld.Ref.Pos(), "scope-loads", "a scope load names a function of this package, written by its bare name (spec/scope-loads)")
+		}
+		return ScopeLoad{}, false
+	}
+	fn := ld.Ref.Parts[0].Name()
+	if scopeLoadNamed(above, fn) {
+		c.errorf(ld.Ref.Pos(), "scope-loads", "scope load %q calls %s, the name of an earlier load of this scope or of a load of one above it, whose value the shim holds under that name when it calls %s (spec/scope-loads)", name, fn, fn)
+		return ScopeLoad{}, false
+	}
+	const want = "func %s(r volt.Request) volt.Load[T]"
+	sc := c.goFuncs(c.pkg)
+	gf, found := sc.funcs[fn]
+	if !found {
+		c.errorf(ld.Ref.Pos(), "scope-loads", "no function %s in package %s's Go files — declare "+want+" beside the routes (spec/scope-loads)%s", fn, c.pkg.Name, fn, sc.brokenHint())
+		return ScopeLoad{}, false
+	}
+	result := ""
+	if len(gf.Results) == 1 {
+		result = gf.Results[0]
+	}
+	inner, isLoad := strings.CutPrefix(result, "volt.Load[")
+	if gf.Generic || gf.Variadic || len(gf.Params) != 1 || gf.Params[0].Type != "volt.Request" || !isLoad || !strings.HasSuffix(inner, "]") {
+		c.errorf(ld.Ref.Pos(), "scope-loads", "%s is not a scope load: found %s, expected "+want+" (spec/scope-loads)", fn, gf.Sig, fn)
+		return ScopeLoad{}, false
+	}
+	goType := strings.TrimSuffix(inner, "]")
+	sl := ScopeLoad{Name: name, Func: fn, GoType: goType, Pos: ld.Pos()}
+	base := strings.TrimLeft(goType, "[]*")
+	if qual, _, qualified := strings.Cut(base, "."); qualified {
+		target, kind := qualifierResolve(qual, c.pkg.Name, c.pkg.Imports)
+		if kind != qualImport {
+			c.errorf(ld.Ref.Pos(), "scope-loads", "%s loads %s, and %q is not an import of this package (spec/scope-loads, spec/imports)", fn, goType, qual)
+			return ScopeLoad{}, false
+		}
+		sl.Qualifier, sl.Import = qual, c.pr.Module
+		if target != "." {
+			sl.Import += "/" + target
+		}
+		if pkg := c.pr.Packages[target]; pkg != nil {
+			sl.PkgName = pkg.Name
+		}
+		c.usedQual[qual] = true
+	}
+	return sl, true
+}
+
+type routeOracle struct{ c *checker }
+
+func (o routeOracle) dataPackage(path string) (string, bool, bool) {
+	pkg := o.c.pr.Packages[path]
+	if pkg == nil {
+		return "", false, false
+	}
+	return pkg.Name, o.c.schemas[path] != nil && pkg.HasSchema(), len(pkg.Selects) > 0
+}
+
+func (o routeOracle) tableByName(path, base string) (*check.TableInfo, string) {
+	info := o.c.schemas[path]
+	if info == nil {
+		return nil, ""
+	}
+	if ti := info.Table(base); ti != nil {
+		return ti, ""
+	}
+	caseMatch := ""
+	for _, cand := range info.Tables {
+		if name := cand.Decl.Name.Name(); strings.EqualFold(name, base) {
+			caseMatch = name
+		}
+	}
+	if caseMatch != "" {
+		return nil, fmt.Sprintf("; did you mean %q? names are case-sensitive", caseMatch)
+	}
+	for _, cand := range info.Tables {
+		if model, err := naming.ModelName(cand.Decl); err == nil && model == base {
+			return nil, fmt.Sprintf("; %q is the model of table %q: name the table",
+				base, cand.Decl.Name.Name())
+		}
+	}
+	return nil, ""
+}
+
+func (o routeOracle) modelOf(path, key string) (any, []naming.CRUDMethod, error) {
+	pkg := o.c.pr.Packages[path]
+	if pkg == nil || pkg.plan == nil {
+		return nil, nil, fmt.Errorf("no package %q", path)
+	}
+	_, methods, err := pkg.plan.CRUDMethods(key)
+	return pkg.plan.ModelRef(key), methods, err
+}
+
+func (o routeOracle) crudByName(path, name string) (string, any, naming.CRUDMethod, bool) {
+	pkg := o.c.pr.Packages[path]
+	if pkg == nil || pkg.plan == nil {
+		return "", nil, naming.CRUDMethod{}, false
+	}
+	key, cm, ok := pkg.plan.CRUDMethod(name)
+	if !ok {
+		return "", nil, naming.CRUDMethod{}, false
+	}
+	return key, pkg.plan.ModelRef(key), cm, true
+}
+
+func (o routeOracle) selectByMethod(path, name string) (*SelectInfo, *check.TableInfo, bool) {
+	pkg := o.c.pr.Packages[path]
+	if pkg == nil {
+		return nil, nil, false
+	}
+	sm, ok := pkg.selectByMethod[name]
+	return sm.sel, sm.member, ok
+}
+
+func (o routeOracle) selectByName(path, name string) (*SelectInfo, string) {
+	pkg := o.c.pr.Packages[path]
+	if pkg == nil {
+		return nil, ""
+	}
+	if si := pkg.selectByName[name]; si != nil {
+		return si, ""
+	}
+	hint := ""
+	for _, cand := range pkg.Selects {
+		if strings.EqualFold(cand.Decl.Name.Name(), name) {
+			hint = fmt.Sprintf("; did you mean %q?", cand.Decl.Name.Name())
+		}
+	}
+	return nil, hint
+}
+
+func (o routeOracle) queryHint(path, name string) string {
+	pkg := o.c.pr.Packages[path]
+	if pkg == nil || pkg.plan == nil {
+		return ""
+	}
+	var candidates []string
+	for _, si := range pkg.Selects {
+		for _, m := range si.Members {
+			candidates = append(candidates, modelOrBase(m)+si.MethodSuffix)
+		}
+	}
+	candidates = append(candidates, pkg.plan.CRUDMethodNames()...)
+	for _, cand := range candidates {
+		if strings.EqualFold(cand, name) {
+			return fmt.Sprintf("; did you mean %q?", cand)
+		}
+	}
+	return ""
+}
+
+type routesMemo struct {
+	prev, next   map[ast.Node]*routesEntry
+	Hits, Misses int
+}
+
+type routesEntry struct {
+	inh     inherited
+	facts   routeFacts
+	lookups []routeLookup
+	routes  []*RouteInfo
+	used    []string
+	diags   []diag.Diagnostic
+}
+
+func (e *routesEntry) holds(inh inherited, facts routeFacts, env routeEnv) bool {
+	if !inheritedEqual(e.inh, inh) || !e.facts.equal(facts) {
+		return false
+	}
+	for _, l := range e.lookups {
+		if !l.holds(env) {
+			return false
+		}
+	}
+	return true
+}
+
+func inheritedEqual(a, b inherited) bool {
+	return slices.Equal(a.prefix, b.prefix) && slices.Equal(a.pipes, b.pipes) && a.errHandler == b.errHandler && a.namePrefix == b.namePrefix && slices.Equal(a.loads, b.loads)
+}
+
+func (c *checker) itemLowerMemo(item ast.Node, inh inherited, facts routeFacts, memo *routesMemo) []*RouteInfo {
+	env := routeOracle{c}
+	if memo != nil {
+		if e := memo.prev[item]; e != nil && e.holds(inh, facts, env) {
+			memo.next[item] = e
+			memo.Hits++
+			c.diags = append(c.diags, e.diags...)
+			for _, q := range e.used {
+				c.usedQual[q] = true
+			}
+			return e.routes
+		}
+	}
+	routes, lookups, used, diags := itemLower(item, inh, facts, env, memo != nil)
+	c.diags = append(c.diags, diags...)
+	for _, q := range used {
+		c.usedQual[q] = true
+	}
+	if memo != nil {
+		memo.next[item] = &routesEntry{inh: inh, facts: facts, lookups: lookups, routes: routes, used: used, diags: diags}
+		memo.Misses++
+	}
+	return routes
+}
+
+func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteInfo) {
+	shape := r.shapeKey
+	if prev, dup := seenShape[shape]; dup {
+		c.errorf(r.Pos, "scopes-and-routes", "route %s %s conflicts with the route at %s: identical method and path shape (spec/route-conflicts)", methodOrAny(r.Method), r.Spelled, prev.Pos)
+		return
+	}
+	if prev := c.conflicts.ambiguous(&r); prev != nil {
+		c.errorf(r.Pos, "scopes-and-routes", "route %s %s is ambiguous with the route at %s (%s %s): both match some requests and neither is more specific (spec/route-conflicts)",
+			methodOrAny(r.Method), r.Spelled, prev.Pos, methodOrAny(prev.Method), prev.Spelled)
+		return
+	}
+	seenShape[shape] = &r
+
+	name := r.HelperName
+	if name == "" {
+		name = r.ClientName
+	}
+	if name != "" {
+		if prev, dup := seenHelper[name]; dup {
+			if r.FromResources && prev.FromResources && r.Pos == prev.Pos {
+				c.errorf(r.Pos, "resources", "resources %q: the collection and member reverse-URL helpers are both %q, because singularizing %q does not change it (spec/table-resolution); set the singular explicitly, e.g. [singular: <name>]",
+					prev.Table, r.HelperName, prev.Table)
+			} else {
+				c.errorf(r.Pos, "scopes-and-routes", "reverse-URL helper or client method %q already produced by the route at %s (spec/route-names-and-reverse-urls, spec/generated-client); disambiguate with %s", name, prev.Pos, r.renameWith())
+			}
+			r.HelperName, r.ClientName = "", ""
+		} else {
+			seenHelper[name] = &r
+		}
+	}
+	if r.Query == nil && !r.Events && r.HelperName != "" {
+		r.ClientName = r.HelperName
+	}
+	if what, taken := voltClientNames[r.ClientName]; taken {
+		c.errorf(r.Pos, "generated-client", "client method %q would take the name of the embedded volt.Client's %s (spec/generated-client); rename the route with %s", r.ClientName, what, r.renameWith())
+	}
+
+	r.ord = len(c.pkg.Routes)
+	if r.Query != nil || r.Events {
+		c.routeAccept(&r)
+		return
+	}
+	ci := c.pkg.Controllers[r.Controller]
+	if ci == nil {
+		ci = &ControllerInfo{Name: r.Controller}
+		c.pkg.Controllers[r.Controller] = ci
+	}
+	if a := ci.Action(r.Action); a != nil {
+		if !scopeLoadsEqual(a.ScopeLoads, r.ScopeLoads) || !paramsEqual(a.Params, r.Params) || !bodiesEqual(a.Body, r.Body) || !loadsEqual(a.Loads, r.Loads) {
+			c.errorf(r.Pos, "scopes-and-routes", "%s.%s is reached by routes with different signatures (spec/handler-references, spec/scope-loads, spec/request-bodies, spec/route-loads): %s vs %s (first at %s)",
+				r.Controller, r.Action, signatureString(r.ScopeLoads, r.Params, r.Body, r.Loads), signatureString(a.ScopeLoads, a.Params, a.Body, a.Loads), a.Routes[0].Pos)
+			return
+		}
+		if r.Doc != "" {
+			if first := a.documentedBy(); first != nil {
+				c.errorf(r.Pos, "scopes-and-routes", "%s.%s is documented by the route at %s already: one of the routes that share an action carries its doc comment (spec/handler-references, spec/doc-comments-in-generated-code)", r.Controller, r.Action, first.Pos)
+			} else {
+				a.Doc = r.Doc
+			}
+		}
+		a.Routes = append(a.Routes, &r)
+	} else {
+		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Doc: r.Doc, Params: r.Params, Body: r.Body, Loads: r.Loads, ScopeLoads: r.ScopeLoads, Routes: []*RouteInfo{&r}})
+	}
+	c.routeAccept(&r)
+}
+
+func (r *RouteInfo) renameWith() string {
+	switch {
+	case r.FromDataset, r.collection:
+		return "a scope name"
+	case r.FromResources:
+		return "[singular:] or a scope name"
+	}
+	return "[name:] or a scope name"
+}
+
+func (c *checker) routeAccept(r *RouteInfo) {
+	c.pkg.Routes = append(c.pkg.Routes, r)
+	c.conflicts.add(r)
+}
+
+type routeIndex struct {
+	root *routeNode
+}
+
+type routeNode struct {
+	routes   []*RouteInfo
+	children map[string]*routeNode
+}
+
+func (ix *routeIndex) add(r *RouteInfo) {
+	n := ix.root
+	for _, seg := range r.shape.segs {
+		if seg == "" {
+			break
+		}
+		child := n.children[seg]
+		if child == nil {
+			if n.children == nil {
+				n.children = map[string]*routeNode{}
+			}
+			child = &routeNode{}
+			n.children[seg] = child
+		}
+		n = child
+	}
+	n.routes = append(n.routes, r)
+}
+
+func (ix *routeIndex) ambiguous(r *RouteInfo) *RouteInfo {
+	var best *RouteInfo
+	var walk func(n *routeNode, depth int)
+	walk = func(n *routeNode, depth int) {
+		for _, prev := range n.routes {
+			if best != nil && prev.ord >= best.ord {
+				break
+			}
+			if routesAmbiguous(prev, r) {
+				best = prev
+				break
+			}
+		}
+		switch {
+		case depth < len(r.shape.segs):
+			if seg := r.shape.segs[depth]; seg != "" {
+				if child := n.children[seg]; child != nil {
+					walk(child, depth+1)
+				}
+			} else {
+				for _, child := range n.children {
+					walk(child, depth+1)
+				}
+			}
+		case r.shape.wild:
+			for _, child := range n.children {
+				walk(child, depth+1)
+			}
+		}
+	}
+	walk(ix.root, 0)
+	return best
+}
+
+func methodOf(verb string) string {
+	if verb == "any" {
+		return ""
+	}
+	return strings.ToUpper(verb)
+}
+
+func methodOrAny(m string) string {
+	if m == "" {
+		return "any"
+	}
+	return m
+}
+
+func patternOf(segs []*ast.Segment) string {
+	if len(segs) == 0 {
+		return "/{$}"
+	}
+	var b strings.Builder
+	for _, seg := range segs {
+		b.WriteByte('/')
+		switch seg.Kind {
+		case ast.SegParam:
+			b.WriteString("{" + seg.Name.Name() + "}")
+		case ast.SegWild:
+			b.WriteString("{" + seg.Name.Name() + "...}")
+		default:
+			b.WriteString(seg.Name.Name())
+		}
+	}
+	return b.String()
+}
+
+func spelledOf(segs []*ast.Segment) string {
+	if len(segs) == 0 {
+		return "/"
+	}
+	var b strings.Builder
+	for _, seg := range segs {
+		b.WriteByte('/')
+		b.WriteString(seg.String())
+	}
+	return b.String()
+}
+
+func shapeOf(r *RouteInfo) string {
+	var b strings.Builder
+	rest := r.Pattern
+	if rest == "/{$}" {
+		return "/"
+	}
+	for _, part := range strings.Split(strings.TrimPrefix(rest, "/"), "/") {
+		b.WriteByte('/')
+		switch {
+		case strings.HasSuffix(part, "...}"):
+			b.WriteString("{...}")
+		case strings.HasPrefix(part, "{"):
+			b.WriteString("{}")
+		default:
+			b.WriteString(part)
+		}
+	}
+	return b.String()
+}
+
+type pathShape struct {
+	segs []string
+	wild bool
+}
+
+func shapeParse(r *RouteInfo) pathShape {
+	if r.Pattern == "/{$}" {
+		return pathShape{}
+	}
+	var s pathShape
+	for _, part := range strings.Split(strings.TrimPrefix(r.Pattern, "/"), "/") {
+		switch {
+		case strings.HasSuffix(part, "...}"):
+			s.wild = true
+		case strings.HasPrefix(part, "{"):
+			s.segs = append(s.segs, "")
+		default:
+			s.segs = append(s.segs, part)
+		}
+	}
+	return s
+}
+
+func pathsOverlap(a, b pathShape) bool {
+	i := 0
+	for ; i < len(a.segs) && i < len(b.segs); i++ {
+		sa, sb := a.segs[i], b.segs[i]
+		if sa != "" && sb != "" && sa != sb {
+			return false
+		}
+	}
+	switch {
+	case i == len(a.segs) && i == len(b.segs):
+		return a.wild == b.wild || i == 0
+	case i == len(a.segs):
+		return a.wild
+	default:
+		return b.wild
+	}
+}
+
+func pathSubset(a, b pathShape) bool {
+	if len(a.segs) < len(b.segs) {
+		return false
+	}
+	for i, sb := range b.segs {
+		if i >= len(a.segs) {
+			return false
+		}
+		if sb != "" && a.segs[i] != sb {
+			return false
+		}
+	}
+	if len(a.segs) > len(b.segs) || a.wild {
+		return b.wild
+	}
+	return !b.wild || len(a.segs) == 0
+}
+
+func methodsOverlap(a, b string) bool { return methodSubset(a, b) || methodSubset(b, a) }
+func methodSubset(a, b string) bool   { return b == "" || a == b || (a == "HEAD" && b == "GET") }
+
+func routesAmbiguous(a, b *RouteInfo) bool {
+	if !methodsOverlap(a.Method, b.Method) {
+		return false
+	}
+	sa, sb := a.shape, b.shape
+	if !pathsOverlap(sa, sb) {
+		return false
+	}
+	aSub := methodSubset(a.Method, b.Method) && pathSubset(sa, sb)
+	bSub := methodSubset(b.Method, a.Method) && pathSubset(sb, sa)
+	return !aSub && !bSub
+}
+
+func paramsEqual(a, b []Param) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		typed := a[i].Type != tUnresolved && b[i].Type != tUnresolved
+		if (typed && a[i].Type != b[i].Type) || a[i].Wild != b[i].Wild || a[i].Name != b[i].Name {
+			return false
+		}
+	}
+	return true
+}
+
+func paramsString(ps []Param) string {
+	parts := make([]string, len(ps))
+	for i, p := range ps {
+		parts[i] = p.Name
+		if p.Type != tUnresolved {
+			parts[i] += " " + p.Type.GoType()
+		}
+	}
+	return "(" + strings.Join(parts, ", ") + ")"
+}
+
+func settingOf(sl *ast.SettingList, name string) *ast.Setting {
+	if sl == nil {
+		return nil
+	}
+	return sl.Get(name)
+}
+
+func settingsRepeated(sl *ast.SettingList, known ...string) (map[*ast.Setting]bool, []diag.Diagnostic) {
+	if sl == nil {
+		return nil, nil
+	}
+	var repeated map[*ast.Setting]bool
+	var diags []diag.Diagnostic
+	seen := map[string]bool{}
+	for _, s := range sl.Settings {
+		isKnown := false
+		for _, k := range known {
+			isKnown = isKnown || k == s.Name
+		}
+		if !isKnown {
+			continue
+		}
+		if seen[s.Name] {
+			if repeated == nil {
+				repeated = map[*ast.Setting]bool{}
+			}
+			repeated[s] = true
+			diags = append(diags, diag.Errorf(s.Pos(), "spec/settings-lists", "setting %q may appear at most once (spec/settings-lists)", s.Name))
+		}
+		seen[s.Name] = true
+	}
+	return repeated, diags
+}
+
+var voltClientNames = map[string]string{
+	"Client": "embedded field Client",
+	"Base":   "field Base",
+	"HTTP":   "field HTTP",
+	"Format": "field Format",
+	"Header": "field Header",
+	"Do":     "method Do",
+	"Raw":    "method Raw",
+	"Stream": "method Stream",
+}
+
+var goKeywords = map[string]bool{
+	"break": true, "case": true, "chan": true, "const": true, "continue": true,
+	"default": true, "defer": true, "else": true, "fallthrough": true, "for": true,
+	"func": true, "go": true, "goto": true, "if": true, "import": true,
+	"interface": true, "map": true, "package": true, "range": true, "return": true,
+	"select": true, "struct": true, "switch": true, "type": true, "var": true,
+}
+
+func goIdentOK(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		switch {
+		case r == '_', 'a' <= r && r <= 'z', 'A' <= r && r <= 'Z':
+		case '0' <= r && r <= '9':
+			if i == 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func exportedIdentOK(s string) bool {
+	return goIdentOK(s) && s[0] >= 'A' && s[0] <= 'Z'
+}
+
+// String renders a route table line for CLI display.
+func (r *RouteInfo) String() string {
+	helper := r.HelperName
+	if helper != "" {
+		helper = "Path" + helper
+	}
+	return fmt.Sprintf("%-7s %-32s %s %s", methodOrAny(r.Method), r.Spelled, r.HandlerRef(), helper)
+}
+
+// HandlerRef renders the route's handler as written: Controller.Action,
+// or pkg.Query for a query route (spec/query-routes).
+func (r *RouteInfo) HandlerRef() string {
+	if r.Query != nil {
+		return r.Query.Ref()
+	}
+	return r.Controller + "." + r.Action
+}
+
+func (o routeOracle) columnHandle(path, tableKey, col string) (string, bool) {
+	pkg := o.c.pr.Packages[path]
+	if pkg == nil || pkg.plan == nil {
+		return "", false
+	}
+	t, err := pkg.plan.Table(tableKey)
+	if err != nil {
+		return "", false
+	}
+	f := t.Field(col)
+	if f == nil {
+		return "", false
+	}
+	return t.Handle(f), true
+}
+
+func (o routeOracle) goType(name string) (string, bool) {
+	gt, ok := o.c.goTypes[name]
+	if !ok || gt.Generic {
+		return "", false
+	}
+	return gt.Underlying, true
+}
+
+func (c *checker) importQualifier(spec *ast.ImportSpec) string {
+	if spec.Alias != nil {
+		return spec.Alias.Name()
+	}
+	if target := c.pr.Packages[spec.PathString()]; target != nil && target.Name != "" {
+		return target.Name
+	}
+	return spec.Path[len(spec.Path)-1].Name()
+}

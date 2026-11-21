@@ -1,0 +1,1315 @@
+package main
+
+import (
+	"fmt"
+	"go/ast"
+	"go/types"
+	"path/filepath"
+	"slices"
+	"sort"
+	"strings"
+	"sync"
+	"testing"
+
+	"golang.org/x/tools/go/packages"
+)
+
+const module = "github.com/Piechutowski/volt"
+
+var pureTargets = []struct{ pkg, name string }{
+	{module + "/lang/check", "tableCheck"},
+	{module + "/nao/naming", "tableBuild"},
+	{module + "/lang", "tableSpecs"},
+	{module + "/lang", "selectCheck"},
+	{module + "/lang", "itemLower"},
+	{module + "/lsp", "tableOccurrences"},
+	{module + "/lang/vet", "DeclVet"},
+}
+
+var immutableVars = map[string]bool{
+	"time.UTC":                                 true,
+	module + "/lang.crudMethodSuffixes":        true,
+	module + "/lang.compareSQL":                true,
+	module + "/lang.goKeywords":                true,
+	module + "/lang.generatedImportNames":      true,
+	module + "/lang.goPredeclared":             true,
+	module + "/lang.resourceActions":           true,
+	module + "/lang.queryMethods":              true,
+	module + "/lang.actionByLower":             true,
+	module + "/lang.queryValueTypes":           true,
+	module + "/lang/check.tableSettings":       true,
+	module + "/lang/check.columnSettings":      true,
+	module + "/lang/check.builtins":            true,
+	module + "/lang/check.indexSettings":       true,
+	module + "/lang/check.refSettings":         true,
+	module + "/lang/check.ReservedAliases":     true,
+	module + "/nao/naming.commonInitialisms":   true,
+	module + "/nao/naming.goKeywords":          true,
+	module + "/nao/naming.routeSignatureNames": true,
+	module + "/nao/gen/sqlite.sqliteKeywords":  true,
+	module + "/nao/gen/sqlite.plainIdent":      true,
+	module + "/nao/inflect.irregular":          true,
+}
+
+var pureStdlib = map[string]bool{
+	"strings": true, "unicode": true,
+	"fmt":     true,
+	"sort":    true,
+	"strconv": true,
+	"errors":  true,
+}
+
+var pureStdlibFuncs = map[string]bool{
+	"(*sync/atomic.Int64).Load": true,
+	"(time.Time).UTC":           true,
+	"(time.Time).Year":          true,
+	"(time.Time).Format":        true,
+	"time.ParseInLocation":      true,
+	"time.Unix":                 true,
+}
+
+var stdlibMutators = map[string]int{
+	"sort.Sort": 0, "sort.Stable": 0, "sort.Slice": 0, "sort.SliceStable": 0,
+	"sort.Strings": 0, "sort.Ints": 0, "sort.Float64s": 0,
+	"slices.Sort": 0, "slices.SortFunc": 0, "slices.SortStableFunc": 0, "slices.Reverse": 0,
+	"slices.Delete": 0, "slices.DeleteFunc": 0, "slices.Insert": 0, "slices.Replace": 0,
+	"slices.Compact": 0, "slices.CompactFunc": 0,
+	"maps.Copy": 0, "maps.DeleteFunc": 0, "maps.Insert": 0,
+}
+
+var valuePackages = map[string][]string{
+	module + "/lang/ast":   {module + "/lang/ast", module + "/lang/parser"},
+	module + "/lang/token": {module + "/lang/token", module + "/lang/scanner", module + "/lang/parser"},
+}
+
+var closureStops = map[string]bool{module + "/lang/diag": true}
+
+const assertPackage = module + "/assert"
+
+const fixtureImpure = module + "/cmd/volt/testdata/impure"
+const fixtureMutable = module + "/cmd/volt/testdata/mutable"
+
+var gateOnce struct {
+	sync.Once
+	pkgs []*packages.Package
+	err  error
+}
+
+func gatePackages(t *testing.T) []*packages.Package {
+	t.Helper()
+	gateOnce.Do(func() {
+		root, err := filepath.Abs(filepath.Join("..", ".."))
+		if err != nil {
+			gateOnce.err = err
+			return
+		}
+		cfg := &packages.Config{
+			Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes |
+				packages.NeedTypesInfo | packages.NeedImports | packages.NeedDeps,
+			Dir: root,
+		}
+		gateOnce.pkgs, gateOnce.err = packages.Load(cfg, module+"/...", module+"/lsp/...", module+"/cmd/volt", fixtureImpure, fixtureMutable)
+	})
+	if gateOnce.err != nil {
+		t.Fatal(gateOnce.err)
+	}
+	return gateOnce.pkgs
+}
+
+func newPurity(t *testing.T, pkgs []*packages.Package, shared bool) *purity {
+	t.Helper()
+	p := &purity{byPath: map[string]*packages.Package{}, decls: map[*types.Func]funcDecl{}, summaries: map[string]*summary{}, active: map[string]bool{}, provisional: map[string]*summary{}, seen: map[string]bool{}, shared: shared}
+	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
+		if len(pkg.Errors) > 0 && strings.HasPrefix(pkg.PkgPath, module) {
+			t.Fatalf("%s: %v", pkg.PkgPath, pkg.Errors[0])
+		}
+		p.byPath[pkg.PkgPath] = pkg
+		for _, f := range pkg.Syntax {
+			for _, d := range f.Decls {
+				if fd, ok := d.(*ast.FuncDecl); ok && fd.Body != nil {
+					if obj, ok := pkg.TypesInfo.Defs[fd.Name].(*types.Func); ok && pkg.PkgPath != assertPackage {
+						p.decls[obj] = funcDecl{pkg, fd}
+					}
+				}
+			}
+		}
+	})
+	return p
+}
+
+func (p *purity) targetFunc(t *testing.T, pkgPath, name string) *types.Func {
+	t.Helper()
+	pkg := p.byPath[pkgPath]
+	if pkg == nil {
+		t.Fatalf("package %s not loaded", pkgPath)
+	}
+	obj, ok := pkg.Types.Scope().Lookup(name).(*types.Func)
+	if !ok {
+		t.Fatalf("%s.%s: no such function", pkgPath, name)
+	}
+	return obj
+}
+
+func (p *purity) allTainted(fn *types.Func) []bool {
+	fd := p.decls[fn]
+	var taint []bool
+	for _, field := range fd.decl.Type.Params.List {
+		for range field.Names {
+			taint = append(taint, true)
+		}
+		if len(field.Names) == 0 {
+			taint = append(taint, true)
+		}
+	}
+	return taint
+}
+
+func TestMemoizedComputationsArePure(t *testing.T) {
+	p := newPurity(t, gatePackages(t), false)
+	for _, target := range pureTargets {
+		obj := p.targetFunc(t, target.pkg, target.name)
+		if obj.Type().(*types.Signature).Recv() != nil {
+			t.Errorf("%s.%s: a memoized computation is a top-level function, not a method", target.pkg, target.name)
+			continue
+		}
+		p.analyze(obj, false, p.allTainted(obj))
+	}
+	p.immutableVarsNeverAssigned()
+	for name := range pureStdlibFuncs {
+		if !p.stdlibFuncsUsed[name] {
+			p.problems = append(p.problems, fmt.Sprintf("pureStdlibFuncs trusts %s, which no memoized computation reaches", name))
+		}
+	}
+	for path := range pureStdlib {
+		if !p.stdlibUsed[path] {
+			p.problems = append(p.problems, fmt.Sprintf("pureStdlib trusts %s, which no memoized computation reaches", path))
+		}
+	}
+	sort.Strings(p.problems)
+	for _, problem := range p.problems {
+		t.Error(problem)
+	}
+}
+
+// TestMemoizedResultsAreImmutable proves no function of the three
+// modules writes, through a value that came from outside it, into a
+// memoized result type unless the function is reachable from the
+// result's producer, nor into a node or a token outside the packages
+// that make them.
+func TestMemoizedResultsAreImmutable(t *testing.T) {
+	p := newPurity(t, gatePackages(t), true)
+	var targets []*types.Func
+	for _, target := range pureTargets {
+		targets = append(targets, p.targetFunc(t, target.pkg, target.name))
+	}
+	p.producersSet(targets)
+	reported := map[string]bool{}
+	for _, fn := range p.startingPoints(func(path string) bool {
+		return strings.HasPrefix(path, module) && !strings.HasPrefix(path, module+"/cmd/volt/testdata/")
+	}) {
+		for _, w := range p.writesOutsideProducers(fn) {
+			if !reported[w.at] {
+				reported[w.at] = true
+				p.problems = append(p.problems, fmt.Sprintf("%s: %s.%s is written outside its producer (reached from %s)", w.at, w.typ.Pkg().Name(), w.typ.Name(), fn.FullName()))
+			}
+		}
+	}
+	sort.Strings(p.problems)
+	for _, problem := range p.problems {
+		t.Error(problem)
+	}
+}
+
+func (p *purity) producersSet(targets []*types.Func) {
+	p.closures = map[*types.TypeName][]int{}
+	p.targets = map[*types.Func]int{}
+	p.reach = make([]map[*types.Func]bool, len(targets))
+	for i, fn := range targets {
+		p.targets[fn] = i
+		p.reach[i] = p.reachable(fn)
+		seen := map[*types.TypeName]bool{}
+		var add func(t types.Type)
+		add = func(t types.Type) {
+			switch t := types.Unalias(t).(type) {
+			case *types.Named:
+				obj := t.Obj()
+				if obj.Pkg() == nil || !strings.HasPrefix(obj.Pkg().Path(), module) || seen[obj] {
+					return
+				}
+				if valuePackages[obj.Pkg().Path()] != nil || closureStops[obj.Pkg().Path()] {
+					return
+				}
+				seen[obj] = true
+				p.closures[obj] = append(p.closures[obj], i)
+				add(t.Underlying())
+			case *types.Pointer:
+				add(t.Elem())
+			case *types.Slice:
+				add(t.Elem())
+			case *types.Array:
+				add(t.Elem())
+			case *types.Map:
+				add(t.Key())
+				add(t.Elem())
+			case *types.Chan:
+				add(t.Elem())
+			case *types.Struct:
+				for j := 0; j < t.NumFields(); j++ {
+					add(t.Field(j).Type())
+				}
+			}
+		}
+		sig := fn.Type().(*types.Signature)
+		for j := 0; j < sig.Results().Len(); j++ {
+			add(sig.Results().At(j).Type())
+		}
+	}
+	for path := range valuePackages {
+		pkg := p.byPath[path]
+		if pkg == nil {
+			continue
+		}
+		scope := pkg.Types.Scope()
+		for _, name := range scope.Names() {
+			if tn, ok := scope.Lookup(name).(*types.TypeName); ok {
+				p.closures[tn] = append(p.closures[tn], -1)
+			}
+		}
+	}
+}
+
+func (p *purity) reachable(fn *types.Func) map[*types.Func]bool {
+	out := map[*types.Func]bool{}
+	var visit func(f *types.Func)
+	visit = func(f *types.Func) {
+		if out[f] {
+			return
+		}
+		out[f] = true
+		fd, ok := p.decls[f]
+		if !ok {
+			return
+		}
+		ast.Inspect(fd.decl.Body, func(n ast.Node) bool {
+			switch x := n.(type) {
+			case *ast.Ident:
+				if g, ok := fd.pkg.TypesInfo.Uses[x].(*types.Func); ok {
+					visit(g.Origin())
+				}
+			case *ast.SelectorExpr:
+				if sel, ok := fd.pkg.TypesInfo.Selections[x]; ok {
+					if g, ok := sel.Obj().(*types.Func); ok {
+						visit(g.Origin())
+						if recv := g.Type().(*types.Signature).Recv(); recv != nil && types.IsInterface(recv.Type()) {
+							for _, impl := range p.implementations(g) {
+								visit(impl)
+							}
+						}
+					}
+				}
+			}
+			return true
+		})
+	}
+	visit(fn)
+	return out
+}
+
+func (p *purity) startingPoints(keep func(path string) bool) []*types.Func {
+	var out []*types.Func
+	for fn, fd := range p.decls {
+		if keep(fd.pkg.PkgPath) {
+			out = append(out, fn)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].FullName() < out[j].FullName() })
+	return out
+}
+
+func (p *purity) writesOutsideProducers(fn *types.Func) []taintedWrite {
+	var out []taintedWrite
+	for _, w := range p.analyze(fn, true, p.allTainted(fn)).writes {
+		allowed := false
+		for _, i := range p.closures[w.typ] {
+			if i < 0 {
+				allowed = allowed || slices.Contains(valuePackages[w.typ.Pkg().Path()], fn.Pkg().Path())
+			} else {
+				allowed = allowed || p.reach[i][fn]
+			}
+		}
+		if !allowed {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+type funcDecl struct {
+	pkg  *packages.Package
+	decl *ast.FuncDecl
+}
+
+type summary struct {
+	results []bool
+	writes  []taintedWrite
+}
+
+type taintedWrite struct {
+	typ *types.TypeName
+	at  string
+}
+
+type purity struct {
+	byPath      map[string]*packages.Package
+	decls       map[*types.Func]funcDecl
+	summaries   map[string]*summary
+	active      map[string]bool
+	problems    []string
+	provisional map[string]*summary
+	hitStack    []map[string]bool
+	seen        map[string]bool
+
+	shared   bool
+	closures map[*types.TypeName][]int
+	targets  map[*types.Func]int
+	reach    []map[*types.Func]bool
+
+	impls           map[*types.Func][]*types.Func
+	stdlibUsed      map[string]bool
+	stdlibFuncsUsed map[string]bool
+}
+
+func (p *purity) implementations(abstract *types.Func) []*types.Func {
+	if p.impls == nil {
+		p.impls = map[*types.Func][]*types.Func{}
+	}
+	if impls, done := p.impls[abstract]; done {
+		return impls
+	}
+	var impls []*types.Func
+	iface, _ := abstract.Type().(*types.Signature).Recv().Type().Underlying().(*types.Interface)
+	if iface != nil {
+		for _, pkg := range p.byPath {
+			if !strings.HasPrefix(pkg.PkgPath, module) {
+				continue
+			}
+			scope := pkg.Types.Scope()
+			for _, name := range scope.Names() {
+				tn, ok := scope.Lookup(name).(*types.TypeName)
+				if !ok || tn.IsAlias() || types.IsInterface(tn.Type()) {
+					continue
+				}
+				ptr := types.NewPointer(tn.Type())
+				if !types.Implements(ptr, iface) {
+					continue
+				}
+				if m, _, _ := types.LookupFieldOrMethod(ptr, true, abstract.Pkg(), abstract.Name()); m != nil {
+					if fn, ok := m.(*types.Func); ok {
+						if _, has := p.decls[fn]; has {
+							impls = append(impls, fn)
+						}
+					}
+				}
+			}
+		}
+	}
+	sort.Slice(impls, func(i, j int) bool { return impls[i].FullName() < impls[j].FullName() })
+	p.impls[abstract] = impls
+	return impls
+}
+
+func (p *purity) problem(pkg *packages.Package, pos ast.Node, format string, args ...any) {
+	p.problems = append(p.problems, fmt.Sprintf("%s: %s", pkg.Fset.Position(pos.Pos()), fmt.Sprintf(format, args...)))
+}
+
+func (p *purity) analyze(fn *types.Func, recvTaint bool, paramTaint []bool) *summary {
+	key := fn.FullName() + "/" + fmt.Sprint(recvTaint, paramTaint)
+	if s := p.summaries[key]; s != nil {
+		return s
+	}
+	if p.active[key] {
+		for _, hits := range p.hitStack {
+			hits[key] = true
+		}
+		return p.provisional[key]
+	}
+	fd, ok := p.decls[fn]
+	if !ok {
+		return &summary{}
+	}
+	p.active[key] = true
+	defer delete(p.active, key)
+	hits := map[string]bool{}
+	p.hitStack = append(p.hitStack, hits)
+	defer func() { p.hitStack = p.hitStack[:len(p.hitStack)-1] }()
+	sig := fn.Type().(*types.Signature)
+	prov := &summary{results: make([]bool, sig.Results().Len())}
+	for {
+		p.provisional[key] = prov
+		fa := &funcAnalysis{p: p, pkg: fd.pkg, info: fd.pkg.TypesInfo, taint: map[types.Object]bool{}, made: map[types.Object]bool{}, array: map[types.Object]bool{}}
+		if sig.Recv() != nil && fd.decl.Recv != nil {
+			for _, field := range fd.decl.Recv.List {
+				for _, name := range field.Names {
+					if obj := fd.pkg.TypesInfo.Defs[name]; obj != nil {
+						fa.taint[obj] = recvTaint
+					}
+				}
+			}
+		}
+		i := 0
+		for _, field := range fd.decl.Type.Params.List {
+			if len(field.Names) == 0 {
+				i++
+				continue
+			}
+			for _, name := range field.Names {
+				if obj := fd.pkg.TypesInfo.Defs[name]; obj != nil && i < len(paramTaint) {
+					fa.taint[obj] = paramTaint[i]
+				}
+				i++
+			}
+		}
+		fa.results = make([]bool, sig.Results().Len())
+		fa.stmts(fd.decl.Body.List)
+		s := &summary{results: fa.results, writes: writesDedup(fa.writes)}
+		if !hits[key] || summaryEqual(s, prov) {
+			delete(p.provisional, key)
+			tentative := false
+			for k := range hits {
+				if k != key && p.active[k] {
+					tentative = true
+				}
+			}
+			if !tentative {
+				p.summaries[key] = s
+			}
+			return s
+		}
+		prov = s
+	}
+}
+
+func writesDedup(ws []taintedWrite) []taintedWrite {
+	seen := map[taintedWrite]bool{}
+	out := ws[:0:0]
+	for _, w := range ws {
+		if !seen[w] {
+			seen[w] = true
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+func summaryEqual(a, b *summary) bool {
+	if len(a.results) != len(b.results) || len(a.writes) != len(b.writes) {
+		return false
+	}
+	for i := range a.results {
+		if a.results[i] != b.results[i] {
+			return false
+		}
+	}
+	return true
+}
+
+type funcAnalysis struct {
+	made    map[types.Object]bool
+	array   map[types.Object]bool
+	p       *purity
+	pkg     *packages.Package
+	info    *types.Info
+	taint   map[types.Object]bool
+	results []bool
+	writes  []taintedWrite
+}
+
+func (fa *funcAnalysis) problem(node ast.Node, format string, args ...any) {
+	msg := fmt.Sprintf("%s: %s", fa.pkg.Fset.Position(node.Pos()), fmt.Sprintf(format, args...))
+	if fa.p.seen[msg] {
+		return
+	}
+	fa.p.seen[msg] = true
+	fa.p.problems = append(fa.p.problems, msg)
+}
+
+func (fa *funcAnalysis) stmts(list []ast.Stmt) {
+	for _, s := range list {
+		fa.stmt(s)
+	}
+}
+
+func (fa *funcAnalysis) stmt(s ast.Stmt) {
+	switch s := s.(type) {
+	case nil:
+	case *ast.ExprStmt:
+		fa.expr(s.X)
+	case *ast.AssignStmt:
+		taints := fa.rhsTaints(s.Rhs, len(s.Lhs))
+		for i, lhs := range s.Lhs {
+			fa.write(lhs, taints[i], s.Tok.String() == ":=")
+			if len(s.Rhs) == len(s.Lhs) {
+				fa.madeMark(lhs, s.Rhs[i])
+			}
+		}
+	case *ast.IncDecStmt:
+		fa.write(s.X, false, false)
+	case *ast.DeclStmt:
+		if gd, ok := s.Decl.(*ast.GenDecl); ok {
+			for _, spec := range gd.Specs {
+				if vs, ok := spec.(*ast.ValueSpec); ok {
+					taints := fa.rhsTaints(vs.Values, len(vs.Names))
+					for i, name := range vs.Names {
+						if obj := fa.info.Defs[name]; obj != nil {
+							fa.taint[obj] = len(vs.Values) > 0 && taints[i]
+						}
+						if i < len(vs.Values) {
+							fa.madeMark(name, vs.Values[i])
+						}
+					}
+				}
+			}
+		}
+	case *ast.ReturnStmt:
+		if len(s.Results) == len(fa.results) {
+			for i, r := range s.Results {
+				if fa.expr(r) {
+					fa.results[i] = true
+				}
+			}
+		} else if len(s.Results) == 1 {
+			if fa.expr(s.Results[0]) {
+				for i := range fa.results {
+					fa.results[i] = true
+				}
+			}
+		}
+	case *ast.BlockStmt:
+		fa.stmts(s.List)
+	case *ast.IfStmt:
+		fa.stmt(s.Init)
+		fa.expr(s.Cond)
+		fa.stmt(s.Body)
+		fa.stmt(s.Else)
+	case *ast.ForStmt:
+		fa.stmt(s.Init)
+		if s.Cond != nil {
+			fa.expr(s.Cond)
+		}
+		fa.stmt(s.Post)
+		fa.stmt(s.Body)
+	case *ast.RangeStmt:
+		tainted := fa.expr(s.X)
+		for _, v := range []ast.Expr{s.Key, s.Value} {
+			if id, ok := v.(*ast.Ident); ok && s.Tok.String() == ":=" {
+				if obj := fa.info.Defs[id]; obj != nil {
+					fa.taint[obj] = tainted
+				}
+			} else if v != nil {
+				fa.write(v, tainted, false)
+			}
+		}
+		fa.stmt(s.Body)
+	case *ast.SwitchStmt:
+		fa.stmt(s.Init)
+		if s.Tag != nil {
+			fa.expr(s.Tag)
+		}
+		fa.stmt(s.Body)
+	case *ast.TypeSwitchStmt:
+		fa.stmt(s.Init)
+		var tainted bool
+		var bound *ast.Ident
+		switch a := s.Assign.(type) {
+		case *ast.ExprStmt:
+			tainted = fa.expr(a.X)
+		case *ast.AssignStmt:
+			tainted = fa.expr(a.Rhs[0])
+			bound = a.Lhs[0].(*ast.Ident)
+		}
+		for _, c := range s.Body.List {
+			cc := c.(*ast.CaseClause)
+			if bound != nil {
+				if obj := fa.info.Implicits[cc]; obj != nil {
+					fa.taint[obj] = tainted
+				}
+			}
+			fa.stmts(cc.Body)
+		}
+	case *ast.CaseClause:
+		for _, e := range s.List {
+			fa.expr(e)
+		}
+		fa.stmts(s.Body)
+	case *ast.CommClause:
+		fa.stmt(s.Comm)
+		fa.stmts(s.Body)
+	case *ast.BranchStmt, *ast.EmptyStmt:
+	case *ast.LabeledStmt:
+		fa.stmt(s.Stmt)
+	case *ast.DeferStmt:
+		fa.expr(s.Call)
+	case *ast.GoStmt:
+		if fa.p.shared {
+			fa.expr(s.Call)
+		} else {
+			fa.problem(s, "a pure function starts no goroutine")
+		}
+	case *ast.SendStmt:
+		if fa.p.shared {
+			fa.expr(s.Chan)
+			fa.expr(s.Value)
+		} else {
+			fa.problem(s, "a pure function sends on no channel")
+		}
+	case *ast.SelectStmt:
+		if fa.p.shared {
+			fa.stmt(s.Body)
+		} else {
+			fa.problem(s, "a pure function selects on no channel")
+		}
+	default:
+		fa.problem(s, "purity gate: unhandled statement %T", s)
+	}
+}
+
+func (fa *funcAnalysis) madeMark(lhs ast.Expr, rhs ast.Expr) {
+	id, ok := lhs.(*ast.Ident)
+	if !ok {
+		return
+	}
+	obj := fa.info.Defs[id]
+	if obj == nil {
+		obj = fa.info.Uses[id]
+	}
+	if obj == nil {
+		return
+	}
+	if _, ok := ast.Unparen(rhs).(*ast.FuncLit); ok {
+		fa.made[obj] = true
+	}
+	if _, ok := obj.Type().Underlying().(*types.Slice); ok {
+		fa.array[obj] = fa.arrayTainted(rhs)
+	}
+}
+
+func (fa *funcAnalysis) arrayTainted(e ast.Expr) bool {
+	switch x := ast.Unparen(e).(type) {
+	case *ast.CompositeLit:
+		return false
+	case *ast.CallExpr:
+		if id, ok := ast.Unparen(x.Fun).(*ast.Ident); ok {
+			if b, ok := fa.info.Uses[id].(*types.Builtin); ok {
+				switch b.Name() {
+				case "make":
+					return false
+				case "append":
+					if len(x.Args) > 0 {
+						return fa.arrayTainted(x.Args[0])
+					}
+					return false
+				}
+			}
+		}
+		return fa.expr(e)
+	case *ast.SliceExpr:
+		return fa.arrayTainted(x.X)
+	case *ast.Ident:
+		if obj := fa.info.Uses[x]; obj != nil {
+			if t, ok := fa.array[obj]; ok {
+				return t
+			}
+		}
+		return fa.expr(e)
+	default:
+		return fa.expr(e)
+	}
+}
+
+func (fa *funcAnalysis) rhsTaints(rhs []ast.Expr, n int) []bool {
+	out := make([]bool, n)
+	if len(rhs) == n {
+		for i, e := range rhs {
+			out[i] = fa.expr(e)
+		}
+		return out
+	}
+	if len(rhs) == 1 {
+		if call, ok := rhs[0].(*ast.CallExpr); ok {
+			results := fa.call(call)
+			for i := range out {
+				if i < len(results) {
+					out[i] = results[i]
+				}
+			}
+			return out
+		}
+		t := fa.expr(rhs[0])
+		for i := range out {
+			out[i] = t
+		}
+	}
+	return out
+}
+
+func (fa *funcAnalysis) write(lhs ast.Expr, tainted bool, define bool) {
+	if id, ok := lhs.(*ast.Ident); ok {
+		if id.Name == "_" {
+			return
+		}
+		var obj types.Object
+		if define {
+			obj = fa.info.Defs[id]
+		} else {
+			obj = fa.info.Uses[id]
+		}
+		if obj == nil {
+			return
+		}
+		if v, ok := obj.(*types.Var); ok && v.Parent() == fa.pkg.Types.Scope() {
+			if !fa.p.shared {
+				fa.problem(lhs, "a pure function writes no package variable (%s)", id.Name)
+			}
+			return
+		}
+		fa.taint[obj] = tainted
+		return
+	}
+	written, shared := fa.sharedTarget(lhs)
+	if !shared {
+		fa.expr(lhs)
+		return
+	}
+	viaTainted := false
+	if root := rootIdent(lhs); root != nil {
+		if obj := fa.info.Uses[root]; obj != nil {
+			if v, ok := obj.(*types.Var); ok && v.Parent() == fa.pkg.Types.Scope() {
+				if !fa.p.shared {
+					fa.problem(lhs, "a pure function writes no package variable (%s)", root.Name)
+					return
+				}
+				viaTainted = true
+			} else {
+				viaTainted = fa.taint[obj]
+			}
+		}
+		fa.expr(lhs)
+	} else {
+		viaTainted = fa.expr(baseExpr(lhs))
+	}
+	if viaTainted {
+		fa.taintedWrite(lhs, written)
+	}
+}
+
+func (fa *funcAnalysis) taintedWrite(node ast.Node, written *types.TypeName) {
+	if !fa.p.shared {
+		fa.problem(node, "a pure function writes through no input")
+		return
+	}
+	if written != nil && fa.p.closures[written] != nil {
+		fa.writes = append(fa.writes, taintedWrite{typ: written, at: fa.pkg.Fset.Position(node.Pos()).String()})
+	}
+}
+
+func (fa *funcAnalysis) sharedTarget(lhs ast.Expr) (written *types.TypeName, shared bool) {
+	step := func(t types.Type) {
+		shared = true
+		if written == nil {
+			written = structOf(t)
+		}
+	}
+	for {
+		switch x := lhs.(type) {
+		case *ast.ParenExpr:
+			lhs = x.X
+		case *ast.SelectorExpr:
+			if t := fa.info.TypeOf(x.X); t != nil {
+				if ptr, ok := t.Underlying().(*types.Pointer); ok {
+					step(ptr.Elem())
+				}
+			}
+			lhs = x.X
+		case *ast.IndexExpr:
+			if t := fa.info.TypeOf(x.X); t != nil {
+				switch u := t.Underlying().(type) {
+				case *types.Slice:
+					step(u.Elem())
+				case *types.Map:
+					step(u.Elem())
+				case *types.Pointer:
+					step(u.Elem())
+				}
+			}
+			lhs = x.X
+		case *ast.StarExpr:
+			if t := fa.info.TypeOf(x.X); t != nil {
+				if ptr, ok := t.Underlying().(*types.Pointer); ok {
+					step(ptr.Elem())
+				} else {
+					shared = true
+				}
+			}
+			lhs = x.X
+		default:
+			return written, shared
+		}
+	}
+}
+
+func structOf(t types.Type) *types.TypeName {
+	if x, ok := types.Unalias(t).(*types.Named); ok {
+		if _, ok := x.Underlying().(*types.Struct); ok {
+			return x.Obj()
+		}
+	}
+	return nil
+}
+
+func elemOf(t types.Type) types.Type {
+	switch x := types.Unalias(t).Underlying().(type) {
+	case *types.Slice:
+		return x.Elem()
+	case *types.Array:
+		return x.Elem()
+	case *types.Map:
+		return x.Elem()
+	}
+	return t
+}
+
+func (fa *funcAnalysis) mutated(arg ast.Expr) {
+	if !fa.expr(arg) {
+		return
+	}
+	written := structOf(elemOf(fa.info.TypeOf(arg)))
+	if written == nil {
+		written, _ = fa.sharedTarget(arg)
+	}
+	fa.taintedWrite(arg, written)
+}
+
+func baseExpr(e ast.Expr) ast.Expr {
+	for {
+		switch x := e.(type) {
+		case *ast.SelectorExpr:
+			e = x.X
+		case *ast.IndexExpr:
+			e = x.X
+		case *ast.StarExpr:
+			e = x.X
+		case *ast.ParenExpr:
+			e = x.X
+		case *ast.SliceExpr:
+			e = x.X
+		default:
+			return e
+		}
+	}
+}
+
+func rootIdent(e ast.Expr) *ast.Ident {
+	for {
+		switch x := e.(type) {
+		case *ast.Ident:
+			return x
+		case *ast.SelectorExpr:
+			e = x.X
+		case *ast.IndexExpr:
+			e = x.X
+		case *ast.StarExpr:
+			e = x.X
+		case *ast.ParenExpr:
+			e = x.X
+		case *ast.SliceExpr:
+			e = x.X
+		default:
+			return nil
+		}
+	}
+}
+
+func (fa *funcAnalysis) expr(e ast.Expr) bool {
+	switch x := e.(type) {
+	case nil:
+		return false
+	case *ast.Ident:
+		obj := fa.info.Uses[x]
+		if obj == nil {
+			return false
+		}
+		if v, ok := obj.(*types.Var); ok {
+			if v.Parent() == fa.pkg.Types.Scope() || (v.Pkg() != nil && v.Pkg().Scope().Lookup(v.Name()) == v) {
+				if immutableVars[v.Pkg().Path()+"."+v.Name()] {
+					return false
+				}
+				if fa.p.shared {
+					return true
+				}
+				fa.problem(x, "a pure function reads no package variable (%s.%s)", v.Pkg().Path(), v.Name())
+				return false
+			}
+			return fa.taint[obj]
+		}
+		return false
+	case *ast.SelectorExpr:
+		if _, ok := fa.info.Selections[x]; ok {
+			return fa.expr(x.X)
+		}
+		return fa.expr(x.Sel)
+	case *ast.IndexExpr:
+		fa.expr(x.Index)
+		return fa.expr(x.X)
+	case *ast.IndexListExpr:
+		return fa.expr(x.X)
+	case *ast.SliceExpr:
+		for _, i := range []ast.Expr{x.Low, x.High, x.Max} {
+			if i != nil {
+				fa.expr(i)
+			}
+		}
+		return fa.expr(x.X)
+	case *ast.StarExpr:
+		return fa.expr(x.X)
+	case *ast.ParenExpr:
+		return fa.expr(x.X)
+	case *ast.TypeAssertExpr:
+		return fa.expr(x.X)
+	case *ast.UnaryExpr:
+		if x.Op.String() == "<-" && !fa.p.shared {
+			fa.problem(x, "a pure function receives on no channel")
+		}
+		return fa.expr(x.X)
+	case *ast.BinaryExpr:
+		fa.expr(x.X)
+		fa.expr(x.Y)
+		return false
+	case *ast.BasicLit:
+		return false
+	case *ast.CompositeLit:
+		for _, elt := range x.Elts {
+			if kv, ok := elt.(*ast.KeyValueExpr); ok {
+				fa.expr(kv.Value)
+			} else {
+				fa.expr(elt)
+			}
+		}
+		return false
+	case *ast.KeyValueExpr:
+		fa.expr(x.Key)
+		return fa.expr(x.Value)
+	case *ast.FuncLit:
+		for _, field := range x.Type.Params.List {
+			for _, name := range field.Names {
+				if obj := fa.info.Defs[name]; obj != nil {
+					fa.taint[obj] = true
+				}
+			}
+		}
+		saved := fa.results
+		fa.results = make([]bool, x.Type.Results.NumFields())
+		fa.stmts(x.Body.List)
+		fa.results = saved
+		return false
+	case *ast.CallExpr:
+		results := fa.call(x)
+		for _, r := range results {
+			if r {
+				return true
+			}
+		}
+		return false
+	case *ast.ArrayType, *ast.MapType, *ast.StructType, *ast.InterfaceType, *ast.FuncType, *ast.ChanType, *ast.Ellipsis:
+		return false
+	default:
+		fa.problem(e, "purity gate: unhandled expression %T", e)
+		return false
+	}
+}
+
+func isStringToSlice(to, from types.Type) bool {
+	if from == nil {
+		return false
+	}
+	if b, ok := from.Underlying().(*types.Basic); !ok || b.Info()&types.IsString == 0 {
+		return false
+	}
+	sl, ok := to.Underlying().(*types.Slice)
+	if !ok {
+		return false
+	}
+	e, ok := sl.Elem().Underlying().(*types.Basic)
+	return ok && (e.Kind() == types.Byte || e.Kind() == types.Rune || e.Kind() == types.Uint8 || e.Kind() == types.Int32)
+}
+
+func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
+	argTaint := make([]bool, len(x.Args))
+	for i, a := range x.Args {
+		argTaint[i] = fa.expr(a)
+	}
+	anyArg := false
+	for _, t := range argTaint {
+		anyArg = anyArg || t
+	}
+	if tv, ok := fa.info.Types[x.Fun]; ok && tv.IsType() {
+		if len(x.Args) == 1 && isStringToSlice(tv.Type, fa.info.Types[x.Args[0]].Type) {
+			return []bool{false}
+		}
+		return []bool{anyArg}
+	}
+	var fn *types.Func
+	var recvTaint bool
+	switch f := ast.Unparen(x.Fun).(type) {
+	case *ast.Ident:
+		switch obj := fa.info.Uses[f].(type) {
+		case *types.Builtin:
+			return fa.builtin(obj.Name(), x, argTaint)
+		case *types.Func:
+			fn = obj
+		case *types.Var:
+			if !fa.p.shared && !fa.made[obj] {
+				fa.problem(x, "a pure function calls no function value it did not make")
+			}
+			return []bool{anyArg || fa.taint[obj]}
+		default:
+			return []bool{anyArg}
+		}
+	case *ast.SelectorExpr:
+		if sel, ok := fa.info.Selections[f]; ok {
+			recvTaint = fa.expr(f.X)
+			if m, ok := sel.Obj().(*types.Func); ok {
+				fn = m
+			} else {
+				if !fa.p.shared {
+					fa.problem(x, "a pure function calls no function value it did not make")
+				}
+				return []bool{recvTaint || anyArg}
+			}
+		} else if obj, ok := fa.info.Uses[f.Sel].(*types.Func); ok {
+			fn = obj
+		} else {
+			return []bool{anyArg}
+		}
+	case *ast.FuncLit:
+		fa.expr(f)
+		return []bool{anyArg}
+	default:
+		fa.expr(x.Fun)
+		return []bool{anyArg}
+	}
+	fn = fn.Origin()
+	sig := fn.Type().(*types.Signature)
+	n := sig.Results().Len()
+	if recv := sig.Recv(); recv != nil && types.IsInterface(recv.Type()) {
+		return fa.dispatch(fn, sig, recvTaint, argTaint)
+	}
+	if fn.Pkg() == nil {
+		return make([]bool, n)
+	}
+	path := fn.Pkg().Path()
+	if !strings.HasPrefix(path, module) {
+		if fa.p.stdlibUsed == nil {
+			fa.p.stdlibUsed = map[string]bool{}
+			fa.p.stdlibFuncsUsed = map[string]bool{}
+		}
+		fa.p.stdlibUsed[path] = true
+		if idx, ok := stdlibMutators[fn.FullName()]; ok && idx < len(x.Args) {
+			fa.mutated(x.Args[idx])
+		} else if pureStdlibFuncs[fn.FullName()] {
+			fa.p.stdlibFuncsUsed[fn.FullName()] = true
+		} else if !pureStdlib[path] && !fa.p.shared {
+			fa.problem(x, "a pure function calls into no package that keeps state (%s)", fn.FullName())
+		}
+		return make([]bool, n)
+	}
+	if _, has := fa.p.decls[fn]; !has {
+		return make([]bool, n)
+	}
+	params := paramTaints(sig, argTaint)
+	s := fa.p.analyze(fn, recvTaint, params)
+	fa.writes = append(fa.writes, s.writes...)
+	if _, memoized := fa.p.targets[fn]; memoized && fa.p.shared {
+		out := make([]bool, n)
+		for i := range out {
+			out[i] = true
+		}
+		return out
+	}
+	return s.results
+}
+
+func paramTaints(sig *types.Signature, argTaint []bool) []bool {
+	params := make([]bool, sig.Params().Len())
+	for i := range params {
+		if sig.Variadic() && i == len(params)-1 {
+			for j := i; j < len(argTaint); j++ {
+				params[i] = params[i] || argTaint[j]
+			}
+		} else if i < len(argTaint) {
+			params[i] = argTaint[i]
+		}
+	}
+	return params
+}
+
+func (fa *funcAnalysis) dispatch(abstract *types.Func, sig *types.Signature, recvTaint bool, argTaint []bool) []bool {
+	out := make([]bool, sig.Results().Len())
+	for i := range out {
+		out[i] = recvTaint
+	}
+	params := paramTaints(sig, argTaint)
+	for _, impl := range fa.p.implementations(abstract) {
+		s := fa.p.analyze(impl, recvTaint, params)
+		fa.writes = append(fa.writes, s.writes...)
+		for i := range out {
+			if i < len(s.results) && s.results[i] {
+				out[i] = true
+			}
+		}
+	}
+	return out
+}
+
+func (fa *funcAnalysis) builtin(name string, x *ast.CallExpr, argTaint []bool) []bool {
+	switch name {
+	case "append":
+		t := false
+		for _, a := range argTaint {
+			t = t || a
+		}
+		if len(x.Args) > 0 && fa.arrayTainted(x.Args[0]) {
+			written, _ := fa.sharedTarget(x.Args[0])
+			fa.taintedWrite(x.Args[0], written)
+		}
+		return []bool{t}
+	case "copy", "delete", "clear":
+		if len(x.Args) > 0 {
+			fa.mutated(x.Args[0])
+		}
+		return []bool{false}
+	case "len", "cap", "make", "new", "min", "max", "panic", "print", "println", "recover", "complex", "real", "imag":
+		return []bool{false}
+	}
+	return []bool{false}
+}
+
+func (p *purity) immutableVarsNeverAssigned() {
+	for _, pkg := range p.byPath {
+		if !strings.HasPrefix(pkg.PkgPath, module) {
+			continue
+		}
+		for _, f := range pkg.Syntax {
+			ast.Inspect(f, func(n ast.Node) bool {
+				var lhs []ast.Expr
+				switch s := n.(type) {
+				case *ast.AssignStmt:
+					lhs = s.Lhs
+				case *ast.IncDecStmt:
+					lhs = []ast.Expr{s.X}
+				default:
+					return true
+				}
+				for _, l := range lhs {
+					root := rootIdent(l)
+					if root == nil {
+						continue
+					}
+					if v, ok := pkg.TypesInfo.Uses[root].(*types.Var); ok && v.Pkg() != nil && immutableVars[v.Pkg().Path()+"."+v.Name()] {
+						p.problems = append(p.problems, fmt.Sprintf("%s: immutable table %s is assigned", pkg.Fset.Position(l.Pos()), v.Name()))
+					}
+				}
+				return true
+			})
+		}
+	}
+}
+
+// TestImmutableVarsDeclared proves every table immutableVars trusts is a
+// package variable that exists, so a table moved to another package
+// cannot leave the gate trusting a name nothing declares.
+func TestImmutableVarsDeclared(t *testing.T) {
+	p := newPurity(t, gatePackages(t), false)
+	for key := range immutableVars {
+		i := strings.LastIndexByte(key, '.')
+		path, name := key[:i], key[i+1:]
+		pkg := p.byPath[path]
+		if pkg == nil {
+			t.Errorf("immutableVars trusts %s, but package %s is not loaded", key, path)
+			continue
+		}
+		if _, ok := pkg.Types.Scope().Lookup(name).(*types.Var); !ok {
+			t.Errorf("immutableVars trusts %s, which package %s does not declare", key, path)
+		}
+	}
+}
+
+func TestPurityGateBites(t *testing.T) {
+	p := newPurity(t, gatePackages(t), false)
+	pkg := p.byPath[fixtureImpure]
+	if pkg == nil {
+		t.Fatal("fixture not loaded")
+	}
+	for name, want := range map[string]string{
+		"ReadsGlobal":         "reads no package variable",
+		"WritesInput":         "writes through no input",
+		"WritesInputByCallee": "writes through no input",
+		"CallsOS":             "calls into no package that keeps state",
+		"CallsRuntimeCaller":  "calls into no package that keeps state",
+		"Asserts":             "",
+		"WritesResultOfInput": "writes through no input",
+		"SortsInput":          "writes through no input",
+		"CallsInterface":      "writes no package variable",
+		"AppendsToInput":      "writes through no input",
+		"CallsFuncValue":      "calls no function value it did not make",
+		"CallsFuncField":      "calls no function value it did not make",
+		"RecursesThenWrites":  "writes through no input",
+		"Pure":                "",
+		"CallsOwnClosure":     "",
+		"RecursesPurely":      "",
+		"AppendsToOwn":        "",
+		"AppendsToAlias":      "writes through no input",
+	} {
+		p.problems = nil
+		fn := pkg.Types.Scope().Lookup(name).(*types.Func)
+		p.analyze(fn, false, p.allTainted(fn))
+		got := strings.Join(p.problems, "\n")
+		switch {
+		case want == "" && got != "":
+			t.Errorf("%s: pure, yet refused:\n%s", name, got)
+		case want != "" && !strings.Contains(got, want):
+			t.Errorf("%s: want a refusal saying %q, got:\n%s", name, want, got)
+		}
+	}
+}
+
+func TestImmutabilityGateBites(t *testing.T) {
+	p := newPurity(t, gatePackages(t), true)
+	pkg := p.byPath[fixtureMutable]
+	if pkg == nil {
+		t.Fatal("fixture not loaded")
+	}
+	p.producersSet([]*types.Func{pkg.Types.Scope().Lookup("Produce").(*types.Func)})
+	for name, want := range map[string]bool{
+		"Tamper": true, "TamperByCallee": true, "touch": true, "Sorts": true, "Rebuilds": true,
+		"Produce": false, "Fresh": false, "Copies": false, "Reads": false,
+	} {
+		fn := pkg.Types.Scope().Lookup(name).(*types.Func)
+		if got := len(p.writesOutsideProducers(fn)) > 0; got != want {
+			t.Errorf("%s: refused=%v, want %v", name, got, want)
+		}
+	}
+}
+
+// TestNoUnsafeImports proves no package of the three modules reaches
+// for unsafe.
+func TestNoUnsafeImports(t *testing.T) {
+	pkgs := gatePackages(t)
+	if len(pkgs) < 20 {
+		t.Fatalf("only %d packages loaded", len(pkgs))
+	}
+	for _, pkg := range pkgs {
+		if pkg.Imports["unsafe"] != nil {
+			t.Errorf("%s imports unsafe", pkg.PkgPath)
+		}
+	}
+}

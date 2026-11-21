@@ -1,0 +1,12 @@
+// spec/query-routes, spec/routes, a read is routed with get, which ServeMux also serves for HEAD: head on a query route is an error naming get, while a controller route keeps head
+// want: db.PostGet is routed with get, not head: the generated method a query route binds fixes its verb, and ServeMux answers HEAD on a get route (spec/query-routes)
+package app
+
+import (
+	db
+)
+
+scope /api {
+	head /posts/:id(int) db.PostGet
+	head /posts          Posts.Probe
+}

@@ -1,0 +1,863 @@
+==================
+volt: package clause and import block
+==================
+
+package app
+
+import (
+	db
+	d2 shared/dicts
+)
+
+---
+
+(source_file
+  (package_clause
+    (identifier))
+  (import_block
+    (import_spec
+      (import_path
+        (identifier)))
+    (import_spec
+      (import_alias)
+      (import_path
+        (identifier)
+        (identifier)))))
+
+==================
+volt: pipeline with plugs
+==================
+
+pipeline api {
+	use volt.RequestID
+	use BearerAuth
+}
+
+---
+
+(source_file
+  (pipeline_definition
+    (pipeline_name)
+    (plug
+      (go_ref
+        (identifier)
+        (identifier)))
+    (plug
+      (go_ref
+        (identifier)))))
+
+==================
+volt: scope with routes, resources, nesting
+==================
+
+scope / [pipe: api, error_handler: Errors] {
+	get / Home.Index [name: root]
+
+	scope /admin [name: admin] {
+		get /stats Admin.Stats
+	}
+
+	resources db.users [only: (index, show)]
+	dataset db.browse [strip: "da_", except: (da_r_r)]
+
+	get /users/:id(int)/avatar Users.Avatar
+	get /files/:path...          Files.Serve
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (identifier))
+      (setting
+        (setting_name
+          (identifier))
+        (identifier)))
+    (route
+      (verb)
+      (route_path)
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (identifier))))
+    (scope_definition
+      (route_path
+        (path_segment))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (identifier)))
+      (route
+        (verb)
+        (route_path
+          (path_segment))
+        (go_ref
+          (identifier)
+          (identifier))))
+    (resources_declaration
+      (package_name)
+      (table_name)
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (ident_group
+            (identifier)
+            (identifier)))))
+    (dataset_declaration
+      (package_name)
+      (select_name)
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (string
+            (string_content)))
+        (setting
+          (setting_name
+            (identifier))
+          (ident_group
+            (identifier)))))
+    (route
+      (verb)
+      (route_path
+        (path_segment)
+        (path_parameter
+          (parameter_name)
+          (type_name))
+        (path_segment))
+      (go_ref
+        (identifier)
+        (identifier)))
+    (route
+      (verb)
+      (route_path
+        (path_segment)
+        (path_parameter
+          (parameter_name)
+          (wildcard_marker)))
+      (go_ref
+        (identifier)
+        (identifier)))))
+
+==================
+volt: routing beside tables (superset)
+==================
+
+package app
+
+table users {
+	id int [pk]
+}
+
+scope / {
+	get /users/:id(int) Users.Show
+}
+
+---
+
+(source_file
+  (package_clause
+    (identifier))
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))))))
+  (scope_definition
+    (route_path)
+    (route
+      (verb)
+      (route_path
+        (path_segment)
+        (path_parameter
+          (parameter_name)
+          (type_name)))
+      (go_ref
+        (identifier)
+        (identifier)))))
+
+==================
+volt: whitespace splits a route path
+:error
+==================
+
+scope / {
+	get /users /:id Users.Show
+}
+
+---
+
+
+
+==================
+volt: put is not a route verb
+:error
+==================
+
+scope / {
+	put /users/:id(int) Users.Update
+}
+
+---
+
+
+
+==================
+volt: a bare path parameter is a string, (string) is not written
+:error
+==================
+
+scope / {
+	get /tags/:slug(string) Tags.Show
+}
+
+---
+
+
+
+==================
+group block and algebra forms
+==================
+
+group series {
+  ms_revenue
+  ms_usage
+}
+
+group wide = series + ks_costs \ ms_usage
+group farm = Metrics \ (ms_dict, ms_notes)
+
+---
+
+(source_file
+  (group_definition
+    (group_name)
+    (group_member)
+    (group_member))
+  (group_definition
+    (group_name)
+    (group_member)
+    (group_member)
+    (group_member))
+  (group_definition
+    (group_name)
+    (group_member)
+    (group_member)
+    (group_member)))
+
+==================
+pred with composition, in, like, is null
+==================
+
+pred current { org = :org and year = :year }
+pred fresh { current and (year >= :since or year in (2024, 2025)) and not org like "x%" and note is not null }
+pred chosen { org in :orgs }
+
+---
+
+(source_file
+  (pred_definition
+    (pred_name)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name)))
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name)))))
+  (pred_definition
+    (pred_name)
+    (pred_expr
+      (pred_ref)
+      (pred_expr
+        (pred_compare
+          (column_ref)
+          (query_param
+            (parameter_name)))
+        (pred_in
+          (column_ref)
+          (number)
+          (number)))
+      (pred_like
+        (column_ref)
+        (string
+          (string_content)))
+      (pred_null
+        (column_ref))))
+  (pred_definition
+    (pred_name)
+    (pred_expr
+      (pred_in
+        (column_ref)
+        (query_param
+          (parameter_name))))))
+
+==================
+select for group with where and order
+==================
+
+select rows for series where current and year >= 2000 [order: (year desc, id)]
+select all for ms_usage
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_target)
+    (pred_expr
+      (pred_ref)
+      (pred_compare
+        (column_ref)
+        (number)))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
+          (identifier)))))
+  (select_definition
+    (select_name)
+    (select_target)))
+
+==================
+select with an order list spanning lines
+==================
+
+select rows for series [order: (
+  year desc,
+  id asc
+)]
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_target)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
+          (identifier)
+          (ident_modifier
+            (identifier)))))))
+
+==================
+select with a limit, a literal and a parameter
+==================
+
+select top for page_views [order: (hits desc, id asc), limit: 10]
+select page for page_views where day >= :from [order: (day asc, id asc), limit: :limit]
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_target)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
+          (identifier)
+          (ident_modifier
+            (identifier))))
+      (setting
+        (setting_name
+          (identifier))
+        (number))))
+  (select_definition
+    (select_name)
+    (select_target)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name))))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
+          (identifier)
+          (ident_modifier
+            (identifier))))
+      (setting
+        (setting_name
+          (identifier))
+        (query_param
+          (parameter_name))))))
+
+==================
+select projections
+==================
+
+select summary (site, day) for metrics where at
+select public (* \ (password_hash, email)) for accounts
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_projection
+      (column_ref)
+      (column_ref))
+    (select_target)
+    (pred_expr
+      (pred_ref)))
+  (select_definition
+    (select_name)
+    (select_projection
+      (column_ref)
+      (column_ref))
+    (select_target)))
+
+==================
+validators
+==================
+
+table page_views {
+  hits int
+  site string
+
+  validators {
+    CountsPositive(hits)
+    EmailValid(site)
+  }
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))
+    (validators_block
+      (validator
+        (go_ref
+          (identifier))
+        (column_ref))
+      (validator
+        (go_ref
+          (identifier))
+        (column_ref)))))
+
+==================
+volt: an error_handler named bare
+==================
+
+scope / [error_handler: Errors] {
+	get / Home.Index
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (identifier)))
+    (route
+      (verb)
+      (route_path)
+      (go_ref
+        (identifier)
+        (identifier)))))
+
+==================
+volt: a dotted setting value parses, the checker judges it
+==================
+
+scope / [error_handler: app.Errors] {
+	get / Home.Index
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (go_ref
+          (identifier)
+          (identifier))))
+    (route
+      (verb)
+      (route_path)
+      (go_ref
+        (identifier)
+        (identifier)))))
+
+==================
+volt: route with a load block
+==================
+
+scope / {
+	get /charts Pages.Charts [timeout: 5] {
+		metrics  db.MetricOrdered()
+		settings db.SettingGet(1, "x", true)
+	}
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (route
+      (verb)
+      (route_path
+        (path_segment))
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (number)))
+      (load_block
+        (load
+          (load_name)
+          (go_ref
+            (identifier)
+            (identifier)))
+        (load
+          (load_name)
+          (go_ref
+            (identifier)
+            (identifier))
+          (number)
+          (string
+            (string_content))
+          (boolean))))))
+
+==================
+volt: route with a body setting
+==================
+
+scope / {
+	patch /settings/:id(int) Settings.Save [body: db.SettingUpdate(id), only: (unit)]
+	post  /metrics           Metrics.Create [body: db.MetricCreate]
+	post  /login             Session.Login [body: LoginForm]
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (route
+      (verb)
+      (route_path
+        (path_segment)
+        (path_parameter
+          (parameter_name)
+          (type_name)))
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (query_call
+            (go_ref
+              (identifier)
+              (identifier))
+            (identifier)))
+        (setting
+          (setting_name
+            (identifier))
+          (ident_group
+            (identifier)))))
+    (route
+      (verb)
+      (route_path
+        (path_segment))
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (go_ref
+            (identifier)
+            (identifier)))))
+    (route
+      (verb)
+      (route_path
+        (path_segment))
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (identifier))))))
+
+==================
+volt: select with a join and qualified columns
+==================
+
+select recent (id, ts, metric.name) for points join metric join site where ts >= :since and metric.unit = "ms" and site.name is not null [order: (metric.name asc, ts desc)]
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_projection
+      (column_ref)
+      (column_ref)
+      (qualified_column
+        (relation_name)
+        (column_ref)))
+    (select_target)
+    (relation_name)
+    (relation_name)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name)))
+      (pred_compare
+        (qualified_column
+          (relation_name)
+          (column_ref))
+        (string
+          (string_content)))
+      (pred_null
+        (qualified_column
+          (relation_name)
+          (column_ref))))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (qualified_column
+            (relation_name)
+            (column_ref))
+          (ident_modifier
+            (identifier))
+          (identifier)
+          (ident_modifier
+            (identifier)))))))
+
+==================
+volt: select with aggregates and arithmetic
+==================
+
+select hourly (metric_id, ts / 3600 * 3600 as hour, avg(value) as mean, count() as n) for points [group: (metric_id, hour)]
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_projection
+      (column_ref)
+      (derived_item
+        (arith
+          (arith_binary
+            (arith
+              (arith_binary
+                (arith
+                  (column_ref))
+                (arith
+                  (number))))
+            (arith
+              (number))))
+        (alias_name))
+      (derived_item
+        (aggregate
+          (aggregate_name)
+          (column_ref))
+        (alias_name))
+      (derived_item
+        (aggregate
+          (aggregate_name))
+        (alias_name)))
+    (select_target)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (identifier))))))
+
+==================
+volt: select with nested results
+==================
+
+select board for metrics with points where unit = :unit
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_target)
+    (relation_name)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name))))))
+
+==================
+volt: scope with a load
+==================
+
+scope /me {
+	load user CurrentUser
+	get / Me.Show
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path
+      (path_segment))
+    (scope_load
+      (load_name)
+      (go_ref
+        (identifier)))
+    (route
+      (verb)
+      (route_path)
+      (go_ref
+        (identifier)
+        (identifier)))))
+
+==================
+volt: optional parameters and exists terms
+==================
+
+pred before { published_at < :at? or (published_at = :at? and id < :id?) }
+select feed for posts where exists tags (tag in :tags? and not tag = "draft") and before [order: (published_at desc, id desc), limit: :limit]
+
+---
+
+(source_file
+  (pred_definition
+    (pred_name)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name)
+          (optional_marker)))
+      (pred_expr
+        (pred_compare
+          (column_ref)
+          (query_param
+            (parameter_name)
+            (optional_marker)))
+        (pred_compare
+          (column_ref)
+          (query_param
+            (parameter_name)
+            (optional_marker))))))
+  (select_definition
+    (select_name)
+    (select_target)
+    (pred_expr
+      (pred_exists
+        (relation_name)
+        (pred_expr
+          (pred_in
+            (column_ref)
+            (query_param
+              (parameter_name)
+              (optional_marker)))
+          (pred_compare
+            (column_ref)
+            (string
+              (string_content)))))
+      (pred_ref))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
+          (identifier)
+          (ident_modifier
+            (identifier))))
+      (setting
+        (setting_name
+          (identifier))
+        (query_param
+          (parameter_name))))))
+
+==================
+volt: a space before ? leaves the parameter required and the ? an error
+:error
+==================
+
+select feed for posts where id < :id ? [order: (id asc)]
+
+---

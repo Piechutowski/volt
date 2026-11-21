@@ -1,0 +1,1269 @@
+package lang
+
+import (
+	"maps"
+	"strings"
+	"unicode"
+
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/nao/inflect"
+	"github.com/Piechutowski/volt/nao/naming"
+)
+
+type routeFacts struct {
+	pkgName, pkgPath, module string
+	imports                  map[string]string
+}
+
+func (f routeFacts) equal(g routeFacts) bool {
+	return f.pkgName == g.pkgName && f.pkgPath == g.pkgPath && f.module == g.module && maps.Equal(f.imports, g.imports)
+}
+
+type routeEnv interface {
+	dataPackage(path string) (pkgName string, hasSchema, hasSelects bool)
+	tableByName(path, base string) (ti *check.TableInfo, hint string)
+	modelOf(path, key string) (model any, methods []naming.CRUDMethod, err error)
+	crudByName(path, name string) (key string, model any, cm naming.CRUDMethod, ok bool)
+	selectByMethod(path, name string) (sel *SelectInfo, member *check.TableInfo, ok bool)
+	selectByName(path, name string) (si *SelectInfo, hint string)
+	queryHint(path, name string) string
+	columnHandle(path, tableKey, col string) (handle string, ok bool)
+	goType(name string) (underlying string, ok bool)
+}
+
+type lookupKind uint8
+
+const (
+	lkDataPackage lookupKind = iota
+	lkTableByName
+	lkModelOf
+	lkCrudByName
+	lkSelectByMethod
+	lkSelectByName
+	lkQueryHint
+	lkColumnHandle
+	lkGoType
+)
+
+type routeLookup struct {
+	kind       lookupKind
+	path, name string
+
+	pkgName, key, hint, err   string
+	hasSchema, hasSelects, ok bool
+	ti, member                *check.TableInfo
+	sel                       *SelectInfo
+	model                     any
+}
+
+func (l routeLookup) holds(env routeEnv) bool {
+	switch l.kind {
+	case lkDataPackage:
+		n, s, sel := env.dataPackage(l.path)
+		return n == l.pkgName && s == l.hasSchema && sel == l.hasSelects
+	case lkTableByName:
+		ti, hint := env.tableByName(l.path, l.name)
+		return ti == l.ti && hint == l.hint
+	case lkModelOf:
+		model, _, err := env.modelOf(l.path, l.key)
+		return model == l.model && errString(err) == l.err
+	case lkCrudByName:
+		key, model, _, ok := env.crudByName(l.path, l.name)
+		return key == l.key && model == l.model && ok == l.ok
+	case lkSelectByMethod:
+		sel, m, ok := env.selectByMethod(l.path, l.name)
+		return sel == l.sel && m == l.member && ok == l.ok
+	case lkSelectByName:
+		si, hint := env.selectByName(l.path, l.name)
+		return si == l.sel && hint == l.hint
+	case lkQueryHint:
+		return env.queryHint(l.path, l.name) == l.hint
+	case lkColumnHandle:
+		h, ok := env.columnHandle(l.path, l.key, l.name)
+		return h == l.hint && ok == l.ok
+	case lkGoType:
+		u, ok := env.goType(l.name)
+		return u == l.hint && ok == l.ok
+	}
+	return false
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+type routeLowering struct {
+	facts  routeFacts
+	env    routeEnv
+	record bool
+
+	lookups []routeLookup
+	used    []string
+	diags   []diag.Diagnostic
+}
+
+func (l *routeLowering) errorf(pos token.Position, section, format string, args ...any) {
+	l.diags = append(l.diags, diag.Errorf(pos, "spec/"+section, format, args...))
+}
+
+func (l *routeLowering) note(lookup routeLookup) {
+	if l.record {
+		l.lookups = append(l.lookups, lookup)
+	}
+}
+
+func (l *routeLowering) qualify(qual string) (string, qualKind) {
+	path, kind := qualifierResolve(qual, l.facts.pkgName, l.facts.imports)
+	if kind == qualImport {
+		l.used = append(l.used, qual)
+	}
+	return path, kind
+}
+
+func (l *routeLowering) importOf(qual string) (string, bool) {
+	path, ok := l.facts.imports[qual]
+	if ok {
+		l.used = append(l.used, qual)
+	}
+	return path, ok
+}
+
+func (l *routeLowering) dataPackage(path string) (string, bool, bool) {
+	name, hasSchema, hasSelects := l.env.dataPackage(path)
+	l.note(routeLookup{kind: lkDataPackage, path: path, pkgName: name, hasSchema: hasSchema, hasSelects: hasSelects})
+	return name, hasSchema, hasSelects
+}
+
+func (l *routeLowering) tableByName(path, base string) (*check.TableInfo, string) {
+	ti, hint := l.env.tableByName(path, base)
+	l.note(routeLookup{kind: lkTableByName, path: path, name: base, ti: ti, hint: hint})
+	return ti, hint
+}
+
+func (l *routeLowering) modelOf(path, key string) (any, []naming.CRUDMethod, error) {
+	model, methods, err := l.env.modelOf(path, key)
+	l.note(routeLookup{kind: lkModelOf, path: path, key: key, model: model, err: errString(err)})
+	return model, methods, err
+}
+
+func (l *routeLowering) crudByName(path, name string) (string, any, naming.CRUDMethod, bool) {
+	key, model, cm, ok := l.env.crudByName(path, name)
+	l.note(routeLookup{kind: lkCrudByName, path: path, name: name, key: key, model: model, ok: ok})
+	return key, model, cm, ok
+}
+
+func (l *routeLowering) selectByMethod(path, name string) (*SelectInfo, *check.TableInfo, bool) {
+	sel, m, ok := l.env.selectByMethod(path, name)
+	l.note(routeLookup{kind: lkSelectByMethod, path: path, name: name, sel: sel, member: m, ok: ok})
+	return sel, m, ok
+}
+
+func (l *routeLowering) selectByName(path, name string) (*SelectInfo, string) {
+	si, hint := l.env.selectByName(path, name)
+	l.note(routeLookup{kind: lkSelectByName, path: path, name: name, sel: si, hint: hint})
+	return si, hint
+}
+
+func (l *routeLowering) queryHint(path, name string) string {
+	hint := l.env.queryHint(path, name)
+	l.note(routeLookup{kind: lkQueryHint, path: path, name: name, hint: hint})
+	return hint
+}
+
+func itemLower(item ast.Node, inh inherited, facts routeFacts, env routeEnv, record bool) (routes []*RouteInfo, lookups []routeLookup, used []string, diags []diag.Diagnostic) {
+	l := &routeLowering{facts: facts, env: env, record: record}
+	switch item := item.(type) {
+	case *ast.Route:
+		if r := l.route(item, inh); r != nil {
+			routes = []*RouteInfo{r}
+		}
+	case *ast.Resources:
+		routes = l.resources(item, inh)
+	case *ast.Dataset:
+		routes = l.dataset(item, inh)
+	}
+	for _, r := range routes {
+		r.shape = shapeParse(r)
+		r.shapeKey = r.Method + " " + shapeOf(r)
+	}
+	return routes, l.lookups, l.used, l.diags
+}
+
+func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
+	qual, target, local := l.facts.pkgName, l.facts.pkgPath, true
+	qualPos := ds.Name.Pos()
+	if ds.Pkg != nil {
+		qual, qualPos, local = ds.Pkg.Name(), ds.Pkg.Pos(), false
+		var kind qualKind
+		switch target, kind = l.qualify(qual); kind {
+		case qualImport:
+		case qualSelf:
+			l.diags = append(l.diags, selfQualified(ds.Pkg.Pos(), qual, ds.Name.Name()))
+			return nil
+		default:
+			l.errorf(ds.Pkg.Pos(), "datasets", "unknown package qualifier %q (spec/dataset-declaration)", qual)
+			return nil
+		}
+	}
+	_, _, hasSelects := l.dataPackage(target)
+	if local && !hasSelects {
+		l.errorf(ds.Name.Pos(), "datasets", "package %q declares no select; a dataset names a select of this package, or of an imported data package, qualified (spec/dataset-declaration)", target)
+		return nil
+	}
+	si, hint := l.selectByName(target, ds.Name.Name())
+	if si == nil {
+		l.errorf(ds.Name.Pos(), "datasets", "no select %q in package %q%s (spec/dataset-declaration)", ds.Name.Name(), target, hint)
+		return nil
+	}
+
+	strip := ""
+	var only, except map[string]bool
+	var onlyPos, exceptPos token.Position
+	members := map[string]bool{}
+	for _, m := range si.Members {
+		members[m.Decl.Name.Name()] = true
+	}
+	if ds.Settings != nil {
+		repeated, dupDiags := settingsRepeated(ds.Settings, "strip", "only", "except")
+		l.diags = append(l.diags, dupDiags...)
+		for _, s := range ds.Settings.Settings {
+			if repeated[s] {
+				continue
+			}
+			switch s.Name {
+			case "strip":
+				lit, ok := s.Value.(*ast.BasicLit)
+				if !ok || lit.Tok.Kind != token.STRING {
+					l.errorf(s.Pos(), "datasets", "strip: takes a string, the table-name prefix to drop from the URL segment (spec/dataset-settings)")
+					continue
+				}
+				strip = lit.Tok.Val
+			case "only", "except":
+				list, ok := s.Value.(*ast.IdentList)
+				if !ok {
+					l.errorf(s.Pos(), "datasets", "%s: takes a table list like (ms_revenue, ms_usage) (spec/dataset-settings)", s.Name)
+					continue
+				}
+				set := map[string]bool{}
+				for i, id := range list.Names {
+					if list.Mods[i] != nil {
+						l.errorf(list.Mods[i].Pos(), "datasets", "%s: entries are table names; %q does not belong after %q (spec/dataset-settings)", s.Name, list.Mods[i].Name(), id.Name())
+					}
+					if !members[id.Name()] {
+						l.errorf(id.Pos(), "datasets", "%s: %q is not a member of select %q's target (spec/dataset-settings)", s.Name, id.Name(), si.Decl.Name.Name())
+						continue
+					}
+					set[id.Name()] = true
+				}
+				if s.Name == "only" {
+					only, onlyPos = set, s.Pos()
+				} else {
+					except, exceptPos = set, s.Pos()
+				}
+			default:
+				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a dataset (spec/settings-whitelists); valid: strip, only, except", s.Name)
+			}
+		}
+	}
+	if only != nil && except != nil {
+		pos := onlyPos
+		if exceptPos.Line() > onlyPos.Line() || (exceptPos.Line() == onlyPos.Line() && exceptPos.Column() > onlyPos.Column()) {
+			pos = exceptPos
+		}
+		l.errorf(pos, "datasets", "only: and except: cannot both be set on a dataset (spec/dataset-settings)")
+		return nil
+	}
+	if !l.datasetOptionalsRefuse(ds, si, inh.prefix, qual, local) {
+		return nil
+	}
+
+	var out []*RouteInfo
+	for _, m := range si.Members {
+		base := m.Decl.Name.Name()
+		if only != nil && !only[base] {
+			continue
+		}
+		if except[base] {
+			continue
+		}
+		seg := base
+		if strip != "" {
+			if !strings.HasPrefix(base, strip) {
+				l.errorf(ds.Pos(), "datasets", "strip: %q is not a prefix of member table %q (spec/dataset-settings)", strip, base)
+				continue
+			}
+			seg = strings.TrimPrefix(base, strip)
+			if seg == "" || !goIdentOK(seg) {
+				l.errorf(ds.Pos(), "datasets", "strip: %q leaves member table %q with no usable segment (spec/dataset-settings)", strip, base)
+				continue
+			}
+		}
+		segs := append(append([]*ast.Segment{}, inh.prefix...), litSeg(seg, ds.Pos()))
+		params, ok := l.pathParams(segs, len(inh.prefix))
+		if !ok {
+			continue
+		}
+		method := modelOrBase(m) + si.MethodSuffix
+		qr := l.queryBind(ds.Name.Pos(), qualPos, "GET", params, qual, target, local, method, paramAt{at: ds.Pos()})
+		if qr == nil {
+			continue
+		}
+		if !l.scopeLoadKeysRefuse(ds.Pos(), qr, inh.loads, true) {
+			return nil
+		}
+		helper := inh.namePrefix + method
+		out = append(out, &RouteInfo{
+			Method:       "GET",
+			Pattern:      patternOf(segs),
+			Spelled:      spelledOf(segs),
+			Params:       params,
+			Query:        qr,
+			HelperName:   helper,
+			ClientName:   helper,
+			Pipes:        inh.pipes,
+			ErrorHandler: inh.errHandler,
+			Pos:          ds.Pos(),
+			FromDataset:  true,
+			ScopeLoads:   inh.loads,
+		})
+	}
+	return out
+}
+
+// datasetOptionalsRefuse reports, once for the dataset, an optional
+// parameter of its select that no member's route can bind
+// (spec/dataset-declaration): an optional list, or one a scope prefix
+// parameter names.
+func (l *routeLowering) datasetOptionalsRefuse(ds *ast.Dataset, si *SelectInfo, prefix []*ast.Segment, qual string, local bool) bool {
+	ref := ds.Name.Name()
+	if !local {
+		ref = qual + "." + ref
+	}
+	inPrefix := map[string]bool{}
+	for _, seg := range prefix {
+		if seg.Kind != ast.SegLit {
+			inPrefix[seg.Name.Name()] = true
+		}
+	}
+	ok := true
+	for _, p := range si.Params {
+		switch {
+		case !p.Optional:
+		case strings.HasPrefix(p.GoType, "[]"):
+			l.errorf(ds.Name.Pos(), "datasets", "select %s takes the optional list parameter %q, which no dataset's route carries: a missing key and an empty list cannot be told apart in a query string, and an absent list matches every row where an empty one matches none; call the select from Go (spec/dataset-declaration)", ref, p.GoName)
+			ok = false
+		case inPrefix[p.GoName]:
+			l.errorf(ds.Pos(), "datasets", "parameter %q of select %s is optional, and the scope prefix parameter %q is a path segment, always present; declare the dataset in a scope without that prefix parameter, so the key binds from the query string, or name a second select whose parameter is required (spec/dataset-declaration)", p.GoName, ref, p.GoName)
+			ok = false
+		}
+	}
+	return ok
+}
+
+func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
+	method := methodOf(r.Verb())
+	if r.Verb() == "put" {
+		method = l.putReport(r)
+	}
+	l.diags = append(l.diags, stringTypedErrors(r.Path.Segments)...)
+	segs := append(append([]*ast.Segment{}, inh.prefix...), r.Path.Segments...)
+	params, ok := l.pathParams(segs, len(inh.prefix))
+	if !ok {
+		return nil
+	}
+	for _, p := range params {
+		if scopeLoadNamed(inh.loads, p.Name) {
+			l.errorf(r.Path.Pos(), "scope-loads", "path parameter %q takes the name of a scope load above the route (spec/scope-loads, spec/route-paths)", p.Name)
+			return nil
+		}
+	}
+
+	var query *QueryRef
+	events := false
+	controller, action := "", r.Handler.Parts[0].Name()
+	if len(r.Handler.Parts) == 2 {
+		controller, action = action, r.Handler.Parts[1].Name()
+	}
+	target, kind := "", qualUnknown
+	if controller != "" {
+		target, kind = l.qualify(controller)
+	}
+	switch {
+	case kind == qualRuntime:
+		if action != "Events" {
+			l.errorf(r.Handler.Pos(), "scopes-and-routes", "the runtime provides no handler volt.%s; volt.Events is the event stream (spec/event-routes)", action)
+			return nil
+		}
+		if method != "GET" {
+			l.errorf(r.Pos(), "scopes-and-routes", "an event route is read with get (spec/event-routes)")
+			return nil
+		}
+		if len(inh.loads) > 0 {
+			l.errorf(r.Pos(), "scope-loads", "an event route runs no load; %q is loaded by the scope above it (spec/scope-loads, spec/event-routes)", inh.loads[0].Name)
+			return nil
+		}
+		events = true
+	case controller == "":
+		query = l.queryRef(r, method, params, l.facts.pkgName, l.facts.pkgPath, true)
+		if query == nil || !l.scopeLoadKeysRefuse(r.Handler.Pos(), query, inh.loads, false) {
+			return nil
+		}
+		controller, action = "", query.Method
+	case kind == qualSelf:
+		l.diags = append(l.diags, selfQualified(r.Handler.Pos(), controller, action))
+		return nil
+	default:
+		if kind == qualImport {
+			query = l.queryRef(r, method, params, controller, target, false)
+			if query == nil || !l.scopeLoadKeysRefuse(r.Handler.Pos(), query, inh.loads, false) {
+				return nil
+			}
+			controller, action = "", query.Method
+		} else if !exportedIdentOK(controller) || !exportedIdentOK(action) {
+			l.errorf(r.Handler.Pos(), "scopes-and-routes", "handler must be Controller.Action, both exported Go identifiers (spec/handler-references), found %q", r.Handler.String())
+			return nil
+		}
+	}
+
+	helper := inh.namePrefix + action
+	client := ""
+	if s := settingOf(r.Settings, "name"); s != nil {
+		id, ok := s.Value.(*ast.Ident)
+		if !ok {
+			l.errorf(s.Pos(), "scopes-and-routes", "name: takes an identifier (spec/route-names-and-reverse-urls)")
+		} else if n, err := naming.GoName(id.Name()); err != nil {
+			l.errorf(s.Pos(), "scopes-and-routes", "route name %q: %v (spec/route-names-and-reverse-urls)", id.Name(), err)
+		} else {
+			helper = inh.namePrefix + n
+		}
+	}
+	timeout := 0
+	var bodyS, onlyS *ast.Setting
+	if r.Settings != nil {
+		_, dupDiags := settingsRepeated(r.Settings, "name", "timeout", "body", "only")
+		l.diags = append(l.diags, dupDiags...)
+		for _, s := range r.Settings.Settings {
+			switch s.Name {
+			case "name":
+			case "timeout":
+				if events {
+					l.errorf(s.Pos(), "route-loads", "an event route takes no timeout: the runtime serves the stream (spec/route-loads, spec/event-routes)")
+					return nil
+				}
+				timeout, _ = l.timeout(s)
+			case "body":
+				bodyS = s
+			case "only":
+				onlyS = s
+			default:
+				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a route (spec/settings-whitelists); valid: name, timeout, body, only", s.Name)
+			}
+		}
+	}
+	var body *BodyInfo
+	if bodyS != nil || onlyS != nil {
+		if query != nil || events {
+			s := bodyS
+			if s == nil {
+				s = onlyS
+			}
+			l.errorf(s.Pos(), "request-bodies", "%s: belongs to a controller route; %s is %s route, whose handler is generated (spec/request-bodies)", s.Name, r.Handler.String(), routeKindArticled(query, events))
+			return nil
+		}
+		var ok bool
+		if body, ok = l.body(r, params, bodyS, onlyS); !ok {
+			return nil
+		}
+	}
+	var loads []LoadInfo
+	if len(r.Loads) > 0 {
+		if query != nil || events {
+			l.errorf(r.Loads[0].Pos(), "route-loads", "a load block belongs to a controller route; %s is %s route, whose handler is generated (spec/route-loads)", r.Handler.String(), routeKindArticled(query, events))
+			return nil
+		}
+		var ok bool
+		if loads, ok = l.loads(r, params, inh); !ok {
+			return nil
+		}
+	}
+
+	if query != nil {
+		action = ""
+		client = helper
+		if method != "GET" {
+			helper = ""
+		}
+	}
+	if events {
+		client = helper
+	}
+	if r.Verb() == "put" {
+		return nil
+	}
+	return &RouteInfo{
+		Method:       method,
+		Pattern:      patternOf(segs),
+		Spelled:      spelledOf(segs),
+		Params:       params,
+		Controller:   controller,
+		Action:       action,
+		Query:        query,
+		Events:       events,
+		HelperName:   helper,
+		ClientName:   client,
+		Pipes:        inh.pipes,
+		ErrorHandler: inh.errHandler,
+		Body:         body,
+		ScopeLoads:   inh.loads,
+		Loads:        loads,
+		Timeout:      timeout,
+		Pos:          r.Pos(),
+		Doc:          r.Doc.Text(),
+	}
+}
+
+// scopeLoadKeysRefuse reports a parameter of a query route or a dataset
+// that binds from the query string by the name of a scope load above it
+// (spec/scope-loads): the route drops the load's value, so the client
+// would choose the value the name stands for.
+func (l *routeLowering) scopeLoadKeysRefuse(pos token.Position, q *QueryRef, loads []ScopeLoad, dataset bool) bool {
+	what, cite := "a query route", "spec/query-routes"
+	if dataset {
+		what, cite = "a dataset's route", "spec/datasets"
+	}
+	for _, p := range q.Params {
+		if (p.Source == FromQuery || p.Source == FromList) && scopeLoadNamed(loads, p.Name) {
+			l.errorf(pos, "scope-loads", "parameter %q of %s binds from the query string by the name of a scope load above the route, whose value %s drops, so the client would choose it; name the parameter otherwise, or route through a controller that receives the load (spec/scope-loads, %s)", p.Name, q.Method, what, cite)
+			return false
+		}
+	}
+	return true
+}
+
+func routeKindArticled(query *QueryRef, events bool) string {
+	if events {
+		return "an event"
+	}
+	return "a " + routeKind(query, events)
+}
+
+func routeKind(query *QueryRef, events bool) string {
+	if events {
+		return "event"
+	}
+	if query != nil {
+		return "query"
+	}
+	return "controller"
+}
+
+func (l *routeLowering) putReport(r *ast.Route) string {
+	parts := r.Handler.Parts
+	name := parts[len(parts)-1].Name()
+	verb, known, why := "patch", false, ""
+	if len(parts) == 1 {
+		verb, known = l.queryVerb(l.facts.pkgPath, name)
+	} else {
+		switch target, kind := qualifierResolve(parts[0].Name(), l.facts.pkgName, l.facts.imports); kind {
+		case qualRuntime:
+			verb, known = "get", name == "Events"
+			why = "an event route is read with get"
+		case qualImport:
+			verb, known = l.queryVerb(target, name)
+		case qualSelf:
+		default:
+			known = exportedIdentOK(parts[0].Name()) && exportedIdentOK(name)
+		}
+	}
+	if !known {
+		l.errorf(r.Pos(), "routes", "put is not a route verb: the partial update is patch (spec/routes)")
+		return "PATCH"
+	}
+	switch {
+	case why != "":
+	case verb == "patch":
+		why = "the partial update is patch"
+	default:
+		why = r.Handler.String() + " is routed with " + verb
+	}
+	l.errorf(r.Pos(), "routes", "put is not a route verb: %s, so write %s %s %s (spec/routes)", why, verb, pathSpelled(r.Path), r.Handler.String())
+	return strings.ToUpper(verb)
+}
+
+func (l *routeLowering) queryVerb(target, name string) (string, bool) {
+	if _, _, ok := l.selectByMethod(target, name); ok {
+		return strings.ToLower(queryMethods["select"]), true
+	}
+	if _, _, cm, ok := l.crudByName(target, name); ok {
+		return strings.ToLower(queryMethods[cm.Op]), true
+	}
+	return "", false
+}
+
+func pathSpelled(p *ast.RoutePath) string {
+	if len(p.Segments) == 0 {
+		return "/"
+	}
+	var b strings.Builder
+	for _, seg := range p.Segments {
+		b.WriteByte('/')
+		if stringTyped(seg) {
+			b.WriteString(":" + seg.Name.Name())
+		} else {
+			b.WriteString(seg.String())
+		}
+	}
+	return b.String()
+}
+
+var queryValueTypes = map[string]bool{
+	"string": true, "bool": true, "int64": true, "float64": true, "time.Time": true,
+}
+
+func (l *routeLowering) queryRef(r *ast.Route, method string, params []Param, qual, target string, local bool) *QueryRef {
+	last := r.Handler.Parts[len(r.Handler.Parts)-1]
+	return l.queryBind(last.Pos(), r.Handler.Parts[0].Pos(), method, params, qual, target, local, last.Name(), paramAt{route: r})
+}
+
+func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, params []Param, qual, target string, local bool, name string, segAt paramAt) *QueryRef {
+	pkgName, hasSchema, _ := l.dataPackage(target)
+	ref := qual + "." + name
+	if local {
+		ref = name
+	}
+	if !hasSchema {
+		if local {
+			l.errorf(pos, "scopes-and-routes", "package %q declares no tables, so it has no query %s; a query of an imported data package is written qualified (spec/query-routes)", target, name)
+		} else {
+			l.errorf(pos, "scopes-and-routes", "package %q declares no tables; a query route needs a data package (spec/query-routes)", target)
+		}
+		return nil
+	}
+	importPath := l.facts.module
+	if target != "." {
+		importPath += "/" + target
+	}
+	qr := &QueryRef{Qualifier: qual, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200}
+
+	type sigParam struct {
+		name, goType                string
+		body, key, limits, optional bool
+	}
+	var sig []sigParam
+	found, op := false, ""
+	var dropped map[string]bool
+
+	if si, m, ok := l.selectByMethod(target, name); ok {
+		found, op, dropped = true, "select", si.droppedParams
+		for _, p := range si.Params {
+			sig = append(sig, sigParam{name: p.GoName, goType: p.GoType, limits: p.GoName == si.LimitParam, optional: p.Optional})
+		}
+		switch {
+		case si.With != nil:
+			qr.Result = si.With.RowType
+		case si.Shared != "":
+			qr.Result = si.Shared
+		case len(si.Excluded) > 0:
+			qr.Result = name + "Row"
+		default:
+			qr.Result = modelOrBase(m)
+		}
+		qr.Many = !si.Lookup
+	}
+	if !found {
+		if key, _, cm, ok := l.crudByName(target, name); ok {
+			found, op = true, cm.Op
+			for _, k := range cm.Key {
+				sig = append(sig, sigParam{name: k.GoName, goType: k.GoType, key: cm.Op == "update"})
+			}
+			if cm.Body != "" {
+				sig = append(sig, sigParam{name: "cs", goType: qual + "." + cm.Body, body: true})
+				qr.Changeset = &ChangesetBind{Type: cm.Body, Params: cm.Params, New: cm.New, Get: cm.Get, Allow: cm.Allow, Table: key}
+			}
+			qr.Result, qr.Many = cm.Result, cm.Many
+			switch cm.Op {
+			case "create":
+				qr.Status = 201
+			case "delete":
+				qr.Status = 204
+			}
+		}
+	}
+	if !found {
+		hint := l.queryHint(target, name)
+		l.errorf(pos, "scopes-and-routes", "no generated query %s in package %q%s — a query route names a select function or a default CRUD function (Get, List, Create, Update, Delete) (spec/query-routes)", ref, target, hint)
+		return nil
+	}
+
+	byName := map[string]Param{}
+	for _, p := range params {
+		byName[p.Name] = p
+	}
+	bound := map[string]bool{}
+	ok := true
+	if want := queryMethods[op]; method != want {
+		at, written := pos, strings.ToLower(methodOrAny(method))
+		if segAt.route != nil {
+			at, written = segAt.route.Pos(), segAt.route.Verb()
+		}
+		why := "the generated method a query route binds fixes its verb"
+		if method == "HEAD" && want == "GET" {
+			why += ", and ServeMux answers HEAD on a get route"
+		}
+		l.errorf(at, "query-routes", "%s is routed with %s, not %s: %s (spec/query-routes)", ref, strings.ToLower(want), written, why)
+		ok = false
+	}
+	for _, sp := range sig {
+		if sp.goType == "" {
+			if pp, inPath := byName[sp.name]; inPath {
+				bound[sp.name] = true
+				if pp.Wild {
+					l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "parameter %q of %s cannot be a wildcard (spec/query-routes)", sp.name, ref)
+					ok = false
+				}
+			} else if sp.key {
+				l.errorf(pos, "query-routes", "%s loads the row to update by %q, which must be a path parameter of the route (spec/query-routes)", ref, sp.name)
+				ok = false
+			}
+			qr.Unresolved = true
+			continue
+		}
+		qp := QueryParam{Name: sp.name, GoType: sp.goType, Limit: sp.limits, Optional: sp.optional}
+		switch {
+		case sp.body:
+			qp.Source = FromBody
+		case sp.optional:
+			qp.Source = FromQuery
+			pp, inPath := byName[sp.name]
+			if inPath {
+				bound[sp.name] = true
+			}
+			switch {
+			case strings.HasPrefix(sp.goType, "[]"):
+				l.errorf(pos, "query-routes", "%s takes the optional list parameter %q, which a route cannot carry: a missing key and an empty list cannot be told apart in a query string, and an absent list matches every row where an empty one matches none; call the select from Go (spec/query-routes)", ref, sp.name)
+				ok = false
+			case inPath:
+				l.errorf(segAt.pos(pp.Name), "query-routes", "parameter %q of %s is optional, and a path segment is always present; pass it in the query string, or route a second select whose parameter is required (spec/query-routes)", sp.name, ref)
+				ok = false
+			case !queryValueTypes[sp.goType]:
+				l.errorf(pos, "query-routes", "parameter %q of %s is %s, which the query string cannot carry (spec/query-routes)", sp.name, ref, qp.Type())
+				ok = false
+			}
+		case strings.HasPrefix(sp.goType, "[]"):
+			qp.Source = FromList
+			if pp, inPath := byName[sp.name]; inPath {
+				l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "list parameter %q of %s cannot be a path parameter; pass it as a repeated query key (spec/query-routes)", sp.name, ref)
+				ok = false
+			}
+			if !queryValueTypes[strings.TrimPrefix(sp.goType, "[]")] {
+				l.errorf(pos, "query-routes", "list parameter %q of %s is %s, which the query string cannot carry (spec/query-routes)", sp.name, ref, qp.Type())
+				ok = false
+			}
+		default:
+			if pp, inPath := byName[sp.name]; inPath {
+				qp.Source = FromPath
+				bound[sp.name] = true
+				if pp.Wild {
+					l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "parameter %q of %s cannot be a wildcard (spec/query-routes)", sp.name, ref)
+					ok = false
+				} else if pp.Type.GoType() != sp.goType {
+					if t, known := paramTypeOfGo(sp.goType); known {
+						l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "path parameter %q is %s but %s takes %s; spell it %s (spec/query-routes)", sp.name, pp.Type.GoType(), ref, sp.goType, paramSpelled(sp.name, t))
+					} else {
+						l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "parameter %q of %s is %s, which a path segment cannot carry (spec/route-paths); pass it in the query string (spec/query-routes)", sp.name, ref, sp.goType)
+					}
+					ok = false
+				}
+			} else if sp.key {
+				spell := ""
+				if t, known := paramTypeOfGo(sp.goType); known {
+					spell = "; spell it " + paramSpelled(sp.name, t)
+				}
+				l.errorf(pos, "query-routes", "%s loads the row to update by %q, which must be a path parameter of the route%s (spec/query-routes)", ref, sp.name, spell)
+				ok = false
+			} else {
+				qp.Source = FromQuery
+				if !queryValueTypes[sp.goType] {
+					l.errorf(pos, "query-routes", "parameter %q of %s is %s, which the query string cannot carry (spec/query-routes)", sp.name, ref, qp.Type())
+					ok = false
+				}
+			}
+		}
+		qr.Params = append(qr.Params, qp)
+	}
+	for _, p := range params {
+		if !bound[p.Name] {
+			if dropped[p.Name] {
+				continue
+			}
+			l.errorf(segAt.pos(p.Name), "scopes-and-routes", "path parameter %q is not a parameter of %s (spec/query-routes)", p.Name, ref)
+			ok = false
+		}
+	}
+	if !ok {
+		return nil
+	}
+	return qr
+}
+
+func litSeg(n string, at token.Position) *ast.Segment {
+	return &ast.Segment{Kind: ast.SegLit, Name: &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: n, Pos: at}}}
+}
+
+type paramAt struct {
+	route *ast.Route
+	at    token.Position
+}
+
+func (p paramAt) pos(name string) token.Position {
+	if p.route != nil {
+		return segPos(p.route, name)
+	}
+	return p.at
+}
+
+func segPos(r *ast.Route, name string) token.Position {
+	for _, seg := range r.Path.Segments {
+		if seg.Kind != ast.SegLit && seg.Name.Name() == name {
+			return seg.Pos()
+		}
+	}
+	return r.Pos()
+}
+
+func nameStartReported(name string) bool {
+	for _, r := range name {
+		return unicode.IsDigit(r) || unicode.IsMark(r)
+	}
+	return false
+}
+
+func (l *routeLowering) pathParams(segs []*ast.Segment, prefix int) ([]Param, bool) {
+	params, diags, ok := paramsOf(segs, prefix)
+	l.diags = append(l.diags, diags...)
+	return params, ok
+}
+
+func paramsOf(segs []*ast.Segment, prefix int) ([]Param, []diag.Diagnostic, bool) {
+	var params []Param
+	var diags []diag.Diagnostic
+	seen := map[string]bool{}
+	ok := true
+	fail := func(i int, pos token.Position, format string, args ...any) {
+		ok = false
+		if i >= prefix {
+			diags = append(diags, diag.Errorf(pos, "spec/scopes-and-routes", format, args...))
+		}
+	}
+	for i, seg := range segs {
+		if !goIdentOK(seg.Name.Name()) {
+			if !nameStartReported(seg.Name.Name()) {
+				fail(i, seg.Pos(), "path segment %q must be a plain identifier of letters, digits and underscores (spec/route-paths)", seg.Name.Name())
+			}
+			ok = false
+			continue
+		}
+		switch seg.Kind {
+		case ast.SegLit:
+			continue
+		case ast.SegWild:
+			if i != len(segs)-1 {
+				fail(i, seg.Pos(), "the wildcard ':%s...' must be the last path segment (spec/route-paths)", seg.Name.Name())
+			}
+		}
+		name := seg.Name.Name()
+		if seen[name] {
+			fail(i, seg.Pos(), "duplicate path parameter %q (spec/route-paths)", name)
+			continue
+		}
+		seen[name] = true
+		if !goIdentOK(name) || goKeywords[name] {
+			fail(i, seg.Pos(), "path parameter %q must be a valid, non-keyword Go identifier (spec/route-paths)", name)
+			continue
+		}
+		if naming.RouteSignatureName(name) {
+			fail(i, seg.Pos(), "path parameter %q collides with a name in generated signatures (spec/route-paths); reserved: w, r, opts, volt, cs, c, ctx, body", name)
+			continue
+		}
+		pt := TString
+		if seg.Type != nil && !stringTyped(seg) {
+			if seg.Type.Name() != string(TInt) {
+				fail(i, seg.Type.Pos(), "unknown parameter type %q (spec/route-paths); valid: int", seg.Type.Name())
+				continue
+			}
+			pt = TInt
+		}
+		params = append(params, Param{Name: name, GoName: name, Type: pt, Wild: seg.Kind == ast.SegWild})
+	}
+	return params, diags, ok
+}
+
+func paramTypeOfGo(goType string) (ParamType, bool) {
+	switch goType {
+	case TInt.GoType():
+		return TInt, true
+	case TString.GoType():
+		return TString, true
+	}
+	return "", false
+}
+
+func paramSpelled(name string, t ParamType) string {
+	if t == TInt {
+		return ":" + name + "(int)"
+	}
+	return ":" + name
+}
+
+func stringTyped(seg *ast.Segment) bool {
+	return seg.Kind == ast.SegParam && seg.Type != nil && strings.EqualFold(seg.Type.Name(), string(TString))
+}
+
+func stringTypedErrors(segs []*ast.Segment) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	for _, seg := range segs {
+		if stringTyped(seg) {
+			n := seg.Name.Name()
+			out = append(out, diag.Errorf(seg.Type.Pos(), "spec/route-paths", "write :%s, not :%s(%s): a bare path parameter is a string, and int is the one type written (spec/route-paths)", n, n, seg.Type.Name()))
+		}
+	}
+	return out
+}
+
+func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInfo {
+	declared := res.Name.Name()
+	if !goIdentOK(declared) || (res.Pkg != nil && !goIdentOK(res.Pkg.Name())) {
+		l.errorf(res.Name.Pos(), "resources", "resources name %q must be a plain identifier (spec/route-paths)", res.Ref())
+		return nil
+	}
+
+	paramName := "id"
+
+	def := false
+	if res.Settings != nil {
+		if s := res.Settings.Get("default"); s != nil {
+			def = true
+			if s.Value != nil {
+				l.errorf(s.Pos(), "resources", "default is a flag and takes no value (spec/default-handlers)")
+			}
+		}
+	}
+
+	ti, ok, reported := l.resourceTable(res)
+	if reported {
+		return nil
+	}
+	if !ok {
+		return nil
+	}
+	tableName, singular := ti.Decl.Name.Name(), ""
+	if model, err := naming.ModelName(ti.Decl); err == nil {
+		singular = model
+	}
+	keyType, ok := l.pkParamType(ti, res.Name.Pos())
+	if !ok {
+		return nil
+	}
+
+	controller, err := naming.GoName(tableName)
+	if err != nil {
+		l.errorf(res.Name.Pos(), "resources", "resources %q: %v (spec/declaration)", declared, err)
+		return nil
+	}
+	if singular == "" {
+		singularRaw, _ := inflect.SingularLast(tableName)
+		singular, err = naming.GoName(singularRaw)
+		if err != nil {
+			singular = controller
+		}
+	}
+	api := false
+	var only, except map[string]bool
+	var onlyPos, exceptPos token.Position
+
+	if res.Settings != nil {
+		repeated, dupDiags := settingsRepeated(res.Settings, "api", "only", "except", "param", "singular", "default")
+		l.diags = append(l.diags, dupDiags...)
+		for _, s := range res.Settings.Settings {
+			if repeated[s] {
+				continue
+			}
+			switch s.Name {
+			case "api":
+				if s.Value != nil {
+					l.errorf(s.Pos(), "resources", "api is a flag and has no value (spec/settings)")
+				}
+				api = true
+			case "default":
+				api = true
+			case "only", "except":
+				list, ok := s.Value.(*ast.IdentList)
+				if !ok {
+					l.errorf(s.Pos(), "resources", "%s: takes an action list like (index, show) (spec/settings)", s.Name)
+					continue
+				}
+				for i, mod := range list.Mods {
+					if mod != nil {
+						l.errorf(mod.Pos(), "resources", "%s: entries are single action names; %q does not belong after %q (spec/settings)", s.Name, mod.Name(), list.Names[i].Name())
+					}
+				}
+				set := map[string]bool{}
+				for _, id := range list.Names {
+					canon, known := actionByLower[id.Name()]
+					if !known {
+						l.errorf(id.Pos(), "resources", "unknown action %q (spec/the-action-table); valid: index, new, create, show, edit, update, delete", id.Name())
+						continue
+					}
+					set[canon] = true
+				}
+				if s.Name == "only" {
+					only, onlyPos = set, s.Pos()
+				} else {
+					except, exceptPos = set, s.Pos()
+				}
+			case "singular":
+				id, ok := s.Value.(*ast.Ident)
+				if !ok || !goIdentOK(id.Name()) {
+					l.errorf(s.Pos(), "resources", "singular: takes an identifier (spec/settings)")
+					continue
+				}
+				gn, err := naming.GoName(id.Name())
+				if err != nil {
+					l.errorf(s.Pos(), "resources", "singular: %v (spec/settings)", err)
+					continue
+				}
+				singular = gn
+			case "param":
+				if def {
+					l.errorf(s.Pos(), "resources", "param: does not apply with [default]; the key parameter is named by the primary-key column, as the generated CRUD spells it (spec/default-handlers)")
+					continue
+				}
+				id, ok := s.Value.(*ast.Ident)
+				if !ok || !goIdentOK(id.Name()) || goKeywords[id.Name()] || naming.RouteSignatureName(id.Name()) {
+					l.errorf(s.Pos(), "resources", "param: takes a valid, non-keyword, non-reserved Go identifier (spec/settings, spec/route-paths)")
+					continue
+				}
+				paramName = id.Name()
+			case "model":
+				l.errorf(s.Pos(), "resources", "model: is not a setting; name the table in the declaration itself — `resources <table>` (spec/declaration)")
+			default:
+				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on resources (spec/settings-whitelists); valid: api, only, except, param, singular, default", s.Name)
+			}
+		}
+	}
+	if only != nil && except != nil {
+		l.errorf(exceptPos, "resources", "only: and except: cannot be combined (spec/settings)")
+		_ = onlyPos
+		except = nil
+	}
+
+	var crud map[string]naming.CRUDMethod
+	qual, target, local := l.facts.pkgName, l.facts.pkgPath, true
+	qualPos := res.Name.Pos()
+	if res.Pkg != nil {
+		qual, local = res.Pkg.Name(), false
+		target, _ = l.importOf(res.Pkg.Name())
+		qualPos = res.Pkg.Pos()
+	}
+	if def {
+		_, methods, err := l.modelOf(target, ti.Key)
+		if err != nil {
+			l.errorf(res.Name.Pos(), "resources", "resources %s [default]: %v (spec/default-handlers)", res.Ref(), err)
+			return nil
+		}
+		crud = map[string]naming.CRUDMethod{}
+		for _, cm := range methods {
+			crud[cm.Op] = cm
+			if len(cm.Key) == 1 {
+				paramName = cm.Key[0].GoName
+			}
+		}
+	}
+
+	for _, seg := range inh.prefix {
+		if seg.Kind != ast.SegParam || seg.Name.Name() != paramName {
+			continue
+		}
+		if def {
+			l.errorf(res.Name.Pos(), "resources", "resources %s [default]: the key parameter %q is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (spec/default-handlers, spec/route-paths)", res.Ref(), paramName)
+		} else {
+			l.errorf(res.Name.Pos(), "resources", "resources %q: the key parameter %q is already a parameter of the enclosing scope; rename it with [param: <name>] (spec/settings, spec/route-paths)", declared, paramName)
+		}
+		return nil
+	}
+
+	nameSeg := func(n string) *ast.Segment { return litSeg(n, res.Pos()) }
+	idSeg := &ast.Segment{Kind: ast.SegParam, MarkPos: res.Pos(),
+		Name: &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: paramName, Pos: res.Pos()}}}
+	if keyType == TInt {
+		idSeg.Type = &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: string(keyType), Pos: res.Pos()}}
+	}
+
+	var out []*RouteInfo
+	for _, a := range resourceActions {
+		if api && !a.API {
+			continue
+		}
+		if only != nil && !only[a.Name] {
+			continue
+		}
+		if except != nil && except[a.Name] {
+			continue
+		}
+		segs := append(append([]*ast.Segment{}, inh.prefix...), nameSeg(tableName))
+		if a.OnID {
+			segs = append(segs, idSeg)
+		}
+		if a.Suffix != "" {
+			segs = append(segs, nameSeg(strings.TrimPrefix(a.Suffix, "/")))
+		}
+		params, ok := l.pathParams(segs, len(inh.prefix))
+		if !ok {
+			continue
+		}
+		for i := range params {
+			if keyType == tUnresolved && a.OnID && params[i].Name == paramName {
+				params[i].Type = tUnresolved
+			}
+		}
+		helper := ""
+		switch a.Name {
+		case "Index":
+			helper = inh.namePrefix + controller
+		case "Show":
+			helper = inh.namePrefix + singular
+		case "New":
+			helper = inh.namePrefix + "New" + singular
+		case "Edit":
+			helper = inh.namePrefix + "Edit" + singular
+		}
+		var qr *QueryRef
+		client := ""
+		if def {
+			cm, has := crud[a.Op]
+			if !has {
+				l.errorf(res.Name.Pos(), "resources", "resources %s [default]: the generated CRUD has no %s method for %q (%s); drop the action with except: (%s) (spec/default-handlers)",
+					res.Ref(), a.Op, a.Name, crudAbsent(a.Op), strings.ToLower(a.Name))
+				continue
+			}
+			qr = l.queryBind(res.Name.Pos(), qualPos, a.Method, params, qual, target, local, cm.Name, paramAt{at: res.Pos()})
+			if qr == nil {
+				continue
+			}
+			switch a.Name {
+			case "Index", "Show":
+				client = helper
+			default:
+				client = inh.namePrefix + a.Name + singular
+			}
+		}
+		r := &RouteInfo{
+			Method:       a.Method,
+			Pattern:      patternOf(segs),
+			Spelled:      spelledOf(segs),
+			Params:       params,
+			Controller:   controller,
+			Action:       a.Name,
+			Query:        qr,
+			HelperName:   helper,
+			ClientName:   client,
+			Pipes:        inh.pipes,
+			ErrorHandler: inh.errHandler,
+			Pos:          res.Pos(),
+
+			FromResources: true,
+			ScopeLoads:    inh.loads,
+			Table:         tableName,
+			collection:    a.Name == "Index",
+		}
+		if qr != nil {
+			r.Controller, r.Action = "", ""
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+func crudAbsent(op string) string {
+	if op == "update" {
+		return "every column is part of the key, so there is nothing to update"
+	}
+	return "the table has no primary key"
+}
+
+func (l *routeLowering) resourceTable(res *ast.Resources) (ti *check.TableInfo, ok, reported bool) {
+	pkgPath := l.facts.pkgPath
+	if res.Pkg != nil {
+		qual := res.Pkg.Name()
+		target, kind := l.qualify(qual)
+		switch kind {
+		case qualImport:
+		case qualSelf:
+			l.diags = append(l.diags, selfQualified(res.Pkg.Pos(), qual, res.Name.Name()))
+			return nil, false, true
+		default:
+			l.errorf(res.Pkg.Pos(), "resources", "unknown package qualifier %q (spec/declaration)", qual)
+			return nil, false, true
+		}
+		pkgPath = target
+	}
+	if _, hasSchema, _ := l.dataPackage(pkgPath); !hasSchema {
+		l.errorf(res.Name.Pos(), "resources", "package %q declares no tables; resources names a table of this package, or of an imported data package, qualified (spec/declaration)", pkgPath)
+		return nil, false, true
+	}
+	want := res.Name.Name()
+	if cand, hint := l.tableByName(pkgPath, want); cand != nil {
+		return cand, true, false
+	} else {
+		l.errorf(res.Name.Pos(), "resources", "no table %q in package %q%s (spec/declaration)", want, pkgPath, hint)
+	}
+	return nil, false, true
+}
+
+func (l *routeLowering) pkParamType(ti *check.TableInfo, pos token.Position) (ParamType, bool) {
+	var pkNames []string
+	for _, cd := range ti.PK() {
+		pkNames = append(pkNames, cd.Col.Name.Name())
+	}
+	switch {
+	case len(pkNames) == 0:
+		l.errorf(pos, "resources", "table %q has no single-column primary key (spec/table-resolution)", ti.Key)
+		return "", false
+	case len(pkNames) > 1:
+		l.errorf(pos, "resources", "table %q has a composite primary key (%s); composite keys are not routable (spec/table-resolution)", ti.Key, strings.Join(pkNames, ", "))
+		return "", false
+	}
+	cd := ti.Column(pkNames[0])
+	if cd == nil {
+		l.errorf(pos, "resources", "table %q primary-key column %q not found (spec/table-resolution)", ti.Key, pkNames[0])
+		return "", false
+	}
+	pk := cd.Col
+	if !cd.Type.Known() {
+		return tUnresolved, true
+	}
+	t, routable := paramTypeOfGo(cd.Type.Go)
+	if !routable {
+		l.errorf(pos, "resources", "primary-key type %q of table %q cannot be a route parameter (spec/table-resolution); routable: int, string", pk.Type.String(), ti.Key)
+		return "", false
+	}
+	return t, true
+}
+
+func (l *routeLowering) columnHandle(path, tableKey, col string) (string, bool) {
+	h, ok := l.env.columnHandle(path, tableKey, col)
+	l.note(routeLookup{kind: lkColumnHandle, path: path, key: tableKey, name: col, hint: h, ok: ok})
+	return h, ok
+}
+
+func (l *routeLowering) goType(name string) (string, bool) {
+	u, ok := l.env.goType(name)
+	l.note(routeLookup{kind: lkGoType, name: name, hint: u, ok: ok})
+	return u, ok
+}

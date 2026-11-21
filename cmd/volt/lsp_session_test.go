@@ -1,0 +1,274 @@
+package main
+
+import (
+	"bufio"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Piechutowski/volt/lsp"
+)
+
+var update = flag.Bool("update", false, "rewrite the goldens and lower the style ledger")
+
+func TestLSPServe(t *testing.T) {
+	if os.Getenv("VOLT_LSP_SERVE") != "1" {
+		t.Skip("the server side of TestLSPSession")
+	}
+	if err := lsp.NewServer().RunStdio(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type lspSession struct {
+	t      *testing.T
+	stdin  io.WriteCloser
+	msgs   chan map[string]any
+	id     int
+	root   string
+	script strings.Builder
+}
+
+func (s *lspSession) send(method string, params any, request bool) int {
+	m := map[string]any{"jsonrpc": "2.0", "method": method, "params": params}
+	id := 0
+	if request {
+		s.id++
+		id = s.id
+		m["id"] = id
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	fmt.Fprintf(s.stdin, "Content-Length: %d\r\n\r\n%s", len(b), b)
+	return id
+}
+
+func (s *lspSession) record(label string, m map[string]any) {
+	b, err := json.Marshal(m)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	text := strings.ReplaceAll(string(b), s.root, "ROOT")
+	fmt.Fprintf(&s.script, "%s\n%s\n\n", label, text)
+}
+
+func (s *lspSession) next() map[string]any {
+	select {
+	case m, ok := <-s.msgs:
+		if !ok {
+			s.t.Fatal("the server closed its output")
+		}
+		return m
+	case <-time.After(30 * time.Second):
+		s.t.Fatal("no message from the server in 30s")
+	}
+	return nil
+}
+
+func (s *lspSession) response(label string, id int) {
+	for {
+		m := s.next()
+		if got, ok := m["id"]; ok && got == float64(id) {
+			s.record(label, m)
+			return
+		}
+		s.record(label+" (before the response)", m)
+	}
+}
+
+func (s *lspSession) notification(label, method string) {
+	for {
+		m := s.next()
+		s.record(label, m)
+		if m["method"] == method {
+			return
+		}
+	}
+}
+
+func TestLSPSession(t *testing.T) {
+	root := t.TempDir()
+	root, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"go.mod":       "module session\n\ngo 1.27\n",
+		"app/title.go": "package app\n\n// TitleShape keeps a title non-blank.\nfunc TitleShape(title string) error { return nil }\n",
+		"app/home.go":  "package app\n\nimport \"github.com/Piechutowski/volt\"\n\n// Home answers the front page.\ntype Home struct{}\n\n// Index renders the front page.\nfunc (Home) Index(r volt.Request) volt.Response { return volt.NoContent() }\n",
+		"app/schema.volt": `package app
+
+table posts {
+	id int [pk, autoincrement]
+	title string
+
+	validators {
+		TitleShape(title)
+	}
+}
+
+scope / {
+	get / Home.Index
+	resources posts
+}
+
+migration 0001__posts {
+	table_create posts {
+		id int [pk, autoincrement]
+		title string
+	}
+}
+`,
+	}
+	for name, text := range files {
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestLSPServe$")
+	cmd.Env = append(os.Environ(), "VOLT_LSP_SERVE=1")
+	cmd.Dir = root
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer cmd.Wait()
+	s := &lspSession{t: t, stdin: stdin, msgs: make(chan map[string]any, 100), root: root}
+	go func() {
+		rd := bufio.NewReader(stdout)
+		defer close(s.msgs)
+		for {
+			length := 0
+			for {
+				line, err := rd.ReadString('\n')
+				if err != nil {
+					return
+				}
+				line = strings.TrimSpace(line)
+				if line == "" {
+					break
+				}
+				if strings.HasPrefix(line, "Content-Length: ") {
+					length, _ = strconv.Atoi(strings.TrimPrefix(line, "Content-Length: "))
+				}
+			}
+			body := make([]byte, length)
+			if _, err := io.ReadFull(rd, body); err != nil {
+				return
+			}
+			var m map[string]any
+			if err := json.Unmarshal(body, &m); err != nil {
+				return
+			}
+			s.msgs <- m
+		}
+	}()
+
+	path := filepath.Join(root, "app", "schema.volt")
+	uri := "file://" + path
+	text := files["app/schema.volt"]
+	doc := func(version int) map[string]any {
+		return map[string]any{"uri": uri, "version": version}
+	}
+	change := func(label string, version int, edited string) {
+		s.send("textDocument/didChange", map[string]any{"textDocument": doc(version),
+			"contentChanges": []map[string]any{{"text": edited}}}, false)
+		s.notification(label, "textDocument/publishDiagnostics")
+	}
+	typed := func(label string, version, line, character int, inserted string) {
+		at := map[string]any{"line": line, "character": character}
+		s.send("textDocument/didChange", map[string]any{"textDocument": doc(version),
+			"contentChanges": []map[string]any{{"range": map[string]any{"start": at, "end": at}, "text": inserted}}}, false)
+		s.notification(label, "textDocument/publishDiagnostics")
+	}
+
+	id := s.send("initialize", map[string]any{"processId": os.Getpid(), "rootUri": "file://" + root,
+		"capabilities": map[string]any{}}, true)
+	s.response("initialize", id)
+	s.send("initialized", map[string]any{}, false)
+	s.send("textDocument/didOpen", map[string]any{"textDocument": map[string]any{"uri": uri, "languageId": "volt", "version": 1, "text": text}}, false)
+	s.notification("open: a clean file", "textDocument/publishDiagnostics")
+
+	broken := strings.Replace(text, "[pk, autoincrement]", "[pk, autoincrement", 1)
+	change("edit 1: a settings list left open", 2, broken)
+	typo := strings.Replace(text, "get / Home.Index", "gett / Home.Index", 1) + "\ntable tags {\n\tid int [pk]\n}\n"
+	change("edit 2: a verb misspelled, a table added", 3, typo)
+	change("edit 3: the verb fixed", 4, strings.Replace(typo, "gett /", "get /", 1))
+	typed("edit 4: a doc comment typed above the new table, as a ranged change", 5, 23, 0, "// Tags readers filter by.\n")
+
+	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 2, "character": 7}}, true)
+	s.response("hover on the table name", id)
+	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 24, "character": 7}}, true)
+	s.response("hover on the documented new table", id)
+	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 13, "character": 12}}, true)
+	s.response("hover on the resources table", id)
+	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 16, "character": 12}}, true)
+	s.response("hover on the migration name", id)
+	id = s.send("textDocument/definition", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 13, "character": 12}}, true)
+	s.response("definition from the resources table", id)
+	id = s.send("textDocument/definition", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 7, "character": 4}}, true)
+	s.response("definition from a validator into its Go function", id)
+	id = s.send("textDocument/definition", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 12, "character": 13}}, true)
+	s.response("definition from a route's action into its Go method", id)
+	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 12, "character": 13}}, true)
+	s.response("hover on a route's action", id)
+	id = s.send("textDocument/completion", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 3, "character": 21}}, true)
+	s.response("completion inside the settings list", id)
+	id = s.send("textDocument/documentSymbol", map[string]any{"textDocument": map[string]any{"uri": uri}}, true)
+	s.response("document symbols", id)
+	id = s.send("shutdown", nil, true)
+	s.response("shutdown", id)
+	s.send("exit", nil, false)
+	stdin.Close()
+
+	golden := filepath.Join("testdata", "lsp_session.golden")
+	got := s.script.String()
+	if *update {
+		if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("%v (run with -update to write it)", err)
+	}
+	if string(want) != got {
+		wl, gl := strings.Split(string(want), "\n"), strings.Split(got, "\n")
+		n := len(gl)
+		if len(wl) < n {
+			n = len(wl)
+		}
+		for i := 0; i < n; i++ {
+			if wl[i] != gl[i] {
+				t.Fatalf("session differs at line %d:\n--- golden\n%s\n--- got\n%s\n(run with -update after reading the diff)", i+1, wl[i], gl[i])
+			}
+		}
+		t.Fatalf("session differs in length: golden %d lines, got %d (run with -update after reading the diff)", len(wl), len(gl))
+	}
+}

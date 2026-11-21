@@ -1,0 +1,276 @@
+==================
+comments everywhere
+==================
+
+// leading comment
+table t { // trailing
+  // above
+  id int // after
+  name string
+}
+
+---
+
+(source_file
+  (comment)
+  (table_definition
+    (table_name
+      (identifier))
+    (comment)
+    (comment)
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))
+    (comment)
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))))
+
+==================
+string escapes
+==================
+
+table t {
+  a text [default: "it's fine"]
+  b string [default: "tab\there, \"b\" \\ c"]
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (string
+            (string_content)))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (string
+            (string_content)))))))
+
+==================
+triple-quoted string with inner quotes and lines
+==================
+
+table t {
+  a text [default: """
+    line one
+    ""quoted"" and "one" don't, \"\"\" too
+  """]
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (string
+            (string_content)))))))
+
+==================
+expression literal spanning lines
+==================
+
+table t {
+  a timestamp [default: `now()
+    - interval '5 days'`]
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (expression
+            (expression_content)))))))
+
+==================
+numbers: integer, decimal, exponent, negative default
+==================
+
+table t {
+  a int [default: 42]
+  b float64 [default: 3.14]
+  c float64 [default: 1e2]
+  d float64 [default: 3.14e-5]
+  e int [default: -100]
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (number))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (number))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (number))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (number))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (signed_number
+            (number)))))))
+
+==================
+a quoted name is an error
+:error
+==================
+
+table "user accounts" {
+  id int
+}
+
+---
+
+==================
+single quotes delimit no string
+:error
+==================
+
+table t [model: 'a model'] {
+  id int
+}
+
+---
+
+==================
+an unknown escape is an error
+:error
+==================
+
+table t [model: "no \q escape"] {
+  id int
+}
+
+---
+
+==================
+a backslash before a line break is an error in a string
+:error
+==================
+
+table t [model: "one line \
+continued"] {
+  id int
+}
+
+---
+
+==================
+a block comment is an error
+:error
+==================
+
+table t {
+  id int
+}
+/* not a comment */
+
+---
+
+==================
+a color literal is an error
+:error
+==================
+
+table t [model: #fff] {
+  id int
+}
+
+---
+
+

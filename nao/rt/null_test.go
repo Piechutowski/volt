@@ -1,0 +1,125 @@
+package rt
+
+import (
+	"encoding/json"
+	"testing"
+	"time"
+)
+
+// TestNullTimeScansText proves a nullable time.Time reads the text
+// SQLite answers for min or max of a date/time column, in each layout a
+// driver writes, as the instant it names in UTC, and refuses text that is
+// no date/time (spec/selects-over-groups, spec/go-types).
+func TestNullTimeScansText(t *testing.T) {
+	want := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	for _, text := range []string{"2026-03-01 12:00:00+00:00", "2026-03-01T12:00:00Z", "2026-03-01 12:00:00", "2026-03-01 12:00"} {
+		var n Null[time.Time]
+		if err := n.Scan(text); err != nil || !n.Valid || !n.V.Equal(want) {
+			t.Errorf("Scan(%q) = %+v, %v", text, n, err)
+		}
+		var b Null[time.Time]
+		if err := b.Scan([]byte(text)); err != nil || !b.V.Equal(want) {
+			t.Errorf("Scan([]byte %q) = %+v, %v", text, b, err)
+		}
+	}
+	var off Null[time.Time]
+	if err := off.Scan("2026-03-01 14:00:00.5+02:00"); err != nil || !off.V.Equal(want.Add(500*time.Millisecond)) || off.V.Location() != time.UTC {
+		t.Errorf("an offset text = %+v, %v", off, err)
+	}
+	var bad Null[time.Time]
+	if err := bad.Scan("yesterday"); err == nil || bad.Valid {
+		t.Errorf("Scan(yesterday) = %+v, want an error", bad)
+	}
+	var null Null[time.Time]
+	if err := null.Scan(nil); err != nil || null.Valid {
+		t.Errorf("Scan(nil) = %+v, %v", null, err)
+	}
+	var native Null[time.Time]
+	if err := native.Scan(want); err != nil || !native.V.Equal(want) {
+		t.Errorf("Scan(time.Time) = %+v, %v", native, err)
+	}
+}
+
+func TestNullScan(t *testing.T) {
+	var s Null[string]
+	if err := s.Scan("hi"); err != nil || !s.Valid || s.V != "hi" {
+		t.Errorf("Scan(hi) = %+v, %v", s, err)
+	}
+	if err := s.Scan(nil); err != nil || s.Valid {
+		t.Errorf("Scan(nil) = %+v, %v", s, err)
+	}
+
+	var i Null[int64]
+	if err := i.Scan(int64(42)); err != nil || !i.Valid || i.V != 42 {
+		t.Errorf("Scan(42) = %+v, %v", i, err)
+	}
+
+	type status string
+	var st Null[status]
+	if err := st.Scan([]byte("open")); err != nil || st.V != "open" {
+		t.Errorf("Scan([]byte) = %+v, %v", st, err)
+	}
+
+	type flag bool
+	var f Null[flag]
+	if err := f.Scan(int64(1)); err != nil || !f.Valid || !bool(f.V) {
+		t.Errorf("Scan(int64 1) into a named bool = %+v, %v", f, err)
+	}
+	if err := f.Scan(nil); err != nil || f.Valid || bool(f.V) {
+		t.Errorf("Scan(nil) into a named bool = %+v, %v", f, err)
+	}
+	if err := f.Scan("maybe"); err == nil {
+		t.Errorf("Scan(maybe) into a named bool = %+v, want an error", f)
+	}
+
+	var ts Null[time.Time]
+	now := time.Now()
+	if err := ts.Scan(now); err != nil || !ts.V.Equal(now) {
+		t.Errorf("Scan(time) = %+v, %v", ts, err)
+	}
+}
+
+func TestNullValue(t *testing.T) {
+	v, err := Some("x").Value()
+	if err != nil || v != "x" {
+		t.Errorf("Some(x).Value() = %v, %v", v, err)
+	}
+	v, err = Null[string]{}.Value()
+	if err != nil || v != nil {
+		t.Errorf("zero.Value() = %v, %v", v, err)
+	}
+}
+
+func TestNullJSON(t *testing.T) {
+	type row struct {
+		Name  Null[string] `json:"name"`
+		Score Null[int]    `json:"score"`
+	}
+	got, err := json.Marshal(row{Name: Some("ann")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"name":"ann","score":null}`; string(got) != want {
+		t.Errorf("Marshal = %s, want %s", got, want)
+	}
+
+	var back row
+	if err := json.Unmarshal([]byte(`{"name":null,"score":7}`), &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.Name.Valid || !back.Score.Valid || back.Score.V != 7 {
+		t.Errorf("Unmarshal = %+v", back)
+	}
+}
+
+func TestNullHelpers(t *testing.T) {
+	if got := (Null[int]{}).Or(9); got != 9 {
+		t.Errorf("zero.Or(9) = %d", got)
+	}
+	if got := Some(3).Or(9); got != 3 {
+		t.Errorf("Some(3).Or(9) = %d", got)
+	}
+	if v, ok := Some("a").Get(); !ok || v != "a" {
+		t.Errorf("Some(a).Get() = %q, %v", v, ok)
+	}
+}

@@ -1,0 +1,93 @@
+==================
+project is an ordinary name: a table and a column named project
+==================
+
+table project {
+  project string
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))))
+
+==================
+type declarations: imported Go type with storage and path, bare type of the package
+==================
+
+type money.Money int from "example.com/app/money"
+type png.Png []byte from "image/png"
+type Slug string
+
+---
+
+(source_file
+  (type_definition
+    (type_name
+      (package_name
+        (identifier))
+      (identifier))
+    (column_type
+      (type_name
+        (identifier)))
+    (string
+      (string_content)))
+  (type_definition
+    (type_name
+      (package_name
+        (identifier))
+      (identifier))
+    (column_type
+      (type_name
+        (identifier)))
+    (string
+      (string_content)))
+  (type_definition
+    (type_name
+      (identifier))
+    (column_type
+      (type_name
+        (identifier)))))
+
+==================
+an Enum element is an error
+:error
+==================
+
+Enum status {
+  active
+}
+
+---
+
+
+
+==================
+use is not an element
+:error
+==================
+
+use * from './base'
+
+---
+
+
+
+==================
+type name takes no slice prefix
+:error
+==================
+
+type []Slug string
+
+---
+
+

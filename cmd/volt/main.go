@@ -1,0 +1,710 @@
+// Command volt is the framework's one binary: the CLI front end over
+// the lang package and both generators — nao's models and queries for
+// data packages, routers for routing packages. Its subcommands
+// are check, vet, gen, migration, routes, stress, lsp and version.
+//
+// Exit status: 0 clean (warnings do not fail), 1 errors found
+// (diagnostics, drift, a migration SQLite refuses), 2 usage or I/O
+// problems (a database that cannot be opened among them).
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"go/format"
+	"go/parser"
+	"go/token"
+	"io"
+	"maps"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"sort"
+	"strings"
+
+	"github.com/urfave/cli/v3"
+	"golang.org/x/tools/go/packages"
+
+	"github.com/Piechutowski/volt/gen/model"
+	"github.com/Piechutowski/volt/gen/router"
+	"github.com/Piechutowski/volt/internal/corpus"
+	"github.com/Piechutowski/volt/internal/disk"
+	"github.com/Piechutowski/volt/internal/par"
+	"github.com/Piechutowski/volt/lang"
+	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lsp"
+)
+
+const version = "0.1.0-dev"
+
+func main() {
+	if err := command().Run(context.Background(), os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+}
+
+func command() *cli.Command {
+	jsonFlag := &cli.BoolFlag{Name: "json", Usage: "emit diagnostics as JSON"}
+
+	return &cli.Command{
+		EnableShellCompletion: true,
+		Name:                  "volt",
+		Usage:                 "the Volt language: check, lint and generate routers from .volt packages",
+		Commands: []*cli.Command{
+			{
+				Name:      "check",
+				Usage:     "load the named packages and run semantic analysis (docs/spec.md Part II)",
+				ArgsUsage: "[packages]",
+				Flags:     []cli.Flag{jsonFlag},
+				Action: func(_ context.Context, c *cli.Command) error {
+					return modeRun(c, "check")
+				},
+			},
+			{
+				Name:      "vet",
+				Usage:     "check plus warnings for legal-but-suspicious Volt",
+				ArgsUsage: "[packages]",
+				Flags: []cli.Flag{
+					jsonFlag,
+					&cli.BoolFlag{Name: "werror", Usage: "treat warnings as errors in the exit status"},
+				},
+				Action: func(_ context.Context, c *cli.Command) error {
+					return modeRun(c, "vet")
+				},
+			},
+			{
+				Name:      "gen",
+				Usage:     "generate Go for the named packages: models and queries for data packages, routers for routing packages. Packages as in Go: none = the current directory, dir, or dir/... for everything beneath",
+				ArgsUsage: "[packages]",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "models-only", Aliases: []string{"m"}, Usage: "emit only volt_models.go; skip the query layers"},
+					&cli.BoolFlag{Name: "sql", Usage: "also write volt_schema.sql (SQLite DDL and seed inserts)"},
+					&cli.BoolFlag{Name: "verify", Usage: "prove every generated Go file is gofmt-canonical and type-checks in its package before writing (a generator self-check)"},
+					&cli.StringFlag{Name: "o", Usage: "write into `DIR` instead of the package directory (one package); the client lands beside the models as volt_client.go"},
+					&cli.StringFlag{Name: "parts", Usage: "comma-separated `LIST` of what to write: models, queries (the query layers and volt_migrations.go), router, client, sql (default: every Go part)"},
+					&cli.StringFlag{Name: "package", Usage: "package clause of the written files (default: the clause of DIR's Go files, else the Volt package's name)"},
+				},
+				Action: func(ctx context.Context, c *cli.Command) error {
+					return genRun(ctx, c)
+				},
+			},
+			migrationCommand(),
+			{
+				Name:      "routes",
+				Usage:     "print the expanded route table (verb, path, handler, helper)",
+				ArgsUsage: "[packages]",
+				Action: func(_ context.Context, c *cli.Command) error {
+					return routesRun(c)
+				},
+			},
+			stressCommand(),
+			{
+				Name:  "lsp",
+				Usage: "run the Volt language server (LSP over stdin/stdout)",
+				Action: func(context.Context, *cli.Command) error {
+					return lsp.NewServer().RunStdio()
+				},
+			},
+			{
+				Name:  "version",
+				Usage: "report the tool version",
+				Action: func(_ context.Context, _ *cli.Command) error {
+					fmt.Println("volt", version)
+					return nil
+				},
+			},
+		},
+	}
+}
+
+func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagnostic, err error) {
+	args := c.Args().Slice()
+	if len(args) == 0 {
+		args = []string{"."}
+	}
+	root := ""
+	var dirs []string
+	for _, arg := range args {
+		pattern := filepath.ToSlash(arg)
+		base := arg
+		if strings.HasSuffix(base, ".volt") {
+			if st, err := os.Stat(base); err == nil && !st.IsDir() {
+				base = filepath.Dir(base)
+				pattern = filepath.ToSlash(base)
+			}
+		}
+		recursive := false
+		if strings.HasSuffix(pattern, "/...") || pattern == "..." {
+			recursive = true
+			base = filepath.FromSlash(strings.TrimSuffix(strings.TrimSuffix(pattern, "..."), "/"))
+			if base == "" {
+				base = "."
+			}
+		}
+		r, err := lang.FindRoot(disk.Source{}, base)
+		if err != nil {
+			return nil, nil, nil, cli.Exit(err.Error(), 2)
+		}
+		if root == "" {
+			root = r
+		} else if root != r {
+			return nil, nil, nil, cli.Exit(fmt.Sprintf("%s belongs to a different project (%s); one project per invocation", arg, r), 2)
+		}
+		if recursive {
+			found, err := lang.PackageDirs(disk.Source{}, root, base)
+			if err != nil {
+				return nil, nil, nil, cli.Exit(err.Error(), 2)
+			}
+			if len(found) == 0 {
+				return nil, nil, nil, cli.Exit(fmt.Sprintf("no Volt packages under %s", base), 2)
+			}
+			dirs = append(dirs, found...)
+		} else {
+			dirs = append(dirs, base)
+		}
+	}
+	pr, err = lang.LoadDirs(disk.Source{}, root, dirs, nil)
+	if err != nil {
+		return nil, nil, nil, cli.Exit(err.Error(), 2)
+	}
+	seen := map[string]bool{}
+	for _, d := range dirs {
+		if pkg := pr.PackageAt(d); pkg != nil && !seen[pkg.Path] {
+			seen[pkg.Path] = true
+			named = append(named, pkg.Path)
+		}
+	}
+	return pr, named, lang.Check(pr), nil
+}
+
+func modeRun(c *cli.Command, mode string) error {
+	pr, _, diags, err := load(c)
+	if err != nil {
+		return err
+	}
+	if mode == "vet" {
+		diags = append(diags, lang.Vet(pr)...)
+		diag.Sort(diags)
+	}
+	if c.Bool("json") {
+		if err := diagsPrintJSON(diags); err != nil {
+			return cli.Exit(err.Error(), 2)
+		}
+	} else {
+		for _, d := range diags {
+			fmt.Println(d)
+		}
+	}
+	if diag.HasErrors(diags) || (mode == "vet" && c.Bool("werror") && len(diags) > 0) {
+		return cli.Exit("", 1)
+	}
+	return nil
+}
+
+func diagsPrintJSON(all []diag.Diagnostic) error {
+	type jsonDiag struct {
+		File     string `json:"file"`
+		Line     int    `json:"line"`
+		Column   int    `json:"column"`
+		Severity string `json:"severity"`
+		Code     string `json:"code"`
+		Message  string `json:"message"`
+	}
+	out := make([]jsonDiag, 0, len(all))
+	for _, d := range all {
+		out = append(out, jsonDiag{
+			File: d.Pos.Filename(), Line: int(d.Pos.Line()), Column: int(d.Pos.Column()),
+			Severity: d.Severity.String(), Code: d.Code, Message: d.Msg,
+		})
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(out)
+}
+
+func genRun(ctx context.Context, c *cli.Command) error {
+	parts, err := partsParse(c.String("parts"), c.Bool("models-only"), c.Bool("sql"))
+	if err != nil {
+		return cli.Exit("gen: "+err.Error(), 2)
+	}
+	pr, named, diags, err := load(c)
+	if err != nil {
+		return err
+	}
+	if diag.HasErrors(diags) {
+		for _, d := range diags {
+			fmt.Println(d)
+		}
+		return cli.Exit("gen: project has errors; fix them first (see 'volt check')", 1)
+	}
+
+	paths := append([]string(nil), named...)
+	sort.Strings(paths)
+
+	for _, path := range paths {
+		pkg := pr.Packages[path]
+		if pkg.Schema() == nil || len(pkg.Schema().Migrations) == 0 {
+			continue
+		}
+		ms, err := migrationsLowered("gen: package "+pkg.Path+": ", pkg)
+		if err != nil {
+			return err
+		}
+		if err := sqliteGuard(sqliteDriver); err != nil {
+			return err
+		}
+		drifts, err := foldCheck(ctx, pkg, ms)
+		if err != nil {
+			return migrationExit("gen: package "+pkg.Path+": ", err)
+		}
+		if len(drifts) > 0 {
+			driftReport(os.Stdout, pkg, drifts)
+			return cli.Exit(fmt.Sprintf("gen: package %s: the schema and its migrations drift; write the migration that closes it (see 'volt migration check %s')", pkg.Path, pkg.Dir), 1)
+		}
+	}
+
+	outDir := c.String("o")
+	if outDir != "" && len(paths) != 1 {
+		return cli.Exit(fmt.Sprintf("gen: -o writes one package; %d named", len(paths)), 2)
+	}
+	if outDir != "" && (parts["models"] || parts["queries"] || parts["router"] || parts["client"]) {
+		for _, path := range paths {
+			if err := bareTypesTravel(pr.Packages[path], outDir); err != nil {
+				return err
+			}
+		}
+	}
+	clause := c.String("package")
+	if outDir != "" && clause == "" {
+		clause = goPackageName(outDir)
+	}
+	dirOf := func(pkg *lang.Package) string {
+		if outDir != "" {
+			return outDir
+		}
+		return pkg.Dir
+	}
+
+	var out []outFile
+
+	emit := func(pkg *lang.Package) ([]outFile, error) {
+		var files []outFile
+		source := "package " + pkg.Path
+		dir := dirOf(pkg)
+
+		if pkg.HasSchema() && (parts["models"] || parts["queries"] || parts["sql"]) {
+			gen, err := model.Generate(pkg, model.Options{
+				Source: source, Package: clause, ModelsOnly: !parts["queries"], SQL: parts["sql"],
+			})
+			if err != nil {
+				return nil, err
+			}
+			for _, name := range slices.Sorted(maps.Keys(gen)) {
+				if parts[partOf(name)] {
+					files = append(files, outFile{path: filepath.Join(dir, name), code: gen[name]})
+				}
+			}
+		}
+
+		if pkg.HasRouting() && (parts["router"] || parts["client"]) {
+			gen, err := router.Generate(pkg, router.Options{Source: source, Package: clause, ClientBeside: outDir != ""})
+			if err != nil {
+				return nil, err
+			}
+			for _, name := range append(append([]string{}, router.Files...), router.ClientBesideFile) {
+				if code, ok := gen[name]; ok && parts[partOf(name)] {
+					files = append(files, outFile{path: filepath.Join(dir, name), code: code})
+				}
+			}
+		}
+		return files, nil
+	}
+	perPkg := make([][]outFile, len(paths))
+	errs := make([]error, len(paths))
+	par.For(len(paths), func(i int) { perPkg[i], errs[i] = emit(pr.Packages[paths[i]]) })
+	for i := range paths {
+		if errs[i] != nil {
+			return cli.Exit("gen: "+errs[i].Error(), 1)
+		}
+		out = append(out, perPkg[i]...)
+	}
+	if len(out) == 0 {
+		fmt.Println("gen: no package declares data or routing elements; nothing to do")
+		return nil
+	}
+
+	if c.Bool("verify") {
+		problems := make([]string, len(out))
+		par.For(len(out), func(i int) {
+			f := out[i]
+			if filepath.Ext(f.path) != ".go" {
+				return
+			}
+			formatted, err := format.Source(f.code)
+			if err != nil {
+				problems[i] = fmt.Sprintf("gen --verify: %s does not parse: %v (a generator bug)", f.path, err)
+			} else if !bytes.Equal(formatted, f.code) {
+				problems[i] = fmt.Sprintf("gen --verify: %s is not gofmt-canonical (a generator bug)", f.path)
+			}
+		})
+		for _, p := range problems {
+			if p != "" {
+				return cli.Exit(p, 2)
+			}
+		}
+		if p := outputsTypeCheck(out); p != "" {
+			return cli.Exit(p, 2)
+		}
+	}
+
+	clobber := make([]string, len(out))
+	par.For(len(out), func(i int) {
+		f := &out[i]
+		old, err := os.ReadFile(f.path)
+		if err != nil {
+			return
+		}
+		if !bytes.HasPrefix(old, genMarker(f.path)) {
+			clobber[i] = f.path
+			return
+		}
+		f.unchanged = bytes.Equal(old, f.code)
+	})
+	for _, path := range clobber {
+		if path != "" {
+			return cli.Exit(fmt.Sprintf("gen: refusing to overwrite %s: it lacks the generated-code header", path), 2)
+		}
+	}
+	produced := map[string]bool{}
+	for _, f := range out {
+		produced[f.path] = true
+	}
+	for _, path := range paths {
+		pkg := pr.Packages[path]
+		var stales []string
+		if pkg.HasSchema() && parts["queries"] {
+			stales = append(stales, "volt_selects.go", "volt_validate.go", "volt_migrations.go")
+		}
+		if !pkg.HasRouting() {
+			for _, name := range router.Files {
+				if name != router.ClientFile && parts["router"] {
+					stales = append(stales, name)
+				}
+			}
+			if parts["client"] {
+				if outDir != "" {
+					stales = append(stales, router.ClientBesideFile)
+				} else {
+					stales = append(stales, router.ClientFile)
+				}
+			}
+		}
+		for _, name := range stales {
+			stale := filepath.Join(dirOf(pkg), name)
+			if produced[stale] {
+				continue
+			}
+			if genMarked(stale) {
+				if err := os.Remove(stale); err != nil {
+					return cli.Exit(err.Error(), 2)
+				}
+				fmt.Println(stale, "(removed: no longer generated)")
+			}
+		}
+	}
+	dirs := map[string]bool{}
+	for _, f := range out {
+		dirs[filepath.Dir(f.path)] = true
+	}
+	for _, dir := range slices.Sorted(maps.Keys(dirs)) {
+		for _, name := range []string{"nao_models.go", "nao_queries.go", "nao_dyn.go", "nao_validate.go", "nao_selects.go", "nao_schema.sql"} {
+			old := filepath.Join(dir, name)
+			if genMarked(old) {
+				if err := os.Remove(old); err != nil {
+					return cli.Exit(err.Error(), 2)
+				}
+				fmt.Println(old, "(removed: generated files are named volt_*)")
+			}
+		}
+	}
+	writes := make([]error, len(out))
+	par.For(len(out), func(i int) {
+		f := out[i]
+		if f.unchanged {
+			return
+		}
+		if err := os.MkdirAll(filepath.Dir(f.path), 0o755); err != nil {
+			writes[i] = err
+			return
+		}
+		writes[i] = os.WriteFile(f.path, f.code, 0o644)
+	})
+	for i, f := range out {
+		if writes[i] != nil {
+			return cli.Exit(writes[i].Error(), 2)
+		}
+		if f.unchanged {
+			fmt.Println(f.path, "(unchanged)")
+			continue
+		}
+		fmt.Println(f.path)
+	}
+	return nil
+}
+
+func genMarker(path string) []byte {
+	if filepath.Ext(path) == ".sql" {
+		return []byte("-- Code generated ")
+	}
+	return []byte("// Code generated ")
+}
+
+type outFile struct {
+	path      string
+	code      []byte
+	unchanged bool
+}
+
+func outputsTypeCheck(out []outFile) string {
+	byDir := map[string]map[string][]byte{}
+	var dirs []string
+	generated := map[string]bool{}
+	for _, f := range out {
+		if filepath.Ext(f.path) != ".go" {
+			continue
+		}
+		dir := filepath.Dir(f.path)
+		if byDir[dir] == nil {
+			byDir[dir] = map[string][]byte{}
+			dirs = append(dirs, dir)
+		}
+		abs, err := filepath.Abs(f.path)
+		if err != nil {
+			return "gen --verify: " + err.Error()
+		}
+		byDir[dir][abs] = f.code
+		generated[abs] = true
+	}
+	sort.Strings(dirs)
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "gen --verify: " + err.Error()
+		}
+		cfg := &packages.Config{
+			Mode:    packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo | packages.NeedImports,
+			Dir:     dir,
+			Overlay: byDir[dir],
+		}
+		pkgs, err := packages.Load(cfg, ".")
+		if err != nil {
+			return fmt.Sprintf("gen --verify: %s: %v", dir, err)
+		}
+		for _, pkg := range pkgs {
+			for _, e := range pkg.Errors {
+				file := e.Pos
+				if i := strings.IndexByte(file, ':'); i >= 0 {
+					file = file[:i]
+				}
+				if generated[file] {
+					return fmt.Sprintf("gen --verify: %v (a generator bug)", e)
+				}
+				return fmt.Sprintf("gen --verify: %v (the package the output lands in does not type-check; fix it first)", e)
+			}
+		}
+	}
+	return ""
+}
+
+func genMarked(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	marker := genMarker(path)
+	buf := make([]byte, len(marker))
+	if _, err := io.ReadFull(f, buf); err != nil {
+		return false
+	}
+	return bytes.Equal(buf, marker)
+}
+
+func routesRun(c *cli.Command) error {
+	pr, named, diags, err := load(c)
+	if err != nil {
+		return err
+	}
+	if diag.HasErrors(diags) {
+		for _, d := range diags {
+			fmt.Println(d)
+		}
+		return cli.Exit("routes: project has errors; fix them first (see 'volt check')", 1)
+	}
+	paths := append([]string(nil), named...)
+	sort.Strings(paths)
+	for _, path := range paths {
+		pkg := pr.Packages[path]
+		if len(pkg.Routes) == 0 {
+			continue
+		}
+		fmt.Printf("package %s\n", pkg.Path)
+		for _, r := range pkg.Routes {
+			fmt.Printf("  %s\n", r)
+		}
+	}
+	return nil
+}
+
+var genParts = []string{"models", "queries", "router", "client", "sql"}
+
+func partsParse(list string, modelsOnly, sql bool) (map[string]bool, error) {
+	parts := map[string]bool{}
+	if list == "" {
+		parts["models"] = true
+		parts["queries"], parts["router"], parts["client"] = !modelsOnly, true, true
+	} else {
+		for _, p := range strings.Split(list, ",") {
+			p = strings.TrimSpace(p)
+			if !slices.Contains(genParts, p) {
+				return nil, fmt.Errorf("unknown part %q in -parts; the parts are %s", p, strings.Join(genParts, ", "))
+			}
+			parts[p] = true
+		}
+	}
+	if sql {
+		parts["sql"] = true
+	}
+	return parts, nil
+}
+
+func partOf(name string) string {
+	switch base := filepath.Base(name); {
+	case base == "volt_models.go":
+		return "models"
+	case base == "volt_schema.sql":
+		return "sql"
+	case base == "volt_queries.go", base == "volt_dyn.go", base == "volt_validate.go", base == "volt_selects.go", base == "volt_migrations.go":
+		return "queries"
+	case base == "volt_client.go":
+		return "client"
+	default:
+		return "router"
+	}
+}
+
+func bareTypesTravel(pkg *lang.Package, outDir string) error {
+	if pkg.Schema() == nil {
+		return nil
+	}
+	if abs, err := filepath.Abs(outDir); err == nil && filepath.Clean(abs) == filepath.Clean(pkg.Dir) {
+		return nil
+	}
+	for _, td := range pkg.Schema().Types {
+		if td.Path != "" {
+			continue
+		}
+		return cli.Exit(fmt.Sprintf("gen: -o %s: type %s of package %s is declared in that package's own Go files, which do not travel to %s; declare it in a package of its own and write type pkg.%s %s from \"its/import/path\" (spec/types)",
+			outDir, td.Key, pkg.Path, outDir, td.Key, td.Storage.Storage), 2)
+	}
+	return nil
+}
+
+func goPackageName(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	fset := token.NewFileSet()
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.PackageClauseOnly)
+		if err != nil {
+			continue
+		}
+		return f.Name.Name
+	}
+	return ""
+}
+
+func stressCommand() *cli.Command {
+	return &cli.Command{
+		Name:      "stress",
+		Usage:     "write a one-file stress project of every language feature (default: 10000 tables of 150 columns) to time check, gen, the language server and the Go compiler by hand",
+		ArgsUsage: "DIR",
+		Flags: []cli.Flag{
+			&cli.IntFlag{Name: "tables", Value: 10000, Usage: "`N` tables, chained by a relation, each routed and in the group select"},
+			&cli.IntFlag{Name: "columns", Value: 150, Usage: "`N` data columns per table"},
+			&cli.StringFlag{Name: "volt", Usage: "Volt checkout `DIR` the project builds against (default: where the working directory's module resolves github.com/Piechutowski/volt, if it does)"},
+		},
+		Action: func(_ context.Context, c *cli.Command) error {
+			return stressRun(c)
+		},
+	}
+}
+
+func stressRun(c *cli.Command) error {
+	if c.Args().Len() != 1 {
+		return cli.Exit("stress: one argument, the directory to write", 2)
+	}
+	dir := c.Args().First()
+	spec := corpus.Spec{Tables: c.Int("tables"), Columns: c.Int("columns"), Single: true, Volt: c.String("volt")}
+	if refusal := stressSpecRefusal(spec); refusal != "" {
+		return cli.Exit("stress: "+refusal, 2)
+	}
+	if spec.Volt == "" {
+		spec.Volt = voltModuleDir()
+	}
+	entries, err := os.ReadDir(dir)
+	switch {
+	case err == nil && len(entries) > 0:
+		return cli.Exit(fmt.Sprintf("stress: %s is not empty; the project goes into a new or empty directory", dir), 2)
+	case err != nil && !os.IsNotExist(err):
+		return cli.Exit("stress: "+err.Error(), 2)
+	}
+	if err := corpus.Write(dir, spec); err != nil {
+		return cli.Exit("stress: "+err.Error(), 2)
+	}
+	fmt.Printf("stress: %d tables of %d columns in %s\n", spec.Tables, spec.Columns, filepath.Join(dir, "schema.volt"))
+	fmt.Printf("  volt check %s\n  volt gen --sql %s\n", dir, dir)
+	if spec.Volt == "" {
+		fmt.Println("  (no Volt checkout found; pass -volt DIR and the project builds)")
+	} else {
+		fmt.Printf("  go build -C %s ./...\n", dir)
+	}
+	fmt.Printf("  open %s in the editor\n", dir)
+	return nil
+}
+
+const sqliteTableColumnsMax = 2000
+
+func stressSpecRefusal(spec corpus.Spec) string {
+	if spec.Tables < 1 {
+		return "-tables is at least 1"
+	}
+	if spec.Columns < 1 {
+		return "-columns is at least 1"
+	}
+	columnsMax := sqliteTableColumnsMax - corpus.ColumnsBeyondData
+	if spec.Columns > columnsMax {
+		return fmt.Sprintf(
+			"-columns is at most %d: SQLite holds %d columns in a table, and each stress table adds %d",
+			columnsMax, sqliteTableColumnsMax, corpus.ColumnsBeyondData,
+		)
+	}
+	return ""
+}
+
+func voltModuleDir() string {
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/Piechutowski/volt").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}

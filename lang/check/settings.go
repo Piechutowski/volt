@@ -1,0 +1,347 @@
+// Settings validation (spec/settings-lists): per-construct whitelists, value shapes, and
+// the at-most-once rule.
+package check
+
+import (
+	"strings"
+
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/token"
+)
+
+type valueKind int
+
+const (
+	flagOnly valueKind = iota
+	strValue
+	exprValue
+	actionValue
+	defaultVal
+	refVal
+	nameValue
+)
+
+type settingSpec struct {
+	kinds      map[string]valueKind
+	repeatable map[string]bool
+	conflicts  [][2]string
+	// forbidden maps a setting name to the diagnostic it gets: a
+	// setting known elsewhere that this construct refuses for a reason.
+	forbidden map[string]string
+}
+
+var (
+	tableSettings = settingSpec{
+		kinds: map[string]valueKind{"model": strValue},
+	}
+	columnSettings = settingSpec{
+		kinds: map[string]valueKind{
+			"pk": flagOnly, "null": flagOnly,
+			"unique": flagOnly, "index": flagOnly, "autoincrement": flagOnly,
+			"default": defaultVal,
+			"ref":     refVal, "tag": strValue,
+			"required": flagOnly,
+		},
+		repeatable: map[string]bool{"tag": true},
+		conflicts:  [][2]string{{"required", "default"}, {"unique", "index"}},
+	}
+	indexSettings = settingSpec{
+		kinds: map[string]valueKind{
+			"name":   strValue,
+			"unique": flagOnly,
+			"where":  exprValue,
+		},
+		forbidden: map[string]string{"pk": pkNotIndexSetting("indexes")},
+	}
+	refSettings = settingSpec{
+		kinds: map[string]valueKind{"delete": actionValue, "update": actionValue, "as": nameValue, "reverse": nameValue},
+	}
+)
+
+// pkNotIndexSetting is the diagnostic of pk on an index, citing section
+// (spec/indexes, spec/migrations).
+func pkNotIndexSetting(section string) string {
+	return "pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (spec/" + section + ")"
+}
+
+func (c *checker) settingsCheck(sl *ast.SettingList, section string, spec settingSpec) {
+	if sl == nil {
+		return
+	}
+	seen := map[string]bool{}
+	for _, s := range sl.Settings {
+		if why, bad := spec.forbidden[s.Name]; bad {
+			c.errorf(s.Pos(), section, "%s", why)
+			continue
+		}
+		kind, known := spec.kinds[s.Name]
+		if !known {
+			c.errorf(s.Pos(), section, "unknown setting %q (spec/%s)", s.Name, section)
+			continue
+		}
+		if seen[s.Name] && !spec.repeatable[s.Name] {
+			c.errorf(s.Pos(), "settings-lists", "setting %q may appear at most once (spec/settings-lists)", s.Name)
+		}
+		seen[s.Name] = true
+		c.settingValueCheck(s, section, kind)
+	}
+	for _, pair := range spec.conflicts {
+		if seen[pair[0]] && seen[pair[1]] {
+			c.errorf(sl.Pos(), section, "%q and %q cannot both be set (spec/%s)", pair[0], pair[1], section)
+		}
+	}
+}
+
+func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKind) {
+	switch kind {
+	case flagOnly:
+		if s.Value != nil {
+			c.errorf(s.Pos(), section, "%q must not have a value (spec/%s)", s.Name, section)
+		}
+		return
+	default:
+		if s.Value == nil {
+			c.errorf(s.Pos(), section, "%q requires a value (spec/%s)", s.Name, section)
+			return
+		}
+	}
+	switch kind {
+	case strValue:
+		if !isString(s.Value) {
+			c.errorf(s.Value.Pos(), section, "%q must be a string (spec/%s)", s.Name, section)
+		}
+	case exprValue:
+		if _, ok := s.Value.(*ast.FuncExpr); !ok {
+			c.errorf(s.Value.Pos(), section, "%q must be a backtick expression (spec/%s)", s.Name, section)
+		}
+	case actionValue:
+		if _, ok := s.Value.(*ast.Ident); !ok {
+			c.errorf(s.Value.Pos(), section, "%q must be a referential action: cascade, restrict, null_set or default_set (spec/%s)", s.Name, section)
+		}
+	case nameValue:
+		if _, ok := s.Value.(*ast.Ident); !ok {
+			c.errorf(s.Value.Pos(), section, "%q takes a name (spec/%s)", s.Name, section)
+		}
+	case defaultVal:
+		c.defaultValueCheck(s)
+	case refVal:
+		ep, ok := s.Value.(*ast.RefEndpoint)
+		if !ok {
+			c.errorf(s.Value.Pos(), section, "'ref' must be an endpoint, table.column (spec/%s)", section)
+		} else if ep.Paren {
+			c.errorf(ep.Pos(), "columns", "an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a ref element (spec/columns)")
+		}
+	}
+}
+
+func (c *checker) defaultValueCheck(s *ast.Setting) {
+	switch v := s.Value.(type) {
+	case *ast.BasicLit, *ast.FuncExpr, *ast.NegNumber:
+	case *ast.Ident:
+		switch name := v.Name(); {
+		case name == "null":
+			c.errorf(v.Pos(), "default-values", "null is not a default value: a column that carries null and has no default is NULL when a write leaves it out (spec/default-values)")
+		case name != "true" && name != "false":
+			c.errorf(v.Pos(), "default-values", "default value must be a number, string, boolean or expression literal; found bare identifier %q (spec/default-values)", v.Name())
+		}
+	case *ast.QualIdent:
+		c.errorf(v.Pos(), "default-values", "default value must be a number, string, boolean or expression literal; found the dotted name %s.%s, and a declared type takes a literal of its storage type (spec/default-values)", v.Qual.Name(), v.Name.Name())
+	default:
+		c.errorf(s.Value.Pos(), "default-values", "default value must be a number, string, boolean or expression literal (spec/default-values)")
+	}
+}
+
+func (c *checker) tagSettingsCheck(sl *ast.SettingList) {
+	if sl == nil {
+		return
+	}
+	seen := map[string]bool{}
+	for _, s := range sl.Settings {
+		if s.Name != "tag" {
+			continue
+		}
+		lit, ok := s.Value.(*ast.BasicLit)
+		if !ok || lit.Tok.Kind != token.STRING {
+			continue
+		}
+		key, ok := tagPairKey(lit.Tok.Val)
+		if !ok {
+			c.errorf(lit.Pos(), "columns", `tag %q is not one key:"value" pair: write e.g. "json:\"name\"" (spec/columns)`, lit.Tok.Val)
+			continue
+		}
+		if key == "db" {
+			c.errorf(lit.Pos(), "columns", `tag key "db" is reserved: the db tag is the scan contract (spec/struct-tags)`)
+			continue
+		}
+		if seen[key] {
+			c.errorf(lit.Pos(), "columns", "tag key %q appears more than once on this column (spec/columns)", key)
+			continue
+		}
+		seen[key] = true
+	}
+}
+
+func tagPairKey(pair string) (string, bool) {
+	i := strings.IndexByte(pair, ':')
+	if i <= 0 {
+		return "", false
+	}
+	key, val := pair[:i], pair[i+1:]
+	if strings.ContainsAny(key, " \t\"`") {
+		return "", false
+	}
+	if len(val) < 2 || val[0] != '"' || val[len(val)-1] != '"' {
+		return "", false
+	}
+	if strings.ContainsAny(val[1:len(val)-1], "\"`") {
+		return "", false
+	}
+	return key, true
+}
+
+func isString(n ast.Node) bool {
+	lit, ok := n.(*ast.BasicLit)
+	return ok && lit.Tok.Kind == token.STRING
+}
+
+// autoincrementCheck enforces the part of the rule that autoincrement is
+// written on the database-assigned key alone (spec/columns) that the
+// table decides by itself: the column is a rowid alias of the built-in
+// int; whether that alias is no foreign key, and so the
+// database-assigned key, is keyAssignedCheck's to decide once the
+// relationships are known.
+func (c *checker) autoincrementCheck(ti *TableInfo) {
+	pk := ti.PK()
+	alias := rowidAliasInt(ti)
+	for _, cd := range ti.Columns {
+		col := cd.Col
+		name := col.Name.Name()
+		auto := col.Settings.Get("autoincrement")
+		if cd == alias || auto == nil || !cd.Type.Known() {
+			continue
+		}
+		isPK := col.Settings.Get("pk") != nil
+		switch {
+		case cd.Type.Decl != nil && cd.Type.Storage == "int":
+			c.errorf(auto.Pos(), "columns",
+				"autoincrement on %q (%s): a declared type stored as int is the rowid alias but an ordinary key, whose value the row gives; only the database-assigned key, a rowid alias of the built-in int that is no foreign key, takes AUTOINCREMENT (spec/columns, spec/mapping-to-sqlite-ddl)", name, col.Type.String())
+		case cd.Type.Storage != "int" || cd.Type.Decl != nil:
+			c.errorf(auto.Pos(), "columns",
+				"autoincrement on %q (%s): only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; a column that is not int is never the rowid alias (spec/columns, spec/mapping-to-sqlite-ddl)", name, col.Type.String())
+		case len(pk) > 1 && isPK:
+			key := make([]string, len(pk))
+			for i, cd := range pk {
+				key[i] = cd.Col.Name.Name()
+			}
+			c.errorf(auto.Pos(), "columns",
+				"autoincrement on %q in table %q, whose primary key is (%s): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (spec/columns)", name, ti.Key, strings.Join(key, ", "))
+		default:
+			c.errorf(auto.Pos(), "columns",
+				"autoincrement on %q: only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (spec/columns, spec/mapping-to-sqlite-ddl)", name)
+		}
+	}
+}
+
+// rowidAliasDefaultCheck refuses a default: on the rowid alias
+// (spec/columns, spec/default-values): SQLite ignores a DEFAULT on it and
+// assigns a rowid to an insert that leaves it out, so the default
+// would never be written.
+func (c *checker) rowidAliasDefaultCheck(ti *TableInfo) {
+	alias := ti.RowidAlias()
+	if alias == nil {
+		return
+	}
+	if def := alias.Col.Settings.Get("default"); def != nil {
+		c.errorf(def.Pos(), "columns",
+			"default on %q, the rowid alias of table %q: SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (spec/columns, spec/default-values)", alias.Col.Name.Name(), ti.Key)
+	}
+}
+
+// keyAssignedCheck enforces what sets a built-in int rowid alias that
+// is a foreign key apart from the database-assigned key (spec/columns,
+// spec/records-sample-data): it takes no autoincrement, since its values
+// come from the referenced row, and every records list names it.
+// assigned is the table's database-assigned key, nil when it has none.
+// It runs on a migration shape too, which takes no records.
+func (c *checker) keyAssignedCheck(ti *TableInfo, assigned *ColumnDef, records []*ast.Records) {
+	alias := rowidAliasInt(ti)
+	if alias == nil || alias == assigned {
+		return
+	}
+	col := alias.Col
+	name := col.Name.Name()
+	if auto := col.Settings.Get("autoincrement"); auto != nil {
+		c.errorf(auto.Pos(), "columns",
+			"autoincrement on %q, the rowid alias of table %q and a foreign key: its values come from the referenced row, so the never-reuse bookkeeping of AUTOINCREMENT has nothing to assign; it is valid on the database-assigned key alone (spec/columns)", name, ti.Key)
+	}
+	for _, r := range records {
+		if !r.HasColumns || alias.Nullable {
+			continue
+		}
+		listed := false
+		for _, id := range r.Columns {
+			listed = listed || id.Name() == name
+		}
+		if !listed {
+			c.errorf(r.Pos(), "records-sample-data", "records of table %q do not list column %q, the rowid alias and a foreign key: its value comes from the referenced row, and only the database-assigned key leaves a column's value to the database; list the column (spec/records-sample-data, spec/columns)", ti.Key, name)
+		}
+	}
+}
+
+// keysAssignedCheck runs keyAssignedCheck over every table once the
+// relationships are resolved (spec/columns), with the records blocks
+// of each, in the table and at the top level.
+func (c *checker) keysAssignedCheck(f *ast.File) {
+	records := map[string][]*ast.Records{}
+	for _, d := range f.Decls {
+		if r, ok := d.(*ast.Records); ok && r.Table != nil {
+			records[r.Table.Name()] = append(records[r.Table.Name()], r)
+		}
+	}
+	for _, ti := range c.info.Tables {
+		rs := records[ti.Key]
+		for _, item := range ti.Decl.Body {
+			if r, ok := item.(*ast.Records); ok {
+				rs = append(rs, r)
+			}
+		}
+		assigned := c.info.KeyAssigned(ti)
+		c.keyAssignedCheck(ti, assigned, rs)
+		c.assignedRequiredCheck(ti, assigned)
+	}
+}
+
+// assignedRequiredCheck refuses required on the database-assigned key
+// (spec/columns): the database assigns it whenever an insert
+// leaves it unmarked, so its zero value is no missing value. A
+// migration shape never runs it, since required is no migration
+// setting at all (spec/migrations).
+func (c *checker) assignedRequiredCheck(ti *TableInfo, assigned *ColumnDef) {
+	if assigned == nil {
+		return
+	}
+	if req := assigned.Col.Settings.Get("required"); req != nil {
+		c.errorf(req.Pos(), "columns", "required on %q, the database-assigned key of table %q: the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (spec/columns, spec/changesets)", assigned.Col.Name.Name(), ti.Key)
+	}
+}
+
+func (c *checker) requiredCheck(ti *TableInfo) {
+	alias := rowidAliasInt(ti)
+	for _, cd := range ti.Columns {
+		col := cd.Col
+		req := col.Settings.Get("required")
+		if req == nil {
+			continue
+		}
+		name := col.Name.Name()
+		if !cd.Type.Known() {
+			continue
+		}
+		if cd == alias {
+			continue
+		}
+		if _, ok := cd.Type.RequiredKind(); !ok {
+			c.errorf(req.Pos(), "columns", "required on %q (%s): a %s has no empty value — every value is a value (spec/columns)", name, col.Type.String(), col.Type.String())
+		}
+	}
+}

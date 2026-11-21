@@ -1,0 +1,8 @@
+// spec/handler-references — same action, identical signatures; spec/route-names-and-reverse-urls requires
+// distinct helper names, provided here by [name:]
+package app
+
+scope / {
+	get  /users/:id(int)  Users.Show
+	post /users/:id(int)  Users.Show [name: showSubmit]
+}

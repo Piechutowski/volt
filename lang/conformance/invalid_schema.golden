@@ -1,0 +1,479 @@
+## i01_block_comment.volt
+i01_block_comment.volt:4:1: error: syntax: a comment is written //, to the end of its line: Volt has no block comment (spec/comments)
+
+## i02_unterminated_string.volt
+i02_unterminated_string.volt:2:31: error: syntax: newline in a string: a string ends on its line, and a multi-line string is written """...""" (spec/string-literals)
+i02_unterminated_string.volt:3:1: error: syntax: invalid setting value (spec/settings-lists): found end of file
+i02_unterminated_string.volt:3:1: error: syntax: expected '}' in table (spec/table), found end of file
+
+## i03_newline_in_string.volt
+i03_newline_in_string.volt:3:23: error: syntax: newline in a string: a string ends on its line, and a multi-line string is written """...""" (spec/string-literals)
+i03_newline_in_string.volt:4:6: error: syntax: newline in a string: a string ends on its line, and a multi-line string is written """...""" (spec/string-literals)
+i03_newline_in_string.volt:5:1: error: syntax: expected ']' in settings list (spec/settings-lists), found '}' "}"
+
+## i04_invalid_number.volt
+i04_invalid_number.volt:3:20: error: syntax: invalid number "12.3abc" (spec/numeric-literals)
+i04_invalid_number.volt:3:20: error: syntax: invalid setting value (spec/settings-lists): found illegal token "12.3abc"
+
+## i05_unterminated_funcexpr.volt
+i05_unterminated_funcexpr.volt:2:28: error: syntax: unterminated expression literal (spec/expression-literals)
+i05_unterminated_funcexpr.volt:2:28: error: syntax: invalid setting value (spec/settings-lists): found end of file
+i05_unterminated_funcexpr.volt:2:28: error: syntax: expected '}' in table (spec/table), found end of file
+
+## i07_unknown_element.volt
+i07_unknown_element.volt:2:1: error: syntax: unknown element type "View" (spec/program-structure)
+
+## i08_empty_table.volt
+i08_empty_table.volt:2:1: error: spec/table: table "empty" must contain at least one column, directly or from an injected table_partial (spec/table)
+
+## i09_duplicate_setting.volt
+i09_duplicate_setting.volt:3:19: error: spec/settings-lists: setting "unique" may appear at most once (spec/settings-lists)
+
+## i126_type_storage.volt
+i126_type_storage.volt:3:11: error: spec/types: storage type "text" of Type "Slug" is not a built-in: bool, int, float64, string, []byte or time.Time (spec/types)
+
+## i127_type_bare_from.volt
+i127_type_bare_from.volt:3:23: error: spec/types: type "Slug" is a type of this package and takes no from path (spec/types)
+
+## i128_type_pkg_no_from.volt
+i128_type_pkg_no_from.volt:3:6: error: spec/types: type "money.Money" names a package but has no from path (spec/types)
+
+## i129_type_builtin_name.volt
+i129_type_builtin_name.volt:3:6: error: spec/types: type "string" spells a built-in type (spec/types)
+
+## i12_duplicate_columns.volt
+i12_duplicate_columns.volt:4:3: error: spec/namespaces-and-uniqueness: duplicate column name "id"
+
+## i130_default_type_mismatch.volt
+i130_default_type_mismatch.volt:4:19: error: spec/default-values: default of "n" (int) must be an integer, found string (spec/default-values)
+
+## i131_unknown_type.volt
+i131_unknown_type.volt:4:8: error: spec/columns: column "name": unknown type "varchar"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (spec/columns)
+
+## i133_autoincrement_declared_type.volt
+i133_autoincrement_declared_type.volt:5:14: error: spec/columns: autoincrement on "id" (ID): a declared type stored as int is the rowid alias but an ordinary key, whose value the row gives; only the database-assigned key, a rowid alias of the built-in int that is no foreign key, takes AUTOINCREMENT (spec/columns, spec/mapping-to-sqlite-ddl)
+
+## i134_default_null_not_null.volt
+i134_default_null_not_null.volt:4:25: error: spec/default-values: null is not a default value: a column that carries null and has no default is NULL when a write leaves it out (spec/default-values)
+i134_default_null_not_null.volt:5:19: error: spec/default-values: null is not a default value: a column that carries null and has no default is NULL when a write leaves it out (spec/default-values)
+
+## i135_records_type_mismatch.volt
+i135_records_type_mismatch.volt:7:8: error: spec/records-sample-data: record value for "n" (int) must be an integer, found string (spec/records-sample-data)
+
+## i136_records_null_not_null.volt
+i136_records_null_not_null.volt:7:8: error: spec/records-sample-data: record value for "n" is null, but the column is not nullable (spec/records-sample-data)
+
+## i139_type_empty_from.volt
+i139_type_empty_from.volt:3:19: error: spec/types: type "m.M" has an empty from path; the path is a non-empty import path (spec/types)
+
+## i140_type_reserved_alias.volt
+i140_type_reserved_alias.volt:3:6: error: spec/types: type "rt.X": package name "rt" is reserved by generated code (spec/types)
+
+## i141_type_reserved_alias_path.volt
+i141_type_reserved_alias_path.volt:3:6: error: spec/types: type "sql.X": package name "sql" is reserved by generated code for "database/sql" (spec/types)
+
+## i142_slice_not_byte.volt
+i142_slice_not_byte.volt:4:8: error: spec/columns: column "tags": unknown type "[]string"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (spec/columns)
+
+## i143_type_duplicate.volt
+i143_type_duplicate.volt:4:1: error: spec/namespaces-and-uniqueness: duplicate type name "Slug"
+
+## i146_type_storage_type.volt
+i146_type_storage_type.volt:4:13: error: spec/types: storage type "Slug" of Type "Handle" is not a built-in: bool, int, float64, string, []byte or time.Time (spec/types)
+
+## i149_default_string_time.volt
+i149_default_string_time.volt:4:26: error: spec/default-values: default of "at" (time.Time) must be an expression literal, found string (spec/default-values)
+
+## i14_unknown_column_setting.volt
+i14_unknown_column_setting.volt:3:11: error: spec/columns: unknown setting "sparkly" (spec/columns)
+
+## i150_default_bool_not_boolean.volt
+i150_default_bool_not_boolean.volt:4:23: error: spec/default-values: default of "live" (bool) must be a boolean, found integer (spec/default-values)
+
+## i151_default_fraction_int.volt
+i151_default_fraction_int.volt:4:19: error: spec/default-values: default of "n" (int) must be an integer, found number (spec/default-values)
+
+## i152_records_literal_null_not_null.volt
+i152_records_literal_null_not_null.volt:7:8: error: spec/records-sample-data: record value for "n" is null, but the column is not nullable (spec/records-sample-data)
+
+## i153_records_declared_type_mismatch.volt
+i153_records_declared_type_mismatch.volt:8:8: error: spec/records-sample-data: record value for "price" (money.Money) must be an integer, found string (spec/records-sample-data)
+
+## i154_column_without_type.volt
+i154_column_without_type.volt:4:6: error: syntax: expected identifier in column type (spec/columns), found '[' "["
+
+## i179_index_expression_unnamed.volt
+i179_index_expression_unnamed.volt:8:6: error: spec/indexes: index (`lower(email)`) on "users" has an expression in its key and must carry name:, since a name derives from columns only (spec/indexes)
+
+## i19_ref_arity_mismatch.volt
+i19_ref_arity_mismatch.volt:5:17: error: spec/relationships-ref: composite relationship endpoints must have the same number of columns: 2 vs 1
+
+## i20_bad_ref_action.volt
+i20_bad_ref_action.volt:4:18: error: spec/relationships-ref: invalid referential action "explode" for 'delete'; expected cascade, restrict, null_set or default_set; leave delete: out for SQLite's default (spec/relationships-ref)
+
+## i21_ref_endpoint_no_column.volt
+i21_ref_endpoint_no_column.volt:4:12: error: syntax: an endpoint is table.column or table.(columns) (spec/relationships-ref), found '>' ">"
+
+## i220_unknown_type_partial_once.volt
+i220_unknown_type_partial_once.volt:4:11: error: spec/columns: column "version": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (spec/columns)
+
+## i226_pk_null.volt
+i226_pk_null.volt:4:21: error: spec/columns: column "id" carries pk and null: a key column is never NULL (spec/columns)
+
+## i227_composite_pk_member_null.volt
+i227_composite_pk_member_null.volt:5:23: error: spec/columns: column "tag" carries pk and null: a key column is never NULL (spec/columns)
+
+## i228_bare_pk_after_type.volt
+i228_bare_pk_after_type.volt:4:10: error: syntax: expected a settings list or end of line after the column type (spec/columns), found identifier "pk"
+
+## i229_primary_key_two_words.volt
+i229_primary_key_two_words.volt:4:19: error: syntax: expected ',' or ']' in settings list, found identifier "key": settings are separated by commas, and a setting name or value is one identifier (spec/settings-lists)
+
+## i230_use_unknown_element.volt
+i230_use_unknown_element.volt:3:1: error: syntax: unknown element type "use" (spec/program-structure)
+
+## i231_records_omit_not_null.volt
+i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "title", which is NOT NULL and has no default: only the database-assigned key leaves a column's value to the database, so every row gives it; list the column (spec/records-sample-data)
+i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "stamped_by", which is NOT NULL and has no default: only the database-assigned key leaves a column's value to the database, so every row gives it; list the column (spec/records-sample-data)
+i231_records_omit_not_null.volt:25:1: error: spec/records-sample-data: records of table "authors" do not list column "name", which is NOT NULL and has no default: only the database-assigned key leaves a column's value to the database, so every row gives it; list the column (spec/records-sample-data)
+
+## i232_ref_set_null_not_null.volt
+i232_ref_set_null_not_null.volt:14:34: error: spec/relationships-ref: delete: null_set on foreign-key column "posts.author_id", which does not carry null: the database would write a NULL the column refuses (spec/relationships-ref)
+i232_ref_set_null_not_null.volt:15:36: error: spec/relationships-ref: update: default_set on foreign-key column "posts.reviewer_id", which carries neither null nor a default:, so its default is NULL, which the column refuses (spec/relationships-ref)
+i232_ref_set_null_not_null.volt:16:55: error: spec/relationships-ref: update: null_set on foreign-key column "posts.editor_id", which does not carry null: the database would write a NULL the column refuses (spec/relationships-ref)
+
+## i244_partial_index_duplicate.volt
+i244_partial_index_duplicate.volt:24:3: error: spec/tablepartial: table_partial "emails" injects index (email, name) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (spec/tablepartial)
+i244_partial_index_duplicate.volt:26:3: error: spec/tablepartial: table_partial "stamps_again" injects index (created_at, updated_at) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (spec/tablepartial)
+i244_partial_index_duplicate.volt:34:3: error: spec/tablepartial: table_partial "stamps" injects index (created_at, updated_at) into table "posts", which has an index on that key already; an index is declared once, in the table or in one partial (spec/tablepartial)
+
+## i245_records_empty_field.volt
+i245_records_empty_field.volt:8:8: error: syntax: empty record field: every field holds a value, and NULL is written null (spec/records-sample-data)
+i245_records_empty_field.volt:9:5: error: syntax: empty record field: every field holds a value, and NULL is written null (spec/records-sample-data)
+i245_records_empty_field.volt:10:11: error: syntax: empty record field after the last ',': every field holds a value, and NULL is written null (spec/records-sample-data)
+
+## i246_ref_inline_twice.volt
+i246_ref_inline_twice.volt:6:32: error: spec/settings-lists: setting "ref" may appear at most once (spec/settings-lists)
+
+## i247_ref_reverse_operator.volt
+i247_ref_reverse_operator.volt:7:15: error: syntax: expected '>' after the foreign key: a Ref is written foreign key > referenced columns (spec/relationships-ref), found '<' "<"
+i247_ref_reverse_operator.volt:8:15: error: syntax: expected '>' after the foreign key: a Ref is written foreign key > referenced columns (spec/relationships-ref), found '-' "-"
+i247_ref_reverse_operator.volt:9:15: error: syntax: expected '>' after the foreign key: a Ref is written foreign key > referenced columns (spec/relationships-ref), found '<' "<"
+
+## i248_ref_inline_operator.volt
+i248_ref_inline_operator.volt:5:21: error: syntax: expected identifier in relationship endpoint (spec/relationships-ref), found '>' ">"
+
+## i249_ref_name_long_form.volt
+i249_ref_name_long_form.volt:5:5: error: syntax: expected ':' after Ref (spec/relationships-ref), found identifier "fk_posts_user"
+i249_ref_name_long_form.volt:6:5: error: syntax: expected ':' after Ref (spec/relationships-ref), found '{' "{"
+
+## i24_records_arity.volt
+i24_records_arity.volt:6:5: error: spec/records-sample-data: record row has 3 values but 2 columns are listed
+
+## i250_partial_settings.volt
+i250_partial_settings.volt:3:22: error: syntax: a table_partial takes no settings; its body holds columns, indexes and validators (spec/tablepartial)
+i250_partial_settings.volt:8:3: error: spec/tablepartial: unknown table_partial "stamps"
+
+## i251_table_alias.volt
+i251_table_alias.volt:3:13: error: syntax: expected '{' in table (spec/table), found identifier "as"
+
+## i252_table_schema_qualified.volt
+i252_table_schema_qualified.volt:3:11: error: syntax: expected '{' in table (spec/table), found '.' "."
+
+## i253_diagram_elements.volt
+i253_diagram_elements.volt:6:1: error: syntax: unknown element type "TableGroup" (spec/program-structure)
+i253_diagram_elements.volt:9:1: error: syntax: unknown element type "DiagramView" (spec/program-structure)
+i253_diagram_elements.volt:12:1: error: syntax: unknown element type "Note" (spec/program-structure)
+
+## i254_color_literal.volt
+i254_color_literal.volt:3:27: error: syntax: unexpected character "#" (spec/lexical-structure)
+i254_color_literal.volt:3:27: error: syntax: invalid setting value (spec/settings-lists): found illegal token "#"
+
+## i256_index_type.volt
+i256_index_type.volt:7:20: error: spec/indexes: unknown setting "type" (spec/indexes)
+
+## i258_semicolon_not_a_token.volt
+i258_semicolon_not_a_token.volt:4:14: error: syntax: unexpected character ";" (spec/lexical-structure)
+i258_semicolon_not_a_token.volt:4:14: error: syntax: expected end of line after column definition (spec/columns), found illegal token ";"
+
+## i259_enum_not_an_element.volt
+i259_enum_not_an_element.volt:3:1: error: syntax: unknown element type "Enum" (spec/program-structure)
+
+## i25_two_records_blocks.volt
+i25_two_records_blocks.volt:3:3: error: spec/records-sample-data: at most one records block per table (spec/records-sample-data)
+
+## i260_default_dotted_name.volt
+i260_default_dotted_name.volt:6:26: error: spec/default-values: default value must be a number, string, boolean or expression literal; found the dotted name state.pending, and a declared type takes a literal of its storage type (spec/default-values)
+
+## i261_record_dotted_name.volt
+i261_record_dotted_name.volt:9:13: error: syntax: a dotted name is not a record value: a record value is a literal, true, false or null, and a declared type takes a literal of its storage type (spec/records-sample-data)
+
+## i265_type_unexported_name.volt
+i265_type_unexported_name.volt:3:6: error: spec/types: type "slug" is not an exported Go name; a declared type's name begins with an upper-case letter, as Slug does (spec/types)
+i265_type_unexported_name.volt:4:6: error: spec/types: type "money.amount" names an unexported Go type of package money, which no other package can name (spec/types)
+
+## i269_table_unknown_setting.volt
+i269_table_unknown_setting.volt:3:14: error: spec/table: unknown setting "headercolor" (spec/table)
+
+## i26_toplevel_records_no_columns.volt
+i26_toplevel_records_no_columns.volt:3:1: error: spec/records-sample-data: top-level records must list columns
+
+## i270_ref_setting.volt
+i270_ref_setting.volt:10:32: error: spec/relationships-ref: unknown setting "name" (spec/relationships-ref)
+
+## i271_type_settings.volt
+i271_type_settings.volt:2:18: error: syntax: expected end of line after type declaration (spec/types), found '[' "["
+
+## i273_inline_ref_action.volt
+i273_inline_ref_action.volt:8:31: error: spec/columns: unknown setting "delete" (spec/columns)
+
+## i274_inline_ref_column_group.volt
+i274_inline_ref_column_group.volt:9:25: error: spec/columns: an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a ref element (spec/columns)
+
+## i275_ref_action_no_action.volt
+i275_ref_action_no_action.volt:5:49: error: spec/relationships-ref: invalid referential action "no_action" for 'update'; expected cascade, restrict, null_set or default_set; leave update: out for SQLite's default (spec/relationships-ref)
+
+## i276_ref_action_two_words.volt
+i276_ref_action_two_words.volt:5:44: error: syntax: expected ',' or ']' in settings list, found identifier "null": settings are separated by commas, and a setting name or value is one identifier (spec/settings-lists)
+
+## i278_settings_missing_comma.volt
+i278_settings_missing_comma.volt:4:17: error: syntax: expected ',' or ']' in settings list, found identifier "autoincrement": settings are separated by commas, and a setting name or value is one identifier (spec/settings-lists)
+
+## i280_ref_action_quoted.volt
+i280_ref_action_quoted.volt:5:40: error: spec/relationships-ref: "delete" must be a referential action: cascade, restrict, null_set or default_set (spec/relationships-ref)
+i280_ref_action_quoted.volt:5:52: error: spec/relationships-ref: "update" requires a value (spec/relationships-ref)
+
+## i282_settings_missing_comma_line_break.volt
+i282_settings_missing_comma_line_break.volt:7:3: error: syntax: expected ',' or ']' in settings list, found identifier "update": settings are separated by commas, and a setting name or value is one identifier (spec/settings-lists)
+
+## i284_case_element_word.volt
+i284_case_element_word.volt:3:1: error: syntax: write table, not TABLE: keywords are case-sensitive (spec/keywords)
+
+## i285_case_block_word.volt
+i285_case_block_word.volt:7:3: error: syntax: write indexes, not Indexes: keywords are case-sensitive (spec/keywords)
+i285_case_block_word.volt:10:3: error: syntax: write records, not Records: keywords are case-sensitive (spec/keywords)
+
+## i286_case_setting_name.volt
+i286_case_setting_name.volt:4:16: error: syntax: write pk, not PK: keywords are case-sensitive (spec/keywords)
+i286_case_setting_name.volt:5:16: error: syntax: write null, not Null: keywords are case-sensitive (spec/keywords)
+i286_case_setting_name.volt:5:22: error: syntax: write unique, not Unique: keywords are case-sensitive (spec/keywords)
+
+## i287_case_ref_action.volt
+i287_case_ref_action.volt:5:40: error: syntax: write cascade, not CASCADE: keywords are case-sensitive (spec/keywords)
+i287_case_ref_action.volt:5:57: error: syntax: write null_set, not Null_Set: keywords are case-sensitive (spec/keywords)
+
+## i288_case_literal_word.volt
+i288_case_literal_word.volt:5:27: error: syntax: write true, not TRUE: keywords are case-sensitive (spec/keywords)
+i288_case_literal_word.volt:10:6: error: syntax: write false, not False: keywords are case-sensitive (spec/keywords)
+i288_case_literal_word.volt:10:13: error: syntax: write null, not NULL: keywords are case-sensitive (spec/keywords)
+
+## i293_identifier_leading_digit.volt
+i293_identifier_leading_digit.volt:5:3: error: syntax: 2fa_code begins with a digit: a name is a Go identifier, a letter or underscore followed by letters, digits and underscores (spec/identifiers)
+
+## i294_identifier_combining_mark.volt
+i294_identifier_combining_mark.volt:5:7: error: syntax: U+0301, a combining mark, cannot stand in a name: a name is a Go identifier, letters, digits and underscores (spec/identifiers)
+
+## i295_quoted_name.volt
+i295_quoted_name.volt:3:7: error: syntax: expected identifier in table name (spec/table), found string "\"user accounts\""
+
+## i296_single_quoted_string.volt
+i296_single_quoted_string.volt:3:21: error: syntax: a multi-line string is written """...""", not '''...''' (spec/multi-line-string-literals)
+i296_single_quoted_string.volt:7:26: error: syntax: a string is written in double quotes, "...", not single quotes (spec/string-literals)
+
+## i297_unknown_escape.volt
+i297_unknown_escape.volt:5:31: error: syntax: unknown escape sequence \q: a string takes \\, \", \n and \t only (spec/escape-sequences)
+i297_unknown_escape.volt:6:26: error: syntax: unknown escape sequence \u: a string takes \\, \", \n and \t only (spec/escape-sequences)
+i297_unknown_escape.volt:7:26: error: syntax: unknown escape sequence \': a string takes \\, \", \n and \t only (spec/escape-sequences)
+i297_unknown_escape.volt:8:27: error: syntax: unknown escape sequence \r: a string takes \\, \", \n and \t only (spec/escape-sequences)
+
+## i306_multiline_ends_quote.volt
+i306_multiline_ends_quote.volt:3:31: error: syntax: a multi-line string cannot end with a double quote: write it \" before the closing """ (spec/multi-line-string-literals)
+
+## i307_index_pk.volt
+i307_index_pk.volt:8:21: error: spec/indexes: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (spec/indexes)
+
+## i308_index_plain_single_column.volt
+i308_index_plain_single_column.volt:6:5: error: spec/indexes: index created_at on "stamps" is a plain single-column index: write the column setting index on "created_at"; an indexes block holds composite, expression and partial indexes (spec/indexes)
+i308_index_plain_single_column.volt:17:5: error: spec/indexes: index email on "users" is a plain single-column index: write the column setting unique on "email"; an indexes block holds composite, expression and partial indexes (spec/indexes)
+i308_index_plain_single_column.volt:18:6: error: spec/indexes: index (name) on "users" is a plain single-column index: write the column setting index on "name"; an indexes block holds composite, expression and partial indexes (spec/indexes)
+
+## i310_index_name_twice.volt
+i310_index_name_twice.volt:10:5: error: spec/indexes: table "users" has two indexes named "idx_users_email", the unique setting of column "email" and index email: SQLite names an index once in the database, so an index name is unique in the schema; give index email another name: (spec/indexes)
+i310_index_name_twice.volt:12:6: error: spec/indexes: table "users" has two indexes named "idx_users_lookup", index (handle, region) and index (region, handle): SQLite names an index once in the database, so an index name is unique in the schema; give index (region, handle) another name: (spec/indexes)
+
+## i311_unique_and_index.volt
+i311_unique_and_index.volt:5:16: error: spec/columns: "unique" and "index" cannot both be set (spec/columns)
+
+## i312_partial_index_name_twice.volt
+i312_partial_index_name_twice.volt:8:6: error: spec/indexes: table_partial "stamps" declares two indexes named "idx_<table>_created_at_updated_at" in every table that injects it, index (created_at, updated_at) and index (created_at, updated_at): SQLite names an index once in the database, so an index name is unique in the schema; declare one of them in a table body instead, since a name: written in a table_partial is the same in every table that injects it (spec/indexes)
+i312_partial_index_name_twice.volt:15:5: error: spec/indexes: table_partial "contact" declares two indexes named "idx_<table>_email" in every table that injects it, the unique setting of column "email" and index email: SQLite names an index once in the database, so an index name is unique in the schema; declare one of them in a table body instead, since a name: written in a table_partial is the same in every table that injects it (spec/indexes)
+
+## i313_index_name_two_tables.volt
+i313_index_name_two_tables.volt:18:3: error: spec/indexes: tables "users" and "admins" each have an index named "idx_email_ci", index `lower(email)` of table_partial "contact" in both: SQLite names an index once in the database, so an index name is unique in the schema; a name: written in a table_partial is the same in every table that injects it, so table_partial "contact" is injected into one table only (spec/indexes)
+
+## i314_index_name_derived_two_tables.volt
+i314_index_name_derived_two_tables.volt:10:15: error: spec/indexes: tables "a_b" and "a" each have an index named "idx_a_b_c", the index setting of column "c" and the index setting of column "b_c": SQLite names an index once in the database, so an index name is unique in the schema; rename a table or a column, since no name: reaches a column's index (spec/indexes)
+i314_index_name_derived_two_tables.volt:20:16: error: spec/indexes: tables "post" and "post_tag" each have an index named "idx_post_tag_slug", the unique setting of column "tag_slug" and the index setting of column "slug": SQLite names an index once in the database, so an index name is unique in the schema; rename a table or a column, since no name: reaches a column's index (spec/indexes)
+
+## i315_index_name_table_name.volt
+i315_index_name_table_name.volt:5:17: error: spec/indexes: the index setting of column "title" of table "posts" is named "idx_posts_title", the name of table "idx_posts_title": SQLite names indexes and tables in one namespace, so an index takes no table's name; rename a table or a column, since no name: reaches a column's index (spec/indexes)
+i315_index_name_table_name.volt:9:5: error: spec/indexes: index `lower(body)` of table "posts" is named "Pages", the name of table "pages": SQLite names indexes and tables in one namespace, so an index takes no table's name; give index `lower(body)` another name: (spec/indexes)
+
+## i316_index_name_case.volt
+i316_index_name_case.volt:10:6: error: spec/indexes: table "posts" has two indexes named "IDX_Posts" and "idx_posts" (one name to SQLite), index (title, body) and index (body, title): SQLite names an index once in the database, so an index name is unique in the schema; give index (body, title) another name: (spec/indexes)
+
+## i317_index_name_sqlite_prefix.volt
+i317_index_name_sqlite_prefix.volt:9:13: error: spec/indexes: index (a, b) on "stats" is named "sqlite_ab": a name beginning with sqlite_ is SQLite's own and refused for an index (spec/indexes)
+i317_index_name_sqlite_prefix.volt:10:13: error: spec/indexes: index (b, a) on "stats" is named "SQLite_BA": a name beginning with sqlite_ is SQLite's own and refused for an index (spec/indexes)
+
+## i318_index_name_empty.volt
+i318_index_name_empty.volt:10:13: error: spec/indexes: index (a, b) on "posts" has an empty name:; write a name, or leave name: out for the derived one (spec/indexes)
+i318_index_name_empty.volt:11:21: error: spec/indexes: index `lower(title)` on "posts" has an empty name:; write a name, or leave name: out for the derived one (spec/indexes)
+
+## i319_autoincrement_partial_composite.volt
+i319_autoincrement_partial_composite.volt:4:15: error: spec/columns: autoincrement on "id" in table "a", whose primary key is (id, site): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (spec/columns)
+i319_autoincrement_partial_composite.volt:4:15: error: spec/columns: autoincrement on "id" in table "b", whose primary key is (id, site): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (spec/columns)
+
+## i320_index_pk_alone.volt
+i320_index_pk_alone.volt:9:8: error: spec/indexes: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (spec/indexes)
+i320_index_pk_alone.volt:10:13: error: spec/indexes: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (spec/indexes)
+
+## i322_table_name_sqlite.volt
+i322_table_name_sqlite.volt:3:7: error: spec/namespaces-and-uniqueness: table name "sqlite_stats" begins with sqlite_, which SQLite keeps for its own objects (spec/namespaces-and-uniqueness)
+i322_table_name_sqlite.volt:7:7: error: spec/namespaces-and-uniqueness: table name "SQLite_Daily" begins with sqlite_, which SQLite keeps for its own objects (spec/namespaces-and-uniqueness)
+
+## i32_settings_next_line.volt
+i32_settings_next_line.volt:4:3: error: syntax: expected a column, indexes, validators, records or '~injection' in table body (spec/table), found '[' "["
+
+## i33_ref_without_body.volt
+i33_ref_without_body.volt:5:1: error: syntax: expected identifier in relationship endpoint (spec/relationships-ref), found end of file
+
+## i345_table_settings_next_line.volt
+i345_table_settings_next_line.volt:4:3: error: syntax: a settings list stays on the line of the table it modifies, found '[' on the next line (spec/settings-lists)
+i345_table_settings_next_line.volt:9:1: error: syntax: a settings list stays on the line of the table it modifies, found '[' on the next line (spec/settings-lists)
+
+## i347_inline_ref_paren.volt
+i347_inline_ref_paren.volt:9:17: error: spec/columns: an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a ref element (spec/columns)
+
+## i348_setting_name_digit.volt
+i348_setting_name_digit.volt:5:14: error: syntax: 2fa begins with a digit: a name is a Go identifier, a letter or underscore followed by letters, digits and underscores (spec/identifiers)
+i348_setting_name_digit.volt:5:14: error: spec/columns: unknown setting "2fa" (spec/columns)
+
+## i349_table_empty_partial.volt
+i349_table_empty_partial.volt:6:1: error: spec/table: table "t" must contain at least one column, directly or from an injected table_partial (spec/table)
+
+## i350_ref_duplicate_permuted.volt
+i350_ref_duplicate_permuted.volt:15:1: error: spec/relationships-ref: duplicate relationship: the same endpoints are already related
+
+## i35_duplicate_table.volt
+i35_duplicate_table.volt:3:1: error: spec/namespaces-and-uniqueness: duplicate table name "users"
+
+## i363_type_alias_two_paths.volt
+i363_type_alias_two_paths.volt:4:6: error: spec/types: type "a.Hits" imports "example.com/two/a" under the alias a, which Type "a.Views" at i363_type_alias_two_paths.volt:3:1 binds to "example.com/one/a": one alias names one package (spec/types)
+
+## i364_type_from_not_import_path.volt
+i364_type_from_not_import_path.volt:3:27: error: spec/types: type "money.Money" has from path "not a path!", which is not a Go import path (spec/types)
+
+## i365_records_time_not_a_date.volt
+i365_records_time_not_a_date.volt:10:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be date/time text in SQLite's canonical UTC form, such as "2024-01-15 10:30:00", found "not a date at all" (spec/records-sample-data)
+
+## i367_type_from_next_line.volt
+i367_type_from_next_line.volt:4:3: error: syntax: expected end of line after type declaration (spec/types), found string "\"example.com/app/money\""
+i367_type_from_next_line.volt:7:3: error: syntax: expected end of line after type declaration (spec/types), found identifier "string"
+i367_type_from_next_line.volt:11:9: error: spec/columns: column "price": unknown type "money.Money"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (spec/columns)
+i367_type_from_next_line.volt:12:9: error: spec/columns: column "slug": unknown type "Slug"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (spec/columns)
+
+## i368_setting_list_shape.volt
+i368_setting_list_shape.volt:4:15: error: syntax: the list of tag: is neither names separated by commas nor names each followed by asc or desc (spec/settings-lists)
+i368_setting_list_shape.volt:4:20: error: spec/columns: "tag" must be a string (spec/columns)
+
+## i36_bad_default.volt
+i36_bad_default.volt:4:20: error: spec/default-values: default value must be a number, string, boolean or expression literal (spec/default-values)
+
+## i37_injection_in_partial.volt
+i37_injection_in_partial.volt:4:3: error: spec/tablepartial: partial injection is not allowed inside table_partial
+
+## i38_records_in_partial.volt
+i38_records_in_partial.volt:4:3: error: spec/tablepartial: records are not allowed inside table_partial
+
+## i42_bare_ident_record.volt
+i42_bare_ident_record.volt:5:17: error: spec/records-sample-data: record values must be literals, null, true or false; found bare identifier "a" (spec/records-sample-data)
+
+## i43_bare_ident_default.volt
+i43_bare_ident_default.volt:3:19: error: spec/default-values: default value must be a number, string, boolean or expression literal; found bare identifier "something" (spec/default-values)
+
+## i448_increment_unknown_setting.volt
+i448_increment_unknown_setting.volt:4:18: error: spec/columns: unknown setting "increment" (spec/columns)
+
+## i449_required_rowid_alias.volt
+i449_required_rowid_alias.volt:4:18: error: spec/columns: required on "id", the database-assigned key of table "posts": the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (spec/columns, spec/changesets)
+i449_required_rowid_alias.volt:9:32: error: spec/columns: required on "id", the database-assigned key of table "events": the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (spec/columns, spec/changesets)
+
+## i452_project_not_an_element.volt
+i452_project_not_an_element.volt:3:1: error: syntax: unknown element type "project" (spec/program-structure)
+
+## i454_autoincrement_foreign_key.volt
+i454_autoincrement_foreign_key.volt:8:23: error: spec/columns: autoincrement on "user_id", the rowid alias of table "user_profiles" and a foreign key: its values come from the referenced row, so the never-reuse bookkeeping of AUTOINCREMENT has nothing to assign; it is valid on the database-assigned key alone (spec/columns)
+i454_autoincrement_foreign_key.volt:13:23: error: spec/columns: autoincrement on "user_id", the rowid alias of table "user_settings" and a foreign key: its values come from the referenced row, so the never-reuse bookkeeping of AUTOINCREMENT has nothing to assign; it is valid on the database-assigned key alone (spec/columns)
+
+## i455_records_omit_foreign_key.volt
+i455_records_omit_foreign_key.volt:11:3: error: spec/records-sample-data: records of table "user_profiles" do not list column "user_id", the rowid alias and a foreign key: its value comes from the referenced row, and only the database-assigned key leaves a column's value to the database; list the column (spec/records-sample-data, spec/columns)
+i455_records_omit_foreign_key.volt:21:1: error: spec/records-sample-data: records of table "user_settings" do not list column "user_id", the rowid alias and a foreign key: its value comes from the referenced row, and only the database-assigned key leaves a column's value to the database; list the column (spec/records-sample-data, spec/columns)
+
+## i456_default_rowid_alias.volt
+i456_default_rowid_alias.volt:6:15: error: spec/columns: default on "id", the rowid alias of table "users": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (spec/columns, spec/default-values)
+i456_default_rowid_alias.volt:10:35: error: spec/columns: default on "id", the rowid alias of table "events": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (spec/columns, spec/default-values)
+i456_default_rowid_alias.volt:15:38: error: spec/columns: default on "user_id", the rowid alias of table "user_profiles": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (spec/columns, spec/default-values)
+i456_default_rowid_alias.volt:20:21: error: spec/columns: default on "code", the rowid alias of table "tickets": SQLite ignores a DEFAULT on the rowid alias and assigns a rowid to an insert that leaves it out, so the default would never be written (spec/columns, spec/default-values)
+
+## i458_records_time_not_canonical.volt
+i458_records_time_not_canonical.volt:9:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15T10:30:00Z" (spec/records-sample-data)
+i458_records_time_not_canonical.volt:10:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15 12:30:00+02:00" (spec/records-sample-data)
+i458_records_time_not_canonical.volt:11:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15 10:30" (spec/records-sample-data)
+i458_records_time_not_canonical.volt:12:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 00:00:00", found "2024-01-15" (spec/records-sample-data)
+i458_records_time_not_canonical.volt:13:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be SQLite's canonical UTC date/time text, "2024-01-15 10:30:00.5", found "2024-01-15 10:30:00.500" (spec/records-sample-data)
+i458_records_time_not_canonical.volt:14:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be a SQL string of SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15T10:30:00" (spec/records-sample-data)
+
+## i459_records_declared_time_not_canonical.volt
+i459_records_declared_time_not_canonical.volt:10:8: error: spec/records-sample-data: record value for "at" (stamp.Stamp) must be SQLite's canonical UTC date/time text, "2024-01-15 08:30:00", found "2024-01-15 10:30:00+02:00" (spec/records-sample-data)
+
+## i460_default_time_sql_string.volt
+i460_default_time_sql_string.volt:5:33: error: spec/default-values: default of "posted_at" (time.Time) must be a SQL string of SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15T10:30:00Z" (spec/default-values)
+
+## i461_default_time_expression_not_stored.volt
+i461_default_time_expression_not_stored.volt:5:28: error: spec/default-values: default of "a" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `datetime('now', 'subsec')` (spec/default-values)
+i461_default_time_expression_not_stored.volt:6:28: error: spec/default-values: default of "b" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `strftime('%Y-%m-%d %H:%M:%f', 'now')` (spec/default-values)
+i461_default_time_expression_not_stored.volt:7:28: error: spec/default-values: default of "c" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `julianday('now')` (spec/default-values)
+i461_default_time_expression_not_stored.volt:8:28: error: spec/default-values: default of "d" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `unixepoch()` (spec/default-values)
+i461_default_time_expression_not_stored.volt:9:28: error: spec/default-values: default of "e" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `datetime('now', 'localtime')` (spec/default-values)
+i461_default_time_expression_not_stored.volt:10:28: error: spec/default-values: default of "f" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `datetime('now') || ''` (spec/default-values)
+i461_default_time_expression_not_stored.volt:11:28: error: spec/default-values: default of "g" (time.Time) must be a SQL string of SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15T10:30:00Z" (spec/default-values)
+
+## i462_records_time_expression_not_stored.volt
+i462_records_time_expression_not_stored.volt:9:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `datetime('now', 'subsec')` (spec/records-sample-data)
+i462_records_time_expression_not_stored.volt:10:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `strftime('%Y-%m-%d %H:%M:%f', 'now')` (spec/records-sample-data)
+i462_records_time_expression_not_stored.volt:11:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be a SQL string of SQLite's canonical UTC date/time text, "2024-01-15 10:30:00", found "2024-01-15T10:30:00Z" (spec/records-sample-data)
+i462_records_time_expression_not_stored.volt:12:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be an expression SQLite evaluates to the stored form of a time.Time, `CURRENT_TIMESTAMP`, `NULL`, `datetime(...)` without the 'subsec', 'localtime' or 'utc' modifier, or a SQL string of SQLite's canonical UTC date/time text, found `date('now')` (spec/records-sample-data)
+
+## i61_tag_malformed.volt
+i61_tag_malformed.volt:4:21: error: spec/columns: tag "json=name" is not one key:"value" pair: write e.g. "json:\"name\"" (spec/columns)
+
+## i62_tag_db_reserved.volt
+i62_tag_db_reserved.volt:4:21: error: spec/columns: tag key "db" is reserved: the db tag is the scan contract (spec/struct-tags)
+
+## i63_tag_duplicate_key.volt
+i63_tag_duplicate_key.volt:4:40: error: spec/columns: tag key "json" appears more than once on this column (spec/columns)
+
+## i78_autoincrement_text.volt
+i78_autoincrement_text.volt:4:20: error: spec/columns: autoincrement on "code" (string): only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; a column that is not int is never the rowid alias (spec/columns, spec/mapping-to-sqlite-ddl)
+
+## i79_autoincrement_not_pk.volt
+i79_autoincrement_not_pk.volt:7:16: error: spec/columns: autoincrement on "counter": only the database-assigned key, the single-column primary key of the built-in int that is no foreign key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (spec/columns, spec/mapping-to-sqlite-ddl)
+
+## i80_autoincrement_composite_pk.volt
+i80_autoincrement_composite_pk.volt:4:23: error: spec/columns: autoincrement on "user_id" in table "user_tags", whose primary key is (user_id, tag): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key, and so no database-assigned key, which alone takes AUTOINCREMENT (spec/columns)
+
+## i81_element_boundary.volt
+i81_element_boundary.volt:12:1: error: syntax: expected identifier in relationship endpoint (spec/relationships-ref), found the start of the next element (spec/line-structure-and-whitespace)
+i81_element_boundary.volt:12:1: error: syntax: unknown element type "tags" (spec/program-structure)
+

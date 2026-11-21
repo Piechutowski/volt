@@ -1,0 +1,18 @@
+// A Ref's delete: and update: become the foreign key's ON DELETE and
+// ON UPDATE clauses (spec/relationships-ref): null_set is SET NULL
+// and default_set is SET DEFAULT, two SQL words for one Volt word;
+// cascade and restrict are spelled as they are (spec/mapping-to-sqlite-ddl).
+
+table users {
+  id    int    [pk]
+  email string [unique]
+}
+
+table posts {
+  id        int [pk]
+  author_id int [null, default: 1]
+  owner_id  int
+}
+
+ref: posts.author_id > users.id [delete: null_set, update: default_set]
+ref: posts.owner_id > users.id [delete: cascade, update: restrict]

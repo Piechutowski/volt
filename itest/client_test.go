@@ -1,0 +1,285 @@
+// The generated client (spec/generated-client) against the fixture server: the
+// typed methods round-trip the query routes in both wire formats, a
+// miss is errors.Is(err, volt.ErrNotFound), and a named controller
+// route is reachable as a raw response.
+package itest
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http/httptest"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Piechutowski/volt"
+	"github.com/Piechutowski/volt/itest/blog/app"
+	"github.com/Piechutowski/volt/itest/blog/app/client"
+	"github.com/Piechutowski/volt/itest/blog/db"
+	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/nao/run"
+)
+
+func TestClientQueryRoutes(t *testing.T) {
+	for _, f := range []volt.Format{volt.FormatJSON, volt.FormatGOB} {
+		srv := httptest.NewServer(handlerWithDB(t))
+		c := client.New(srv.URL)
+		c.Format = f
+		ctx := context.Background()
+
+		made, err := c.APIUserCreate(ctx, db.UserNew().EmailSet("two@example.com"))
+		if err != nil || made.Email != "two@example.com" || made.ID == 0 {
+			t.Fatalf("%v: create = %+v, %v", f, made, err)
+		}
+		all, err := c.APIUserList(ctx)
+		if err != nil || len(all) != 2 {
+			t.Fatalf("%v: list = %+v, %v", f, all, err)
+		}
+		since, err := c.APIUserSince(ctx, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC))
+		if err != nil || len(since) != 2 {
+			t.Fatalf("%v: since 2000 = %+v, %v; a time.Time parameter travels as RFC 3339 (spec/generated-client)", f, since, err)
+		}
+		if none, err := c.APIUserSince(ctx, time.Date(2999, 1, 1, 0, 0, 0, 0, time.UTC)); err != nil || len(none) != 0 {
+			t.Fatalf("%v: since 2999 = %+v, %v", f, none, err)
+		}
+		one, err := c.APIUserGet(ctx, made.ID)
+		if err != nil || one.ID != made.ID {
+			t.Fatalf("%v: get = %+v, %v", f, one, err)
+		}
+		if _, err := c.APIUserGet(ctx, 999); !errors.Is(err, volt.ErrNotFound) {
+			t.Fatalf("%v: miss = %v, want volt.ErrNotFound", f, err)
+		}
+		up, err := c.APIUserUpdate(ctx, made.ID, db.UserNew().EmailSet("dos@example.com"))
+		if err != nil || up.Email != "dos@example.com" {
+			t.Fatalf("%v: update = %+v, %v", f, up, err)
+		}
+		picked, err := c.APIUserPicked(ctx, []int64{made.ID, 1})
+		if err != nil || len(picked) != 2 || picked[0].ID != 1 {
+			t.Fatalf("%v: picked = %+v, %v", f, picked, err)
+		}
+		if none, err := c.APIUserPicked(ctx, nil); err != nil || len(none) != 0 {
+			t.Fatalf("%v: picked none = %+v, %v", f, none, err)
+		}
+		latest, err := c.APIUserLatest(ctx, 1)
+		if err != nil || len(latest) != 1 || latest[0].ID != made.ID {
+			t.Fatalf("%v: latest 1 = %+v, %v; want the newest user (spec/generated-client)", f, latest, err)
+		}
+		var pe *volt.ProblemError
+		if _, err := c.APIUserLatest(ctx, 0); !errors.As(err, &pe) || pe.Status != 400 {
+			t.Fatalf("%v: latest 0 = %v, want a 400 problem (spec/selects-over-groups)", f, err)
+		}
+		if err := c.APIUserDelete(ctx, made.ID); err != nil {
+			t.Fatalf("%v: delete = %v", f, err)
+		}
+		if err := c.APIUserDelete(ctx, made.ID); !errors.Is(err, volt.ErrNotFound) {
+			t.Fatalf("%v: second delete = %v, want volt.ErrNotFound", f, err)
+		}
+
+		if _, err := c.MsRevenueBrowse(ctx, 2024); err != nil {
+			t.Fatalf("%v: dataset route = %v", f, err)
+		}
+		if _, err := c.MsUsageBrowse(ctx, 2024); err != nil {
+			t.Fatalf("%v: dataset route = %v", f, err)
+		}
+
+		resp, err := c.User(ctx, 7)
+		if err != nil || resp.StatusCode != 200 {
+			t.Fatalf("%v: raw user = %v %v", f, resp, err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if !strings.Contains(string(body), "/users/{id}") {
+			t.Fatalf("%v: raw body %q", f, body)
+		}
+		srv.Close()
+	}
+}
+
+// TestEventRouteStreams (spec/event-routes): what the server publishes reaches
+// every connected client through the generated Events method, in
+// order, and a late subscriber replays what it missed.
+func TestEventRouteStreams(t *testing.T) {
+	h, broker := fixture(t)
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	c := client.New(srv.URL)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	a := c.Events(ctx)
+	b := c.Events(ctx)
+	type change struct {
+		Table string
+		IDs   []int
+	}
+	if err := broker.Publish("table.changed", change{"users", []int{1}}); err != nil {
+		t.Fatal(err)
+	}
+	for name, ch := range map[string]<-chan volt.Event{"a": a, "b": b} {
+		select {
+		case ev := <-ch:
+			var got change
+			if err := ev.Decode(&got); err != nil || ev.Name != "table.changed" || got.Table != "users" || len(got.IDs) != 1 {
+				t.Fatalf("%s: event = %+v (%v)", name, ev, err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("%s: no event", name)
+		}
+	}
+	late := c.Events(ctx)
+	select {
+	case ev := <-late:
+		if ev.Name != "table.changed" {
+			t.Fatalf("late subscriber got %+v", ev)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("late subscriber saw no replay")
+	}
+}
+
+// TestClientValidationErrors: the generated client sees a refused
+// write as a *volt.ProblemError carrying the status and the field
+// details the server itemized (spec/formats, spec/changesets), in GOB too.
+func TestClientValidationErrors(t *testing.T) {
+	srv := httptest.NewServer(handlerWithDB(t))
+	defer srv.Close()
+	c := client.New(srv.URL)
+	c.Format = volt.FormatGOB
+	ctx := context.Background()
+
+	_, err := c.APIUserCreate(ctx, db.UserNew().EmailSet("nope"))
+	var he volt.HTTPError
+	if !errors.As(err, &he) || he.StatusCode() != 422 {
+		t.Fatalf("invalid email = %v", err)
+	}
+	var pe *volt.ProblemError
+	if !errors.As(err, &pe) || !detailNamed(pe.Details(), "EmailValid", "email") {
+		t.Fatalf("no attribution through the client: %v", err)
+	}
+	_, err = c.APIUserUpdate(ctx, 1, db.UserNew().EmailSet(""))
+	if !errors.As(err, &pe) || pe.StatusCode() != 422 || !detailNamed(pe.Details(), "required", "email") {
+		t.Fatalf("empty email on update = %v, want 422 with required on email", err)
+	}
+	_, err = c.APIUserCreate(ctx, db.UserNew().EmailSet("one@example.com"))
+	if !errors.As(err, &pe) || pe.StatusCode() != 409 || !detailNamed(pe.Details(), "unique", "email") {
+		t.Fatalf("duplicate = %v, want 409 with unique on email", err)
+	}
+	if _, err := c.APIUserUpdate(ctx, 999, db.UserNew().EmailSet("x@example.com")); !errors.Is(err, volt.ErrNotFound) {
+		t.Fatalf("update of a missing row = %v, want volt.ErrNotFound", err)
+	}
+}
+
+// TestClientBodyRoutes proves spec/generated-client for routes that
+// bind a body (spec/request-bodies): the raw method of a changeset body
+// sends the changeset's Params, in GOB as well as JSON, and the raw
+// method of a struct body sends whatever value it is handed.
+func TestClientBodyRoutes(t *testing.T) {
+	srv := httptest.NewServer(handlerWithDB(t))
+	defer srv.Close()
+	ctx := context.Background()
+	for _, f := range []volt.Format{volt.FormatJSON, volt.FormatGOB} {
+		c := client.New(srv.URL)
+		c.Format = f
+		resp, err := c.ChangeEmail(ctx, 1, db.UserNew().EmailSet("tres@example.com"))
+		if err != nil || resp.StatusCode != 200 {
+			t.Fatalf("%v: change email = %v, %v", f, resp, err)
+		}
+		resp.Body.Close()
+		resp, err = c.ChangeEmail(ctx, 1, db.UserNew().EmailSet("nope"))
+		if err != nil || resp.StatusCode != 422 {
+			t.Fatalf("%v: invalid email = %v, %v; want the handler's 422", f, resp, err)
+		}
+		resp.Body.Close()
+	}
+	c := client.New(srv.URL)
+	resp, err := c.Login(ctx, map[string]string{"Email": "one@example.com", "Password": "open sesame"})
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatalf("login = %v, %v", resp, err)
+	}
+	resp.Body.Close()
+}
+
+// TestClientHeader proves the generated constructor starts the client
+// with an empty Header, so a header set on a fresh client reaches the
+// scope load of every route beneath, through the typed method of a
+// query route and the raw method of a controller route alike
+// (spec/generated-client, spec/scope-loads).
+func TestClientHeader(t *testing.T) {
+	srv := httptest.NewServer(handlerWithDB(t))
+	defer srv.Close()
+	ctx := context.Background()
+	c := client.New(srv.URL)
+	var he volt.HTTPError
+	if _, err := c.MeUserList(ctx); !errors.As(err, &he) || he.StatusCode() != 401 {
+		t.Fatalf("no X-User = %v, want the load's 401", err)
+	}
+	c.Header.Set("X-User", "1")
+	for _, f := range []volt.Format{volt.FormatJSON, volt.FormatGOB} {
+		c.Format = f
+		if peers, err := c.MeUserList(ctx); err != nil || len(peers) != 1 {
+			t.Fatalf("%v: X-User 1 on a query route = %+v, %v", f, peers, err)
+		}
+		resp, err := c.MeShow(ctx)
+		if err != nil || resp.StatusCode != 200 {
+			t.Fatalf("%v: X-User 1 on a controller route = %v, %v", f, resp, err)
+		}
+		resp.Body.Close()
+	}
+}
+
+// An optional parameter travels only when present: the client leaves an
+// absent one out of the query string, the route binds the missing key as
+// absent, and the select's term that reads it is true, an exists term
+// whole (spec/predicates, spec/query-routes, spec/generated-client).
+func TestClientOptionalParams(t *testing.T) {
+	ctx := context.Background()
+	dbh := fixtureDB(t)
+	two, err := run.Run(ctx, dbh, db.UserCreate(db.UserNew().EmailSet("two@example.com")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run.Run(ctx, dbh, db.ProfileCreate(db.ProfileNew().UserIDSet(two.ID).BioSet("writes go"))); err != nil {
+		t.Fatal(err)
+	}
+	h := app.NewRouter(fixtureControllers(dbh, &volt.Broker{}))
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	c := client.New(srv.URL)
+	ids := func(rows []db.User) []int64 {
+		out := make([]int64, len(rows))
+		for i, r := range rows {
+			out[i] = r.ID
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name string
+		bio  rt.Null[string]
+		from rt.Null[int64]
+		want []int64
+	}{
+		{"both absent", rt.Null[string]{}, rt.Null[int64]{}, []int64{1, two.ID}},
+		{"bio present", rt.Some("%go%"), rt.Null[int64]{}, []int64{two.ID}},
+		{"bio matching nobody", rt.Some("%rust%"), rt.Null[int64]{}, []int64{}},
+		{"from present", rt.Null[string]{}, rt.Some(two.ID), []int64{two.ID}},
+	} {
+		rows, err := c.APIUserDescribed(ctx, tc.bio, tc.from)
+		if err != nil || !slices.Equal(ids(rows), tc.want) {
+			t.Errorf("%s: %v, %v; want %v", tc.name, ids(rows), err, tc.want)
+		}
+	}
+	if rec := call(h, "GET", "/api/described?from=many", nil); rec.Code != 400 || !strings.Contains(rec.Body.String(), "from") {
+		t.Errorf("an unparseable optional value: %d %q, want a 400 naming from", rec.Code, rec.Body.String())
+	}
+	resp, err := c.Both(ctx, 1, 2, rt.Some("%go%"))
+	var both map[string]int
+	if err != nil || resp.StatusCode != 200 || json.NewDecoder(resp.Body).Decode(&both) != nil || both["latest"] != 2 || both["described"] != 1 {
+		t.Errorf("the raw method of a controller route sending its loads' keys = %v, %v, %v; want latest 2 and described 1, the user from 2 whose bio is about go", resp, both, err)
+	}
+	if resp != nil {
+		resp.Body.Close()
+	}
+}

@@ -1,0 +1,105 @@
+package volt
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+)
+
+// Client is the wire side of a generated client package (spec/generated-client).
+// It speaks the Formats rules from the other end: Accept and
+// Content-Type from Format, the reply decoded by its Content-Type.
+type Client struct {
+	Base   string       // server origin, e.g. "http://localhost:8888"; no trailing slash
+	HTTP   *http.Client // nil means http.DefaultClient
+	Format Format       // wire format for request bodies and Accept; FormatJSON by default
+	Header http.Header  // default headers of every request; Accept, Content-Type and a stream's Last-Event-ID stay the client's own
+}
+
+// Do issues one request. A non-nil in is encoded as the body; a non-nil
+// out receives the decoded reply. A reply outside 2xx is returned as an
+// HTTPError carrying its status and body text, so errors.Is(err,
+// volt.ErrNotFound) holds for a 404 and errors.As recovers any status.
+func (c *Client) Do(ctx context.Context, method, url string, in, out any) error {
+	resp, err := c.send(ctx, method, url, in)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return problemOf(resp)
+	}
+	if bodyless(out) || resp.StatusCode == http.StatusNoContent {
+		return nil
+	}
+	f, ok := FormatOf(resp.Header.Get("Content-Type"))
+	if !ok {
+		return fmt.Errorf("volt client: %s %s answered %q, which is neither JSON nor GOB", method, url, resp.Header.Get("Content-Type"))
+	}
+	return DecodeBody(f, resp.Body, out)
+}
+
+// Raw issues a request to a controller route and returns the response
+// for the caller to read and close; in, when not nil, is encoded in the
+// client's format as the body (spec/generated-client).
+func (c *Client) Raw(ctx context.Context, method, url string, in any) (*http.Response, error) {
+	return c.send(ctx, method, url, in)
+}
+
+func (c *Client) send(ctx context.Context, method, url string, in any) (*http.Response, error) {
+	var body io.Reader
+	if !bodyless(in) {
+		var buf bytes.Buffer
+		if err := Encode(&buf, c.Format, in); err != nil {
+			return nil, err
+		}
+		body = &buf
+	}
+	req, err := c.requestNew(ctx, method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	if !bodyless(in) {
+		req.Header.Set("Content-Type", c.Format.MIME())
+	}
+	req.Header.Set("Accept", c.Format.MIME())
+	return c.httpClient().Do(req)
+}
+
+func (c *Client) requestNew(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.Base+url, body)
+	if err != nil {
+		return nil, err
+	}
+	for k, vs := range c.Header {
+		switch http.CanonicalHeaderKey(k) {
+		case "Accept", "Content-Type":
+			continue
+		}
+		for _, v := range vs {
+			req.Header.Add(k, v)
+		}
+	}
+	return req, nil
+}
+
+func (c *Client) httpClient() *http.Client {
+	if c.HTTP == nil {
+		return http.DefaultClient
+	}
+	return c.HTTP
+}
+
+func problemOf(resp *http.Response) error {
+	if f, ok := FormatOf(resp.Header.Get("Content-Type")); ok {
+		var p Problem
+		if err := DecodeBody(f, io.LimitReader(resp.Body, 1<<20), &p); err == nil && p.Status != 0 {
+			return &ProblemError{p}
+		}
+	}
+	msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	return Error(resp.StatusCode, strings.TrimSpace(string(msg)))
+}

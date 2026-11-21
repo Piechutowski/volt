@@ -1,0 +1,752 @@
+// Package parser turns Volt source into an ast.File, mirroring go/parser.
+//
+// The parser is a hand-written recursive descent over the EBNF of the
+// specification (docs/spec.md): one method per production. It is
+// syntax-only: it accepts any setting name in any position, any value
+// shape the token stream allows, and unresolved names; the check package
+// judges meaning.
+//
+// On a syntax error the parser records a diagnostic and synchronizes to
+// the next line or the enclosing brace. A file is parsed element by
+// element (reuse.go): the scanner cuts it where an element begins
+// (spec/line-structure-and-whitespace), and each piece is parsed on its own.
+package parser
+
+import (
+	"cmp"
+	"slices"
+	"strings"
+
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/scanner"
+	"github.com/Piechutowski/volt/lang/token"
+)
+
+// ParseFile parses one Volt source file. It always returns a (possibly
+// partial) AST; diagnostics carry every lexical and syntax error found.
+func ParseFile(filename, src string) (*ast.File, []diag.Diagnostic) {
+	f, diags, _, _ := ParseFileReuse(filename, src, nil)
+	return f, diags
+}
+
+type parser struct {
+	line      bool
+	lineDepth int
+	lineFirst bool
+	lineCtx   string
+
+	toks  []token.Token
+	docs  []scanner.Doc
+	pos   int
+	diags []diag.Diagnostic
+	buf   []token.Token
+
+	idents   slab[ast.Ident]
+	quals    slab[ast.QualName]
+	columns  slab[ast.Column]
+	types    slab[ast.TypeRef]
+	settings slab[ast.Setting]
+	lists    slab[ast.SettingList]
+	lits     slab[ast.BasicLit]
+}
+
+type slab[T any] struct{ chunk []T }
+
+func (s *slab[T]) new() *T {
+	if len(s.chunk) == cap(s.chunk) {
+		s.chunk = make([]T, 0, 256)
+	}
+	s.chunk = s.chunk[:len(s.chunk)+1]
+	return &s.chunk[len(s.chunk)-1]
+}
+
+func (p *parser) identOf(t token.Token) *ast.Ident {
+	id := p.idents.new()
+	id.Tok = t
+	return id
+}
+
+func (p *parser) litOf(t token.Token) *ast.BasicLit {
+	l := p.lits.new()
+	l.Tok = t
+	return l
+}
+
+func (p *parser) qualOf(parts ...*ast.Ident) *ast.QualName {
+	q := p.quals.new()
+	q.Parts = parts
+	return q
+}
+
+type bailout struct{}
+
+func (p *parser) doc() *ast.CommentGroup {
+	i, ok := slices.BinarySearchFunc(p.docs, p.pos, func(d scanner.Doc, tok int) int { return cmp.Compare(d.Tok, tok) })
+	if !ok {
+		return nil
+	}
+	return &ast.CommentGroup{List: p.docs[i].Comments}
+}
+
+func (p *parser) cur() token.Token { return p.toks[p.pos] }
+func (p *parser) next() token.Token {
+	t := p.toks[p.pos]
+	if p.line {
+		if t.NLBefore && p.lineDepth == 0 && !p.lineFirst {
+			p.fail(t, "expected end of line after %s, found %s", p.lineCtx, t)
+		}
+		p.lineFirst = false
+		switch t.Kind {
+		case token.LBRACE, token.LBRACKET, token.LPAREN:
+			p.lineDepth++
+		case token.RBRACE, token.RBRACKET, token.RPAREN:
+			p.lineDepth--
+		}
+	}
+	p.pos++
+	return t
+}
+
+func (p *parser) lineBegin(ctx string) {
+	p.line, p.lineDepth, p.lineFirst, p.lineCtx = true, 0, true, ctx
+}
+
+func (p *parser) lineClear() { p.line = false }
+func (p *parser) at(k token.Kind) bool {
+	return p.cur().Kind == k
+}
+
+func (p *parser) peekNL(n int) bool {
+	return p.pos+n < len(p.toks) && p.toks[p.pos+n].NLBefore
+}
+
+func (p *parser) peekKind(n int) token.Kind {
+	if p.pos+n >= len(p.toks) {
+		return token.EOF
+	}
+	return p.toks[p.pos+n].Kind
+}
+
+func (p *parser) atKw(kw string) bool {
+	t := p.cur()
+	return t.Kind == token.IDENT && strings.EqualFold(t.Val, kw)
+}
+
+func (p *parser) errorf(t token.Token, format string, args ...any) {
+	p.diags = append(p.diags, diag.Errorf(t.Pos, "syntax", format, args...))
+}
+
+func (p *parser) fail(t token.Token, format string, args ...any) {
+	p.errorf(t, format, args...)
+	panic(bailout{})
+}
+
+func (p *parser) expect(k token.Kind, ctx string) token.Token {
+	if !p.at(k) {
+		p.fail(p.cur(), "expected %s in %s, found %s", k, ctx, p.cur())
+	}
+	return p.next()
+}
+
+func (p *parser) endOfLine(ctx string) {
+	p.line = false
+	if p.at(token.RBRACE) || p.at(token.EOF) || p.cur().NLBefore {
+		return
+	}
+	p.fail(p.cur(), "expected end of line after %s, found %s", ctx, p.cur())
+}
+
+func (p *parser) ident(ctx string) *ast.Ident {
+	return p.identOf(p.name(ctx))
+}
+
+func (p *parser) name(ctx string) token.Token {
+	t := p.expect(token.IDENT, ctx)
+	if c := t.Val[0]; '0' <= c && c <= '9' {
+		p.errorf(t, "%s begins with a digit: a name is a Go identifier, a letter or underscore followed by letters, digits and underscores (spec/identifiers)", t.Val)
+	}
+	return t
+}
+
+func (p *parser) qualName(ctx string) *ast.QualName {
+	first := p.ident(ctx)
+	if p.at(token.DOT) {
+		p.next()
+		return p.qualOf(first, p.ident(ctx))
+	}
+	return p.qualOf(first)
+}
+
+func (p *parser) file(name string) *ast.File {
+	f := &ast.File{Name: name}
+	for !p.at(token.EOF) {
+		if d := p.decl(); d != nil {
+			f.Decls = append(f.Decls, d)
+		}
+	}
+	f.EOF = p.cur().Pos
+	return f
+}
+
+func (p *parser) decl() (d ast.Decl) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(bailout); !ok {
+				panic(r)
+			}
+			d = nil
+			p.topLevelSync()
+		}
+	}()
+
+	t := p.cur()
+	if t.Kind != token.IDENT {
+		p.fail(t, "expected an element type at top level (spec/program-structure), found %s", t)
+	}
+	lower := strings.ToLower(t.Val)
+	if right, ok := declWords[lower]; ok && right != t.Val {
+		p.caseErr(t, right)
+		p.toks[p.pos].Val = right
+	}
+	switch lower {
+	case "package":
+		return p.packageClause()
+	case "import":
+		if p.peekKind(1) == token.LPAREN {
+			return p.importDecl()
+		}
+		p.fail(t, "expected '(' after import (spec/imports); Volt uses Go-style import blocks")
+		return nil
+	case "pipeline":
+		return p.pipeline()
+	case "group":
+		return p.groupDecl()
+	case "pred":
+		return p.predDecl()
+	case "select":
+		return p.selectDecl()
+	case "scope":
+		return p.scope()
+	case "get", "post", "put", "patch", "delete", "options", "head", "any", "resources", "dataset":
+		p.fail(t,
+			"routes, resources and datasets must appear inside a scope (spec/scopes-and-routes)")
+		return nil
+	case "table":
+		return p.table()
+	case "table_partial":
+		return p.tablePartial()
+	case "type":
+		return p.typeDecl()
+	case "ref":
+		return p.ref()
+	case "records":
+		return p.recordsDecl()
+	case "migration":
+		return p.migration()
+	default:
+		p.fail(t, "unknown element type %q (spec/program-structure)", t.Val)
+		return nil
+	}
+}
+
+func (p *parser) topLevelSync() {
+	p.line = false
+	for !p.at(token.EOF) {
+		p.next()
+	}
+}
+
+func (p *parser) lineSync() {
+	p.lineSyncTo(token.RBRACE)
+}
+
+func (p *parser) lineSyncTo(closers ...token.Kind) {
+	p.line = false
+	closed := func() bool {
+		for _, k := range closers {
+			if p.at(k) {
+				return true
+			}
+		}
+		return p.at(token.EOF)
+	}
+	if !closed() {
+		p.next()
+	}
+	for !closed() && !p.cur().NLBefore {
+		p.next()
+	}
+}
+
+func (p *parser) item(parse func()) bool {
+	return p.itemTo(parse, token.RBRACE)
+}
+
+func (p *parser) itemTo(parse func(), closers ...token.Kind) (dropped bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(bailout); !ok {
+				panic(r)
+			}
+			p.lineSyncTo(closers...)
+			dropped = true
+		}
+	}()
+	parse()
+	return false
+}
+
+func (p *parser) settingsAt(construct string) *ast.SettingList {
+	if !p.at(token.LBRACKET) {
+		return nil
+	}
+	if p.cur().NLBefore {
+		p.errorf(p.cur(), "a settings list stays on the line of the %s it modifies, found '[' on the next line (spec/settings-lists)", construct)
+	}
+	return p.settingList()
+}
+
+func (p *parser) table() *ast.Table {
+	d := &ast.Table{Doc: p.doc(), TablePos: p.next().Pos}
+	d.Name = p.ident("table name (spec/table)")
+	d.Settings = p.settingsAt("table")
+	p.expect(token.LBRACE, "table (spec/table)")
+	d.Body, d.Incomplete = p.tableBody("table")
+	d.Rbrace = p.expect(token.RBRACE, "table (spec/table)").Pos
+	return d
+}
+
+func (p *parser) tablePartial() *ast.TablePartial {
+	d := &ast.TablePartial{Doc: p.doc(), PartialPos: p.next().Pos}
+	d.Name = p.ident("table_partial name (spec/tablepartial)")
+	if p.at(token.LBRACKET) {
+		p.fail(p.cur(), "a table_partial takes no settings; its body holds columns, indexes and validators (spec/tablepartial)")
+	}
+	p.expect(token.LBRACE, "table_partial (spec/tablepartial)")
+	d.Body, d.Incomplete = p.tableBody("table_partial")
+	d.Rbrace = p.expect(token.RBRACE, "table_partial (spec/tablepartial)").Pos
+	return d
+}
+
+func (p *parser) tableBody(what string) (items []ast.TableItem, incomplete bool) {
+	for !p.at(token.RBRACE) && !p.at(token.EOF) {
+		if item := p.tableItem(what); item != nil {
+			items = append(items, item)
+		} else {
+			incomplete = true
+		}
+	}
+	return items, incomplete
+}
+
+func (p *parser) tableItem(what string) (item ast.TableItem) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(bailout); !ok {
+				panic(r)
+			}
+			item = nil
+			p.lineSync()
+		}
+	}()
+
+	t := p.cur()
+	switch {
+	case t.Kind == token.TILDE:
+		p.lineBegin("partial injection (spec/tablepartial)")
+		pr := &ast.PartialRef{Doc: p.doc(), TildePos: t.Pos}
+		p.next()
+		pr.Name = p.ident("partial injection (spec/tablepartial)")
+		p.endOfLine("partial injection (spec/tablepartial)")
+		return pr
+	case p.atKw("indexes") && p.peekKind(1) == token.LBRACE:
+		return p.indexesBlock()
+	case p.atKw("validators") && p.peekKind(1) == token.LBRACE:
+		return p.validatorsBlock()
+	case p.atKw("records") && (p.peekKind(1) == token.LPAREN || p.peekKind(1) == token.LBRACE):
+		return p.records(nil)
+	case t.Kind == token.IDENT:
+		return p.column()
+	default:
+		p.fail(t, "expected a column, indexes, validators, records or '~injection' in %s body (spec/%s), found %s", what, strings.ToLower(what), t)
+		return nil
+	}
+}
+
+func (p *parser) column() *ast.Column {
+	c := p.columns.new()
+	c.Doc = p.doc()
+	p.lineBegin("column definition (spec/columns)")
+	c.Name = p.ident("column name (spec/columns)")
+	c.Type = p.typeRef()
+	if !p.cur().NLBefore && !p.at(token.LBRACKET) && !p.at(token.RBRACE) && !p.at(token.EOF) {
+		p.errorf(p.cur(), "expected a settings list or end of line after the column type (spec/columns), found %s", p.cur())
+		for !p.at(token.EOF) && !p.at(token.RBRACE) && !p.cur().NLBefore {
+			p.next()
+		}
+	}
+	if p.at(token.LBRACKET) && !p.cur().NLBefore {
+		c.Settings = p.settingList()
+	}
+	p.endOfLine("column definition (spec/columns)")
+	return c
+}
+
+func (p *parser) typeRef() *ast.TypeRef {
+	tr := p.types.new()
+	if p.at(token.LBRACKET) && p.peekKind(1) == token.RBRACKET {
+		tr.Slice = true
+		tr.Lbrack = p.next().Pos
+		p.next()
+	}
+	tr.Name = p.qualName("column type (spec/columns)")
+	return tr
+}
+
+func (p *parser) indexesBlock() *ast.IndexesBlock {
+	b := &ast.IndexesBlock{Doc: p.doc(), IndexesPos: p.kwTake("indexes").Pos}
+	p.expect(token.LBRACE, "indexes block (spec/indexes)")
+	for !p.at(token.RBRACE) && !p.at(token.EOF) {
+		p.item(func() { b.Indexes = append(b.Indexes, p.index()) })
+	}
+	b.Rbrace = p.expect(token.RBRACE, "indexes block (spec/indexes)").Pos
+	return b
+}
+
+func (p *parser) indexAtom() ast.Node {
+	t := p.cur()
+	switch t.Kind {
+	case token.IDENT:
+		return p.ident("index key (spec/indexes)")
+	case token.FUNCEXPR:
+		return &ast.FuncExpr{Tok: p.next()}
+	default:
+		p.fail(t,
+			"index key must be a column name or backtick expression (spec/indexes), found %s", t)
+		return nil
+	}
+}
+
+func (p *parser) index() *ast.Index {
+	doc := p.doc()
+	p.lineBegin("index definition (spec/indexes)")
+	ix := p.indexRest()
+	ix.Doc = doc
+	p.endOfLine("index definition (spec/indexes)")
+	return ix
+}
+
+func (p *parser) indexRest() *ast.Index {
+	ix := &ast.Index{}
+	if p.at(token.LPAREN) {
+		ix.Composite = true
+		p.next()
+		for {
+			ix.Key = append(ix.Key, p.indexAtom())
+			if p.at(token.COMMA) {
+				p.next()
+				continue
+			}
+			break
+		}
+		p.expect(token.RPAREN, "composite index key (spec/indexes)")
+	} else {
+		ix.Key = append(ix.Key, p.indexAtom())
+	}
+	if p.at(token.LBRACKET) && !p.cur().NLBefore {
+		ix.Settings = p.settingList()
+	}
+	return ix
+}
+
+func (p *parser) validatorsBlock() *ast.ValidatorsBlock {
+	b := &ast.ValidatorsBlock{Doc: p.doc(), ValidatorsPos: p.kwTake("validators").Pos}
+	p.expect(token.LBRACE, "validators block (spec/validators)")
+	for !p.at(token.RBRACE) && !p.at(token.EOF) {
+		p.item(func() {
+			p.lineBegin("validator (spec/validators)")
+			v := &ast.Validator{Doc: p.doc(), Ref: p.goRef("validator reference (spec/validators)")}
+			p.expect(token.LPAREN, "validator arguments (spec/validators)")
+			for {
+				v.Args = append(v.Args, p.ident("validator argument (spec/validators)"))
+				if !p.at(token.COMMA) {
+					break
+				}
+				p.next()
+			}
+			v.EndPos = p.expect(token.RPAREN, "validator arguments (spec/validators)").End()
+			p.endOfLine("validator (spec/validators)")
+			b.Validators = append(b.Validators, v)
+		})
+	}
+	b.Rbrace = p.expect(token.RBRACE, "validators block (spec/validators)").Pos
+	return b
+}
+
+func (p *parser) ref() *ast.Ref {
+	d := &ast.Ref{Doc: p.doc(), RefPos: p.next().Pos}
+	if !p.at(token.COLON) {
+		p.fail(p.cur(), "expected ':' after Ref (spec/relationships-ref), found %s", p.cur())
+	}
+	p.next()
+	d.Left = p.refEndpoint()
+	if !p.at(token.GT) {
+		p.fail(p.cur(), "expected '>' after the foreign key: a Ref is written foreign key > referenced columns (spec/relationships-ref), found %s", p.cur())
+	}
+	p.next()
+	d.Right = p.refEndpoint()
+	if p.at(token.LBRACKET) && !p.cur().NLBefore {
+		d.Settings = p.settingList()
+	}
+	d.SetEnd(p.toks[p.pos-1].End())
+	return d
+}
+
+func (p *parser) refEndpoint() *ast.RefEndpoint {
+	ep := &ast.RefEndpoint{Table: p.ident("relationship endpoint (spec/relationships-ref)")}
+	if !p.at(token.DOT) {
+		p.fail(p.cur(), "an endpoint is table.column or table.(columns) (spec/relationships-ref), found %s", p.cur())
+	}
+	p.next()
+	if !p.at(token.LPAREN) {
+		ep.Columns = []*ast.Ident{p.ident("endpoint column (spec/relationships-ref)")}
+		ep.SetEnd(ep.Columns[0].End())
+		return ep
+	}
+	p.next()
+	ep.Paren = true
+	for {
+		ep.Columns = append(ep.Columns, p.ident("endpoint column (spec/relationships-ref)"))
+		if !p.at(token.COMMA) {
+			break
+		}
+		p.next()
+	}
+	ep.SetEnd(p.expect(token.RPAREN, "endpoint column group (spec/relationships-ref)").End())
+	return ep
+}
+
+func (p *parser) typeDecl() *ast.TypeDecl {
+	p.lineBegin("type declaration (spec/types)")
+	d := &ast.TypeDecl{Doc: p.doc(), TypePos: p.next().Pos}
+	d.Name = p.qualName("declared type name (spec/types)")
+	d.Storage = p.typeRef()
+	d.EndPos = d.Storage.End()
+	if p.atKw("from") && !p.cur().NLBefore {
+		p.kwTake("from")
+		d.From = &ast.BasicLit{Tok: p.expect(token.STRING, "import path after from (spec/types)")}
+		d.EndPos = d.From.End()
+	}
+	p.endOfLine("type declaration (spec/types)")
+	return d
+}
+
+func (p *parser) recordsDecl() *ast.Records {
+	doc := p.doc()
+	pos := p.next().Pos
+	table := p.ident("records target table (spec/records-sample-data)")
+	return p.recordsRest(doc, pos, table)
+}
+
+func (p *parser) records(_ *ast.Ident) *ast.Records {
+	doc := p.doc()
+	pos := p.kwTake("records").Pos
+	return p.recordsRest(doc, pos, nil)
+}
+
+func (p *parser) recordsRest(doc *ast.CommentGroup, pos token.Position, table *ast.Ident) *ast.Records {
+	d := &ast.Records{Doc: doc, RecordsPos: pos, Table: table}
+	if p.at(token.LPAREN) {
+		d.HasColumns = true
+		p.next()
+		for {
+			d.Columns = append(d.Columns, p.ident("records column (spec/records-sample-data)"))
+			if p.at(token.COMMA) {
+				p.next()
+				continue
+			}
+			break
+		}
+		p.expect(token.RPAREN, "records column list (spec/records-sample-data)")
+	}
+	p.expect(token.LBRACE, "records body (spec/records-sample-data)")
+	for !p.at(token.RBRACE) && !p.at(token.EOF) {
+		p.item(func() {
+			if row := p.recordRow(); row != nil {
+				d.Rows = append(d.Rows, row)
+			}
+		})
+	}
+	d.Rbrace = p.expect(token.RBRACE, "records body (spec/records-sample-data)").Pos
+	return d
+}
+
+func (p *parser) recordRow() *ast.RecordRow {
+	row := &ast.RecordRow{Doc: p.doc()}
+	p.lineBegin("record row (spec/records-sample-data)")
+	for {
+		if len(row.Values) > 0 && (p.cur().NLBefore || p.at(token.RBRACE) || p.at(token.EOF)) {
+			p.errorf(p.toks[p.pos-1], "empty record field after the last ',': every field holds a value, and NULL is written null (spec/records-sample-data)")
+			p.lineClear()
+			return nil
+		}
+		if p.at(token.COMMA) || p.at(token.RBRACE) || p.at(token.EOF) {
+			p.fail(p.cur(), "empty record field: every field holds a value, and NULL is written null (spec/records-sample-data)")
+		}
+		row.Values = append(row.Values, p.recordValue())
+		if p.at(token.COMMA) && !p.cur().NLBefore {
+			p.next()
+			continue
+		}
+		p.endOfLine("record row (spec/records-sample-data)")
+		return row
+	}
+}
+
+func (p *parser) recordValue() ast.Node {
+	t := p.cur()
+	switch t.Kind {
+	case token.STRING, token.NUMBER:
+		return p.litOf(p.next())
+	case token.FUNCEXPR:
+		return &ast.FuncExpr{Tok: p.next()}
+	case token.MINUS:
+		p.next()
+		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "record value (spec/records-sample-data)"))}
+	case token.IDENT:
+		id := p.ident("record value (spec/records-sample-data)")
+		p.wordFold(id, literalWords)
+		if p.at(token.DOT) {
+			p.fail(p.cur(), "a dotted name is not a record value: a record value is a literal, true, false or null, and a declared type takes a literal of its storage type (spec/records-sample-data)")
+		}
+		return id
+	default:
+		p.fail(t, "invalid record value (spec/records-sample-data): found %s", t)
+		return nil
+	}
+}
+
+func (p *parser) settingList() *ast.SettingList {
+	sl := p.lists.new()
+	sl.Lbrack = p.expect(token.LBRACKET, "settings list (spec/settings-lists)").Pos
+	for {
+		s := p.setting()
+		sl.Settings = append(sl.Settings, s)
+		if p.at(token.COMMA) {
+			p.next()
+			continue
+		}
+		break
+	}
+	if p.at(token.IDENT) {
+		p.fail(p.cur(), "expected ',' or ']' in settings list, found %s: settings are separated by commas, and a setting name or value is one identifier (spec/settings-lists)", p.cur())
+	}
+	sl.Rbrack = p.expect(token.RBRACKET, "settings list (spec/settings-lists)").End()
+	return sl
+}
+
+func (p *parser) setting() *ast.Setting {
+	nameTok := p.name("setting name (spec/settings-lists)")
+	if right, ok := foldTo(nameTok.Val, SettingNames); ok && right != nameTok.Val {
+		p.caseErr(nameTok, right)
+		nameTok.Val = right
+	}
+	name := nameTok.Val
+	s := p.settings.new()
+	s.NameTok, s.Name = nameTok, name
+	s.SetEnd(nameTok.End())
+	if p.at(token.COLON) {
+		p.next()
+		if name == "ref" {
+			s.Value = p.refEndpoint()
+		} else {
+			s.Value = p.settingValue()
+		}
+		if id, ok := s.Value.(*ast.Ident); ok {
+			switch name {
+			case "delete", "update":
+				p.wordFold(id, RefActions)
+			case "default":
+				p.wordFold(id, literalWords)
+			}
+		}
+		if il, ok := s.Value.(*ast.IdentList); ok && name != "order" && name != "only" && name != "except" && !listShaped(il) {
+			p.errorf(nameTok, "the list of %s: is neither names separated by commas nor names each followed by asc or desc (spec/settings-lists)", name)
+		}
+		s.SetEnd(s.Value.End())
+	}
+	return s
+}
+
+func listShaped(il *ast.IdentList) bool {
+	directed := 0
+	for _, mod := range il.Mods {
+		if mod == nil {
+			continue
+		}
+		if v := mod.Name(); v != "asc" && v != "desc" {
+			return false
+		}
+		directed++
+	}
+	return directed == 0 || directed == len(il.Mods)
+}
+
+func (p *parser) settingValue() ast.Node {
+	t := p.cur()
+	switch t.Kind {
+	case token.STRING, token.NUMBER:
+		return p.litOf(p.next())
+	case token.FUNCEXPR:
+		return &ast.FuncExpr{Tok: p.next()}
+	case token.MINUS:
+		p.next()
+		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "setting value (spec/settings-lists)"))}
+	case token.COLON:
+		return p.param()
+	case token.LPAREN:
+		l := p.next()
+		il := &ast.IdentList{Lparen: l.Pos}
+		for {
+			name := p.ident("identifier list (spec/settings-whitelists)")
+			var qual *ast.Ident
+			if p.at(token.DOT) {
+				p.next()
+				qual, name = name, p.ident("identifier list (spec/settings-whitelists)")
+			}
+			il.Names = append(il.Names, name)
+			il.Quals = append(il.Quals, qual)
+			var mod *ast.Ident
+			if p.at(token.IDENT) && !p.cur().NLBefore {
+				mod = p.ident("identifier list (spec/settings-whitelists)")
+				p.wordFold(mod, orderWords)
+			}
+			il.Mods = append(il.Mods, mod)
+			if p.at(token.COMMA) {
+				p.next()
+				continue
+			}
+			break
+		}
+		il.Rparen = p.expect(token.RPAREN, "identifier list (spec/settings-whitelists)").End()
+		return il
+	case token.IDENT:
+		id := p.ident("setting value (spec/settings-lists)")
+		if p.at(token.DOT) {
+			p.next()
+			name := p.ident("qualified setting value (spec/scopes)")
+			if p.at(token.LPAREN) {
+				return p.queryCall(&ast.GoRef{Parts: []*ast.Ident{id, name}}, "a body: setting (spec/request-bodies)")
+			}
+			return &ast.QualIdent{Qual: id, Name: name}
+		}
+		if p.at(token.LPAREN) {
+			return p.queryCall(&ast.GoRef{Parts: []*ast.Ident{id}}, "a body: setting (spec/request-bodies)")
+		}
+		return id
+	default:
+		p.fail(t, "invalid setting value (spec/settings-lists): found %s", t)
+		return nil
+	}
+}

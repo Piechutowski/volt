@@ -1,0 +1,11 @@
+// spec/default-handlers — i115_resources_default_param
+// want: param: does not apply with [default]
+package app
+
+import (
+	db
+)
+
+scope /api {
+	resources db.users [default, param: key]
+}

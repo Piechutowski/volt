@@ -1,0 +1,89 @@
+package lsp
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/Piechutowski/volt/lsp/protocol"
+)
+
+func TestGoFileChangeRefreshesInBackground(t *testing.T) {
+	root := goRefProject(t)
+	schema := filepath.Join(root, "db", "schema.volt")
+	uri := "file://" + schema
+	s := NewServer()
+	s.debounce = 20 * time.Millisecond
+	var mu sync.Mutex
+	published := 0
+	ctx := &protocol.Context{Notify: func(method string, params any) {
+		if method == protocol.TextDocumentPublishDiagnostics && params.(protocol.PublishDiagnosticsParams).URI == uri {
+			mu.Lock()
+			published++
+			mu.Unlock()
+		}
+	}}
+	publishes := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return published
+	}
+	waitPublishes := func(n int) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for publishes() < n {
+			if time.Now().After(deadline) {
+				t.Fatalf("%d publishes, want %d", publishes(), n)
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{TextDocument: protocol.TextDocumentItem{URI: uri, Version: 1, Text: goRefSchema}}); err != nil {
+		t.Fatal(err)
+	}
+	waitPublishes(1)
+	session := s.sessionFor(root)
+	loads := func() int {
+		st := session.Stats()
+		return st.FilesParsed + st.FilesReused
+	}
+	unit := loads()
+	hover := protocol.Position{Line: 7, Character: 3}
+	if h, _ := s.hover(ctx, &protocol.HoverParams{TextDocumentPositionParams: protocol.TextDocumentPositionParams{TextDocument: protocol.TextDocumentIdentifier{URI: uri}, Position: hover}}); h == nil {
+		t.Fatal("precondition: the Go reference hovers before the rename")
+	}
+
+	goFile := filepath.Join(root, "db", "checks.go")
+	src, err := os.ReadFile(goFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(goFile, []byte(strings.ReplaceAll(string(src), "EmailValid", "AddressValid")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before := loads()
+	for i := 0; i < 5; i++ {
+		s.hover(ctx, &protocol.HoverParams{TextDocumentPositionParams: protocol.TextDocumentPositionParams{TextDocument: protocol.TextDocumentIdentifier{URI: uri}, Position: hover}})
+	}
+	if passes := (loads() - before) / unit; passes != 0 {
+		t.Fatalf("%d project passes ran on the requests' goroutine", passes)
+	}
+	waitPublishes(2)
+	time.Sleep(3 * s.debounce)
+	if passes := (loads() - before) / unit; passes < 1 || passes > 2 {
+		t.Fatalf("%d project passes after five requests, want one or two", passes)
+	}
+	doc := s.docGet(uri)
+	if doc.GoFilesChanged() {
+		t.Fatal("the adopted analysis still predates the Go file change")
+	}
+	if loc := doc.Definition(posOf(t, goRefSchema, "EmailValid", 0)); loc != nil {
+		t.Errorf("definition still resolves to the renamed function: %v", loc)
+	}
+	if publishes() > 3 {
+		t.Errorf("%d publishes for one Go file change", publishes())
+	}
+}

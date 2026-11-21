@@ -1,0 +1,854 @@
+// Volt-layer productions (spec Part II, docs/spec.md): the
+// package clause, Go-style imports, pipelines, scopes, routes and
+// resources. One method per production, in the style of the schema layer.
+package parser
+
+import (
+	"strings"
+
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/token"
+)
+
+var voltVerbs = foldMap(Verbs)
+
+func isVerb(v string) bool { return voltVerbs[strings.ToLower(v)] != "" }
+
+func isPut(v string) bool { return strings.EqualFold(v, "put") }
+
+func (p *parser) contiguous() bool {
+	t := p.cur()
+	return !t.SpBefore && !t.NLBefore
+}
+
+func (p *parser) packageClause() (d *ast.PackageClause) {
+	p.lineBegin("package clause (spec/projects-and-packages)")
+	d = &ast.PackageClause{Doc: p.doc(), PackagePos: p.next().Pos}
+	d.Name = p.ident("package clause (spec/projects-and-packages)")
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(bailout); !ok {
+				panic(r)
+			}
+			p.topLevelSync()
+		}
+	}()
+	if p.at(token.LBRACKET) && !p.cur().NLBefore {
+		p.errorf(p.cur(), "a package clause takes no settings list: a package is documented by the doc comment above its clause (spec/doc-comments)")
+		p.settingList()
+	}
+	p.endOfLine("package clause (spec/projects-and-packages)")
+	return d
+}
+
+func (p *parser) importDecl() *ast.ImportDecl {
+	d := &ast.ImportDecl{Doc: p.doc(), ImportPos: p.next().Pos}
+	p.expect(token.LPAREN, "import declaration (spec/imports)")
+	for !p.at(token.RPAREN) && !p.at(token.RBRACE) && !p.at(token.EOF) {
+		if p.itemTo(func() { d.Specs = append(d.Specs, p.importSpec()) }, token.RPAREN, token.RBRACE) {
+			d.Incomplete = true
+		}
+	}
+	d.Rparen = p.expect(token.RPAREN, "import declaration (spec/imports)").End()
+	if len(d.Specs) == 0 && !d.Incomplete {
+		p.errorf(p.toks[p.pos-1], "empty import declaration (spec/imports)")
+	}
+	return d
+}
+
+func (p *parser) importSpec() *ast.ImportSpec {
+	spec := &ast.ImportSpec{Doc: p.doc()}
+	p.lineBegin("import specifier (spec/imports)")
+	first := p.ident("import path (spec/imports)")
+	if p.at(token.IDENT) && !p.cur().NLBefore {
+		spec.Alias = first
+		first = p.ident("import path (spec/imports)")
+	}
+	spec.Path = []*ast.Ident{first}
+	for p.at(token.SLASH) && p.contiguous() {
+		p.next()
+		if !p.at(token.IDENT) || !p.contiguous() {
+			p.fail(p.cur(), "import path segments are identifiers separated by '/' with no spaces (spec/imports)")
+		}
+		spec.Path = append(spec.Path, p.ident("import path (spec/imports)"))
+	}
+	p.endOfLine("import specifier (spec/imports)")
+	return spec
+}
+
+func (p *parser) pipeline() *ast.Pipeline {
+	d := &ast.Pipeline{Doc: p.doc(), PipelinePos: p.next().Pos}
+	d.Name = p.ident("pipeline name (spec/pipelines)")
+	p.expect(token.LBRACE, "pipeline (spec/pipelines)")
+	for !p.at(token.RBRACE) && !p.at(token.EOF) {
+		if plug := p.plugLine(); plug != nil {
+			d.Plugs = append(d.Plugs, plug)
+		}
+	}
+	d.Rbrace = p.expect(token.RBRACE, "pipeline (spec/pipelines)").Pos
+	return d
+}
+
+func (p *parser) plugLine() (plug *ast.Plug) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(bailout); !ok {
+				panic(r)
+			}
+			plug = nil
+			p.lineSync()
+		}
+	}()
+
+	if !p.atKw("use") {
+		p.fail(p.cur(),
+			"expected 'use' plug line in pipeline body (spec/pipelines), found %s", p.cur())
+	}
+	p.lineBegin("plug line (spec/pipelines)")
+	plug = &ast.Plug{Doc: p.doc(), UsePos: p.kwTake("use").Pos}
+	plug.Ref = p.goRef("plug reference (spec/pipelines)")
+	p.endOfLine("plug line (spec/pipelines)")
+	return plug
+}
+
+func (p *parser) goRef(ctx string) *ast.GoRef {
+	first := p.ident(ctx)
+	if p.at(token.DOT) {
+		p.next()
+		return &ast.GoRef{Parts: []*ast.Ident{first, p.ident(ctx)}}
+	}
+	return &ast.GoRef{Parts: []*ast.Ident{first}}
+}
+
+func (p *parser) scope() *ast.Scope {
+	d := &ast.Scope{Doc: p.doc(), ScopePos: p.kwTake("scope").Pos}
+	d.Path = p.routePath()
+	d.Settings = p.settingsAt("scope")
+	p.expect(token.LBRACE, "scope (spec/scopes-and-routes)")
+	for !p.at(token.RBRACE) && !p.at(token.EOF) {
+		if item := p.scopeItem(); item != nil {
+			d.Items = append(d.Items, item)
+		}
+	}
+	d.Rbrace = p.expect(token.RBRACE, "scope (spec/scopes-and-routes)").Pos
+	return d
+}
+
+func (p *parser) scopeItem() (item ast.ScopeItem) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(bailout); !ok {
+				panic(r)
+			}
+			item = nil
+			p.lineSync()
+		}
+	}()
+
+	t := p.cur()
+	if t.Kind != token.IDENT {
+		p.fail(t, "expected a route, resources or nested scope in scope body (spec/scopes-and-routes), found %s", t)
+	}
+	switch {
+	case p.atKw("scope"):
+		return p.scope()
+	case p.atKw("resources"):
+		return p.resources()
+	case p.atKw("dataset"):
+		return p.dataset()
+	case p.atKw("load"):
+		return p.scopeLoad()
+	case isVerb(t.Val), isPut(t.Val):
+		return p.route()
+	default:
+		p.fail(t, "expected a verb (get, post, ...), 'resources', 'dataset', 'load' or 'scope' in scope body (spec/scopes-and-routes), found %q", t.Val)
+		return nil
+	}
+}
+
+func (p *parser) scopeLoad() *ast.ScopeLoad {
+	p.lineBegin("scope load (spec/scope-loads)")
+	d := &ast.ScopeLoad{Doc: p.doc(), LoadPos: p.kwTake("load").Pos}
+	d.Name = p.ident("scope load name (spec/scope-loads)")
+	d.Ref = p.goRef("scope load function (spec/scope-loads)")
+	p.endOfLine("scope load (spec/scope-loads)")
+	return d
+}
+
+func (p *parser) dataset() *ast.Dataset {
+	p.lineBegin("dataset (spec/datasets)")
+	d := &ast.Dataset{Doc: p.doc(), DatasetPos: p.kwTake("dataset").Pos}
+	d.Name = p.ident("dataset select name (spec/datasets)")
+	if p.at(token.DOT) {
+		p.next()
+		d.Pkg = d.Name
+		d.Name = p.ident("dataset select name (spec/datasets)")
+	}
+	if p.at(token.LBRACKET) && !p.cur().NLBefore {
+		d.Settings = p.settingList()
+	}
+	p.endOfLine("dataset (spec/datasets)")
+	return d
+}
+
+func (p *parser) route() *ast.Route {
+	p.lineBegin("route (spec/scopes-and-routes)")
+	r := &ast.Route{Doc: p.doc()}
+	if isPut(p.cur().Val) {
+		r.VerbTok = p.next()
+		r.VerbTok.Val = "put"
+	} else {
+		r.VerbTok = p.kwTake(voltVerbs[strings.ToLower(p.cur().Val)])
+	}
+	r.Path = p.routePath()
+	r.Handler = p.goRef("route handler (spec/scopes-and-routes)")
+	if p.at(token.LBRACKET) && !p.cur().NLBefore {
+		r.Settings = p.settingList()
+	}
+	if p.at(token.LBRACE) && !p.cur().NLBefore {
+		p.lineClear()
+		p.next()
+		for !p.at(token.RBRACE) && !p.at(token.EOF) {
+			if ld := p.load(); ld != nil {
+				r.Loads = append(r.Loads, ld)
+			}
+		}
+		r.Rbrace = p.expect(token.RBRACE, "load block (spec/route-loads)").End()
+	}
+	p.endOfLine("route (spec/scopes-and-routes)")
+	return r
+}
+
+func (p *parser) load() (ld *ast.Load) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(bailout); !ok {
+				panic(r)
+			}
+			ld = nil
+			p.lineSync()
+		}
+	}()
+	ld = &ast.Load{Doc: p.doc(), Name: p.ident("load name (spec/route-loads)")}
+	ld.Call = p.queryCall(p.goRef("load query (spec/route-loads)"), "load (spec/route-loads)")
+	p.endOfLine("load (spec/route-loads)")
+	return ld
+}
+
+// queryCall parses the argument list of a query call after its reference
+// (spec/route-loads): a load's query, or a body: setting's.
+func (p *parser) queryCall(ref *ast.GoRef, ctx string) *ast.QueryCall {
+	call := &ast.QueryCall{Ref: ref}
+	p.expect(token.LPAREN, "query call in "+ctx)
+	for !p.at(token.RPAREN) {
+		call.Args = append(call.Args, p.loadArg(ctx))
+		if !p.at(token.COMMA) {
+			break
+		}
+		p.next()
+		if p.at(token.RPAREN) {
+			p.fail(p.cur(), "expected an argument after the comma in %s, found %s", ctx, p.cur())
+		}
+	}
+	call.Rparen = p.expect(token.RPAREN, "query call in "+ctx).End()
+	return call
+}
+
+func (p *parser) loadArg(ctx string) ast.Node {
+	t := p.cur()
+	switch t.Kind {
+	case token.STRING, token.NUMBER:
+		return p.litOf(p.next())
+	case token.MINUS:
+		p.next()
+		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "argument in "+ctx))}
+	case token.IDENT:
+		return p.ident("argument in " + ctx)
+	}
+	p.fail(t, "expected a name or a literal as an argument in %s, found %s", ctx, t)
+	return nil
+}
+
+func (p *parser) resources() *ast.Resources {
+	p.lineBegin("resources (spec/resources)")
+	d := &ast.Resources{Doc: p.doc(), ResourcesPos: p.kwTake("resources").Pos}
+	d.Name = p.ident("resources model name (spec/resources)")
+	if p.at(token.DOT) {
+		p.next()
+		d.Pkg = d.Name
+		d.Name = p.ident("resources model name (spec/resources)")
+	}
+	if p.at(token.LBRACKET) && !p.cur().NLBefore {
+		d.Settings = p.settingList()
+		for _, s := range d.Settings.Settings {
+			if l, ok := s.Value.(*ast.IdentList); ok && (s.Name == "only" || s.Name == "except") {
+				for _, id := range l.Names {
+					p.wordFold(id, ResourceActions)
+				}
+			}
+		}
+	}
+	p.endOfLine("resources (spec/resources)")
+	return d
+}
+
+func (p *parser) routePath() *ast.RoutePath {
+	slash := p.expect(token.SLASH, "route path (spec/route-paths)")
+	rp := &ast.RoutePath{SlashPos: slash.Pos}
+	rp.SetEnd(slash.End())
+	for {
+		if !p.contiguous() {
+			break
+		}
+		switch p.cur().Kind {
+		case token.IDENT:
+			seg := &ast.Segment{Kind: ast.SegLit, Name: p.ident("path segment (spec/route-paths)")}
+			seg.MarkPos = seg.Name.Pos()
+			rp.Segments = append(rp.Segments, seg)
+		case token.COLON:
+			mark := p.next()
+			if !p.at(token.IDENT) || !p.contiguous() {
+				p.fail(p.cur(), "':' must be followed by a parameter name (spec/route-paths)")
+			}
+			seg := &ast.Segment{Kind: ast.SegParam, MarkPos: mark.Pos, Name: p.ident("path parameter (spec/route-paths)")}
+			if p.at(token.LPAREN) && p.contiguous() {
+				p.next()
+				if !p.at(token.IDENT) || !p.contiguous() {
+					p.fail(p.cur(), "parameter type is written ':name(type)' with no spaces (spec/route-paths)")
+				}
+				seg.Type = p.ident("parameter type (spec/route-paths)")
+				p.wordFold(seg.Type, ParamTypes)
+				if !p.at(token.RPAREN) || !p.contiguous() {
+					p.fail(p.cur(), "parameter type is written ':name(type)' with no spaces (spec/route-paths)")
+				}
+				seg.Rparen = p.next().End()
+			}
+			if p.at(token.DOT) && p.contiguous() {
+				for i := 0; i < 3; i++ {
+					if !p.at(token.DOT) || !p.contiguous() {
+						p.fail(p.cur(),
+							"wildcard ellipsis is spelled ':name...' (spec/route-paths)")
+					}
+					dot := p.next()
+					seg.SetEnd(dot.End())
+				}
+				if seg.Type != nil {
+					p.fail(p.toks[p.pos-1], "a wildcard cannot carry a type; ':name...' always captures a string (spec/route-paths)")
+				}
+				seg.Kind = ast.SegWild
+			}
+			rp.Segments = append(rp.Segments, seg)
+		case token.SLASH:
+			p.fail(p.cur(), "'/' must be followed by a path segment; routes match exactly, without a trailing slash (spec/route-paths)")
+		default:
+		}
+		if len(rp.Segments) == 0 {
+			break
+		}
+		last := rp.Segments[len(rp.Segments)-1]
+		rp.SetEnd(last.End())
+		if p.at(token.SLASH) && p.contiguous() {
+			slash := p.next()
+			if !p.contiguous() || (p.cur().Kind != token.IDENT && p.cur().Kind != token.COLON) {
+				p.fail(slash, "'/' must be followed by a path segment; routes match exactly, without a trailing slash (spec/route-paths)")
+			}
+			continue
+		}
+		break
+	}
+	return rp
+}
+
+func (p *parser) groupDecl() *ast.Group {
+	p.lineBegin("group declaration (spec/groups)")
+	d := &ast.Group{Doc: p.doc(), GroupPos: p.next().Pos}
+	d.Name = p.ident("group declaration (spec/groups)")
+	switch {
+	case p.at(token.LBRACE):
+		p.next()
+		for !p.at(token.RBRACE) && !p.at(token.EOF) {
+			dropped := p.item(func() {
+				doc := p.doc()
+				name := p.ident("group member (spec/groups)")
+				d.Terms = append(d.Terms, &ast.GroupTerm{Doc: doc, Names: []*ast.Ident{name}})
+				if !p.at(token.RBRACE) && !p.cur().NLBefore {
+					p.fail(p.cur(), "group members are one per line (spec/groups)")
+				}
+			})
+			if dropped {
+				d.Incomplete = true
+			}
+		}
+		d.EndPos = p.expect(token.RBRACE, "group declaration (spec/groups)").End()
+		p.endOfLine("group declaration (spec/groups)")
+	case p.at(token.EQ):
+		p.next()
+		d.Terms = append(d.Terms, p.groupTerm(false))
+		for p.at(token.PLUS) || p.at(token.BACKSLASH) || p.at(token.MINUS) {
+			if p.at(token.MINUS) {
+				p.fail(p.cur(), "'-' is not a group operator: set difference is spelled '\\' (spec/groups)")
+			}
+			neg := !p.at(token.PLUS)
+			p.next()
+			d.Terms = append(d.Terms, p.groupTerm(neg))
+		}
+		d.EndPos = d.Terms[len(d.Terms)-1].End()
+		p.endOfLine("group declaration (spec/groups)")
+	default:
+		p.fail(p.cur(), "expected '{' or '=' after the group name (spec/groups)")
+	}
+	return d
+}
+
+func (p *parser) groupTerm(neg bool) *ast.GroupTerm {
+	t := &ast.GroupTerm{Neg: neg}
+	if !p.at(token.LPAREN) {
+		t.Names = append(t.Names, p.ident("group expression (spec/groups)"))
+		return t
+	}
+	t.Lparen = p.next().Pos
+	for {
+		t.Names = append(t.Names, p.ident("group set member (spec/groups)"))
+		if !p.at(token.COMMA) {
+			break
+		}
+		p.next()
+	}
+	t.Rparen = p.expect(token.RPAREN, "group set (spec/groups)").End()
+	return t
+}
+
+func (p *parser) predDecl() *ast.Pred {
+	p.lineBegin("predicate declaration (spec/predicates)")
+	d := &ast.Pred{Doc: p.doc(), PredPos: p.next().Pos}
+	d.Name = p.ident("predicate declaration (spec/predicates)")
+	p.expect(token.LBRACE, "predicate declaration (spec/predicates)")
+	d.X = p.predExpr()
+	d.Rbrace = p.expect(token.RBRACE, "predicate declaration (spec/predicates)").End()
+	p.endOfLine("predicate declaration (spec/predicates)")
+	return d
+}
+
+func (p *parser) predExpr() ast.PredExpr {
+	x := p.predAnd()
+	for p.atKw("or") {
+		p.kwTake("or")
+		x = &ast.PredBinary{Op: "or", X: x, Y: p.predAnd()}
+	}
+	return x
+}
+
+func (p *parser) predAnd() ast.PredExpr {
+	x := p.predUnary()
+	for p.atKw("and") {
+		p.kwTake("and")
+		x = &ast.PredBinary{Op: "and", X: x, Y: p.predUnary()}
+	}
+	return x
+}
+
+func (p *parser) predUnary() ast.PredExpr {
+	if p.atKw("not") {
+		pos := p.kwTake("not").Pos
+		return &ast.PredNot{NotPos: pos, X: p.predUnary()}
+	}
+	return p.predPrimary()
+}
+
+func (p *parser) predPrimary() ast.PredExpr {
+	t := p.cur()
+	switch {
+	case p.at(token.LPAREN):
+		lp := p.next().Pos
+		x := p.predExpr()
+		rp := p.expect(token.RPAREN, "parenthesized predicate (spec/predicates)").End()
+		return &ast.PredParen{Lparen: lp, X: x, Rparen: rp}
+	case p.at(token.COLON), p.at(token.NUMBER), p.at(token.STRING), p.at(token.MINUS),
+		(p.atKw("true") || p.atKw("false")) && p.compOpAt(1):
+		x := p.operand()
+		return p.comparisonTail(x)
+	case p.atKw("exists") && p.peekKind(1) == token.IDENT:
+		return p.predExists()
+	case p.at(token.IDENT):
+		bare := "pred"
+		if p.compOpAt(1) || p.kwAt(1, "in") || p.kwAt(1, "like") || p.kwAt(1, "is") {
+			bare = "column"
+		}
+		col := p.colRef("predicate (spec/predicates)", bare)
+		switch {
+		case p.compOpAt(0):
+			return p.comparisonTail(col)
+		case p.atKw("in"):
+			return p.predIn(col)
+		case p.atKw("like"):
+			return p.predLike(col)
+		case p.atKw("is"):
+			return p.predNull(col)
+		case col.Qual != nil:
+			p.fail(p.cur(), "expected a comparison operator, in, like or is after the column %s (spec/predicates)", col.String())
+			return nil
+		default:
+			return &ast.PredRef{Name: col.Name}
+		}
+	default:
+		p.fail(t, "expected a predicate expression (spec/predicates), found %s", t)
+		return nil
+	}
+}
+
+func (p *parser) param() *ast.Param {
+	colon := p.next().Pos
+	if !p.at(token.IDENT) || !p.contiguous() {
+		p.fail(p.cur(), "':' must be directly followed by a parameter name (spec/predicates)")
+	}
+	x := &ast.Param{ColonPos: colon, Name: p.ident("parameter (spec/predicates)")}
+	if p.at(token.QUESTION) {
+		if !p.contiguous() {
+			p.fail(p.cur(), "'?' makes a parameter optional only directly after its name, :%s? (spec/predicates)", x.Name.Name())
+		}
+		p.next()
+		x.Optional = true
+	}
+	return x
+}
+
+func (p *parser) predExists() ast.PredExpr {
+	x := &ast.PredExists{ExistsPos: p.kwTake("exists").Pos}
+	p.predKeywordCheck("relation")
+	x.Rel = p.ident("exists (spec/predicates)")
+	x.Lparen = p.expect(token.LPAREN, "exists (spec/predicates)").Pos
+	x.X = p.predExpr()
+	x.Rparen = p.expect(token.RPAREN, "exists (spec/predicates)").End()
+	return x
+}
+
+// predKeywordCheck refuses a predicate keyword where a name stands, naming
+// what the name would be there, a column, a relation or a pred
+// (spec/keywords, spec/predicates).
+func (p *parser) predKeywordCheck(role string) {
+	t := p.cur()
+	if t.Kind != token.IDENT {
+		return
+	}
+	if _, ok := foldTo(t.Val, predWords); ok {
+		p.fail(t, "%q is a keyword inside a predicate and names no %s there (spec/predicates)", t.Val, role)
+	}
+}
+
+func (p *parser) kwAt(n int, kw string) bool {
+	if p.pos+n >= len(p.toks) {
+		return false
+	}
+	t := p.toks[p.pos+n]
+	return t.Kind == token.IDENT && strings.EqualFold(t.Val, kw)
+}
+
+func (p *parser) compOpAt(n int) bool {
+	switch p.peekKind(n) {
+	case token.EQ, token.NEQ, token.LT, token.LE, token.GT, token.GE:
+		return true
+	}
+	return false
+}
+
+func (p *parser) comparisonTail(x ast.Operand) ast.PredExpr {
+	if !p.compOpAt(0) {
+		p.fail(p.cur(), "expected a comparison operator (= != < <= > >=) (spec/predicates)")
+	}
+	op := p.next().Kind
+	return &ast.PredCompare{X: x, Op: op, Y: p.operand()}
+}
+
+func (p *parser) operand() ast.Operand {
+	t := p.cur()
+	switch {
+	case p.at(token.COLON):
+		return p.param()
+	case p.at(token.NUMBER), p.at(token.STRING):
+		return &ast.Lit{Tok: p.next()}
+	case p.at(token.MINUS) && p.peekKind(1) == token.NUMBER:
+		minus := p.next()
+		num := p.next()
+		num.Val = "-" + num.Val
+		num.Pos = minus.Pos
+		return &ast.Lit{Tok: num}
+	case p.atKw("true"):
+		return &ast.Lit{Tok: p.kwTake("true")}
+	case p.atKw("false"):
+		return &ast.Lit{Tok: p.kwTake("false")}
+	case p.at(token.IDENT):
+		return p.colRef("operand (spec/predicates)", "column")
+	default:
+		p.fail(t, "expected a column, :param or literal (spec/predicates), found %s", t)
+		return nil
+	}
+}
+
+// colRef reads a column reference: a name, or relation.column
+// (spec/predicates, spec/selects-over-groups); neither part is a predicate
+// keyword, and bare names what a lone name stands for, a column or a pred.
+func (p *parser) colRef(ctx, bare string) *ast.ColRef {
+	role := bare
+	if p.peekKind(1) == token.DOT {
+		role = "relation"
+	}
+	p.predKeywordCheck(role)
+	name := p.ident(ctx)
+	if !p.at(token.DOT) {
+		return &ast.ColRef{Name: name}
+	}
+	p.next()
+	p.predKeywordCheck("column")
+	return &ast.ColRef{Qual: name, Name: p.ident(ctx)}
+}
+
+func (p *parser) projCol(ctx string) *ast.ColRef {
+	name := p.ident(ctx)
+	if !p.at(token.DOT) {
+		return &ast.ColRef{Name: name}
+	}
+	p.next()
+	return &ast.ColRef{Qual: name, Name: p.ident(ctx)}
+}
+
+func (p *parser) predIn(col *ast.ColRef) ast.PredExpr {
+	p.kwTake("in")
+	x := &ast.PredIn{Col: col}
+	if p.at(token.COLON) {
+		prm, ok := p.operand().(*ast.Param)
+		if !ok {
+			p.fail(p.toks[p.pos-1], "expected a :list parameter after 'in' (spec/predicates)")
+			return x
+		}
+		x.List = prm
+		return x
+	}
+	p.expect(token.LPAREN, "in list (spec/predicates)")
+	for {
+		lit, ok := p.operand().(*ast.Lit)
+		if !ok {
+			p.fail(p.toks[p.pos-1], "in items are literals (spec/predicates)")
+		}
+		x.Items = append(x.Items, lit)
+		if !p.at(token.COMMA) {
+			break
+		}
+		p.next()
+	}
+	x.Rparen = p.expect(token.RPAREN, "in list (spec/predicates)").End()
+	return x
+}
+
+func (p *parser) predLike(col *ast.ColRef) ast.PredExpr {
+	p.kwTake("like")
+	x := &ast.PredLike{Col: col}
+	switch pat := p.operand().(type) {
+	case *ast.Lit:
+		if pat.Tok.Kind != token.STRING {
+			p.fail(pat.Tok, "like takes a string pattern or :param (spec/predicates)")
+		}
+		x.Pattern = pat
+	case *ast.Param:
+		x.Pattern = pat
+	default:
+		p.fail(p.toks[p.pos-1], "like takes a string pattern or :param (spec/predicates)")
+	}
+	return x
+}
+
+func (p *parser) predNull(col *ast.ColRef) ast.PredExpr {
+	p.kwTake("is")
+	x := &ast.PredNull{Col: col}
+	if p.atKw("not") {
+		p.kwTake("not")
+		x.Not = true
+	}
+	if !p.atKw("null") {
+		p.fail(p.cur(), "expected 'null' after 'is' (spec/predicates)")
+	}
+	x.EndPos = p.kwTake("null").End()
+	return x
+}
+
+func (p *parser) selectDecl() *ast.Select {
+	p.lineBegin("select declaration (spec/selects-over-groups)")
+	d := &ast.Select{Doc: p.doc(), SelectPos: p.next().Pos}
+	d.Name = p.ident("select declaration (spec/selects-over-groups)")
+	if p.at(token.LPAREN) {
+		p.selectProjection(d)
+	}
+	if !p.atKw("for") {
+		p.fail(p.cur(), "expected 'for' after the select name (spec/selects-over-groups)")
+	}
+	p.kwTake("for")
+	d.Target = p.ident("select target (spec/selects-over-groups)")
+	d.EndPos = d.Target.End()
+	for p.atKw("join") {
+		p.kwTake("join")
+		rel := p.ident("join (spec/selects-over-groups)")
+		d.Joins = append(d.Joins, rel)
+		d.EndPos = rel.End()
+	}
+	if p.atKw("with") {
+		p.kwTake("with")
+		d.With = p.ident("with (spec/selects-over-groups)")
+		d.EndPos = d.With.End()
+	}
+	if p.atKw("where") {
+		p.kwTake("where")
+		d.Where = p.predExpr()
+		d.EndPos = d.Where.End()
+	}
+	if p.at(token.LBRACKET) {
+		d.Settings = p.settingList()
+		d.EndPos = d.Settings.End()
+	}
+	p.endOfLine("select declaration (spec/selects-over-groups)")
+	return d
+}
+
+func (p *parser) selectProjection(d *ast.Select) {
+	d.Lparen = p.next().Pos
+	if p.at(token.STAR) {
+		d.Star = true
+		p.next()
+		for p.at(token.BACKSLASH) || p.at(token.MINUS) {
+			if p.at(token.MINUS) {
+				p.fail(p.cur(), "'-' is not a projection operator: exclusion is spelled '\\' (spec/selects-over-groups)")
+			}
+			p.next()
+			if !p.at(token.LPAREN) {
+				d.Cols = append(d.Cols, &ast.ColRef{Name: p.ident("excluded column (spec/selects-over-groups)")})
+				continue
+			}
+			p.next()
+			for {
+				d.Cols = append(d.Cols, &ast.ColRef{Name: p.ident("excluded column (spec/selects-over-groups)")})
+				if !p.at(token.COMMA) {
+					break
+				}
+				p.next()
+			}
+			p.expect(token.RPAREN, "excluded column set (spec/selects-over-groups)")
+		}
+		if len(d.Cols) == 0 {
+			p.fail(p.cur(), "a star projection needs at least one '\\ column' exclusion; drop the parens to select every column (spec/selects-over-groups)")
+		}
+	} else {
+		for {
+			d.Items = append(d.Items, p.projItem())
+			if !p.at(token.COMMA) {
+				break
+			}
+			p.next()
+		}
+	}
+	d.Rparen = p.expect(token.RPAREN, "projection (spec/selects-over-groups)").End()
+	d.EndPos = d.Rparen
+}
+
+// projItem reads one item of an explicit projection (spec/selects-over-groups):
+// a column, an aggregate or an arithmetic expression, the derived ones
+// followed by "as" and an alias.
+func (p *parser) projItem() *ast.ProjItem {
+	item := &ast.ProjItem{}
+	if p.at(token.IDENT) && p.peekKind(1) == token.LPAREN {
+		if _, ok := foldTo(p.cur().Val, AggregateWords); ok {
+			agg := p.ident("aggregate (spec/selects-over-groups)")
+			p.wordFold(agg, AggregateWords)
+			item.Agg = agg
+			p.expect(token.LPAREN, "aggregate (spec/selects-over-groups)")
+			if !p.at(token.RPAREN) || agg.Name() != "count" {
+				if p.at(token.RPAREN) {
+					p.fail(p.cur(), "%s takes a column; only count() counts the rows (spec/selects-over-groups)", agg.Name())
+					return item
+				}
+				item.Col = p.projCol("aggregate column (spec/selects-over-groups)")
+			}
+			item.EndPos = p.expect(token.RPAREN, "aggregate (spec/selects-over-groups)").End()
+		}
+	}
+	if item.Agg == nil {
+		x := p.arith()
+		if x == nil {
+			return item
+		}
+		if cr, ok := x.(*ast.ColRef); ok && !p.atKw("as") {
+			item.Col, item.EndPos = cr, cr.End()
+			return item
+		}
+		item.Expr, item.EndPos = x, x.End()
+	}
+	if !p.atKw("as") {
+		p.fail(p.cur(),
+			"a derived item takes an alias: write it as name (spec/selects-over-groups)")
+		return item
+	}
+	p.kwTake("as")
+	item.As = p.ident("alias (spec/selects-over-groups)")
+	item.EndPos = item.As.End()
+	return item
+}
+
+func (p *parser) arith() ast.ArithExpr {
+	x := p.arithTerm()
+	for x != nil && (p.at(token.PLUS) || p.at(token.MINUS)) {
+		op := "+"
+		if p.at(token.MINUS) {
+			op = "-"
+		}
+		p.next()
+		y := p.arithTerm()
+		if y == nil {
+			return nil
+		}
+		x = &ast.ArithBinary{X: x, Op: op, Y: y}
+	}
+	return x
+}
+
+func (p *parser) arithTerm() ast.ArithExpr {
+	x := p.arithFactor()
+	for x != nil && (p.at(token.STAR) || p.at(token.SLASH)) {
+		op := "*"
+		if p.at(token.SLASH) {
+			op = "/"
+		}
+		p.next()
+		y := p.arithFactor()
+		if y == nil {
+			return nil
+		}
+		x = &ast.ArithBinary{X: x, Op: op, Y: y}
+	}
+	return x
+}
+
+func (p *parser) arithFactor() ast.ArithExpr {
+	t := p.cur()
+	switch {
+	case p.at(token.LPAREN):
+		lp := p.next().Pos
+		x := p.arith()
+		if x == nil {
+			return nil
+		}
+		rp := p.expect(token.RPAREN, "parenthesized expression (spec/selects-over-groups)").End()
+		return &ast.ArithParen{Lparen: lp, X: x, Rparen: rp}
+	case p.at(token.NUMBER):
+		return &ast.Lit{Tok: p.next()}
+	case p.at(token.MINUS) && p.peekKind(1) == token.NUMBER:
+		minus := p.next()
+		num := p.next()
+		num.Val = "-" + num.Val
+		num.Pos = minus.Pos
+		return &ast.Lit{Tok: num}
+	case p.at(token.COLON):
+		return p.param()
+	case p.at(token.IDENT):
+		return p.projCol("projected column (spec/selects-over-groups)")
+	default:
+		p.fail(t, "expected a column, an aggregate, a number, a :param or a parenthesized expression in the projection (spec/selects-over-groups), found %s", t)
+		return nil
+	}
+}

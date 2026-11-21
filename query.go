@@ -1,0 +1,126 @@
+package volt
+
+import (
+	"fmt"
+	"math"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/Piechutowski/volt/nao/rt"
+)
+
+// QueryValue is the set of Go types a query-string parameter can carry: the
+// scalar column types bool, int, float64, string and time.Time (spec/columns),
+// the only types a query route binds from the query string (spec/query-routes).
+type QueryValue interface {
+	string | bool | int64 | float64 | time.Time
+}
+
+// QueryParam binds one scalar parameter from the query string by name, as a
+// generated query route does (spec/query-routes). A missing or unparseable value,
+// a time.Time outside the years Volt stores (spec/go-types) and a float64 NaN,
+// which SQLite binds as NULL, included, is a 400 naming the parameter.
+func QueryParam[T QueryValue](r Request, name string) (T, error) {
+	var v T
+	vals, ok := r.Query()[name]
+	if !ok || len(vals) == 0 {
+		return v, Error(http.StatusBadRequest, "missing query parameter "+name)
+	}
+	if err := parseQuery(vals[0], &v); err != nil {
+		return v, Error(http.StatusBadRequest, fmt.Sprintf("query parameter %s: %v", name, err))
+	}
+	return v, nil
+}
+
+// QueryParamOptional binds an optional parameter (spec/predicates) from the
+// query string by name, as a generated query route or route load does
+// (spec/query-routes): absent when the key is missing, the parsed value of
+// its first value otherwise; a value that does not parse is a 400 naming
+// the parameter, as for QueryParam.
+func QueryParamOptional[T QueryValue](r Request, name string) (rt.Null[T], error) {
+	if vals, ok := r.Query()[name]; !ok || len(vals) == 0 {
+		return rt.Null[T]{}, nil
+	}
+	v, err := QueryParam[T](r, name)
+	if err != nil {
+		return rt.Null[T]{}, err
+	}
+	return rt.Some(v), nil
+}
+
+// LimitCheck is nil for a limit of at least 1 and otherwise the 400 naming
+// the request key it came from (spec/query-routes, spec/route-loads): a generated
+// route refuses a select's limit: parameter below 1 where it binds it, a
+// path parameter before the scope loads and a query key before the query
+// or the route's loads, since SQLite reads a negative limit as none.
+func LimitCheck(name string, n int64) error {
+	if n >= 1 {
+		return nil
+	}
+	return Error(http.StatusBadRequest, fmt.Sprintf("parameter %s is a limit, at least 1, not %d", name, n))
+}
+
+// QueryParams binds a list parameter (spec/predicates): every value of a repeated
+// query key, in order. An absent key is an empty list, never an error;
+// an element that does not parse is a 400 naming the parameter.
+func QueryParams[T QueryValue](r Request, name string) ([]T, error) {
+	vals := r.Query()[name]
+	out := make([]T, 0, len(vals))
+	for _, s := range vals {
+		var v T
+		if err := parseQuery(s, &v); err != nil {
+			return nil, Error(http.StatusBadRequest, fmt.Sprintf("query parameter %s: %v", name, err))
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+func parseQuery(s string, dst any) error {
+	var err error
+	switch d := dst.(type) {
+	case *string:
+		*d = s
+	case *bool:
+		*d, err = strconv.ParseBool(s)
+	case *int64:
+		*d, err = strconv.ParseInt(s, 10, 64)
+	case *float64:
+		if *d, err = strconv.ParseFloat(s, 64); err == nil && math.IsNaN(*d) {
+			err = strconv.ErrSyntax
+		}
+	case *time.Time:
+		if *d, err = time.Parse(time.RFC3339, s); err == nil {
+			_, err = rt.TimeText(*d)
+		}
+	default:
+		return fmt.Errorf("unsupported parameter type %T", dst)
+	}
+	if err != nil {
+		return fmt.Errorf("%q is not a valid %s", s, typeName(dst))
+	}
+	return nil
+}
+
+func typeName(dst any) string {
+	return fmt.Sprintf("%T", dst)[1:]
+}
+
+// FormatQuery renders a query-string value the way QueryParam parses it
+// (spec/generated-client), a time.Time as RFC 3339 with its fractional
+// seconds, so the instant arrives whole.
+func FormatQuery[T QueryValue](v T) string {
+	switch v := any(v).(type) {
+	case string:
+		return v
+	case bool:
+		return strconv.FormatBool(v)
+	case time.Time:
+		return v.Format(time.RFC3339Nano)
+	case float64:
+		return strconv.FormatFloat(v, 'g', -1, 64)
+	default:
+		return fmt.Sprint(v)
+	}
+}

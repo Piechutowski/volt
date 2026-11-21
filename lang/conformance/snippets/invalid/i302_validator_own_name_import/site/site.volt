@@ -1,0 +1,20 @@
+// spec/imports, spec/validators, where an import takes the package's own name, that name qualifies the import, so a validator written with it names the imported package and is refused as a function of another package, not as a self-qualified one
+// want: a validator is a function of the containing package, not of "site": write a local wrapper
+package site
+
+import (
+	lib/site
+)
+
+table posts {
+  id    int    [pk]
+  title string
+
+  validators {
+    site.TitleShape(title)
+  }
+}
+
+scope /api {
+	resources site.tags [default]
+}

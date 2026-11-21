@@ -1,0 +1,357 @@
+package lang
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"unicode"
+
+	"github.com/Piechutowski/volt/internal/disk"
+	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/ebnf"
+	"github.com/Piechutowski/volt/lang/parser"
+)
+
+type specBlock struct {
+	line    int
+	heading string
+	section string
+	part    int
+	g       *ebnf.Grammar
+}
+
+func (b specBlock) collected() bool { return strings.HasPrefix(b.section, "Collected grammar") }
+
+func specGrammarBlocks(t *testing.T) []specBlock {
+	t.Helper()
+	lines := strings.Split(specText(t), "\n")
+	part := 1
+	heading, section := "", ""
+	var blocks []specBlock
+	for i := 0; i < len(lines); i++ {
+		l := lines[i]
+		if strings.HasPrefix(l, "# Part II") {
+			part = 2
+		}
+		if strings.HasPrefix(l, "#") {
+			heading = strings.TrimLeft(l, "# ")
+			if strings.HasPrefix(l, "## ") {
+				section = heading
+			}
+		}
+		if strings.TrimSpace(l) != "```ebnf" {
+			continue
+		}
+		start := i + 1
+		j := start
+		for j < len(lines) && strings.TrimSpace(lines[j]) != "```" {
+			j++
+		}
+		g, err := ebnf.Parse(strings.Join(lines[start:j], "\n"))
+		if err != nil {
+			t.Fatalf("docs/spec.md:%d (%s): the grammar block does not read: %v", start+1, heading, err)
+		}
+		blocks = append(blocks, specBlock{line: start + 1, heading: heading, section: section, part: part, g: g})
+		i = j
+	}
+	return blocks
+}
+
+func specLanguage(t *testing.T) *ebnf.Language {
+	t.Helper()
+	blocks := specGrammarBlocks(t)
+	g := &ebnf.Grammar{}
+	lexical := map[string]bool{}
+	tokenShaped := map[string]bool{"slash": true, "migration name": true, "label": true}
+	var va *specBlock
+	for i, b := range blocks {
+		if b.collected() {
+			if b.part == 2 {
+				va = &blocks[i]
+			}
+			continue
+		}
+		for _, r := range b.g.Rules {
+			switch {
+			case b.section == "Lexical Structure" || tokenShaped[r.Name]:
+				lexical[r.Name] = true
+			}
+			if err := g.Add(r); err != nil {
+				t.Fatalf("docs/spec.md:%d (%s): %v: a name is defined once, and a section that needs another's rule references it", b.line, b.heading, err)
+			}
+		}
+	}
+	if va == nil {
+		t.Fatal("no collected grammar for Part II")
+	}
+	for _, name := range []string{"element", "setting value"} {
+		ext, ok := va.g.Lookup(name).Expr.(ebnf.Alt)
+		if !ok || len(ext.Items) < 2 || ebnf.Format(ext.Items[0]) != "" {
+			t.Fatalf("Collected grammar (Part II): %s must extend Part I's by reference, an empty first alternative", name)
+		}
+		base := g.Lookup(name)
+		g.Set(&ebnf.Rule{Name: name, Expr: ebnf.Alt{Items: append(alternatives(base.Expr), ext.Items[1:]...)}, Line: base.Line})
+	}
+	contiguous := map[string]bool{
+		"route path":   true,
+		"package path": true,
+		"param":        true,
+	}
+	oneOf := func(chars string) func(rune) bool { return func(r rune) bool { return strings.ContainsRune(chars, r) } }
+	l := &ebnf.Language{
+		G:          g,
+		Start:      "program",
+		Lexical:    lexical,
+		Layout:     ebnf.Rep{X: ebnf.Alt{Items: []ebnf.Expr{ebnf.Ref{Name: "sp"}, ebnf.Ref{Name: "comment"}}}},
+		Newline:    "newline",
+		Contiguous: contiguous,
+		SameLine: map[string]bool{
+			"settings": true, "table settings": true, "column settings": true,
+			"index settings": true, "ref settings": true,
+			"migration settings": true, "migration column settings": true,
+		},
+		NoBreakAfter: map[string]bool{`\`: true},
+		Specials: map[string]func(rune) bool{
+			"U+000A LINE FEED":      oneOf("\n"),
+			"U+0020 SPACE":          oneOf(" "),
+			"U+0009 TAB":            oneOf("\t"),
+			"any Unicode character": func(rune) bool { return true },
+			"any character of Unicode category L (Letter)":          unicode.IsLetter,
+			"any character of Unicode category Nd (Decimal Number)": unicode.IsDigit,
+		},
+		Witness: map[string]string{
+			"U+000A LINE FEED":      "\n",
+			"U+0020 SPACE":          " ",
+			"U+0009 TAB":            "\t",
+			"any Unicode character": "a",
+			"any character of Unicode category L (Letter)":          "a",
+			"any character of Unicode category Nd (Decimal Number)": "0",
+		},
+		Cut: true,
+	}
+	if err := l.Check(); err != nil {
+		t.Fatalf("the spec's grammar is not closed:\n%v", err)
+	}
+	return l
+}
+
+func alternatives(e ebnf.Expr) []ebnf.Expr {
+	if a, ok := e.(ebnf.Alt); ok {
+		return a.Items
+	}
+	return []ebnf.Expr{e}
+}
+
+func TestSpecGrammarReadsAndIsClosed(t *testing.T) {
+	specLanguage(t)
+}
+
+// The collected grammars are copies: Collected grammar (Part I) repeats
+// every rule of Part I's sections and nothing else; Collected grammar
+// (Part II) repeats every rule of Part II's sections but the query layer's (spec/groups to spec/validators, which
+// it says it leaves in place), extends element and setting value by
+// reference, and defines nothing of its own.
+func TestSpecCollectedGrammarsRepeatTheSections(t *testing.T) {
+	blocks := specGrammarBlocks(t)
+	sections := map[int]map[string]string{1: {}, 2: {}}
+	where := map[string]string{}
+	notCollected := map[string]bool{"Groups": true, "Predicates": true, "Selects over groups": true, "Validators": true}
+	expected := map[int]map[string]bool{1: {}, 2: {}}
+	for _, b := range blocks {
+		if b.collected() {
+			continue
+		}
+		for _, r := range b.g.Rules {
+			sections[b.part][r.Name] = ebnf.Format(r.Expr)
+			where[r.Name] = fmt.Sprintf("docs/spec.md:%d", b.line)
+			if b.part == 1 || !notCollected[b.section] {
+				expected[b.part][r.Name] = true
+			}
+		}
+	}
+	for _, b := range blocks {
+		if !b.collected() {
+			continue
+		}
+		seen := map[string]bool{}
+		for _, r := range b.g.Rules {
+			seen[r.Name] = true
+			if b.part == 2 && (r.Name == "element" || r.Name == "setting value") {
+				continue
+			}
+			def, ok := sections[b.part][r.Name]
+			if !ok {
+				t.Errorf("%s (docs/spec.md:%d) defines %s, which no section of Part %d defines", b.section, b.line, r.Name, b.part)
+				continue
+			}
+			if got := ebnf.Format(r.Expr); got != def {
+				t.Errorf("%s repeats %s as\n\t%s\nbut %s defines it as\n\t%s", b.section, r.Name, got, where[r.Name], def)
+			}
+		}
+		for name := range expected[b.part] {
+			if !seen[name] {
+				t.Errorf("%s (docs/spec.md:%d) lacks %s, defined at %s", b.section, b.line, name, where[name])
+			}
+		}
+	}
+}
+
+func specSentences(t *testing.T) (*ebnf.Language, []ebnf.Sentence) {
+	t.Helper()
+	l := specLanguage(t)
+	sentences, unreachable, err := l.Sentences()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "newline, sp, comment, punct, pred keyword"
+	if got := strings.Join(unreachable, ", "); got != want {
+		t.Errorf("rules no sentence reaches: %s\nwant: %s", got, want)
+	}
+	return l, sentences
+}
+
+var sentencesDir = flag.String("sentences", "", "write the derived sentences of the spec's grammar to this directory")
+
+// Every sentence the grammar derives is recognized by the grammar's
+// own recognizer (the rendering and the recognizer agree on layout)
+// and parses without a diagnostic.
+func TestSpecGrammarSentencesParse(t *testing.T) {
+	l, sentences := specSentences(t)
+	if *sentencesDir != "" {
+		if err := os.MkdirAll(*sentencesDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	failures := 0
+	byRule := map[string]int{}
+	for i, s := range sentences {
+		text := ebnf.Text(s.Pieces)
+		byRule[s.Rule]++
+		if *sentencesDir != "" {
+			name := fmt.Sprintf("%03d_%s.volt", i, strings.ReplaceAll(s.Rule, " ", "_"))
+			if err := os.WriteFile(filepath.Join(*sentencesDir, name), []byte(text), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if !l.Accepts("program", text) {
+			t.Errorf("%s: derived but not recognized: %q", s.Rule, text)
+			failures++
+		}
+		if _, diags := parser.ParseFile("t.volt", text); len(diags) > 0 {
+			if failures < 60 {
+				t.Errorf("%s: the grammar derives %q, the parser says: %s", s.Rule, text, diags[0].Msg)
+			}
+			failures++
+		}
+	}
+	if failures >= 60 {
+		t.Errorf("%d failures in all", failures)
+	}
+	t.Logf("%d sentences over %d rules", len(sentences), len(byRule))
+}
+
+func specFrontEnd(t *testing.T) func(text string) map[string]bool {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ModFile), []byte("module corpus\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "app")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "x.volt")
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	keys := func(diags []diag.Diagnostic) map[string]bool {
+		set := make(map[string]bool, len(diags))
+		for _, d := range diags {
+			set[d.Code+": "+d.Msg] = true
+		}
+		return set
+	}
+	return func(text string) map[string]bool {
+		if _, diags := parser.ParseFile(path, text); len(diags) > 0 {
+			return keys(diags)
+		}
+		pr, err := LoadOverlay(disk.Source{}, root, map[string]string{path: text})
+		if err != nil {
+			return map[string]bool{"load: " + err.Error(): true}
+		}
+		var errs []diag.Diagnostic
+		for _, d := range Check(pr) {
+			if d.Severity == diag.Error {
+				errs = append(errs, d)
+			}
+		}
+		return keys(errs)
+	}
+}
+
+// Every text one token away from a derived sentence (a token dropped,
+// a token inserted, two adjacent tokens exchanged) is decided the same
+// way by the grammar and by the front end: in the grammar, the parser
+// accepts it; outside, the front end reports an error it does not
+// report for the sentence the text came from. A sentence without a
+// package clause gets one, so that the project pass judges it.
+func TestSpecGrammarNeighboursAgreeWithTheFrontEnd(t *testing.T) {
+	l, sentences := specSentences(t)
+	front := specFrontEnd(t)
+	inserted := []ebnf.Piece{{Text: "x"}, {Text: "1"}, {Text: ","}, {Text: "}"}, {Text: "\n", Sep: true}}
+	seen := map[string]bool{}
+	disagreements := 0
+	checked := 0
+	for _, s := range sentences {
+		base := ebnf.Text(s.Pieces)
+		prefix := ""
+		if !pkgClauseRE.MatchString(base) {
+			prefix = "package app\n"
+		}
+		var baseDiags map[string]bool
+		var near []string
+		near = append(near, ebnf.Deletions(s.Pieces)...)
+		near = append(near, ebnf.Insertions(s.Pieces, inserted)...)
+		near = append(near, ebnf.Swaps(s.Pieces)...)
+		for _, text := range near {
+			if seen[text] {
+				continue
+			}
+			seen[text] = true
+			checked++
+			inGrammar := l.Accepts("program", text)
+			if inGrammar {
+				if _, diags := parser.ParseFile("t.volt", text); len(diags) > 0 {
+					if disagreements < 60 {
+						t.Errorf("in the grammar, rejected by the parser: %q (from a sentence of %s): %s", text, s.Rule, diags[0].Msg)
+					}
+					disagreements++
+				}
+				continue
+			}
+			if baseDiags == nil {
+				baseDiags = front(prefix + base)
+			}
+			fresh := false
+			for k := range front(prefix + text) {
+				if !baseDiags[k] {
+					fresh = true
+					break
+				}
+			}
+			if !fresh {
+				if disagreements < 60 {
+					t.Errorf("outside the grammar, accepted by the front end: %q (from a sentence of %s, %q)", text, s.Rule, base)
+				}
+				disagreements++
+			}
+		}
+	}
+	if disagreements >= 60 {
+		t.Errorf("%d disagreements in all", disagreements)
+	}
+	t.Logf("%d texts one token away from %d sentences checked", checked, len(sentences))
+}

@@ -1,0 +1,508 @@
+==================
+minimal table
+==================
+
+table users {
+  id int
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))))
+
+==================
+table with settings
+==================
+
+table users [model: "Member"] {
+  id int
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (string
+          (string_content))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))))
+
+==================
+column types: built-ins, the [] of []byte, qualified time.Time, a declared type
+==================
+
+table t {
+  name string
+  data []byte
+  created time.Time
+  status JobState
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (package_name
+            (identifier))
+          (identifier))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))))
+
+==================
+column settings
+==================
+
+table t {
+  a int [pk, unique, autoincrement]
+  b int [null]
+  c string [default: "x", tag: "col"]
+  d time.Time [default: `now()`]
+  e float64 [default: -1.5]
+  f bool [default: false]
+  h Status [default: "active"]
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)))
+        (setting
+          (setting_name
+            (identifier)))
+        (setting
+          (setting_name
+            (identifier)))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (string
+            (string_content)))
+        (setting
+          (setting_name
+            (identifier))
+          (string
+            (string_content)))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (package_name
+            (identifier))
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (expression
+            (expression_content)))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (signed_number
+            (number)))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (boolean))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (string
+            (string_content)))))))
+
+==================
+inline refs in column settings
+==================
+
+table posts {
+  author_id int [ref: users.id]
+  editor_id int [null, ref: users.id]
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name)
+          (ref_endpoint
+            (table_name
+              (identifier))
+            (column_name
+              (identifier))))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)))
+        (setting
+          (setting_name)
+          (ref_endpoint
+            (table_name
+              (identifier))
+            (column_name
+              (identifier))))))))
+
+==================
+settings lists spanning lines
+==================
+
+table t [
+  model: "x"
+] {
+  id int [pk,
+    autoincrement]
+  title string [
+    null
+  ]
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (string
+          (string_content))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)))
+        (setting
+          (setting_name
+            (identifier)))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)))))))
+
+==================
+a line break after a setting's colon
+==================
+
+table posts [model:
+  """
+  A blog post.
+  """] {
+  id int [pk]
+  views int [default:
+    0]
+  user_id int [ref:
+    users.id]
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (string
+          (string_content))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (number))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name)
+          (ref_endpoint
+            (table_name
+              (identifier))
+            (column_name
+              (identifier))))))))
+
+==================
+an element word in the wrong case is an error
+:error
+==================
+
+TABLE users {
+  id int [pk]
+}
+
+---
+
+==================
+a block word in the wrong case is an error
+:error
+==================
+
+table users {
+  id int [pk]
+  Indexes {
+    id
+  }
+}
+
+---
+
+==================
+a bare flag after the column type is not a column
+:error
+==================
+
+table t {
+  id int pk
+}
+
+---
+
+==================
+a name beginning with a digit is an error
+:error
+==================
+
+table t {
+  2fa_enabled bool
+}
+
+---
+
+==================
+table partial definition and injection
+==================
+
+table_partial base {
+  id int [pk]
+}
+
+table users {
+  ~base
+  name string
+}
+
+---
+
+(source_file
+  (table_partial_definition
+    (partial_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))))))
+  (table_definition
+    (table_name
+      (identifier))
+    (partial_injection
+      (partial_name
+        (identifier)))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))))
+
+==================
+two columns on one line is an error
+:error
+==================
+
+table t { id int name string }
+
+---
+
+==================
+a table alias is an error
+:error
+==================
+
+table users as U {
+  id int
+}
+
+---
+
+==================
+a schema-qualified table name is an error
+:error
+==================
+
+table core.users {
+  id int
+}
+
+---
+
+==================
+an inline ref with an operator is an error
+:error
+==================
+
+table posts {
+  author_id int [ref: > users.id]
+}
+
+---
+
+==================
+two settings without a comma are an error
+:error
+==================
+
+table t {
+  id int [pk autoincrement]
+}
+
+---
+
+

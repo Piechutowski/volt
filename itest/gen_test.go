@@ -1,0 +1,68 @@
+package itest
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/Piechutowski/volt/gen/model"
+	"github.com/Piechutowski/volt/gen/router"
+	"github.com/Piechutowski/volt/internal/disk"
+	"github.com/Piechutowski/volt/lang"
+	"github.com/Piechutowski/volt/lang/diag"
+)
+
+// TestFixtureNotDrifted regenerates the fixture's router files
+// in-memory and byte-compares them with the committed ones: the proof
+// suite always exercises current generator output. Refresh with
+// 'go run ./cmd/volt gen ./itest/blog/app' after intentional changes.
+func TestFixtureNotDrifted(t *testing.T) {
+	root, err := lang.FindRoot(disk.Source{}, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr, err := lang.LoadDirs(disk.Source{}, root, []string{filepath.Join("blog", "app")}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diags := lang.Check(pr)
+	if diag.HasErrors(diags) {
+		t.Fatalf("fixture has errors: %v", diags)
+	}
+	pkg := pr.PackageAt(filepath.Join("blog", "app"))
+	if pkg == nil {
+		t.Fatal("blog/app not loaded")
+	}
+	files, err := router.Generate(pkg, router.Options{Source: "package " + pkg.Path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range files {
+		got, err := os.ReadFile(filepath.Join("blog", "app", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("%s drifted from generator output; re-run volt gen ./itest/blog/app", name)
+		}
+	}
+
+	dbPkg := pr.PackageAt(filepath.Join("blog", "db"))
+	if dbPkg == nil {
+		t.Fatal("blog/db not loaded")
+	}
+	dbFiles, err := model.Generate(dbPkg, model.Options{Source: "package " + dbPkg.Path, SQL: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for voltName, voltCode := range dbFiles {
+		got, err := os.ReadFile(filepath.Join("blog", "db", voltName))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, voltCode) {
+			t.Errorf("%s drifted from generator output; re-run volt gen --sql ./itest/blog/db", voltName)
+		}
+	}
+}

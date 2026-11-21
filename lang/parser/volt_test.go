@@ -1,0 +1,339 @@
+package parser
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/Piechutowski/volt/lang/ast"
+)
+
+const voltSample = `package app
+
+import (
+	db
+	d2 shared/dicts
+)
+
+pipeline api {
+	use volt.RequestID
+	use BearerAuth
+}
+
+scope / [pipe: api, error_handler: Errors] {
+	get  /            Home.Index [name: root]
+	get  /about       Home.About
+
+	scope /admin [name: admin] {
+		get /stats  Admin.Stats
+	}
+
+	resources users [api, model: db.User, only: (index, show)]
+
+	get /files/:path...        Files.Serve
+	get /users/:id(int)/edit  Users.Edit
+}
+`
+
+func TestVoltSampleParses(t *testing.T) {
+	f, diags := ParseFile("app.volt", voltSample)
+	if len(diags) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	kinds := []string{}
+	for _, d := range f.Decls {
+		switch d.(type) {
+		case *ast.PackageClause:
+			kinds = append(kinds, "package")
+		case *ast.ImportDecl:
+			kinds = append(kinds, "import")
+		case *ast.Pipeline:
+			kinds = append(kinds, "pipeline")
+		case *ast.Scope:
+			kinds = append(kinds, "scope")
+		default:
+			kinds = append(kinds, "other")
+		}
+	}
+	if got, want := strings.Join(kinds, ","), "package,import,pipeline,scope"; got != want {
+		t.Fatalf("decls = %s, want %s", got, want)
+	}
+
+	imp := f.Decls[1].(*ast.ImportDecl)
+	if len(imp.Specs) != 2 {
+		t.Fatalf("imports = %d, want 2", len(imp.Specs))
+	}
+	if imp.Specs[0].Alias != nil || imp.Specs[0].PathString() != "db" {
+		t.Errorf("spec[0] = %+v, want the unaliased path db", imp.Specs[0])
+	}
+	if p := imp.Specs[1].PathString(); p != "shared/dicts" {
+		t.Errorf("spec[1] path = %q, want shared/dicts", p)
+	}
+	if a := imp.Specs[1].Alias; a == nil || a.Name() != "d2" {
+		t.Errorf("spec[1] alias = %v, want d2", a)
+	}
+
+	pl := f.Decls[2].(*ast.Pipeline)
+	if len(pl.Plugs) != 2 || pl.Plugs[0].Ref.String() != "volt.RequestID" || pl.Plugs[1].Ref.String() != "BearerAuth" {
+		t.Errorf("pipeline plugs wrong: %+v", pl.Plugs)
+	}
+
+	sc := f.Decls[3].(*ast.Scope)
+	if sc.Path.String() != "/" {
+		t.Errorf("scope path = %q, want /", sc.Path.String())
+	}
+	if sc.Settings.Get("pipe") == nil || sc.Settings.Get("error_handler") == nil {
+		t.Errorf("scope settings missing: %v", sc.Settings)
+	}
+	if len(sc.Items) != 6 {
+		t.Fatalf("scope items = %d, want 6", len(sc.Items))
+	}
+	if _, ok := sc.Items[2].(*ast.Scope); !ok {
+		t.Errorf("item 2 should be the nested Scope, got %T", sc.Items[2])
+	}
+	res, ok := sc.Items[3].(*ast.Resources)
+	if !ok {
+		t.Fatalf("item 3 should be resources, got %T", sc.Items[3])
+	}
+	only, ok := res.Settings.Get("only").Value.(*ast.IdentList)
+	if !ok || len(only.Names) != 2 {
+		t.Errorf("only: identifier list wrong: %v", res.Settings.Get("only"))
+	}
+
+	wild := sc.Items[4].(*ast.Route)
+	if wild.Path.String() != "/files/:path..." {
+		t.Errorf("wildcard path = %q", wild.Path.String())
+	}
+	if wild.Path.Segments[1].Kind != ast.SegWild {
+		t.Errorf("segment kind = %v, want SegWild", wild.Path.Segments[1].Kind)
+	}
+	typed := sc.Items[5].(*ast.Route)
+	if typed.Path.String() != "/users/:id(int)/edit" {
+		t.Errorf("typed path = %q", typed.Path.String())
+	}
+	seg := typed.Path.Segments[1]
+	if seg.Kind != ast.SegParam || seg.Name.Name() != "id" || seg.Type == nil || seg.Type.Name() != "int" {
+		t.Errorf("typed param segment wrong: %+v", seg)
+	}
+}
+
+func TestVoltSyntaxErrors(t *testing.T) {
+	cases := []struct {
+		name, src, wantMsg string
+	}{
+		{"space in path", "scope / {\n\tget /users /:id Users.Show\n}\n", "expected identifier in route handler"},
+		{"top-level dataset", "dataset db.browse\n", "must appear inside a scope"},
+		{"import without parens", "import db\n", "expected '(' after import"},
+		{"top-level route", "get /users Users.Index\n", "must appear inside a scope"},
+		{"top-level put", "put /users Users.Replace\n", "must appear inside a scope"},
+		{"top-level put in another case", "PUT /users Users.Replace\n", "must appear inside a scope"},
+		{"colon without name", "scope / {\n\tget /users/: Users.Show\n}\n", "':' must be followed by a parameter name"},
+		{"short ellipsis", "scope / {\n\tget /files/:path.. Files.Serve\n}\n", "wildcard ellipsis is spelled"},
+		{"typed wildcard", "scope / {\n\tget /files/:path(int)... Files.Serve\n}\n", "cannot carry a type"},
+		{"empty import block", "import (\n)\n", "empty import declaration"},
+		{"space in import path", "import (\n\tshared / dicts\n)\n", "expected end of line after import specifier"},
+		{"plug without use", "pipeline api {\n\tRequestID\n}\n", "expected 'use' plug line"},
+		{"trailing slash", "scope / {\n\tget /users/ Users.Index\n}\n", "without a trailing slash"},
+		{"space in type annotation", "scope / {\n\tget /users/:id( int32 ) Users.Show\n}\n", "with no spaces"},
+		{"space before closing paren", "scope / {\n\tget /users/:id(int32 ) Users.Show\n}\n", "with no spaces"},
+		{"string import path", "import (\n\t\"db\"\n)\n", "expected identifier in import path"},
+		{"string import alias", "import (\n\t\"d\" shared/db\n)\n", "expected identifier in import path"},
+		{"scope in the wrong case", "SCOPE / {\n\tget / A.Index\n}\n", "write scope, not SCOPE"},
+		{"verb in the wrong case", "scope / {\n\tGet / A.Index\n}\n", "write get, not Get"},
+		{"use in the wrong case", "pipeline api {\n\tUse volt.RequestID\n}\n", "write use, not Use"},
+		{"clause word in the wrong case", "select s for t Where a = 1\n", "write where, not Where"},
+		{"predicate word in the wrong case", "pred p { a = 1 OR b = 2 }\n", "write or, not OR"},
+		{"resource action in the wrong case", "scope / {\n\tresources db.t [only: (Show)]\n}\n", "write show, not Show"},
+		{"trailing slash on scope", "scope /admin/ {\n\tget / A.Index\n}\n", "without a trailing slash"},
+		{"non-segment after slash", "scope / {\n\tget /users/[name: root] Users.Index\n}\n", "'/' must be followed by a path segment"},
+		{"group minus", "group narrow = wide - ms_usage\n", "set difference is spelled '\\'"},
+		{"group empty set", "group narrow = wide \\ ()\n", "expected identifier in group set member"},
+		{"group unclosed set", "group narrow = wide \\ (a, b\n", "expected ')'"},
+		{"projection minus", "select p (* - a) for t\n", "exclusion is spelled '\\'"},
+		{"projection star alone", "select p (*) for t\n", "needs at least one"},
+		{"projection unclosed set", "select p (* \\ (a, b for t\n", "expected ')'"},
+		{"in without list", "pred p { site in }\n", "expected '('"},
+		{"in with column", "pred p { site in other }\n", "expected '('"},
+		{"space in a limit parameter", "select s for t [order: (id asc), limit: : n]\n", "':' must be directly followed by a parameter name"},
+		{"limit parameter on the next line", "select s for t [order: (id asc), limit: :\nn]\n", "':' must be directly followed by a parameter name"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, diags := ParseFile("t.volt", tc.src)
+			if len(diags) == 0 {
+				t.Fatalf("expected a diagnostic for %q", tc.src)
+			}
+			found := false
+			for _, d := range diags {
+				if strings.Contains(d.Msg, tc.wantMsg) {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("diagnostics %v do not mention %q", diags, tc.wantMsg)
+			}
+		})
+	}
+}
+
+func TestGroupSetTerms(t *testing.T) {
+	f, diags := ParseFile("t.volt", "package db\ngroup series = Metrics \\ (ms_dict, ms_notes) + extra\n")
+	if len(diags) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	var g *ast.Group
+	for _, d := range f.Decls {
+		if gg, ok := d.(*ast.Group); ok {
+			g = gg
+		}
+	}
+	if g == nil {
+		t.Fatal("no Group parsed")
+	}
+	if len(g.Terms) != 3 {
+		t.Fatalf("terms = %d, want 3", len(g.Terms))
+	}
+	if g.Terms[0].Neg || g.Terms[0].Set() || g.Terms[0].Names[0].Name() != "Metrics" {
+		t.Errorf("term 0 = %+v, want +Metrics unparenthesized", g.Terms[0])
+	}
+	if !g.Terms[1].Neg || !g.Terms[1].Set() || len(g.Terms[1].Names) != 2 ||
+		g.Terms[1].Names[0].Name() != "ms_dict" || g.Terms[1].Names[1].Name() != "ms_notes" {
+		t.Errorf("term 1 = %+v, want \\ (ms_dict, ms_notes)", g.Terms[1])
+	}
+	if g.Terms[2].Neg || g.Terms[2].Set() || g.Terms[2].Names[0].Name() != "extra" {
+		t.Errorf("term 2 = %+v, want +extra", g.Terms[2])
+	}
+	if g.End().Line() != 2 {
+		t.Errorf("group end line = %d, want 2", g.End().Line())
+	}
+}
+
+func TestProjectionSetTerms(t *testing.T) {
+	f, diags := ParseFile("t.volt", "package db\nselect p (* \\ a \\ (b, c) \\ d) for t\n")
+	if len(diags) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	var sel *ast.Select
+	for _, d := range f.Decls {
+		if s, ok := d.(*ast.Select); ok {
+			sel = s
+		}
+	}
+	if sel == nil || !sel.Star {
+		t.Fatalf("no star select parsed: %+v", sel)
+	}
+	got := make([]string, len(sel.Cols))
+	for i, c := range sel.Cols {
+		got[i] = c.String()
+	}
+	if strings.Join(got, ",") != "a,b,c,d" {
+		t.Errorf("exclusions = %v, want a,b,c,d", got)
+	}
+}
+
+// A predicate keyword names a column anywhere outside a predicate: a
+// projection lists, aggregates and computes over it, and only inside the
+// where clause is it the keyword (spec/keywords, spec/predicates).
+func TestProjectionTakesPredicateWords(t *testing.T) {
+	src := "package db\nselect p (id, exists, like.in, sum(is) as total, not + 1 as next) for t join like\n"
+	f, diags := ParseFile("t.volt", src)
+	if len(diags) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	var got []string
+	for _, d := range f.Decls {
+		if s, ok := d.(*ast.Select); ok {
+			for _, it := range s.Items {
+				if it.Col != nil {
+					got = append(got, it.Col.String())
+				}
+			}
+		}
+	}
+	if strings.Join(got, ",") != "id,exists,like.in,is" {
+		t.Errorf("projected columns = %v, want id,exists,like.in,is", got)
+	}
+	_, diags = ParseFile("t.volt", "package db\nselect p (id) for t where exists = 1\n")
+	if len(diags) == 0 || !strings.Contains(diags[0].Msg, "keyword inside a predicate") {
+		t.Errorf("exists as a column inside a predicate: %v, want the keyword error", diags)
+	}
+}
+
+func TestPipelineRecoversPerPlug(t *testing.T) {
+	src := "pipeline api {\n\tuse volt.RequestID\n\tRequestID\n\tBearerAuth extra\n\tuse Last\n}\n"
+	f, diags := ParseFile("p.volt", src)
+	if len(diags) != 2 {
+		t.Fatalf("diagnostics = %d (%v), want 2 — one per bad plug line", len(diags), diags)
+	}
+	if len(f.Decls) != 1 {
+		t.Fatalf("decls = %d, want 1 (the Pipeline must survive)", len(f.Decls))
+	}
+	pl, ok := f.Decls[0].(*ast.Pipeline)
+	if !ok {
+		t.Fatalf("decl is %T, want *ast.Pipeline", f.Decls[0])
+	}
+	if len(pl.Plugs) != 2 || pl.Plugs[0].Ref.String() != "volt.RequestID" || pl.Plugs[1].Ref.String() != "Last" {
+		t.Errorf("plugs = %+v, want the two good ones", pl.Plugs)
+	}
+}
+
+func TestPackageClauseSurvivesTrailingError(t *testing.T) {
+	for _, tc := range []struct{ src, kinds string }{
+		{"package db [model: \"Blog\"]\n\ntable posts {\n\tid int [pk]\n}\n", "package,table"},
+		{"package db extra\n\ntable posts {\n\tid int [pk]\n}\n", "package,table"},
+	} {
+		f, diags := ParseFile("db.volt", tc.src)
+		if len(diags) != 1 {
+			t.Errorf("%q: diagnostics = %v, want one", tc.src, diags)
+		}
+		var kinds []string
+		for _, d := range f.Decls {
+			switch d.(type) {
+			case *ast.PackageClause:
+				kinds = append(kinds, "package")
+			case *ast.Table:
+				kinds = append(kinds, "table")
+			default:
+				kinds = append(kinds, "other")
+			}
+		}
+		if got := strings.Join(kinds, ","); got != tc.kinds {
+			t.Errorf("%q: decls = %s, want %s", tc.src, got, tc.kinds)
+		}
+	}
+}
+
+func TestVoltLayerIsSuperset(t *testing.T) {
+	src := "table users {\n\tid int [pk]\n}\n"
+	f, diags := ParseFile("s.volt", src)
+	if len(diags) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	if len(f.Decls) != 1 {
+		t.Fatalf("decls = %d, want 1", len(f.Decls))
+	}
+	if _, ok := f.Decls[0].(*ast.Table); !ok {
+		t.Fatalf("decl is %T, want *ast.Table", f.Decls[0])
+	}
+}
+
+func TestRouteHandlerForms(t *testing.T) {
+	f, diags := ParseFile("t.volt", "package app\nscope / {\n\tget /a Users.Show\n\tget /b db.UserList\n\tget /c UserList\n}\n")
+	if len(diags) != 0 {
+		t.Fatal(diags)
+	}
+	sc := f.Decls[1].(*ast.Scope)
+	want := [][]string{{"Users", "Show"}, {"db", "UserList"}, {"UserList"}}
+	if len(sc.Items) != len(want) {
+		t.Fatalf("got %d routes, want %d", len(sc.Items), len(want))
+	}
+	for i, item := range sc.Items {
+		r := item.(*ast.Route)
+		var got []string
+		for _, p := range r.Handler.Parts {
+			got = append(got, p.Name())
+		}
+		if strings.Join(got, ".") != strings.Join(want[i], ".") {
+			t.Errorf("route %d: handler parts %v, want %v", i, got, want[i])
+		}
+	}
+}

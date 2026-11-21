@@ -1,0 +1,469 @@
+// Package migrate is the running half of migrations (spec/migrations):
+// Lower turns the Migration elements of a checked package into the
+// statements the runtime applies, Read takes the structure of a SQLite
+// database and Diff compares two structures, the fold against the
+// target (spec/the-fold). The package is stdlib and the driver is the
+// caller's.
+package migrate
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/nao/gen/sqlite"
+	"github.com/Piechutowski/volt/nao/rt"
+)
+
+// Lower renders every migration of info in both directions, in name
+// order (spec/migrations): the up statements as written,
+// the down statements as the down block or the inverses of a flat body
+// in reverse order, nil when the migration is irreversible. It has no
+// database: the shape of a table follows from the migrations alone, so
+// a rebuild of a table no table_create of theirs made reads every
+// column of its body from the old table, and a column the table lacks
+// is SQLite's error when the fold runs (spec/the-fold).
+func Lower(info *check.Info) ([]rt.Migration, error) {
+	l := &lowerer{tables: map[string][]string{}}
+	out := make([]rt.Migration, 0, len(info.Migrations))
+	for _, mi := range info.Migrations {
+		m, err := l.migration(mi)
+		if err != nil {
+			return nil, fmt.Errorf("migration %s: %w", mi.Name, err)
+		}
+		out = append(out, m)
+	}
+	return out, nil
+}
+
+// lowerer follows the column names of every table the migrations
+// created, in name order, so that a rebuild knows which of its columns
+// have an old column to read (spec/migrations).
+type lowerer struct {
+	tables map[string][]string
+}
+
+func (l *lowerer) migration(mi *check.MigrationInfo) (rt.Migration, error) {
+	d := mi.Decl
+	m := rt.Migration{
+		Name:          mi.Name,
+		NoTransaction: d.Settings.Get("no_transaction") != nil,
+	}
+	m.ForeignKeysOff = !m.NoTransaction && (bracketNeeded(d.Up) || bracketNeeded(d.Down))
+	up, err := l.operations(d.Up)
+	if err != nil {
+		return m, err
+	}
+	m.Up = up
+	if !mi.Reversible {
+		return m, nil
+	}
+	m.Down = []string{}
+	if d.UpDown {
+		after := &lowerer{tables: tablesClone(l.tables)}
+		down, err := after.operations(d.Down)
+		if err != nil {
+			return m, err
+		}
+		m.Down = append(m.Down, down...)
+		return m, nil
+	}
+	for i := len(d.Up) - 1; i >= 0; i-- {
+		inv, err := inverse(d.Up[i])
+		if err != nil {
+			return m, err
+		}
+		m.Down = append(m.Down, inv...)
+	}
+	return m, nil
+}
+
+// bracketNeeded reports whether the operations hold a table_rebuild or
+// a table_drop, which the foreign-key bracket surrounds unless
+// no_transaction disables it (spec/migrations).
+func bracketNeeded(ops []ast.Operation) bool {
+	for _, op := range ops {
+		switch op.(type) {
+		case *ast.TableDrop, *ast.TableRebuild:
+			return true
+		}
+	}
+	return false
+}
+
+func (l *lowerer) operations(ops []ast.Operation) ([]string, error) {
+	var out []string
+	for _, op := range ops {
+		stmts, err := l.operation(op)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, stmts...)
+	}
+	return out, nil
+}
+
+func (l *lowerer) operation(op ast.Operation) ([]string, error) {
+	switch op := op.(type) {
+	case *ast.TableCreate:
+		name := op.Name.Name()
+		stmts, err := shapeCreate(name, op.Body)
+		if err != nil {
+			return nil, err
+		}
+		l.tables[name] = shapeColumns(op.Body)
+		return stmts, nil
+	case *ast.TableDrop:
+		name := op.Name.Name()
+		delete(l.tables, name)
+		return []string{"DROP TABLE " + sqlite.Ident(name)}, nil
+	case *ast.TableRename:
+		from, to := op.From.Name(), op.To.Name()
+		if cols, known := l.tables[from]; known {
+			delete(l.tables, from)
+			l.tables[to] = cols
+		}
+		return []string{"ALTER TABLE " + sqlite.Ident(from) + " RENAME TO " + sqlite.Ident(to)}, nil
+	case *ast.TableAlter:
+		return l.alter(op)
+	case *ast.TableRebuild:
+		return l.rebuild(op)
+	case *ast.IndexCreate:
+		return indexCreate(op.Table.Name(), op.Index)
+	case *ast.IndexDrop:
+		return indexDrop(op.Table.Name(), op.Index)
+	case *ast.Exec:
+		return []string{op.SQL.Tok.Val}, nil
+	}
+	return nil, fmt.Errorf("unknown operation %T", op)
+}
+
+func (l *lowerer) alter(op *ast.TableAlter) ([]string, error) {
+	table := op.Name.Name()
+	cols, known := l.tables[table]
+	var out []string
+	for _, item := range op.Items {
+		switch item := item.(type) {
+		case *ast.AlterAdd:
+			stmts, err := columnAdd(table, item.Column)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, stmts...)
+			cols = append(cols, item.Column.Name.Name())
+		case *ast.AlterDrop:
+			if item.Type != nil {
+				if ix := check.ColumnIndex(&ast.Column{Name: item.Name, Type: item.Type, Settings: item.Settings}); ix != nil {
+					stmts, err := indexDrop(table, ix)
+					if err != nil {
+						return nil, err
+					}
+					out = append(out, stmts...)
+				}
+			}
+			out = append(out, "ALTER TABLE "+sqlite.Ident(table)+" DROP COLUMN "+sqlite.Ident(item.Name.Name()))
+			cols = without(cols, item.Name.Name())
+		case *ast.AlterRename:
+			out = append(out, "ALTER TABLE "+sqlite.Ident(table)+" RENAME COLUMN "+sqlite.Ident(item.From.Name())+" TO "+sqlite.Ident(item.To.Name()))
+			cols = append(without(cols, item.From.Name()), item.To.Name())
+		}
+	}
+	if known {
+		l.tables[table] = cols
+	}
+	return out, nil
+}
+
+// rebuild lowers a table_rebuild to its steps (spec/migrations): the
+// new table, the copy, the high-water mark carried over when the
+// body's key is AUTOINCREMENT, the drop, the rename and the body's
+// indexes, named for the table as it stands after the rename.
+// The source of a column of a table the migrations created is its
+// from:, else the old column of its name, else its default:, else
+// NULL, which is what the database-assigned key a rebuild introduces
+// reads, since the rowid alias takes no default:. A
+// table no table_create made is of unknown shape, and every column of
+// the body reads the old column of its name, since without a fold the
+// lowering cannot tell which exist.
+func (l *lowerer) rebuild(op *ast.TableRebuild) ([]string, error) {
+	table := op.Name.Name()
+	tmp := table + "__new"
+	create, err := sqlite.TableDDL(tmp, op.Body)
+	if err != nil {
+		return nil, err
+	}
+	old, known := l.tables[table]
+	var cols, sources []string
+	for _, item := range op.Body {
+		col, ok := item.(*ast.Column)
+		if !ok {
+			continue
+		}
+		name := col.Name.Name()
+		cols = append(cols, sqlite.Ident(name))
+		src := "NULL"
+		switch {
+		case col.Settings.Get("from") != nil:
+			if fe, ok := col.Settings.Get("from").Value.(*ast.FuncExpr); ok {
+				src = fe.Text()
+			}
+		case !known:
+			src = sqlite.Ident(name)
+		case contains(old, name):
+			src = sqlite.Ident(name)
+		case col.Settings.Get("default") != nil:
+			d, err := sqlite.DefaultSQL(col.Settings.Get("default").Value)
+			if err != nil {
+				return nil, fmt.Errorf("table_rebuild %s: column %q: %w", table, name, err)
+			}
+			src = d
+		}
+		sources = append(sources, src)
+	}
+	out := []string{
+		create,
+		"INSERT INTO " + sqlite.Ident(tmp) + " (" + strings.Join(cols, ", ") + ")\nSELECT " + strings.Join(sources, ", ") + "\nFROM " + sqlite.Ident(table),
+	}
+	if autoincrementHas(op.Body) {
+		out = append(out, sequenceCarry(table, tmp)...)
+	}
+	out = append(out,
+		"DROP TABLE "+sqlite.Ident(table),
+		"ALTER TABLE "+sqlite.Ident(tmp)+" RENAME TO "+sqlite.Ident(table),
+	)
+	indexes, err := sqlite.IndexesDDL(table, op.Body)
+	if err != nil {
+		return nil, err
+	}
+	l.tables[table] = shapeColumns(op.Body)
+	return append(out, indexes...), nil
+}
+
+// autoincrementHas reports whether a shape body's key carries
+// autoincrement (spec/columns).
+func autoincrementHas(body []ast.TableItem) bool {
+	for _, item := range body {
+		if col, ok := item.(*ast.Column); ok && col.Settings.Get("autoincrement") != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// sequenceCarry renders the statements that give the rebuilt table the
+// larger of its own high-water mark and the old table's before the
+// drop deletes the old one's row of sqlite_sequence, so a rebuild never
+// lets an AUTOINCREMENT key reuse an id (spec/migrations).
+func sequenceCarry(table, tmp string) []string {
+	t, n := sqlite.StringSQL(table), sqlite.StringSQL(tmp)
+	return []string{
+		"UPDATE sqlite_sequence SET seq = (SELECT max(seq) FROM sqlite_sequence WHERE name IN (" + t + ", " + n + "))\nWHERE name = " + n,
+		"INSERT INTO sqlite_sequence (name, seq)\nSELECT " + n + ", seq FROM sqlite_sequence\nWHERE name = " + t + " AND NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = " + n + ")",
+	}
+}
+
+// inverse renders the statements that undo one operation of a flat
+// body (spec/migrations).
+func inverse(op ast.Operation) ([]string, error) {
+	switch op := op.(type) {
+	case *ast.TableCreate:
+		return []string{"DROP TABLE " + sqlite.Ident(op.Name.Name())}, nil
+	case *ast.TableDrop:
+		if !op.HasBody() {
+			return nil, fmt.Errorf("table_drop %s has no body and no inverse (spec/migrations)", op.Name.Name())
+		}
+		return shapeCreate(op.Name.Name(), op.Body)
+	case *ast.TableRename:
+		return []string{"ALTER TABLE " + sqlite.Ident(op.To.Name()) + " RENAME TO " + sqlite.Ident(op.From.Name())}, nil
+	case *ast.TableAlter:
+		table := op.Name.Name()
+		var out []string
+		for i := len(op.Items) - 1; i >= 0; i-- {
+			switch item := op.Items[i].(type) {
+			case *ast.AlterAdd:
+				if _, err := sqlite.ColumnDDL(item.Column); err != nil {
+					return nil, err
+				}
+				if ix := check.ColumnIndex(item.Column); ix != nil {
+					stmts, err := indexDrop(table, ix)
+					if err != nil {
+						return nil, err
+					}
+					out = append(out, stmts...)
+				}
+				out = append(out, "ALTER TABLE "+sqlite.Ident(table)+" DROP COLUMN "+sqlite.Ident(item.Column.Name.Name()))
+			case *ast.AlterDrop:
+				if item.Type == nil {
+					return nil, fmt.Errorf("drop %s in table_alter %s has no type and no inverse (spec/migrations)", item.Name.Name(), table)
+				}
+				stmts, err := columnAdd(table, &ast.Column{Name: item.Name, Type: item.Type, Settings: item.Settings})
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, stmts...)
+			case *ast.AlterRename:
+				out = append(out, "ALTER TABLE "+sqlite.Ident(table)+" RENAME COLUMN "+sqlite.Ident(item.To.Name())+" TO "+sqlite.Ident(item.From.Name()))
+			}
+		}
+		return out, nil
+	case *ast.IndexCreate:
+		return indexDrop(op.Table.Name(), op.Index)
+	case *ast.IndexDrop:
+		return indexCreate(op.Table.Name(), op.Index)
+	case *ast.Exec:
+		down := op.DownSQL()
+		if down == nil {
+			return nil, fmt.Errorf("exec has no down: and no inverse (spec/migrations)")
+		}
+		return []string{down.Tok.Val}, nil
+	case *ast.TableRebuild:
+		return nil, fmt.Errorf("table_rebuild %s has no inverse (spec/migrations)", op.Name.Name())
+	}
+	return nil, fmt.Errorf("unknown operation %T", op)
+}
+
+func shapeCreate(table string, body []ast.TableItem) ([]string, error) {
+	create, err := sqlite.TableDDL(table, body)
+	if err != nil {
+		return nil, err
+	}
+	indexes, err := sqlite.IndexesDDL(table, body)
+	if err != nil {
+		return nil, err
+	}
+	return append([]string{create}, indexes...), nil
+}
+
+// columnAdd lowers an add item: ADD COLUMN, the backfill and the schema
+// edit of an expression default, then the CREATE [UNIQUE] INDEX of a
+// column that carries unique or index, which SQLite's ADD COLUMN takes
+// no part of (spec/migrations).
+func columnAdd(table string, col *ast.Column) ([]string, error) {
+	def, err := sqlite.ColumnDDL(col)
+	if err != nil {
+		return nil, fmt.Errorf("table_alter %s: %w", table, err)
+	}
+	out := []string{"ALTER TABLE " + sqlite.Ident(table) + " ADD COLUMN " + def}
+	if s := col.Settings.Get("default"); s != nil {
+		if _, expr := s.Value.(*ast.FuncExpr); expr {
+			if out, err = expressionDefaultAdd(table, col, def, s.Value); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if ix := check.ColumnIndex(col); ix != nil {
+		stmts, err := indexCreate(table, ix)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, stmts...)
+	}
+	return out, nil
+}
+
+// expressionDefaultAdd lowers the add of a column whose default is an
+// expression, which SQLite's ADD COLUMN refuses on a table with rows
+// unless it is a constant (spec/migrations): the column added
+// without it, every row written with its value, and the definition the
+// ADD COLUMN appended replaced by def in the table's CREATE TABLE text.
+func expressionDefaultAdd(table string, col *ast.Column, def string, value ast.Node) ([]string, error) {
+	name := col.Name.Name()
+	sqlType, _ := sqlite.TypeSQL(col.Type.String())
+	staged := sqlite.Ident(name) + " " + sqlType
+	if col.Settings.Get("null") == nil {
+		staged += " NOT NULL DEFAULT 0"
+	}
+	backfill, err := sqlite.DefaultSQL(value)
+	if err != nil {
+		return nil, fmt.Errorf("table_alter %s: column %q: %w", table, name, err)
+	}
+	return []string{
+		"ALTER TABLE " + sqlite.Ident(table) + " ADD COLUMN " + staged,
+		"UPDATE " + sqlite.Ident(table) + " SET " + sqlite.Ident(name) + " = " + backfill,
+		"PRAGMA writable_schema = ON",
+		"UPDATE sqlite_schema SET sql = replace(sql, " + sqlite.StringSQL(", "+staged) + ", " + sqlite.StringSQL(", "+def) + ")\nWHERE type = 'table' AND name = " + sqlite.StringSQL(table) + " COLLATE NOCASE",
+		"PRAGMA writable_schema = RESET",
+	}, nil
+}
+
+func indexCreate(table string, ix *ast.Index) ([]string, error) {
+	name, err := sqlite.IndexName(table, ix)
+	if err != nil {
+		return nil, err
+	}
+	return []string{sqlite.IndexDDL(table, name, ix)}, nil
+}
+
+func indexDrop(table string, ix *ast.Index) ([]string, error) {
+	name, err := sqlite.IndexName(table, ix)
+	if err != nil {
+		return nil, err
+	}
+	return []string{"DROP INDEX " + sqlite.Ident(name)}, nil
+}
+
+func shapeColumns(body []ast.TableItem) []string {
+	var out []string
+	for _, item := range body {
+		if col, ok := item.(*ast.Column); ok {
+			out = append(out, col.Name.Name())
+		}
+	}
+	return out
+}
+
+func tablesClone(tables map[string][]string) map[string][]string {
+	out := make(map[string][]string, len(tables))
+	for k, v := range tables {
+		out[k] = append([]string(nil), v...)
+	}
+	return out
+}
+
+func without(names []string, name string) []string {
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		if n != name {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+func contains(names []string, name string) bool {
+	for _, n := range names {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
+// SQLText renders migrations for review as volt migration sql prints
+// them (spec/migration-tooling): each name, its up statements,
+// then its down statements, or "-- irreversible".
+func SQLText(ms []rt.Migration) string {
+	var b strings.Builder
+	for i, m := range ms {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "-- %s\n-- up\n", m.Name)
+		statementsWrite(&b, m.Up)
+		if m.Down == nil {
+			b.WriteString("-- irreversible\n")
+			continue
+		}
+		b.WriteString("-- down\n")
+		statementsWrite(&b, m.Down)
+	}
+	return b.String()
+}
+
+func statementsWrite(b *strings.Builder, stmts []string) {
+	for _, s := range stmts {
+		b.WriteString(strings.TrimRight(strings.TrimSpace(s), ";"))
+		b.WriteString(";\n")
+	}
+}

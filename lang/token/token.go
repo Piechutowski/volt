@@ -1,0 +1,261 @@
+// Package token defines the lexical tokens of Volt and source positions,
+// mirroring the role of go/token in the Go toolchain.
+package token
+
+import (
+	"fmt"
+	"sync/atomic"
+)
+
+// File is the source positions point into: its name and text held
+// once. A File may be one chunk of a larger source, in
+// which case its base is where the chunk sits in the whole.
+// Bases are atomic because a reused declaration is shared
+// with results still being read.
+type File struct {
+	Name string
+	Src  string
+
+	baseOffset atomic.Int64
+	baseLine   atomic.Int64
+}
+
+// NewFile names a source text.
+func NewFile(name, src string) *File { return &File{Name: name, Src: src} }
+
+// NewChunk names a piece of a source that begins at the given byte
+// offset and 1-based line of the whole.
+func NewChunk(name, src string, baseOffset, baseLine int) *File {
+	f := &File{Name: name, Src: src}
+	f.Relocate(baseOffset, baseLine)
+	return f
+}
+
+// Relocate moves the chunk to a new place in the whole: its first
+// byte is at baseOffset and its first line is the 1-based baseLine.
+func (f *File) Relocate(baseOffset, baseLine int) {
+	f.baseOffset.Store(int64(baseOffset))
+	f.baseLine.Store(int64(baseLine - 1))
+}
+
+// At is the position in f at the given byte offset, 1-based line and
+// 1-based rune column, all relative to f's own text.
+func (f *File) At(offset, line, column int) Position {
+	return Position{file: f, off: offset, line: line, col: column}
+}
+
+// Position is a source location. The numbers are relative to the file
+// (or chunk) the position is in; the accessors answer in terms of the
+// whole source.
+type Position struct {
+	file *File
+	off  int
+	line int
+	col  int
+}
+
+// At is a position in a file known by name only: a Go file a reference
+// resolves to, a synthetic position at the start of a file.
+func At(filename string, offset, line, column int) Position {
+	return (&File{Name: filename}).At(offset, line, column)
+}
+
+// Offset is the 0-based byte offset in the whole source.
+func (p Position) Offset() int {
+	if p.file == nil {
+		return p.off
+	}
+	return int(p.file.baseOffset.Load()) + p.off
+}
+
+// Line is the 1-based line in the whole source.
+func (p Position) Line() int {
+	if p.file == nil {
+		return p.line
+	}
+	return int(p.file.baseLine.Load()) + p.line
+}
+
+// Column is the 1-based column in runes.
+func (p Position) Column() int { return p.col }
+
+// Filename is the name of the file the position is in; "" when none.
+func (p Position) Filename() string {
+	if p.file == nil {
+		return ""
+	}
+	return p.file.Name
+}
+
+// File is the source the position points into; nil when known by name
+// only.
+func (p Position) File() *File { return p.file }
+
+// Advance is the position n bytes on, on the same line, one column
+// per byte.
+func (p Position) Advance(n int) Position {
+	p.off += n
+	p.col += n
+	return p
+}
+
+func (p Position) String() string {
+	name := p.Filename()
+	if name == "" {
+		name = "<input>"
+	}
+	return fmt.Sprintf("%s:%d:%d", name, p.Line(), p.Column())
+}
+
+func (p Position) IsValid() bool { return p.line > 0 }
+
+// Kind is the set of lexical token kinds (spec/lexical-structure).
+type Kind uint8
+
+const (
+	ILLEGAL Kind = iota
+	EOF
+
+	IDENT    // users (spec/identifiers)
+	STRING   // "text", """multi line""" (spec/string-literals, spec/multi-line-string-literals)
+	NUMBER   // 42, 3.14, 1.5e10 (spec/numeric-literals)
+	FUNCEXPR // `CURRENT_TIMESTAMP` (spec/expression-literals)
+
+	LBRACE   // {
+	RBRACE   // }
+	LBRACKET // [
+	RBRACKET // ]
+	LPAREN   // (
+	RPAREN   // )
+	COMMA    // ,
+	COLON    // :
+	DOT      // .
+	TILDE    // ~
+	STAR     // * (a select's star projection, spec/selects-over-groups)
+	SLASH    // / (Volt route paths and import paths, spec/pipelines to spec/resources)
+
+	LT    // <
+	GT    // >
+	MINUS // -
+
+	// Predicate and group operators (spec/groups to spec/predicates)
+	PLUS      // +
+	BACKSLASH // \ (group set difference, spec/groups)
+	EQ        // =
+	NEQ       // !=
+	LE        // <=
+	GE        // >=
+	QUESTION  // ? (an optional query parameter, spec/predicates)
+
+	COMMENT // a // comment, never among the parser's tokens (spec/comments)
+)
+
+var kindNames = [...]string{
+	ILLEGAL:   "illegal token",
+	EOF:       "end of file",
+	IDENT:     "identifier",
+	STRING:    "string",
+	NUMBER:    "number",
+	FUNCEXPR:  "expression literal",
+	LBRACE:    "'{'",
+	RBRACE:    "'}'",
+	LBRACKET:  "'['",
+	RBRACKET:  "']'",
+	LPAREN:    "'('",
+	RPAREN:    "')'",
+	COMMA:     "','",
+	COLON:     "':'",
+	DOT:       "'.'",
+	TILDE:     "'~'",
+	STAR:      "'*'",
+	SLASH:     "'/'",
+	LT:        "'<'",
+	GT:        "'>'",
+	MINUS:     "'-'",
+	PLUS:      "'+'",
+	BACKSLASH: "'\\'",
+	EQ:        "'='",
+	NEQ:       "'!='",
+	LE:        "'<='",
+	GE:        "'>='",
+	QUESTION:  "'?'",
+	COMMENT:   "comment",
+}
+
+func (k Kind) String() string {
+	if int(k) < len(kindNames) {
+		return kindNames[k]
+	}
+	return fmt.Sprintf("Kind(%d)", int(k))
+}
+
+// Token is one lexical token. Val holds the processed value (escape
+// sequences applied, quotes stripped); the raw source text is borrowed
+// from the file through Text.
+type Token struct {
+	Kind Kind
+
+	Multi bool // STRING written as """multi-line"""
+
+	// NLBefore reports whether a line break (or start of file) precedes
+	// this token.
+	NLBefore bool
+	// SpBefore reports whether any whitespace precedes this token.
+	SpBefore bool
+	// DeclStart reports that this token begins a top-level element
+	// (spec/line-structure-and-whitespace): an identifier in the first column of its
+	// line, outside every brace, string and comment. The element before
+	// it ends here.
+	DeclStart bool
+
+	Len int // bytes of source text; 0 for a synthetic token, whose Text is its Val
+
+	Val string
+	Pos Position
+}
+
+// Synthetic is a token that stands for text the source does not
+// contain: an expanded route segment, a resource parameter. Its Text
+// is its Val and its position is the one given.
+func Synthetic(kind Kind, val string, at Position) Token {
+	return Token{Kind: kind, Val: val, Pos: at}
+}
+
+// Text is the raw source text of the token.
+func (t Token) Text() string {
+	if t.Len == 0 || t.Pos.file == nil {
+		return t.Val
+	}
+	return t.Pos.file.Src[t.Pos.off : t.Pos.off+t.Len]
+}
+
+func (t Token) String() string {
+	if t.Kind == EOF {
+		if t.Val != "" {
+			return t.Val
+		}
+		return t.Kind.String()
+	}
+	if text := t.Text(); text != "" {
+		return fmt.Sprintf("%s %q", t.Kind, text)
+	}
+	return t.Kind.String()
+}
+
+// End returns the position immediately after the token.
+func (t Token) End() Position {
+	end := t.Pos
+	text := t.Text()
+	for _, r := range text {
+		switch r {
+		case '\n':
+			end.line++
+			end.col = 0
+		case '\r':
+			continue
+		}
+		end.col++
+	}
+	end.off += len(text)
+	return end
+}

@@ -1,0 +1,288 @@
+package lsp
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+const goRefSchema = "package db\n\ntable users {\n\tid int [pk]\n\temail string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t\tMissing(email)\n\t}\n}\n"
+const goRefRoutes = "package app\n\npipeline api {\n\tuse volt.RequestID\n\tuse Auth\n}\n"
+
+func goRefProject(t *testing.T) string {
+	t.Helper()
+	return voltProject(t, map[string]string{
+		"go.mod":          "module goref\n",
+		"db/schema.volt":  goRefSchema,
+		"db/checks.go":    "package db\n\nimport \"errors\"\n\n// EmailValid rejects addresses without an @ — a Go-reference check\n// target (spec/validators).\nfunc EmailValid(email string) error {\n\tif email == \"\" {\n\t\treturn errors.New(\"empty\")\n\t}\n\treturn nil\n}\n",
+		"app/routes.volt": goRefRoutes,
+		"app/mw.go":       "package app\n\nimport \"net/http\"\n\n// Auth is a pipeline plug.\nfunc Auth(next http.Handler) http.Handler { return next }\n",
+	})
+}
+
+func TestGoRefDefinitionAndHover(t *testing.T) {
+	root := goRefProject(t)
+	schema := filepath.Join(root, "db", "schema.volt")
+	d := NewDocument("file://"+schema, goRefSchema)
+
+	loc := d.Definition(posOf(t, goRefSchema, "EmailValid", 0))
+	if loc == nil {
+		t.Fatal("no definition for EmailValid")
+	}
+	if !strings.HasSuffix(loc.URI, "db/checks.go") {
+		t.Errorf("definition URI = %s, want db/checks.go", loc.URI)
+	}
+	if loc.Range.Start.Line != 6 || loc.Range.Start.Character != 5 {
+		t.Errorf("definition range = %+v, want line 6 char 5", loc.Range.Start)
+	}
+
+	h := d.Hover(posOf(t, goRefSchema, "EmailValid", 0))
+	if h == nil {
+		t.Fatal("no hover for EmailValid")
+	}
+	md := h.Contents.Value
+	for _, want := range []string{"func EmailValid(email string) error", "rejects addresses without an @"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("hover missing %q:\n%s", want, md)
+		}
+	}
+}
+
+func TestGoRefMissingFunctionHoverExplains(t *testing.T) {
+	root := goRefProject(t)
+	schema := filepath.Join(root, "db", "schema.volt")
+	d := NewDocument("file://"+schema, goRefSchema)
+
+	if loc := d.Definition(posOf(t, goRefSchema, "Missing", 0)); loc != nil {
+		t.Errorf("definition for an undeclared function = %v, want none", loc)
+	}
+	h := d.Hover(posOf(t, goRefSchema, "Missing", 0))
+	if h == nil {
+		t.Fatal("no hover for a missing Go reference")
+	}
+	md := h.Contents.Value
+	if !strings.Contains(md, "no such function") {
+		t.Errorf("hover should explain the function is undeclared:\n%s", md)
+	}
+}
+
+func TestGoRefPipelinePlug(t *testing.T) {
+	root := goRefProject(t)
+	routes := filepath.Join(root, "app", "routes.volt")
+	d := NewDocument("file://"+routes, goRefRoutes)
+
+	loc := d.Definition(posOf(t, goRefRoutes, "Auth", 0))
+	if loc == nil || !strings.HasSuffix(loc.URI, "app/mw.go") {
+		t.Fatalf("plug definition = %v, want app/mw.go", loc)
+	}
+	h := d.Hover(posOf(t, goRefRoutes, "Auth", 0))
+	if h == nil || !strings.Contains(h.Contents.Value, "func Auth(next http.Handler) http.Handler") {
+		t.Errorf("plug hover missing the signature: %v", h)
+	}
+	if loc := d.Definition(posOf(t, goRefRoutes, "RequestID", 0)); loc != nil {
+		t.Errorf("volt.RequestID resolved to %v; runtime plugs are not package functions", loc)
+	}
+}
+
+func TestGoRefUndeclaredIsDiagnostic(t *testing.T) {
+	root := goRefProject(t)
+	schema := filepath.Join(root, "db", "schema.volt")
+	d := NewDocument("file://"+schema, goRefSchema)
+	found := false
+	for _, dg := range d.Diags {
+		if strings.Contains(dg.Msg, "no function Missing") && strings.Contains(dg.Msg, "func Missing(string) error") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("undeclared Go reference produced no diagnostic naming the signature to write; diags = %v", d.Diags)
+	}
+	for _, dg := range d.Diags {
+		if strings.Contains(dg.Msg, "EmailValid") {
+			t.Errorf("the declared, well-typed reference must not be flagged: %v", dg)
+		}
+	}
+}
+
+func TestGoRefRenameRewritesVoltSpellings(t *testing.T) {
+	root := goRefProject(t)
+	schema := filepath.Join(root, "db", "schema.volt")
+	d := NewDocument("file://"+schema, goRefSchema)
+
+	edit, err := d.Rename(posOf(t, goRefSchema, "EmailValid", 0), "AddressValid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var voltEdits, goEdits int
+	for uri, edits := range edit.Changes {
+		if strings.HasSuffix(uri, ".go") {
+			goEdits += len(edits)
+		} else {
+			voltEdits += len(edits)
+		}
+	}
+	if voltEdits != 1 || goEdits != 0 {
+		t.Errorf("rename touched %d volt and %d go spellings, want 1 and 0: %+v", voltEdits, goEdits, edit.Changes)
+	}
+}
+
+func TestColumnRenameFollowsIntoChecks(t *testing.T) {
+	const text = "package db\n\ntable users {\n\tid int [pk]\n\temail string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t}\n}\n"
+	root := voltProject(t, map[string]string{
+		"go.mod":         "module rn\n",
+		"db/schema.volt": text,
+		"db/checks.go":   "package db\n\nfunc EmailValid(email string) error { return nil }\n",
+	})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
+	edit, err := d.Rename(posOf(t, text, "email", 0), "address")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, edits := range edit.Changes {
+		n += len(edits)
+	}
+	if n != 2 {
+		t.Errorf("column rename produced %d edits, want 2 (declaration, validator argument): %+v", n, edit.Changes)
+	}
+}
+
+func TestColumnRenameFollowsIntoSingleTableSelect(t *testing.T) {
+	const text = "package db\n\ntable page_views {\n\tid int [pk]\n\tsite string\n\tday int\n}\n\n" +
+		"select rows (site, day) for page_views where site = :s [order: (day desc, site asc)]\n"
+	root := voltProject(t, map[string]string{
+		"go.mod":         "module rn\n",
+		"db/schema.volt": text,
+	})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
+	edit, err := d.Rename(posOf(t, text, "site", 0), "host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, edits := range edit.Changes {
+		n += len(edits)
+	}
+	if n != 4 {
+		t.Errorf("column rename produced %d edits, want 4 (declaration, projection, where, order): %+v", n, edit.Changes)
+	}
+}
+
+func TestSelectColumnRefsFollowTheTarget(t *testing.T) {
+	const text = "package db\n\ntable orders {\n\tid int [pk]\n\ttotal int\n}\n\n" +
+		"table page_views {\n\tid int [pk]\n\tsite string\n}\n\n" +
+		"table link_clicks {\n\tid int [pk]\n\tsite string\n}\n\n" +
+		"group clicks {\n\tlink_clicks\n}\n\n" +
+		"select big (total) for orders where total > 1\n" +
+		"select all (site) for clicks\n"
+	root := voltProject(t, map[string]string{"go.mod": "module g\n", "db/schema.volt": text})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
+
+	edit, err := d.Rename(posOf(t, text, "total", 0), "amount")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, edits := range edit.Changes {
+		n += len(edits)
+	}
+	if n != 3 {
+		t.Errorf("select over a table: rename produced %d edits, want 3: %+v", n, edit.Changes)
+	}
+
+	edit, err = d.Rename(posOf(t, text, "site", 0), "host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n = 0
+	for _, edits := range edit.Changes {
+		n += len(edits)
+	}
+	if n != 1 {
+		t.Errorf("select over a group that does not hold the table: rename produced %d edits, want 1 (declaration only): %+v", n, edit.Changes)
+	}
+}
+
+func TestGoFileChangeInvalidatesIndex(t *testing.T) {
+	root := goRefProject(t)
+	schema := filepath.Join(root, "db", "schema.volt")
+	d := NewDocument("file://"+schema, goRefSchema)
+	if d.GoFilesChanged() {
+		t.Fatal("fresh index reports stale Go files")
+	}
+	if d.Definition(posOf(t, goRefSchema, "EmailValid", 0)) == nil {
+		t.Fatal("precondition: EmailValid resolves before the rename")
+	}
+
+	goFile := filepath.Join(root, "db", "checks.go")
+	src, err := os.ReadFile(goFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamed := strings.ReplaceAll(string(src), "EmailValid", "AddressValid")
+	if err := os.WriteFile(goFile, []byte(renamed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !d.GoFilesChanged() {
+		t.Fatal("index did not notice the Go file changed")
+	}
+	d.Update(d.Text)
+	if loc := d.Definition(posOf(t, goRefSchema, "EmailValid", 0)); loc != nil {
+		t.Errorf("definition still resolves to the renamed function: %v", loc)
+	}
+	found := false
+	for _, dg := range d.Diags {
+		if strings.Contains(dg.Msg, "no function EmailValid") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the reference must now be reported as undeclared; diags = %v", d.Diags)
+	}
+}
+
+func TestGoFileChangeNoticedForBareTypesAndErrorHandlers(t *testing.T) {
+	for _, tc := range []struct {
+		name, file, text, goFile, goSrc, missing string
+	}{
+		{
+			name:    "bare Type",
+			file:    "db/schema.volt",
+			text:    "package db\n\ntype Slug string\n\ntable posts {\n\tid   int  [pk]\n\tslug Slug\n}\n",
+			goFile:  "db/types.go",
+			goSrc:   "package db\n\n// Slug is a URL segment (spec/types).\ntype Slug string\n",
+			missing: "type Slug is declared in no Go file",
+		},
+		{
+			name:    "error handler",
+			file:    "app/routes.volt",
+			text:    "package app\n\nscope / [error_handler: Errors] {\n\tget / volt.Events\n}\n",
+			goFile:  "app/errors.go",
+			goSrc:   "package app\n\nimport (\n\t\"net/http\"\n\n\t\"github.com/Piechutowski/volt\"\n)\n\n// Errors renders failures (spec/scopes).\nfunc Errors(r volt.Request, err error) volt.Response { return volt.DefaultErrorHandler(r, err) }\n",
+			missing: "no function Errors",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := voltProject(t, map[string]string{"go.mod": "module fresh\n", tc.file: tc.text})
+			d := NewDocument("file://"+filepath.Join(root, tc.file), tc.text)
+			if !strings.Contains(fmt.Sprint(d.Diags), tc.missing) {
+				t.Fatalf("precondition: %q is reported before the Go file exists; diags = %v", tc.missing, d.Diags)
+			}
+			if d.GoFilesChanged() {
+				t.Fatal("fresh index reports stale Go files")
+			}
+			if err := os.WriteFile(filepath.Join(root, tc.goFile), []byte(tc.goSrc), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if !d.GoFilesChanged() {
+				t.Fatalf("the index did not notice %s, which the check of the %s reads (spec/projects-and-packages)", tc.goFile, tc.name)
+			}
+			d.Update(d.Text)
+			if strings.Contains(fmt.Sprint(d.Diags), tc.missing) {
+				t.Errorf("after the update %q is still reported: %v", tc.missing, d.Diags)
+			}
+		})
+	}
+}

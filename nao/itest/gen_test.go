@@ -1,0 +1,51 @@
+package itest
+
+//go:generate go run ../../cmd/volt gen --sql .
+
+import (
+	"bytes"
+	"os"
+	"testing"
+
+	"github.com/Piechutowski/volt/gen/model"
+	"github.com/Piechutowski/volt/internal/disk"
+	"github.com/Piechutowski/volt/lang"
+	"github.com/Piechutowski/volt/lang/diag"
+)
+
+// TestGeneratedFilesCurrent proves the checked-in files match what the
+// generator produces from schema.volt today — through the same path
+// `volt gen` takes, so the test and the tool cannot disagree.
+// On failure: go generate ./nao/itest
+func TestGeneratedFilesCurrent(t *testing.T) {
+	root, err := lang.FindRoot(disk.Source{}, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr, err := lang.LoadDirs(disk.Source{}, root, []string{"."}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags := lang.Check(pr); diag.HasErrors(diags) {
+		t.Fatalf("schema.volt must be valid: %v", diags)
+	}
+	pkg := pr.PackageAt(".")
+	if pkg == nil || !pkg.HasSchema() {
+		t.Fatal("the fixture package declares no data elements")
+	}
+
+	files, err := model.Generate(pkg, model.Options{Source: "package " + pkg.Path, SQL: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for voltName, voltCode := range files {
+		got, err := os.ReadFile(voltName)
+		if err != nil {
+			t.Errorf("%s: %v (run 'go generate ./nao/itest')", voltName, err)
+			continue
+		}
+		if !bytes.Equal(got, voltCode) {
+			t.Errorf("%s is stale; run 'go generate ./nao/itest'", voltName)
+		}
+	}
+}

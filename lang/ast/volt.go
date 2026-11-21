@@ -1,0 +1,710 @@
+// Volt-layer AST nodes (spec Part II, docs/spec.md).
+package ast
+
+import (
+	"strconv"
+
+	"github.com/Piechutowski/volt/lang/token"
+)
+
+// PackageClause is a "package name" clause (spec/projects-and-packages).
+type PackageClause struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	PackagePos token.Position
+	Name       *Ident
+}
+
+func (d *PackageClause) Pos() token.Position { return d.PackagePos }
+func (d *PackageClause) End() token.Position { return d.Name.End() }
+func (d *PackageClause) declNode()           {}
+
+// ImportDecl is an "import ( ... )" block (spec/imports).
+type ImportDecl struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	ImportPos  token.Position
+	Specs      []*ImportSpec
+	Incomplete bool // true if a syntax error dropped an entry from Specs
+	Rparen     token.Position
+}
+
+func (d *ImportDecl) Pos() token.Position { return d.ImportPos }
+func (d *ImportDecl) End() token.Position { return d.Rparen }
+func (d *ImportDecl) declNode()           {}
+
+// ImportSpec is one import line: [alias] path, the path written as
+// slash-separated identifiers rooted at the project root (spec/imports).
+type ImportSpec struct {
+	Doc   *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	Alias *Ident        // nil when the default qualifier applies
+	Path  []*Ident      // 1+ segments
+}
+
+func (x *ImportSpec) Pos() token.Position {
+	if x.Alias != nil {
+		return x.Alias.Pos()
+	}
+	return x.Path[0].Pos()
+}
+func (x *ImportSpec) End() token.Position { return x.Path[len(x.Path)-1].End() }
+
+// PathString returns the canonical slash-joined import path.
+func (x *ImportSpec) PathString() string {
+	s := x.Path[0].Name()
+	for _, p := range x.Path[1:] {
+		s += "/" + p.Name()
+	}
+	return s
+}
+
+// GoRef is a reference to Go code or an imported symbol: one identifier,
+// or qualifier.identifier (volt.RequestID, app.Session, db.User).
+type GoRef struct {
+	Parts []*Ident // 1 or 2 elements
+}
+
+func (x *GoRef) Pos() token.Position { return x.Parts[0].Pos() }
+func (x *GoRef) End() token.Position { return x.Parts[len(x.Parts)-1].End() }
+
+// Qualifier returns the leading qualifier, or "" if unqualified.
+func (x *GoRef) Qualifier() string {
+	if len(x.Parts) == 2 {
+		return x.Parts[0].Name()
+	}
+	return ""
+}
+
+// Base returns the unqualified name.
+func (x *GoRef) Base() string { return x.Parts[len(x.Parts)-1].Name() }
+
+func (x *GoRef) String() string {
+	if len(x.Parts) == 2 {
+		return x.Parts[0].Name() + "." + x.Parts[1].Name()
+	}
+	return x.Parts[0].Name()
+}
+
+// Pipeline is a named middleware list (spec/pipelines).
+type Pipeline struct {
+	Doc         *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	PipelinePos token.Position
+	Name        *Ident
+	Plugs       []*Plug
+	Rbrace      token.Position
+}
+
+func (d *Pipeline) Pos() token.Position { return d.PipelinePos }
+func (d *Pipeline) End() token.Position { return d.Rbrace }
+func (d *Pipeline) declNode()           {}
+
+// Plug is one "use ref" line inside a Pipeline body.
+type Plug struct {
+	Doc    *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	UsePos token.Position
+	Ref    *GoRef
+}
+
+func (x *Plug) Pos() token.Position { return x.UsePos }
+func (x *Plug) End() token.Position { return x.Ref.End() }
+
+// Scope is a routing scope (spec/scopes-and-routes): a path prefix, optional settings,
+// and a body of routes, resources and nested scopes.
+type Scope struct {
+	Doc      *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	ScopePos token.Position
+	Path     *RoutePath
+	Settings *SettingList
+	Items    []ScopeItem
+	Rbrace   token.Position
+}
+
+func (d *Scope) Pos() token.Position { return d.ScopePos }
+func (d *Scope) End() token.Position { return d.Rbrace }
+func (d *Scope) declNode()           {}
+func (d *Scope) scopeItemNode()      {}
+
+// ScopeItem is implemented by everything legal in a Scope body:
+// *Route, *Resources, *Scope.
+type ScopeItem interface {
+	Node
+	scopeItemNode()
+}
+
+// Route is one verb route line (spec/routes), with its load block when
+// it has one (spec/route-loads).
+type Route struct {
+	Doc      *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	VerbTok  token.Token   // IDENT: get, post, patch, delete, options, head, any; put, read only for the checker to name the verb to write (spec/routes)
+	Path     *RoutePath
+	Handler  *GoRef // Controller.Action — exactly two parts
+	Settings *SettingList
+	Loads    []*Load
+	Rbrace   token.Position // valid when the route has a load block
+}
+
+func (x *Route) Pos() token.Position { return x.VerbTok.Pos }
+func (x *Route) End() token.Position {
+	if x.Rbrace.IsValid() {
+		return x.Rbrace
+	}
+	if x.Settings != nil {
+		return x.Settings.End()
+	}
+	return x.Handler.End()
+}
+
+// Load is one line of a route's load block (spec/route-loads): the name
+// the handler receives the value under and the query call that loads it.
+type Load struct {
+	Doc  *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	Name *Ident
+	Call *QueryCall
+}
+
+func (x *Load) Pos() token.Position { return x.Name.Pos() }
+func (x *Load) End() token.Position { return x.Call.End() }
+
+// QueryCall names a generated query of a data package with its
+// arguments, each an Ident, a BasicLit or a NegNumber
+// (spec/route-loads, spec/request-bodies): a load's query, or the value of a
+// body: setting.
+type QueryCall struct {
+	Ref    *GoRef
+	Args   []Node
+	Rparen token.Position
+}
+
+func (x *QueryCall) Pos() token.Position { return x.Ref.Pos() }
+func (x *QueryCall) End() token.Position { return x.Rparen }
+func (x *Route) scopeItemNode()          {}
+
+// Verb returns the lowercased verb.
+func (x *Route) Verb() string { return lower(x.VerbTok.Val) }
+
+// Resources is a resources declaration (spec/resources).
+type Resources struct {
+	Doc          *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	ResourcesPos token.Position
+	// Pkg is the package qualifier when the declaration names a model
+	// of an imported package (`resources db.Post`); nil otherwise.
+	Pkg      *Ident
+	Name     *Ident
+	Settings *SettingList
+}
+
+// Ref renders the declaration's name as written.
+func (x *Resources) Ref() string {
+	if x.Pkg != nil {
+		return x.Pkg.Name() + "." + x.Name.Name()
+	}
+	return x.Name.Name()
+}
+
+func (x *Resources) Pos() token.Position { return x.ResourcesPos }
+func (x *Resources) End() token.Position {
+	if x.Settings != nil {
+		return x.Settings.End()
+	}
+	return x.Name.End()
+}
+func (x *Resources) scopeItemNode() {}
+
+// Dataset expands a group select of an imported data package into one
+// query route per member (spec, Datasets): `dataset db.browse [strip: "da_"]`.
+type Dataset struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	DatasetPos token.Position
+	Pkg        *Ident // the package qualifier; required
+	Name       *Ident // the select's declared name
+	Settings   *SettingList
+}
+
+// Ref renders the reference as written.
+func (x *Dataset) Ref() string {
+	if x.Pkg != nil {
+		return x.Pkg.Name() + "." + x.Name.Name()
+	}
+	return x.Name.Name()
+}
+
+func (x *Dataset) Pos() token.Position { return x.DatasetPos }
+func (x *Dataset) End() token.Position {
+	if x.Settings != nil {
+		return x.Settings.End()
+	}
+	return x.Name.End()
+}
+func (x *Dataset) scopeItemNode() {}
+
+// ScopeLoad is "load name Func" in a Scope body (spec/scope-loads): a value
+// every route beneath receives, from a function of the package.
+type ScopeLoad struct {
+	Doc     *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	LoadPos token.Position
+	Name    *Ident
+	Ref     *GoRef
+}
+
+func (x *ScopeLoad) Pos() token.Position { return x.LoadPos }
+func (x *ScopeLoad) End() token.Position { return x.Ref.End() }
+func (x *ScopeLoad) scopeItemNode()      {}
+
+// RoutePath is a route or scope path: "/" or "/seg/:param(type)/*rest"
+// (spec/route-paths). Tokens within a path are contiguous.
+type RoutePath struct {
+	SlashPos token.Position
+	Segments []*Segment
+	endPos   token.Position
+}
+
+func (x *RoutePath) Pos() token.Position     { return x.SlashPos }
+func (x *RoutePath) End() token.Position     { return x.endPos }
+func (x *RoutePath) SetEnd(p token.Position) { x.endPos = p }
+
+// String returns the canonical spelling, e.g. "/users/:id(int)".
+func (x *RoutePath) String() string {
+	if len(x.Segments) == 0 {
+		return "/"
+	}
+	s := ""
+	for _, seg := range x.Segments {
+		s += "/" + seg.String()
+	}
+	return s
+}
+
+// SegKind distinguishes the three segment forms.
+type SegKind int
+
+const (
+	SegLit   SegKind = iota // users
+	SegParam                // :id or :id(int)
+	SegWild                 // :path... — rest-of-path capture, last segment only
+)
+
+// Segment is one path segment. The wildcard is spelled ":name...":
+// "/*" is no comment and an error (spec/comments).
+type Segment struct {
+	Kind    SegKind
+	MarkPos token.Position // position of ':'; equals Name.Pos() for literals
+	Name    *Ident
+	Type    *Ident // param type, nil when defaulted; only for SegParam
+	Rparen  token.Position
+	endPos  token.Position
+}
+
+func (x *Segment) Pos() token.Position {
+	if x.Kind == SegLit {
+		return x.Name.Pos()
+	}
+	return x.MarkPos
+}
+func (x *Segment) End() token.Position {
+	if x.endPos.IsValid() {
+		return x.endPos
+	}
+	if x.Type != nil {
+		return x.Rparen
+	}
+	return x.Name.End()
+}
+
+// SetEnd records the segment's extent (used for the wildcard ellipsis).
+func (x *Segment) SetEnd(p token.Position) { x.endPos = p }
+
+func (x *Segment) String() string {
+	switch x.Kind {
+	case SegParam:
+		if x.Type != nil {
+			return ":" + x.Name.Name() + "(" + x.Type.Name() + ")"
+		}
+		return ":" + x.Name.Name()
+	case SegWild:
+		return ":" + x.Name.Name() + "..."
+	default:
+		return x.Name.Name()
+	}
+}
+
+// IdentList is a parenthesized identifier list setting value, e.g.
+// only: (index, show) (spec/settings-whitelists).
+type IdentList struct {
+	Lparen token.Position
+	Names  []*Ident
+	// Quals holds an optional qualifier per name (parallel to Names, nil
+	// entries when absent): an order list reaches a joined relation's
+	// column as relation.column (spec/selects-over-groups).
+	Quals []*Ident
+	// Mods holds an optional one-word modifier per name (parallel to
+	// Names, nil entries when absent): order lists use it for asc/desc
+	// (spec/selects-over-groups).
+	Mods   []*Ident
+	Rparen token.Position
+}
+
+func (x *IdentList) Pos() token.Position { return x.Lparen }
+func (x *IdentList) End() token.Position { return x.Rparen }
+
+func lower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + 'a' - 'A'
+		}
+	}
+	return string(b)
+}
+
+// Group is a named set of tables for generation (spec/groups): either a
+// block of members or a `+`/`\` expression over tables and groups.
+type Group struct {
+	Doc        *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	GroupPos   token.Position
+	Name       *Ident
+	Terms      []*GroupTerm // block form: all Add, one name each; expr form: signed
+	Incomplete bool         // true if a syntax error dropped a member from a block form
+	EndPos     token.Position
+}
+
+func (d *Group) Pos() token.Position { return d.GroupPos }
+func (d *Group) End() token.Position { return d.EndPos }
+func (d *Group) declNode()           {}
+
+// GroupTerm is one term of a group expression: one name, or a
+// parenthesized set of names, added or removed (spec/groups).
+type GroupTerm struct {
+	Doc    *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	Neg    bool          // true for '\' terms
+	Names  []*Ident      // one name, or the members of a parenthesized set
+	Lparen token.Position
+	Rparen token.Position // End of the closing paren; zero when unparenthesized
+}
+
+// Set reports whether the term was written as a parenthesized set.
+func (t *GroupTerm) Set() bool { return t.Rparen.Line() > 0 }
+
+// Pos is the term's first position: its opening paren or its name.
+func (t *GroupTerm) Pos() token.Position {
+	if t.Set() {
+		return t.Lparen
+	}
+	return t.Names[0].Pos()
+}
+
+// End is the term's extent: the closing paren or the last name.
+func (t *GroupTerm) End() token.Position {
+	if t.Set() {
+		return t.Rparen
+	}
+	return t.Names[len(t.Names)-1].End()
+}
+
+// Pred is a named predicate declaration (spec/predicates).
+type Pred struct {
+	Doc     *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	PredPos token.Position
+	Name    *Ident
+	X       PredExpr
+	Rbrace  token.Position
+}
+
+func (d *Pred) Pos() token.Position { return d.PredPos }
+func (d *Pred) End() token.Position { return d.Rbrace }
+func (d *Pred) declNode()           {}
+
+// PredExpr is a node of the closed predicate expression language
+// (spec/predicates). It is deliberately not SQL.
+type PredExpr interface {
+	Node
+	predExpr()
+}
+
+// PredBinary is "x and y" / "x or y".
+type PredBinary struct {
+	Op   string // "and" | "or" (canonical lower case)
+	X, Y PredExpr
+}
+
+func (x *PredBinary) Pos() token.Position { return x.X.Pos() }
+func (x *PredBinary) End() token.Position { return x.Y.End() }
+func (x *PredBinary) predExpr()           {}
+
+// PredNot is "not x".
+type PredNot struct {
+	NotPos token.Position
+	X      PredExpr
+}
+
+func (x *PredNot) Pos() token.Position { return x.NotPos }
+func (x *PredNot) End() token.Position { return x.X.End() }
+func (x *PredNot) predExpr()           {}
+
+// PredParen is "(x)"; kept for exact source spans.
+type PredParen struct {
+	Lparen token.Position
+	X      PredExpr
+	Rparen token.Position
+}
+
+func (x *PredParen) Pos() token.Position { return x.Lparen }
+func (x *PredParen) End() token.Position { return x.Rparen }
+func (x *PredParen) predExpr()           {}
+
+// PredRef is a bare name referencing another Pred (spec/predicates).
+type PredRef struct {
+	Name *Ident
+}
+
+func (x *PredRef) Pos() token.Position { return x.Name.Pos() }
+func (x *PredRef) End() token.Position { return x.Name.End() }
+func (x *PredRef) predExpr()           {}
+
+// PredCompare is "a <op> b" with op one of = != < <= > >=.
+type PredCompare struct {
+	X  Operand
+	Op token.Kind // EQ NEQ LT LE GT GE
+	Y  Operand
+}
+
+func (x *PredCompare) Pos() token.Position { return x.X.Pos() }
+func (x *PredCompare) End() token.Position { return x.Y.End() }
+func (x *PredCompare) predExpr()           {}
+
+// PredIn is "col in (lit, ...)" or "col in :list" — the latter a list
+// parameter, typed as a slice of the column's type (spec/predicates).
+type PredIn struct {
+	Col    *ColRef
+	Items  []*Lit // literal form; nil when List is set
+	List   *Param // list-parameter form; nil for the literal form
+	Rparen token.Position
+}
+
+func (x *PredIn) Pos() token.Position { return x.Col.Pos() }
+func (x *PredIn) End() token.Position {
+	if x.List != nil {
+		return x.List.End()
+	}
+	return x.Rparen
+}
+func (x *PredIn) predExpr() {}
+
+// PredLike is "col like pattern" (pattern: string literal or param).
+type PredLike struct {
+	Col     *ColRef
+	Pattern Operand // *Lit (string) or *Param
+}
+
+func (x *PredLike) Pos() token.Position { return x.Col.Pos() }
+func (x *PredLike) End() token.Position { return x.Pattern.End() }
+func (x *PredLike) predExpr()           {}
+
+// PredNull is "col is [not] null".
+type PredNull struct {
+	Col    *ColRef
+	Not    bool
+	EndPos token.Position
+}
+
+func (x *PredNull) Pos() token.Position { return x.Col.Pos() }
+func (x *PredNull) End() token.Position { return x.EndPos }
+func (x *PredNull) predExpr()           {}
+
+// PredExists is "exists relation (x)": true for a row when a row the
+// relation leads to matches x, a predicate over the related table's
+// columns (spec/predicates).
+type PredExists struct {
+	ExistsPos token.Position
+	Rel       *Ident
+	Lparen    token.Position
+	X         PredExpr
+	Rparen    token.Position
+}
+
+func (x *PredExists) Pos() token.Position { return x.ExistsPos }
+func (x *PredExists) End() token.Position { return x.Rparen }
+func (x *PredExists) predExpr()           {}
+
+// Operand is a comparison operand: column reference, :param, or literal.
+type Operand interface {
+	Node
+	operand()
+}
+
+// ColRef is a column reference inside a predicate or a projection: a
+// column of the target, or relation.column, a column of a joined
+// relation (spec/predicates, spec/selects-over-groups).
+type ColRef struct {
+	Qual *Ident // the relation, nil for a column of the target
+	Name *Ident
+}
+
+func (x *ColRef) Pos() token.Position {
+	if x.Qual != nil {
+		return x.Qual.Pos()
+	}
+	return x.Name.Pos()
+}
+func (x *ColRef) End() token.Position { return x.Name.End() }
+func (x *ColRef) operand()            {}
+
+// String spells the reference as written, relation.column or column.
+func (x *ColRef) String() string {
+	if x.Qual != nil {
+		return x.Qual.Name() + "." + x.Name.Name()
+	}
+	return x.Name.Name()
+}
+
+// Param is a ":name" query parameter, ":name?" when optional
+// (spec/predicates).
+type Param struct {
+	ColonPos token.Position
+	Name     *Ident
+	Optional bool
+}
+
+func (x *Param) Pos() token.Position { return x.ColonPos }
+func (x *Param) End() token.Position {
+	if x.Optional {
+		return x.Name.End().Advance(1)
+	}
+	return x.Name.End()
+}
+func (x *Param) operand() {}
+
+// Lit is a number, string or boolean literal operand.
+type Lit struct {
+	Tok token.Token // NUMBER, STRING, or IDENT true/false
+}
+
+func (x *Lit) Pos() token.Position { return x.Tok.Pos }
+func (x *Lit) End() token.Position { return x.Tok.End() }
+func (x *Lit) operand()            {}
+
+// String spells the literal as written, a string quoted.
+func (x *Lit) String() string {
+	if x.Tok.Kind == token.STRING {
+		return strconv.Quote(x.Tok.Val)
+	}
+	return x.Tok.Val
+}
+
+// Select declares a query generated for every member of its target
+// (spec/selects-over-groups).
+type Select struct {
+	Doc       *CommentGroup // nil when the construct has no doc comment (spec/doc-comments)
+	SelectPos token.Position
+	Name      *Ident
+	Lparen    token.Position // projection parens (spec/selects-over-groups); zero when absent
+	Star      bool           // (* \\ a \\ (b, c)) star form
+	Items     []*ProjItem    // explicit list: columns, aggregates and expressions (spec/selects-over-groups)
+	Cols      []*ColRef      // the star form's exclusions
+	Rparen    token.Position
+	Target    *Ident   // group or table name (spec/selects-over-groups)
+	Joins     []*Ident // the relations joined, in order (spec/selects-over-groups)
+	With      *Ident   // the reverse relation whose rows nest under each parent (spec/selects-over-groups); nil when none
+	Where     PredExpr // nil = all rows
+	Settings  *SettingList
+	EndPos    token.Position
+}
+
+// Projected reports whether the select carries a projection (spec/selects-over-groups).
+func (d *Select) Projected() bool { return len(d.Items) > 0 || len(d.Cols) > 0 }
+
+// ProjItem is one item of an explicit projection (spec/selects-over-groups):
+// a column; an aggregate, Agg over Col (nil for count()); or an
+// arithmetic expression, Expr; a derived item carries its alias As.
+type ProjItem struct {
+	Col    *ColRef
+	Agg    *Ident
+	Expr   ArithExpr
+	As     *Ident
+	EndPos token.Position
+}
+
+func (x *ProjItem) Pos() token.Position {
+	switch {
+	case x.Agg != nil:
+		return x.Agg.Pos()
+	case x.Expr != nil:
+		return x.Expr.Pos()
+	}
+	return x.Col.Pos()
+}
+func (x *ProjItem) End() token.Position { return x.EndPos }
+
+// Derived reports whether the item is an aggregate or an expression.
+func (x *ProjItem) Derived() bool { return x.Agg != nil || x.Expr != nil }
+
+// Name is what names the item: its alias, else the column as written.
+func (x *ProjItem) Name() string {
+	if x.As != nil {
+		return x.As.Name()
+	}
+	return x.Col.String()
+}
+
+// String spells the item as written.
+func (x *ProjItem) String() string {
+	var s string
+	switch {
+	case x.Agg != nil:
+		col := ""
+		if x.Col != nil {
+			col = x.Col.String()
+		}
+		s = x.Agg.Name() + "(" + col + ")"
+	case x.Expr != nil:
+		s = x.Expr.String()
+	default:
+		return x.Col.String()
+	}
+	return s + " as " + x.As.Name()
+}
+
+// ArithExpr is an arithmetic expression (spec/selects-over-groups): a
+// ColRef, a Lit, a Param, an ArithBinary or an ArithParen.
+type ArithExpr interface {
+	Node
+	String() string
+	arithExpr()
+}
+
+// ArithBinary is "x op y" with op one of + - * /.
+type ArithBinary struct {
+	X  ArithExpr
+	Op string
+	Y  ArithExpr
+}
+
+func (x *ArithBinary) Pos() token.Position { return x.X.Pos() }
+func (x *ArithBinary) End() token.Position { return x.Y.End() }
+func (x *ArithBinary) String() string      { return x.X.String() + " " + x.Op + " " + x.Y.String() }
+func (x *ArithBinary) arithExpr()          {}
+
+// ArithParen is a parenthesized expression.
+type ArithParen struct {
+	Lparen token.Position
+	X      ArithExpr
+	Rparen token.Position
+}
+
+func (x *ArithParen) Pos() token.Position { return x.Lparen }
+func (x *ArithParen) End() token.Position { return x.Rparen }
+func (x *ArithParen) String() string      { return "(" + x.X.String() + ")" }
+func (x *ArithParen) arithExpr()          {}
+
+func (x *ColRef) arithExpr() {}
+func (x *Lit) arithExpr()    {}
+func (x *Param) arithExpr()  {}
+
+// String spells the parameter as written.
+func (x *Param) String() string {
+	if x.Optional {
+		return ":" + x.Name.Name() + "?"
+	}
+	return ":" + x.Name.Name()
+}
+
+func (d *Select) Pos() token.Position { return d.SelectPos }
+func (d *Select) End() token.Position { return d.EndPos }
+func (d *Select) declNode()           {}

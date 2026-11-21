@@ -1,0 +1,14 @@
+// spec/migrations, an exec takes down: and no other setting
+// want: unknown setting "name"
+package db
+
+table users {
+  id int [pk]
+}
+
+migration 0001__init {
+  table_create users {
+    id int [pk]
+  }
+  exec `PRAGMA user_version = 1` [down: `PRAGMA user_version = 0`, name: "bump"]
+}

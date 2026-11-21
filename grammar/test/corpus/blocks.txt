@@ -1,0 +1,264 @@
+==================
+indexes: plain, composite, expression, settings
+==================
+
+table t {
+  id int
+  indexes {
+    id [pk]
+    (id, `lower(name)`) [name: "ix", unique]
+    created_at [where: `created_at > 0`]
+    `floor(balance)`
+  }
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))
+    (indexes_block
+      (index_definition
+        (column_name
+          (identifier))
+        (settings_list
+          (setting
+            (setting_name
+              (identifier)))))
+      (index_definition
+        (composite_index
+          (column_name
+            (identifier))
+          (expression
+            (expression_content)))
+        (settings_list
+          (setting
+            (setting_name
+              (identifier))
+            (string
+              (string_content)))
+          (setting
+            (setting_name
+              (identifier)))))
+      (index_definition
+        (column_name
+          (identifier))
+        (settings_list
+          (setting
+            (setting_name
+              (identifier))
+            (expression
+              (expression_content)))))
+      (index_definition
+        (expression
+          (expression_content))))))
+
+==================
+validators block
+==================
+
+table t {
+  balance int
+  validators {
+    BalanceFloor(balance)
+    db.BalanceCap(balance)
+  }
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))
+    (validators_block
+      (validator
+        (go_ref
+          (identifier))
+        (column_ref))
+      (validator
+        (go_ref
+          (identifier)
+          (identifier))
+        (column_ref)))))
+
+==================
+doc comments: the comment group above a table and a column
+==================
+
+// the table
+table t {
+  // the column
+  id int
+}
+
+---
+
+(source_file
+  (comment)
+  (table_definition
+    (table_name
+      (identifier))
+    (comment)
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))))
+
+==================
+records: top-level with expressions and null
+==================
+
+records orders(id, user_id, total) {
+  1, 1, `1.0 + 2.0`
+  2, null, 3.5
+  4, null, -7
+  3, 2, "true"
+}
+
+---
+
+(source_file
+  (records_definition
+    (table_name
+      (identifier))
+    (records_columns
+      (column_name
+        (identifier))
+      (column_name
+        (identifier))
+      (column_name
+        (identifier)))
+    (record_row
+      (number)
+      (number)
+      (expression
+        (expression_content)))
+    (record_row
+      (number)
+      (null)
+      (number))
+    (record_row
+      (number)
+      (null)
+      (signed_number
+        (number)))
+    (record_row
+      (number)
+      (number)
+      (string
+        (string_content)))))
+
+==================
+records: in-table with and without column list
+==================
+
+table t {
+  id int
+  records (id) {
+    1
+  }
+}
+
+table s {
+  id int
+  records {
+    1
+    2
+  }
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))
+    (records_block
+      (records_columns
+        (column_name
+          (identifier)))
+      (record_row
+        (number))))
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))
+    (records_block
+      (record_row
+        (number))
+      (record_row
+        (number)))))
+
+==================
+records: an unsigned exponent is a number
+==================
+
+table metrics {
+  value float64 [pk]
+  records {
+    1e5
+    2E10
+  }
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)))))
+    (records_block
+      (record_row
+        (number))
+      (record_row
+        (number)))))
+
+==================
+records: an empty field is an error
+:error
+==================
+
+records orders(id, user_id) {
+  1, , 2
+}
+
+---
+
+

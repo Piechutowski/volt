@@ -1,0 +1,11 @@
+# Benchmark baseline for lang. Not gated: compare by hand after a change,
+# refresh with: go test ./lang -run '^$' -bench . -benchmem > lang/testdata/bench_baseline.txt
+# 2026-09-14 go1.27.0 4 CPUs: Intel(R) Xeon(R) Processor @ 2.80GHz
+goos: linux
+goarch: amd64
+pkg: github.com/Piechutowski/volt/lang
+cpu: Intel(R) Xeon(R) Processor @ 2.80GHz
+BenchmarkLoad-4          	     364	   3130014 ns/op	 2500909 B/op	   14644 allocs/op
+BenchmarkCheck-4         	      93	  11043788 ns/op	 5525635 B/op	   60508 allocs/op
+BenchmarkGenerate-4      	      60	  18524082 ns/op	19169316 B/op	  150446 allocs/op
+BenchmarkSessionEdit-4   	     234	   5322249 ns/op	 1938636 B/op	   28427 allocs/op

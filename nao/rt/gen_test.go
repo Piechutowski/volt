@@ -1,0 +1,168 @@
+package rt
+
+import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func TestGenConstructorsMatchTypedHandles(t *testing.T) {
+	userName := Column[m, string]{Name: "name"}
+	parent := Column[m, int64]{Name: "parent_id"}
+	cases := []struct {
+		name  string
+		typed Pred[m]
+		gen   func() (GenPred, error)
+	}{
+		{"eq", email.Eq("a"), func() (GenPred, error) { return PredCmp("email", "=", "a") }},
+		{"ne", email.Ne("a"), func() (GenPred, error) { return PredCmp("email", "!=", "a") }},
+		{"lt", id.Lt(4), func() (GenPred, error) { return PredCmp("id", "<", int64(4)) }},
+		{"le", id.Le(4), func() (GenPred, error) { return PredCmp("id", "<=", int64(4)) }},
+		{"gt", id.Gt(4), func() (GenPred, error) { return PredCmp("id", ">", int64(4)) }},
+		{"ge", id.Ge(4), func() (GenPred, error) { return PredCmp("id", ">=", int64(4)) }},
+		{"eqcol", email.EqCol(userName), func() (GenPred, error) { return PredColCmp("email", "=", "name") }},
+		{"necol", email.NeCol(userName), func() (GenPred, error) { return PredColCmp("email", "!=", "name") }},
+		{"ltcol", id.LtCol(parent), func() (GenPred, error) { return PredColCmp("id", "<", "parent_id") }},
+		{"in", id.In(1, 2), func() (GenPred, error) { return PredIn("id", int64(1), int64(2)), nil }},
+		{"in empty", id.In(), func() (GenPred, error) { return PredIn("id"), nil }},
+		{"inlist", id.InList([]int64{1, 2}), func() (GenPred, error) { return PredInList("id", JSONList([]int64{1, 2})), nil }},
+		{"like", email.Like("%a"), func() (GenPred, error) { return PredLike("email", "%a"), nil }},
+		{"isnull", bio.IsNull(), func() (GenPred, error) { return PredNull("bio"), nil }},
+		{"isnotnull", bio.IsNotNull(), func() (GenPred, error) { return PredNotNull("bio"), nil }},
+		{
+			"nested",
+			And(Or(id.Lt(1), id.Gt(9)), Not(email.Eq("a"))),
+			func() (GenPred, error) {
+				lt, _ := PredCmp("id", "<", int64(1))
+				gt, _ := PredCmp("id", ">", int64(9))
+				eq, _ := PredCmp("email", "=", "a")
+				return And(Or(lt, gt), Not(eq)), nil
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g, err := tc.gen()
+			if err != nil {
+				t.Fatal(err)
+			}
+			typedSQL, typedArgs, err := SelectRender(`"users"`, `"id"`, tc.typed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			genSQL, genArgs, err := SelectRender(`"users"`, `"id"`, g)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if typedSQL != genSQL {
+				t.Errorf("typed handle renders %q, the generator's view %q", typedSQL, genSQL)
+			}
+			if len(typedArgs)+len(genArgs) > 0 && !reflect.DeepEqual(typedArgs, genArgs) {
+				t.Errorf("typed handle binds %#v, the generator's view %#v", typedArgs, genArgs)
+			}
+		})
+	}
+}
+
+func TestGenOrderTermMatchesTypedHandles(t *testing.T) {
+	typed := OrderRender([]Order[m]{email.Asc(), id.Desc()})
+	gen := OrderRender([]GenOrder{OrderTerm("email", false), OrderTerm("id", true)})
+	if want := `"email" ASC, "id" DESC`; typed != want || gen != want {
+		t.Errorf("typed %q, generator's view %q, want %q", typed, gen, want)
+	}
+}
+
+func TestGenCmpRefusesOtherSpellings(t *testing.T) {
+	for _, op := range []string{"<>", "==", "=<", "LIKE", "IS", "", " ="} {
+		if _, err := PredCmp("email", op, "a"); err == nil {
+			t.Errorf("PredCmp accepted %q", op)
+		}
+		if _, err := PredColCmp("email", op, "name"); err == nil {
+			t.Errorf("PredColCmp accepted %q", op)
+		}
+	}
+	for _, op := range []string{"=", "!=", "<", "<=", ">", ">="} {
+		if _, err := PredCmp("email", op, "a"); err != nil {
+			t.Errorf("PredCmp(%q): %v", op, err)
+		}
+		if _, err := PredColCmp("email", op, "name"); err != nil {
+			t.Errorf("PredColCmp(%q): %v", op, err)
+		}
+	}
+}
+
+func TestRendererSpellsOneInequality(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING && strings.Contains(lit.Value, "<>") {
+				t.Errorf("%s: %s spells <>; the renderer's inequality is != (spec/predicates)", fset.Position(lit.Pos()), lit.Value)
+			}
+			return true
+		})
+	}
+}
+
+func TestGenExistsAndOptionalSpellings(t *testing.T) {
+	tag, _ := PredCmp("tags.tag", "=", "tag")
+	other, _ := PredCmp("tags.tag", "!=", "draft")
+	before, _ := PredCmp("published_at", "<", "at")
+	on := [][2]string{{"tags.post_id", "posts.id"}}
+	cases := []struct {
+		name string
+		pred GenPred
+		sql  string
+		args []any
+	}{
+		{"exists", PredExists("post_tags", "tags", on, tag),
+			`EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ("tags"."tag" = ?))`, []any{"tag"}},
+		{"exists over a group", PredExists("post_tags", "tags", on, Or(tag, other)),
+			`EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ("tags"."tag" = ? OR "tags"."tag" != ?))`, []any{"tag", "draft"}},
+		{"exists composite key", PredExists("lines", "lines", [][2]string{{"lines.order_id", "orders.id"}, {"lines.shop", "orders.shop"}}, PredNull("lines.note")),
+			`EXISTS (SELECT 1 FROM "lines" AS "lines" WHERE "lines"."order_id" = "orders"."id" AND "lines"."shop" = "orders"."shop" AND ("lines"."note" IS NULL))`, nil},
+		{"exists without a filter", PredExists("post_tags", "tags", on, GenPred{}),
+			`EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id")`, nil},
+		{"not exists", Not(PredExists("post_tags", "tags", on, tag)),
+			`NOT (EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ("tags"."tag" = ?)))`, []any{"tag"}},
+		{"optional", PredOptional([]any{"at"}, before),
+			`(? IS NULL OR "published_at" < ?)`, []any{"at", "at"}},
+		{"optional exists", PredOptional([]any{"tag", "kind"}, PredExists("post_tags", "tags", on, tag)),
+			`(? IS NULL OR ? IS NULL OR EXISTS (SELECT 1 FROM "post_tags" AS "tags" WHERE "tags"."post_id" = "posts"."id" AND ("tags"."tag" = ?)))`, []any{"tag", "kind", "tag"}},
+		{"optional without guards", PredOptional(nil, before), `"published_at" < ?`, []any{"at"}},
+		{"optional in a chain", And(PredOptional([]any{"at"}, before), tag),
+			`((? IS NULL OR "published_at" < ?) AND "tags"."tag" = ?)`, []any{"at", "at", "tag"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sql, args, err := WhereRender([]GenPred{tc.pred})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if sql != tc.sql {
+				t.Errorf("renders\n\t%s\nwant\n\t%s", sql, tc.sql)
+			}
+			if !reflect.DeepEqual(args, tc.args) {
+				t.Errorf("binds %#v, want %#v", args, tc.args)
+			}
+		})
+	}
+	if p := PredOptional([]any{"at"}, GenPred{}); p.kind != predEmpty {
+		t.Errorf("an optional guard over the empty predicate is %v, want it empty", p.kind)
+	}
+}

@@ -1,0 +1,161 @@
+; Volt highlight queries for Zed. Later patterns win, so generic rules come
+; first and specific roles override them.
+
+; ---------- comments and literals ----------
+
+(comment) @comment
+
+(string) @string
+(number) @number
+(signed_number) @number
+(boolean) @boolean
+(null) @constant.builtin
+
+; opaque SQL expressions in backticks
+(expression) @string.special
+
+; ---------- keywords ----------
+
+[
+  "table"
+  "table_partial"
+  "type"
+  "ref"
+  "records"
+  "indexes"
+  "validators"
+  "use"
+  "from"
+] @keyword
+
+; ---------- operators and punctuation ----------
+
+(ref_relation ">" @operator)
+"~" @operator
+
+["{" "}" "(" ")" "[" "]"] @punctuation.bracket
+[":" "," "."] @punctuation.delimiter
+
+; ---------- names by role ----------
+
+; package qualifiers of column types: time.Time, money.Money
+(package_name) @namespace
+
+; tables (definitions and references)
+(table_name name: (_) @type)
+(group_member) @type
+
+; table partials
+(partial_name) @constructor
+
+; columns
+(column_name) @property
+(column_definition name: (_) @property)
+(records_columns (column_name) @property)
+
+; column types
+(type_name) @type
+
+; ---------- settings ----------
+
+(settings_list (setting name: (_) @attribute))
+(setting value: (identifier) @constant)
+
+; ---------- Volt layer (docs/spec.md Part II) ----------
+
+[
+  "package"
+  "import"
+  "pipeline"
+  "scope"
+  "resources"
+  "dataset"
+  "load"
+] @keyword
+
+(verb) @keyword
+
+; module wiring
+(package_clause name: (identifier) @namespace)
+(import_alias) @namespace
+(import_path (identifier) @namespace)
+
+; pipelines and Go references (plugs, route handlers, error handlers)
+(pipeline_name) @label
+(go_ref (identifier) @function)
+(load_name) @variable.parameter
+
+; route paths: literals as paths, parameters as parameters
+(route_path "/" @string.special)
+(path_segment) @string.special
+(path_parameter ":" @operator)
+(parameter_name) @variable.parameter
+(wildcard_marker) @operator
+
+; the resources table reference
+(resources_declaration table: (table_name) @type)
+
+; ---------- groups, predicates, selects (spec/groups to spec/selects-over-groups) ----------
+
+[
+  "group"
+  "pred"
+  "select"
+  "for"
+  "join"
+  "with"
+  "where"
+  "as"
+] @keyword
+
+[
+  "and"
+  "or"
+  "not"
+  "in"
+  "like"
+  "is"
+  "exists"
+] @keyword.operator
+
+(pred_null "null" @keyword.operator)
+
+; ---------- migrations (spec/migrations) ----------
+
+[
+  "migration"
+  "up"
+  "down"
+  "table_create"
+  "table_drop"
+  "table_rename"
+  "table_alter"
+  "table_rebuild"
+  "index_create"
+  "index_drop"
+  "drop"
+  "rename"
+  "exec"
+  "add"
+  "to"
+] @keyword
+
+(migration_name) @label
+
+(group_name) @type
+(group_member) @type
+(group_definition ["+" "\\"] @operator)
+(select_projection ["*" "\\"] @operator)
+(pred_name) @label
+(pred_ref) @label
+(select_name) @label
+(select_target) @type
+(column_ref) @property
+(relation_name) @variable.parameter
+(aggregate_name) @function
+(alias_name) @variable
+(query_param ":" @operator)
+(query_param optional: (optional_marker) @operator)
+(query_param name: (parameter_name) @variable.parameter)
+(pred_compare op: _ @operator)
+(ident_modifier) @constant

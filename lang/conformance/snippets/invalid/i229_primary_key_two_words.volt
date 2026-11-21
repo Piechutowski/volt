@@ -1,0 +1,5 @@
+// spec/columns, spec/settings-lists, spec/line-structure-and-whitespace, the key setting is pk; primary key is a syntax error at key, where the setting ends, and the table whose only column it drops is not reported empty
+// want: expected ',' or ']' in settings list, found identifier "key"
+table posts {
+  id int [primary key]
+}

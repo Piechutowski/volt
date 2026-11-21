@@ -1,0 +1,10 @@
+// spec/settings-lists, spec/selects-over-groups, a Select takes each setting at most once
+// want: setting "order" may appear at most once
+package app
+
+table posts {
+	id    int [pk]
+	title string
+}
+
+select recent for posts [order: (id desc), order: (title asc)]

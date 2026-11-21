@@ -1,0 +1,161 @@
+package lsp
+
+import (
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/Piechutowski/volt/lsp/protocol"
+)
+
+func rangeAt(l1, c1, l2, c2 int) *protocol.Range {
+	return &protocol.Range{
+		Start: protocol.Position{Line: protocol.UInteger(l1), Character: protocol.UInteger(c1)},
+		End:   protocol.Position{Line: protocol.UInteger(l2), Character: protocol.UInteger(c2)},
+	}
+}
+
+func ranged(r *protocol.Range, text string) protocol.TextDocumentContentChangeEvent {
+	return protocol.TextDocumentContentChangeEvent{Range: r, Text: text}
+}
+
+func TestIncrementalSync(t *testing.T) {
+	s := NewServer()
+	ctx := &protocol.Context{Notify: func(string, any) {}}
+	change := func(uri string, version int32, items ...protocol.TextDocumentContentChangeEvent) {
+		t.Helper()
+		if err := s.didChange(ctx, &protocol.DidChangeTextDocumentParams{
+			TextDocument:   protocol.VersionedTextDocumentIdentifier{TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: uri}, Version: version},
+			ContentChanges: items,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	expect := func(uri, want string, version int32) {
+		t.Helper()
+		doc := s.docGet(uri)
+		if doc.Text != want {
+			t.Fatalf("%s: document text\n--- got\n%q\n--- want\n%q", uri, doc.Text, want)
+		}
+		path := pathFromURI(uri)
+		s.mu.Lock()
+		mirror, v := s.texts[path], s.versions[path]
+		s.mu.Unlock()
+		if mirror != want {
+			t.Fatalf("%s: the server's mirror differs from the document:\n%q", uri, mirror)
+		}
+		if v != version {
+			t.Fatalf("%s: version %d, want %d", uri, v, version)
+		}
+	}
+
+	uri := "file:///lone.volt"
+	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{TextDocument: protocol.TextDocumentItem{URI: uri, Version: 1,
+		Text: "table users {\n  id int [pk]\n  name bool\n}\n"}}); err != nil {
+		t.Fatal(err)
+	}
+	change(uri, 2,
+		ranged(rangeAt(1, 5, 1, 8), "float64"),
+		ranged(rangeAt(2, 11, 2, 11), " [null]"))
+	expect(uri, "table users {\n  id float64 [pk]\n  name bool [null]\n}\n", 2)
+	change(uri, 3, ranged(rangeAt(2, 7, 2, 11), "\"na😀\""))
+	change(uri, 4, ranged(rangeAt(2, 13, 2, 13), "y"))
+	expect(uri, "table users {\n  id float64 [pk]\n  name \"na😀\"y [null]\n}\n", 4)
+	change(uri, 5, protocol.TextDocumentContentChangeEvent{Text: "table t {\n  id int\n}\n"}, ranged(rangeAt(1, 8, 1, 8), " [pk]"))
+	expect(uri, "table t {\n  id int [pk]\n}\n", 5)
+
+	crlf := "file:///crlf.volt"
+	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{TextDocument: protocol.TextDocumentItem{URI: crlf, Version: 1,
+		Text: "table t {\r\n  id int [pk]\r\n  x int\r\n}\r\n"}}); err != nil {
+		t.Fatal(err)
+	}
+	change(crlf, 2, ranged(rangeAt(1, 13, 2, 0), " "))
+	expect(crlf, "table t {\r\n  id int [pk]   x int\r\n}\r\n", 2)
+	change(crlf, 3, ranged(rangeAt(9, 0, 9, 0), "// end"), ranged(rangeAt(0, 40, 0, 40), " // head"))
+	expect(crlf, "table t { // head\r\n  id int [pk]   x int\r\n}\r\n// end", 3)
+	change(crlf, 4, ranged(rangeAt(0, 9, 0, 17), ""))
+	expect(crlf, "table t {\r\n  id int [pk]   x int\r\n}\r\n// end", 4)
+}
+
+func TestPublishCarriesVersion(t *testing.T) {
+	var mu sync.Mutex
+	var published []protocol.PublishDiagnosticsParams
+	ctx := &protocol.Context{Notify: func(method string, params any) {
+		if method != protocol.TextDocumentPublishDiagnostics {
+			return
+		}
+		mu.Lock()
+		published = append(published, params.(protocol.PublishDiagnosticsParams))
+		mu.Unlock()
+	}}
+	last := func(uri string) *protocol.PublishDiagnosticsParams {
+		mu.Lock()
+		defer mu.Unlock()
+		for i := len(published) - 1; i >= 0; i-- {
+			if published[i].URI == uri {
+				return &published[i]
+			}
+		}
+		return nil
+	}
+	version := func(p *protocol.PublishDiagnosticsParams) int {
+		if p == nil || p.Version == nil {
+			return -1
+		}
+		return int(*p.Version)
+	}
+	s := NewServer()
+	s.debounce = 0
+
+	lone := "file:///lone.volt"
+	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{TextDocument: protocol.TextDocumentItem{URI: lone, Version: 7, Text: "table t {\n  id int [pk]\n}\n"}}); err != nil {
+		t.Fatal(err)
+	}
+	if v := version(last(lone)); v != 7 {
+		t.Fatalf("the open's publish carries version %d, want 7", v)
+	}
+	if err := s.didChange(ctx, &protocol.DidChangeTextDocumentParams{
+		TextDocument:   protocol.VersionedTextDocumentIdentifier{TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: lone}, Version: 9},
+		ContentChanges: []protocol.TextDocumentContentChangeEvent{ranged(rangeAt(1, 9, 1, 9), ", null")},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if v := version(last(lone)); v != 9 {
+		t.Fatalf("the change's publish carries version %d, want 9", v)
+	}
+
+	root := voltProject(t, map[string]string{
+		"go.mod":          "module lsptest\n",
+		"app/routes.volt": "package app\n\nscope / {\n\tget / Home.Index\n}\n",
+	})
+	uri := "file://" + filepath.Join(root, "app", "routes.volt")
+	waitVersion := func(want int) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			if version(last(uri)) == want {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatalf("no publish with version %d; last %+v", want, last(uri))
+	}
+	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{TextDocument: protocol.TextDocumentItem{URI: uri, Version: 3, Text: "package app\n\nscope / {\n\tget / Home.Index\n}\n"}}); err != nil {
+		t.Fatal(err)
+	}
+	waitVersion(3)
+	if err := s.didChange(ctx, &protocol.DidChangeTextDocumentParams{
+		TextDocument:   protocol.VersionedTextDocumentIdentifier{TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: uri}, Version: 4},
+		ContentChanges: []protocol.TextDocumentContentChangeEvent{ranged(rangeAt(3, 17, 3, 17), "\n\tget /x Home.X")},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	waitVersion(4)
+	if err := s.didClose(ctx, &protocol.DidCloseTextDocumentParams{TextDocument: protocol.TextDocumentIdentifier{URI: uri}}); err != nil {
+		t.Fatal(err)
+	}
+	if p := last(uri); p == nil || p.Version != nil || len(p.Diagnostics) != 0 {
+		t.Fatalf("the close's publish: %+v", p)
+	}
+}
